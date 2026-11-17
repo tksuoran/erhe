@@ -195,9 +195,9 @@ What the shapes need that is not built, each sized as the shapes are.
   six-level cross-braced scaffold about 900), and 2000 holds them at their
   defaults with margin while a scattered run of a hundred pieces stays
   within what one imported prop costs. Budgets of the built shapes stay.
-- P2 Light on a piece (M). A design item of its own, a new D-number in
-  `doc/plans/level_tools_design.md`, built before the first light shape
-  (U34, U36):
+- P2 Light on a piece (M), built as D3.15 of
+  `doc/plans/level_tools_design.md` (U34, U36; behavior in
+  `doc/editor/level_tools.md` "Lights on pieces"):
   - Frames: a shape states light frames from its values, as it states
     connectors: a name, a position and a direction in the piece's space.
     Each frame is a child node of the piece node holding an

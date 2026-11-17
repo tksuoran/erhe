@@ -4,6 +4,7 @@
 
 #include "level/kit_layout.hpp"
 #include "level/kit_piece.hpp"
+#include "level/kit_piece_light.hpp"
 
 #include "app_context.hpp"
 #include "brushes/brush.hpp"
@@ -475,10 +476,11 @@ auto Level_kits::build_layout_generation(
         elements.push_back(std::move(placement));
     }
 
-    // A child equals its element: the same record, materials by name and local pose, and no children of its own.
+    // A child equals its element: the same record, materials by name and local pose, and no children of its own but its
+    // kit lights (D3.15), which a kept child has put on its frames below.
     const auto matches = [this, &layout_from_world](const erhe::Hierarchy& child, const Kit_placement& element) -> bool {
         const erhe::scene::Mesh* const mesh = dynamic_cast<const erhe::scene::Mesh*>(&child);
-        if ((mesh == nullptr) || (mesh->get_child_count() > 0)) {
+        if ((mesh == nullptr) || !has_only_kit_light_children(*mesh)) {
             return false;
         }
         const std::optional<Kit_piece_data> record = read_kit_piece(*mesh);
@@ -546,6 +548,12 @@ auto Level_kits::build_layout_generation(
                     }
                 )
             );
+        }
+    }
+    // A kept child's lights go to its frames, as every regeneration puts them (D3.15).
+    for (std::size_t i = 0, end = std::min(children.size(), elements.size()); i < end; ++i) {
+        if (kept[i]) {
+            m_light_sync.append(m_context, scene_root, std::dynamic_pointer_cast<erhe::scene::Node>(children[i]), elements[i].values.value(), operations);
         }
     }
     // Inserted in element order: every earlier element stands at its index by then.
@@ -812,7 +820,7 @@ auto Level_kits::make_layout_from_piece(Scene_root& scene_root, const Kit_layout
         result.error = refusal.value();
         return result;
     }
-    if (piece->get_child_count() > 0) {
+    if (!has_only_kit_light_children(*piece)) {
         result.error = fmt::format("'{}' has children; a kit layout node makes its own children", piece->get_name());
         return result;
     }
@@ -847,17 +855,22 @@ auto Level_kits::make_layout_from_piece(Scene_root& scene_root, const Kit_layout
     // The node takes the piece's index; the piece is no surface for the element that replaces it.
     const std::size_t index = piece->get_index_in_parent();
     const std::array<const erhe::scene::Mesh*, 1> excluded{piece.get()};
-    std::vector<std::shared_ptr<Operation>> leading;
-    leading.push_back(
-        std::make_shared<Item_insert_remove_operation>(
-            Item_insert_remove_operation::Parameters{
-                .context = m_context,
-                .item    = piece,
-                .parent  = parent,
-                .mode    = Item_insert_remove_operation::Mode::remove
-            }
-        )
-    );
+    // The piece goes with its kit lights (a remove alone would move them to its parent); the elements make their own.
+    std::vector<std::shared_ptr<Operation>>       leading;
+    std::vector<std::shared_ptr<erhe::Hierarchy>> subtree;
+    collect_subtree_deepest_first(piece, subtree);
+    for (const std::shared_ptr<erhe::Hierarchy>& item : subtree) {
+        leading.push_back(
+            std::make_shared<Item_insert_remove_operation>(
+                Item_insert_remove_operation::Parameters{
+                    .context = m_context,
+                    .item    = item,
+                    .parent  = item->get_parent().lock(),
+                    .mode    = Item_insert_remove_operation::Mode::remove
+                }
+            )
+        );
+    }
     return create_layout_after(scene_root, create, index, excluded, leading);
 }
 

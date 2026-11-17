@@ -363,6 +363,11 @@ The user's rulings (2026-11-15):
     layout kinds allow a tilted node; slanted treads are no stairs). A
     curve too short for its steps is refused with the plan length it needs.
   Built as `doc/editor/level_tools.md` "Stairs layouts".
+- U43 (2026-11-17), lights on pieces in live drags. The user's ruling:
+  "lights shall follow live parameter drags". During a live parameter drag
+  of a piece the kit light nodes stand at every step where the release puts
+  them; a cancel puts them back; the release is one undo entry. Built as
+  D3.15 of `doc/plans/level_tools_design.md`.
 
 ## Terms
 

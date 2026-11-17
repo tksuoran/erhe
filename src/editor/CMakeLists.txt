@@ -397,12 +397,16 @@ erhe_target_sources_grouped(
     level/kit_layout_values.hpp
     level/kit_leaf.cpp
     level/kit_leaf.hpp
+    level/kit_light.cpp
+    level/kit_light.hpp
     level/kit_mesh_builder.cpp
     level/kit_mesh_builder.hpp
     level/kit_parameter_rows.cpp
     level/kit_parameter_rows.hpp
     level/kit_piece.cpp
     level/kit_piece.hpp
+    level/kit_piece_light.cpp
+    level/kit_piece_light.hpp
     level/kit_piece_operation.cpp
     level/kit_piece_operation.hpp
     level/kit_replace.cpp

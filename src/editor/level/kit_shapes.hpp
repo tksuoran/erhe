@@ -9,6 +9,8 @@
 
 namespace editor {
 
+class Kit_random;
+
 // What stairs values produce (R3.5): steps are equal, each at most the step rise limit high.
 class Kit_stairs_layout
 {
@@ -34,6 +36,24 @@ constexpr int   kit_stairs_max_steps      = 128;
 
 // Empty when the default agent passes the opening (R2.10); otherwise the message naming the shape and the shortfall.
 [[nodiscard]] auto check_kit_opening(const Kit_shape_definition& shape, float width, float height, const Kit_agent& agent) -> std::string;
+
+// The head of an arch (Q3 of doc/plans/level_kit_more_shapes.md).
+enum class Kit_arch_head : unsigned int {
+    round = 0, // half an ellipse
+    pointed    // two arcs with their centers on the springing line
+};
+
+// The intrados from the right foot (half_span, 0) over the crown (0, rise) to the left foot: segments + 1 points, the
+// left half the right half's mirror image; a pointed head takes an even count (an odd one is one less). With a random
+// stream every point but the feet moves along its radius from the origin by up to jitter of it.
+[[nodiscard]] auto make_kit_arch_head_points(
+    Kit_arch_head head,
+    float         half_span,
+    float         rise,
+    int           segments,
+    float         jitter = 0.0f,
+    Kit_random*   random = nullptr
+) -> std::vector<glm::vec2>;
 
 // A recreated shape's id is its original's plus this, its display name its original's plus the mark.
 constexpr const char* c_kit_recreated_id_suffix   = ".v2";

@@ -14,6 +14,7 @@ namespace erhe::math { class Aabb; }
 namespace editor {
 
 class Kit_connector;
+class Kit_light_frame;
 class Kit_shape_definition;
 
 enum class Kit_parameter_type : unsigned int {
@@ -245,6 +246,7 @@ using Kit_values_check        = std::function<std::string(const Kit_parameter_va
 using Kit_walkability_check   = std::function<std::string(const Kit_parameter_values& values, const Kit_agent& agent)>;
 using Kit_seam_sides_function = std::function<std::vector<Kit_side>(const Kit_parameter_values& values)>;
 using Kit_connectors_function = std::function<void(const Kit_parameter_values& values, std::vector<Kit_connector>& out_connectors)>;
+using Kit_light_frames_function = std::function<void(const Kit_parameter_values& values, std::vector<Kit_light_frame>& out_frames)>;
 
 class Kit_shape_definition
 {
@@ -266,6 +268,7 @@ public:
     Kit_origin_rule            origin_rule            {Kit_origin_rule::base_center}; // an unseeded shape's; a seeded one's is always base_contains_origin
     std::vector<Kit_mirror_plane> mirror_planes;       // empty: no exact mirror image (D1.10)
     Kit_connectors_function    get_connectors;         // optional: the connectors at the values, the same names at every value (D1.12)
+    Kit_light_frames_function  get_light_frames;       // optional: at most four light frames at the values (D3.15)
     Kit_generator              generator;
     Kit_values_check           check_combination;      // optional: limits between parameters
     Kit_walkability_check      check_walkability;      // set for shapes meant to be walked on or through

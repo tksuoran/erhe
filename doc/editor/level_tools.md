@@ -880,11 +880,12 @@ and `write()` stores each facet's slot index in the facet attribute
 the facets of one slot with their vertices.
 
 The palette (`Kit_shape_library::get_palette()`) is a list of flat-color
-materials (`Kit_palette_material`: name, linear base color, roughness): Kit
+materials (`Kit_palette_material`: name, linear base color, roughness, linear
+emissive color): Kit
 Stone, Kit Floor, Kit Plaster, Kit Trim, Kit Wood, Kit Dark Wood, Kit
 Vermilion, Kit Rock, Kit Earth, Kit Grass, Kit Foliage, Kit Autumn Foliage,
-Kit Bark, Kit Dark Rock, Kit Sand, Kit Shell, Kit Roof Tile, Kit Water and Kit
-Shallow Water. Each slot name has a
+Kit Bark, Kit Dark Rock, Kit Sand, Kit Shell, Kit Roof Tile, Kit Water, Kit
+Shallow Water and the glowing Kit Glow (warm) and Kit Ember (red). Each slot name has a
 `Kit_slot_palette` (`get_slot_palettes()`, `find_slot_palette()`): its default
 material and a few alternatives, by palette name:
 
@@ -904,6 +905,7 @@ material and a few alternatives, by palette name:
 | roof | Kit Roof Tile | Kit Wood, Kit Stone |
 | water | Kit Water | Kit Shallow Water |
 | wood | Kit Wood | Kit Vermilion, Kit Dark Wood, Kit Bark |
+| glow | Kit Glow | Kit Ember |
 
 A piece's mesh has one primitive per slot, in slot order, each with its own
 material; the primitives' materials are the piece's per-slot assignment, so
@@ -2204,6 +2206,44 @@ brush, collision shape, body, navigation flag and transform exactly.
   already is left as it is (`replaced` false); when nothing is replaced, no
   entry is recorded.
 
+## Lights on pieces
+
+A shape can carry lights (U34, U36). It states up to four light frames from
+its values, as it states connectors: a name, a position and the direction the
+light shines in the piece's local space (`Kit_shape_definition::get_light_frames`,
+`level/kit_light.hpp`; how a generator states them is in D3.15 of
+`doc/plans/level_tools_design.md`). Each frame is a child light node of the
+piece carrying `Kit_light.frame`, the frame's name, which it is also named
+after when made; afterwards the kit sets only its local transform. Its type,
+color, intensity, range, cone angles and shadow casting are the light's own
+properties, edited in the Properties window as any light's. A new node
+starts with the frame's values, by default a warm white point light of 40 cd
+with a range of 8 m, and always with shadow casting off; a shape may state
+its own (the stone lantern: 12 cd, 6 m, color (1, 0.72, 0.42), an
+orchestrator choice for the user's review).
+
+- Every regeneration of a piece keeps the edits: a parameter change, Replace,
+  a kit layout regenerating a kept child and the load refresh move each light
+  node to the frame its `Kit_light.frame` names and leave its light
+  properties as they are, give a frame without a node a new one and remove a
+  node whose frame the values no longer state, in the same undo entry. A
+  parameter edit to the values the piece has is no regeneration and changes
+  nothing. Replace matches against the new shape's frame names, so a light
+  whose frame the new shape also has keeps its edits.
+- During a live parameter drag the light nodes stand at every step where the
+  release puts them (U43); a cancel puts them back, and the release is one
+  undo entry. A frame that appears or goes during the drag gets or loses its
+  node at the release.
+- A copy of a kit light under its piece (a duplicate or a paste of the light
+  node) is the user's: the next regeneration clears its `Kit_light` record and
+  it stays as a plain light.
+- A duplicate, a copy and paste and a group duplicate copy the light nodes with
+  their edited properties; a mirror reflects them with the piece, direction
+  included. The pieces a kit layout or scatter places start with the starting
+  values; Copy and Paste Properties copies one light's values to another.
+- Every lit piece makes its lights, without a limit. The lights save as
+  ordinary glTF lights.
+
 ## Connectors
 
 A connector (R5.3, D1.12) is a named frame on a shape where another shape
@@ -3168,9 +3208,10 @@ stays in kit mode for the next piece.
   mask, default seed), `material_slots` (in slot order: `slot`,
   `default_material` and `alternatives`, palette names), `connectors` (at the
   defaults, in the piece's local space: `name`, `position`, `outward`, `up`),
-  normal style, triangle budget, collision, `seeded` (the generator draws
+  `light_frames` (at the defaults: `name`, `position`, `direction` and the
+  starting values, "Lights on pieces"), normal style, triangle budget, collision, `seeded` (the generator draws
   from the seed) and `mirror_planes` ("Groups"); the scene's level lengths and the `palette` (`name`,
-  `base_color`, `roughness`).
+  `base_color`, `roughness`, `emissive`).
 - `level_place_pieces {scene_name, snap, surface_snap, surface_orient,
   surface_direction, surface_max_distance, pieces: [{shape, parameters, position, rotation_xyzw,
   name, materials, parent_id, parent_index, surface_snap, surface_orient}]}`:
@@ -3404,7 +3445,10 @@ stays in kit mode for the next piece.
   `follows_kit` and `problem` ("Persistence") and `physics` (motion mode,
   collision shape, whether the body exists); straight stairs, original or
   recreated, also `stairs` (`step_count`, `step_rise`, `tread_depth`, `run`,
-  `slope_degrees`: the layout their values produce, R3.5).
+  `slope_degrees`: the layout their values produce, R3.5); `light_frames` (the
+  shape's at the piece's values) and `lights` (its kit light nodes: `id`,
+  `name`, `frame`, local `position` and `direction`, and the light's own
+  values, "Lights on pieces").
 
 ## Walkable area reads
 
@@ -4500,6 +4544,21 @@ Kit window and the MCP tools both call; their scene-free parts are in
   `logs/shape_roofed_house_1.png`: a gable roof on a door wall and three
   walls over a floor; `logs/shape_beach_corner_1.png`: shore tiles into the
   water, dunes, a palm, palm clumps, shrubs and a ground patch).
+  `--only-piece-lights` runs the checks of lights on pieces (D3.15) with the
+  lit shape `--piece-lights-shape` names (default
+  `architecture.stone_lantern`): the light nodes of a placed piece on its
+  frames with the starting values; an edited light (intensity, shadow
+  casting) kept through a parameter change, its undo and redo; a Properties
+  value drag with the light node already where the release puts it mid-drag,
+  one entry at the release, its undo, and a deselect mid-drag putting the
+  node back without an entry; a light node moved off its frame put back by
+  the next regeneration; a user's copy of the kit light kept as a plain light
+  by a regeneration (its record back on undo) and by a save and load; a light
+  node a regeneration adds under a sheared parent chain exactly on its frame; a duplicate's light
+  nodes carrying the edits; Replace by `basic.block` removing them in its one
+  entry and its undo giving the same nodes back; a locked line layout's
+  pieces lit with the starting values and kept by a refresh; and save,
+  close and load keeping the edits. The full run ends with it.
 - `Mcp_test.document_edits_record_one_undo_entry_each` places three pieces as
   one undo entry, changes a piece's parameters and snaps a raised piece onto
   the one below it, groups it, mirrors the group, duplicates it and ungroups

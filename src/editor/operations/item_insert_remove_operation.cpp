@@ -80,6 +80,7 @@ Item_insert_remove_operation::Item_insert_remove_operation(const Parameters& par
     m_selection_before       = selection.get_selected_items();
     m_active_item_before     = selection.get_active_item();
     m_index_in_parent_insert = parameters.index_in_parent;
+    m_first_insert           = parameters.first_insert;
 
     if (parameters.mode == Mode::insert) {
         m_after_parent = parameters.parent;
@@ -191,8 +192,8 @@ void Item_insert_remove_operation::execute(App_context& context)
     }
 
     const bool first_insert = (m_mode == Mode::insert) && !m_inserted_once;
-    if ((m_mode == Mode::insert) && m_inserted_once) {
-        // A redo: the item kept the local transform the first insert gave it.
+    if ((m_mode == Mode::insert) && (m_inserted_once || (m_first_insert == Item_insert_transform::keep_local))) {
+        // A redo (the item kept the local transform the first insert gave it), or a first insert asked to keep it.
         reattach_keeping_local_transform(m_item, m_after_parent, m_index_in_parent);
     } else {
         // The first insert keeps the world transform the caller placed the

@@ -3,6 +3,7 @@
 #include "level/kit_layout.hpp"
 #include "level/kit_mesh_builder.hpp"
 #include "level/kit_piece.hpp"
+#include "level/kit_piece_light.hpp"
 #include "level/kit_piece_operation.hpp"
 
 #include "app_context.hpp"
@@ -204,6 +205,7 @@ void process_kit_geometry(const Kit_shape_definition& shape, erhe::geometry::Geo
     material_values.base_color = palette.base_color;
     material_values.roughness  = glm::vec2{palette.roughness, palette.roughness};
     material_values.metallic   = 0.0f;
+    material_values.emissive   = palette.emissive;
     return std::make_shared<erhe::primitive::Material>(
         erhe::primitive::Material_create_info{.name = palette.name, .values = material_values}
     );
@@ -929,6 +931,7 @@ auto Level_kits::refresh_scene(Scene_root& scene_root) -> Kit_refresh_report
             set_node_collision_shape(*mesh, scaled->collision_shape);
         }
         set_brush_placement(*mesh, brush, GEO::NO_INDEX, GEO::NO_INDEX);
+        report.light_change_count += m_light_sync.apply_now(scene_root, mesh, values);
         ++report.follow_count;
     }
     // U33: switch values a write would refuse (a hand-edited file) are kept as loaded and named in one warning.
@@ -957,8 +960,8 @@ auto Level_kits::refresh_scene(Scene_root& scene_root) -> Kit_refresh_report
     }
     if (report.piece_count > 0) {
         log_scene->info(
-            "Scene '{}': {} kit pieces, {} follow the kit, {} keep their loaded mesh",
-            scene_root.get_name(), report.piece_count, report.follow_count, report.problem_count
+            "Scene '{}': {} kit pieces, {} follow the kit, {} keep their loaded mesh, {} light nodes put on their frames",
+            scene_root.get_name(), report.piece_count, report.follow_count, report.problem_count, report.light_change_count
         );
     }
     return report;
@@ -1291,6 +1294,8 @@ auto Level_kits::prepare_placements(
             insert.node->enable_flag_bits(Editor_item_flags::pass_through);
         }
         write_kit_piece(*insert.node.get(), Kit_piece_data{.shape = shape.id, .parameters = values[i].to_canonical_text()});
+        // The lights ride the piece's insert as its children (D3.15).
+        add_piece_lights(scene_root, insert.node, values[i]);
         insert_operations.push_back(insert.operation);
         result.pieces.push_back(
             Kit_placed_piece{
@@ -2063,6 +2068,18 @@ void Level_kits::cancel_parameter_preview()
     Parameter_preview preview = std::move(m_parameter_preview.value());
     m_parameter_preview.reset();
     apply_preview_primitives(m_context, preview.mesh, preview.before.primitives);
+    restore_preview_lights(*preview.mesh);
+}
+
+void Level_kits::restore_preview_lights(const erhe::scene::Mesh& mesh)
+{
+    erhe::Item_host* const item_host = mesh.get_item_host();
+    if (item_host == nullptr) {
+        m_light_sync.restore_preview();
+        return;
+    }
+    std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> scene_lock{item_host->item_host_mutex};
+    m_light_sync.restore_preview();
 }
 
 void Level_kits::on_selection()
@@ -2175,6 +2192,11 @@ auto Level_kits::preview_parameters(const std::shared_ptr<erhe::scene::Node>& no
     // The brush shown holds its cache entry; the previous step's brush goes with its last holder (D2.2).
     m_parameter_preview.value().brush = brush;
     apply_preview_primitives(m_context, mesh, with_brush_primitives(m_parameter_preview.value().before.primitives, *scaled));
+    // U43: the kit lights follow the step, as the release will put them.
+    {
+        std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> scene_lock{mesh->get_item_host()->item_host_mutex};
+        m_light_sync.preview(mesh, values);
+    }
     log_scene->trace(
         "Kit piece '{}' preview step {}: {:.3f} ms", mesh->get_name(), get_mesh_key(values),
         std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count()
@@ -2218,6 +2240,8 @@ auto Level_kits::set_parameters(const std::shared_ptr<erhe::scene::Node>& node, 
     if (is_previewing(*mesh)) {
         before = std::move(m_parameter_preview.value().before);
         m_parameter_preview.reset();
+        // The release's light moves are recorded from where the lights stood before the drag.
+        restore_preview_lights(*mesh);
     } else {
         const std::optional<Brush_placement_data> placement = read_brush_placement(*mesh);
         before = Kit_piece_mesh_state{
@@ -2247,8 +2271,16 @@ auto Level_kits::set_parameters(const std::shared_ptr<erhe::scene::Node>& node, 
         .motion_mode     = before.motion_mode,
         .ground          = before.ground
     };
+    std::vector<std::shared_ptr<Operation>> operations;
+    operations.push_back(std::make_shared<Kit_piece_parameters_operation>(mesh, std::move(before), std::move(after)));
+    Scene_root* const scene_root = dynamic_cast<Scene_root*>(mesh->get_item_host());
+    if (scene_root != nullptr) {
+        m_light_sync.append(m_context, *scene_root, mesh, values, operations);
+    }
     m_context.operation_stack->execute_now(
-        std::make_shared<Kit_piece_parameters_operation>(mesh, std::move(before), std::move(after))
+        (operations.size() == 1)
+            ? operations.front()
+            : std::make_shared<Compound_operation>(Compound_operation::Parameters{.operations = std::move(operations)})
     );
     return result;
 }
@@ -2576,6 +2608,7 @@ auto Level_kits::replace_shape(
         };
         piece_operations.push_back(std::make_shared<Kit_piece_parameters_operation>(mesh, std::move(before), std::move(after)));
         append_connector_switch_carry(mesh, piece.values, piece_operations);
+        m_light_sync.append(m_context, scene_root, mesh, piece.values, piece_operations);
         ++result.replaced_count;
     }
     if (piece_operations.empty()) {

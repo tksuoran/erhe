@@ -202,8 +202,8 @@ TEST(Kit_recreated, land_mass_connectors_are_its_base_and_its_top)
     std::vector<Kit_connector> connectors;
     land_mass.get_connectors(values, connectors);
     ASSERT_EQ(connectors.size(), 2u);
-    EXPECT_EQ(connectors[0].name, "base");
-    EXPECT_EQ(connectors[1].name, "top");
+    EXPECT_STREQ(connectors[0].name, "base");
+    EXPECT_STREQ(connectors[1].name, "top");
     EXPECT_EQ(connectors[1].position, (glm::vec3{0.0f, 1.75f, 0.0f}));
 }
 

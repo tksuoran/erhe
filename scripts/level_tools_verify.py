@@ -212,6 +212,7 @@ Usage: python3 scripts/level_tools_verify.py [--editor <binary>] [--image <png p
        [--layout-image <png path>] [--group-image <png path>] [--path-image <png path>] [--only-walkable] [--only-transform] [--only-layouts]
        [--only-path-layouts] [--only-window-layout] [--only-replace] [--only-layout-selection] [--only-scatter] [--only-connectors] [--only-connector-snap]
        [--only-layout-indicators] [--only-region-handles] [--only-segment-handles] [--only-more-shapes] [--only-recreated-shapes] [--only-layout-connectors] [--only-stairs-layout]
+       [--only-piece-lights] [--piece-lights-shape <shape id>]
 (default editor: build_ninja_linux_vulkan_headless/bin/editor when built, else build/Ninja_Vulkan_Debug/bin/editor)
 """
 
@@ -289,9 +290,13 @@ NOMINAL_SHARE = 0.35
 # an entry in that function's `values`.
 RECREATED_SUFFIX = ".v2"
 RECREATED_SHAPES = ("basic.block", "basic.wedge", "basic.cylinder", "basic.stairs", "basic.floor_slab",
-                    "architecture.door_wall", "architecture.pillar", "architecture.arch")
-ORIGINAL_SHAPE_COUNT = 31
-SHAPE_COUNT = ORIGINAL_SHAPE_COUNT + len(RECREATED_SHAPES)
+                    "architecture.door_wall", "architecture.pillar", "architecture.arch", "architecture.battlement", "architecture.tower",
+                    "nature.leaf_plant", "nature.palm_shrub", "nature.rock_spire", "nature.rock", "nature.land_mass", "nature.hill",
+                    "nature.tree", "nature.bush")
+# The library: its originals and all its recreated shapes (those above and the later batches').
+ORIGINAL_SHAPE_COUNT = 50
+RECREATED_SHAPE_COUNT = len(RECREATED_SHAPES)
+SHAPE_COUNT = ORIGINAL_SHAPE_COUNT + RECREATED_SHAPE_COUNT
 
 
 def default_editor():
@@ -344,7 +349,7 @@ def check_catalog(editor, scene):
     catalog = editor.call("level_get_kits", {"scene_name": scene})
     shapes = catalog["shapes"]
     originals = [shape for shape in shapes if not shape["recreates"]]
-    check(f"level_get_kits lists {SHAPE_COUNT} shapes: {ORIGINAL_SHAPE_COUNT} originals and {len(RECREATED_SHAPES)} recreated",
+    check(f"level_get_kits lists {SHAPE_COUNT} shapes: {ORIGINAL_SHAPE_COUNT} originals and {RECREATED_SHAPE_COUNT} recreated",
           (catalog["shape_count"] == SHAPE_COUNT) and (len(shapes) == SHAPE_COUNT) and (len(originals) == ORIGINAL_SHAPE_COUNT),
           f"{catalog['shape_count']} shapes, {len(originals)} originals")
     recreates_of = {shape["id"]: shape["recreates"] for shape in shapes}
@@ -12044,34 +12049,29 @@ REGION_HANDLE_IMAGE = os.path.join("logs", "level_region_handles.png")
 
 def check_recreated_shapes(editor):
     """Step 70 of doc/plans/level_tools_implementation.md (U41): each recreated shape beside its original - the catalog
-    pairing, equal bounds, bodies, materials and connectors of placed pieces, Replace original -> recreated -> original,
-    and the recreated door wall and arch in runs of walls: flush, without a level check finding, walked through."""
+    pairing, placed pieces with their bodies, materials and connectors, Replace original -> recreated -> original keeping
+    what both shapes share, and the recreated door wall and arch in runs of walls: flush, without a level check finding,
+    walked through. A recreated shape may add slots and change parameters, seam sides and connectors (U41: "we dont need
+    backwards compatibilty"), so the pairs are compared only where the shapes agree."""
     scene = create_scene(editor)
     kits = editor.call("level_get_kits", {"scene_name": scene})
     by_id = {shape["id"]: shape for shape in kits["shapes"]}
     order = [shape["id"] for shape in kits["shapes"]]
     recreated = [shape for shape in kits["shapes"] if shape["recreates"]]
     check(f"level_get_kits lists {len(RECREATED_SHAPES)} recreated shapes, each <original>{RECREATED_SUFFIX} naming its original in recreates",
-          ([s["recreates"] for s in recreated] == list(RECREATED_SHAPES)) and all(s["id"] == s["recreates"] + RECREATED_SUFFIX for s in recreated),
+          (sorted(s["recreates"] for s in recreated) == sorted(RECREATED_SHAPES)) and
+          all((s["id"] == s["recreates"] + RECREATED_SUFFIX) and (s["recreates"] in by_id) and not by_id[s["recreates"]]["recreates"] for s in recreated),
           json.dumps([(s["id"], s["recreates"]) for s in recreated]))
     kit_order = {k["name"]: k["shapes"] for k in kits["kits"]}
-    check("each recreated shape stands directly after its original in the shape list and in its kit's list, its name marked (F)",
-          all((order.index(s["id"]) == order.index(s["recreates"]) + 1) and
+    check("each recreated shape stands directly after its original in the shape list and in its kit's list, in its kit, its name ending (F)",
+          all((order.index(s["id"]) == order.index(s["recreates"]) + 1) and (s["kit"] == by_id[s["recreates"]]["kit"]) and
               (kit_order[s["kit"]].index(s["id"]) == kit_order[s["kit"]].index(s["recreates"]) + 1) and
-              (s["name"] == by_id[s["recreates"]]["name"] + " (F)") for s in recreated),
+              s["name"].endswith(" (F)") for s in recreated),
           json.dumps([s["name"] for s in recreated]))
-    same_keys = ("kit", "parameters", "default_derive", "material_slots", "collision", "mesh_kind", "mirror_planes", "tags", "description", "normal_style")
-    contract_problems = [f"{s['id']}: {key}" for s in recreated for key in same_keys if s[key] != by_id[s["recreates"]][key]]
-    contract_problems += [f"{s['id']}: connectors" for s in recreated
-                          if [(c["name"], c["position"], c["outward"], c["up"]) for c in s["connectors"]] !=
-                             [(c["name"], c["position"], c["outward"], c["up"]) for c in by_id[s["recreates"]]["connectors"]]]
-    contract_problems += [f"{s['id']}: default_bounds" for s in recreated
-                          if not (close(s["default_bounds"]["min"], by_id[s["recreates"]]["default_bounds"]["min"]) and
-                                  close(s["default_bounds"]["max"], by_id[s["recreates"]]["default_bounds"]["max"]))]
-    check("a recreated shape states its original's kit, parameters, default mask, slots, connectors, collision kind, mesh kind, mirror planes and default bounds",
-          not contract_problems, "; ".join(contract_problems))
+    shape_problems = [s["id"] for s in recreated if not (s["parameters"] and s["material_slots"] and s["default_bounds"])]
+    check("each recreated shape states parameters, material slots and default bounds of its own", not shape_problems, ", ".join(shape_problems))
 
-    # Each pair placed side by side with values off the defaults.
+    # Each pair placed side by side, the first batch's with values off the defaults (the other pairs at their defaults).
     values = {
         "basic.block":      {"width": 1.5, "height": 0.75, "depth": 2.0, "seed": 5},
         "basic.wedge":      {"run": 3.0, "rise": 1.25, "width": 1.5, "seed": 5},
@@ -12089,7 +12089,7 @@ def check_recreated_shapes(editor):
     for row, original in enumerate(RECREATED_SHAPES):
         for column, shape_id in enumerate((original, original + RECREATED_SUFFIX)):
             # A shape without an entry is compared at its defaults.
-            requests.append({"shape": shape_id, "position": [6.0 * column, 0.0, 8.0 * row], "name": f"rc {shape_id}", "parameters": values.get(original, {})})
+            requests.append({"shape": shape_id, "position": [12.0 * column, 0.0, 12.0 * row], "name": f"rc {shape_id}", "parameters": values.get(original, {})})
     depth = undo_depth(editor)
     placed = editor.call("level_place_pieces", {"scene_name": scene, "pieces": requests})["pieces"]
     editor.wait_idle()
@@ -12100,20 +12100,28 @@ def check_recreated_shapes(editor):
     def local_box(piece):
         return [[a - b for a, b in zip(piece["world_aabb"][end], piece["position"])] for end in ("min", "max")]
 
-    check("the pairs place in one call; each recreated piece has its original's parameter values and local bounds",
+    pinned = [(old, new) for old, new in pairs if old["shape"] in values]
+    check("the pairs place in one call; each recreated piece of the first batch has its original's parameter values and local bounds",
           (len(placed) == 2 * len(RECREATED_SHAPES)) and (undo_depth(editor) == depth + 1) and
-          all((new["shape"] == old["shape"] + RECREATED_SUFFIX) and (new["parameters"] == old["parameters"]) and
-              close(local_box(new)[0], local_box(old)[0]) and close(local_box(new)[1], local_box(old)[1]) for old, new in pairs),
-          "; ".join(f"{new['shape']} {fmt3(local_box(new)[0])} .. {fmt3(local_box(new)[1])}" for _, new in pairs))
-    check("each recreated piece has a static body of its original's collision kind, its original's materials and is navigation input alike",
-          all(new["physics"]["has_body"] and (new["physics"]["motion_mode"] == "static") and
-              (new["physics"]["collision_shape"].split()[0] == old["physics"]["collision_shape"].split()[0]) and
-              (new["materials"] == old["materials"]) and (new["pass_through"] == old["pass_through"]) for old, new in pairs),
-          "; ".join(f"{new['shape']}: {new['physics']['collision_shape']} / {old['physics']['collision_shape']}" for old, new in pairs))
+          all(new["shape"] == old["shape"] + RECREATED_SUFFIX for old, new in pairs) and
+          all((new["parameters"] == old["parameters"]) and close(local_box(new)[0], local_box(old)[0]) and close(local_box(new)[1], local_box(old)[1])
+              for old, new in pinned),
+          "; ".join(f"{new['shape']} {fmt3(local_box(new)[0])} .. {fmt3(local_box(new)[1])}" for _, new in pinned))
+    body_problems = []
+    for old, new in pairs:
+        stated = by_id[new["shape"]]
+        bodied = stated["collision"] != "none"
+        slots  = [slot["slot"] for slot in stated["material_slots"]]
+        if not ((new["physics"]["has_body"] == bodied) and ((not bodied) or (new["physics"]["motion_mode"] == "static")) and
+                (new["pass_through"] == (not bodied)) and new.get("follows_kit") and (sorted(new["materials"]) == sorted(slots)) and
+                all(new["materials"][slot["slot"]] == slot["default_material"] for slot in stated["material_slots"])):
+            body_problems.append(f"{new['shape']}: body {new['physics']['has_body']} ({stated['collision']}), materials {new['materials']}")
+    check("each recreated piece follows its kit, has the body its own collision kind states (static; none and pass_through for none) "
+          "and its own slots' default materials", not body_problems, "; ".join(body_problems))
     check("the recreated stairs are 12 triangles a step (8 steps: 96), the door wall 572, the round pillar 476 and the arch 516; "
-          "the other recreated pieces have their originals' triangle counts",
-          all((triangles[new["id"]] == recreated_triangles.get(old["shape"], triangles[old["id"]])) for old, new in pairs),
-          "; ".join(f"{new['shape']} {triangles[new['id']]} / {triangles[old['id']]}" for old, new in pairs))
+          "the other recreated pieces of the first batch have their originals' triangle counts",
+          all((triangles[new["id"]] == recreated_triangles.get(old["shape"], triangles[old["id"]])) for old, new in pinned),
+          "; ".join(f"{new['shape']} {triangles[new['id']]} / {triangles[old['id']]}" for old, new in pinned))
     stairs_old, stairs_new = next((old, new) for old, new in pairs if old["shape"] == "basic.stairs")
     check("level_get_pieces reports the recreated stairs' layout as the original's (8 steps of 0.25 m, treads 0.375 m, run 3 m); no other piece has one",
           (stairs_new.get("stairs") == stairs_old.get("stairs")) and (stairs_new["stairs"]["step_count"] == 8) and
@@ -12122,44 +12130,47 @@ def check_recreated_shapes(editor):
           json.dumps(stairs_new.get("stairs")))
     connector_problems = []
     for old, new in pairs:
-        a = connectors_of(editor, scene, old["id"])
-        b = connectors_of(editor, scene, new["id"])
-        offset = [n - o for n, o in zip(new["position"], old["position"])]
-        if (list(a) != list(b)) or not all(close([p - d for p, d in zip(b[name]["position"], offset)], a[name]["position"]) and
-                                           close(b[name]["outward"], a[name]["outward"]) and close(b[name]["up"], a[name]["up"]) for name in a):
+        stated = [c["name"] for c in by_id[new["shape"]]["connectors"]]
+        if sorted(connectors_of(editor, scene, new["id"])) != sorted(stated):
             connector_problems.append(new["shape"])
-    check("level_get_connectors gives each recreated piece its original's connectors (names, places, frames)", not connector_problems, ", ".join(connector_problems))
+    check("level_get_connectors gives each recreated piece the connectors its own shape states", not connector_problems, ", ".join(connector_problems))
 
-    # Replace original -> recreated -> original: every value and material carries, the node keeps its place.
+    # Replace original -> recreated -> original: what both shapes share carries both ways, the node keeps its place.
     replace_problems = []
     for old, new in pairs:
         node_id = old["id"]
-        editor.call("level_set_piece_material", {"scene_name": scene, "node_id": node_id, "slot": by_id[old["shape"]]["material_slots"][0]["slot"], "material": "Kit Wood"})
-        editor.wait_idle()
+        shared_slots = sorted({s["slot"] for s in by_id[old["shape"]]["material_slots"]} & {s["slot"] for s in by_id[new["shape"]]["material_slots"]})
+        old_parameters = {p["name"]: p["type"] for p in by_id[old["shape"]]["parameters"]}
+        shared_parameters = sorted(p["name"] for p in by_id[new["shape"]]["parameters"] if old_parameters.get(p["name"]) == p["type"])
+        if shared_slots:
+            editor.call("level_set_piece_material", {"scene_name": scene, "node_id": node_id, "slot": shared_slots[0], "material": "Kit Wood"})
+            editor.wait_idle()
         before = replace_state(editor, scene, node_id)
+        before_values = piece_by_id(editor, scene, node_id)["parameters"]
         depth = undo_depth(editor)
         forward = editor.call("level_replace_pieces", {"scene_name": scene, "node_ids": [node_id], "shape": new["shape"]})["pieces"][0]
         editor.wait_idle()
         as_new = replace_state(editor, scene, node_id)
-        expected = replace_state(editor, scene, new["id"])
         back = editor.call("level_replace_pieces", {"scene_name": scene, "node_ids": [node_id], "shape": old["shape"]})["pieces"][0]
         editor.wait_idle()
         as_old = replace_state(editor, scene, node_id)
-        names = sorted(p["name"] for p in by_id[old["shape"]]["parameters"])
-        slots = sorted(s["slot"] for s in by_id[old["shape"]]["material_slots"])
+        back_values = piece_by_id(editor, scene, node_id)["parameters"]
+        # A value clamped into the recreated shape's range comes back clamped; every other shared value comes back as it was.
+        clamped = set(forward.get("clamped", []))
         ok = (forward["replaced"] and back["replaced"] and (undo_depth(editor) == depth + 2) and
-              (sorted(forward["carried"]) == names) and (forward["defaulted"] == []) and (sorted(forward["kept_materials"]) == slots) and
-              (sorted(back["carried"]) == names) and (back["defaulted"] == []) and (sorted(back["kept_materials"]) == slots) and
-              (as_new["shape"] == new["shape"]) and (as_new["parameters_text"] == before["parameters_text"]) and
-              (as_new["mesh_key"] == expected["mesh_key"]) and (as_new["materials"] == before["materials"]) and
-              (as_new["collision_shape"].split()[0] == before["collision_shape"].split()[0]) and as_new["has_body"] and
-              kept_place(before, as_new) and close(as_new["world_aabb"]["min"], before["world_aabb"]["min"]) and
-              close(as_new["world_aabb"]["max"], before["world_aabb"]["max"]) and (as_old == before))
+              (sorted(set(forward["carried"]) | clamped) == shared_parameters) and
+              set(shared_slots).issubset(set(forward["kept_materials"])) and set(shared_slots).issubset(set(back["kept_materials"])) and
+              (as_new["shape"] == new["shape"]) and as_new["follows_kit"] and
+              all(as_new["materials"][slot] == before["materials"][slot] for slot in shared_slots) and
+              all(as_old["materials"][slot] == before["materials"][slot] for slot in shared_slots) and
+              kept_place(before, as_new) and kept_place(before, as_old) and (as_old["shape"] == old["shape"]) and as_old["follows_kit"] and
+              all(back_values.get(name) == before_values.get(name) for name in shared_parameters if name not in clamped))
         if not ok:
-            replace_problems.append(f"{old['shape']}: forward {json.dumps({k: forward.get(k) for k in ('replaced', 'carried', 'defaulted', 'kept_materials')})} "
-                                    f"differs back in {[k for k in before if before[k] != as_old.get(k)]}")
-    check("Replace original -> recreated -> original carries every parameter and material, keeps the node's place and bounds, "
-          "gives the recreated shape's mesh and returns the original piece exactly (two undo entries a pair)",
+            replace_problems.append(f"{old['shape']}: forward {json.dumps({k: forward.get(k) for k in ('replaced', 'carried', 'clamped', 'defaulted', 'kept_materials')})}, "
+                                    f"shared {shared_parameters} / {shared_slots}, back differs in "
+                                    f"{[n for n in shared_parameters if back_values.get(n) != before_values.get(n)]}")
+    check("Replace original -> recreated -> original carries the parameters and material slots both shapes share and keeps the "
+          "node's place (two undo entries a pair)",
           not replace_problems, "; ".join(replace_problems))
     editor.call("undo")
     editor.wait_idle()
@@ -12168,7 +12179,7 @@ def check_recreated_shapes(editor):
 
     # A run of walls with the recreated door wall in it, and behind it a run with the recreated arch between two
     # walls, on a slab no wider than the runs: the way from the front to the back leads through both openings.
-    run_z = 60.0
+    run_z = (12.0 * len(RECREATED_SHAPES)) + 12.0
     arch_z = run_z + 4.0
     half_arch = 0.5 * size_of(by_id["architecture.arch.v2"]["default_bounds"])[0]
     flank = 6.0 - half_arch
@@ -12898,6 +12909,225 @@ def check_layout_connectors(editor, image_prefix):
         shutil.rmtree(directory, ignore_errors=True)
 
 
+PIECE_LIGHTS_SHAPE = "architecture.stone_lantern"
+
+
+def light_near(light, frame, tolerance=TOLERANCE):
+    """A light node stands on its frame: position and shine direction in the piece's local space."""
+    return all(abs(a - b) < tolerance for a, b in zip(light["position"], frame["position"])) and \
+        all(abs(a - b) < tolerance for a, b in zip(light["direction"], frame["direction"]))
+
+
+def lights_on_frames(piece):
+    """Every light frame of the piece's values has one light node of its name standing on it, and no other light node."""
+    frames = {f["name"]: f for f in piece.get("light_frames", [])}
+    lights = piece.get("lights", [])
+    return (sorted(l["frame"] for l in lights) == sorted(frames)) and all(light_near(l, frames[l["frame"]]) for l in lights)
+
+
+def changed_value(parameter):
+    """A value of a float or int parameter inside its range and off its default; None for an enum or a fixed point range."""
+    if parameter["type"] == "float":
+        low, high = parameter["min"], parameter["max"]
+        value = low + 0.7 * (high - low)
+        return value if abs(value - parameter["default"]) > 1.0e-3 else low + 0.3 * (high - low)
+    if (parameter["type"] == "int") and (parameter["max"] > parameter["min"]) and (parameter["name"] != "seed"):
+        return parameter["min"] if parameter["default"] != parameter["min"] else parameter["min"] + 1
+    return None
+
+
+def check_piece_lights(editor, directory, shape_id=PIECE_LIGHTS_SHAPE):
+    """D3.15, P2: a lit shape's pieces own light nodes on its frames, which keep their edits through every regeneration."""
+    scene = create_scene(editor)
+    kits = editor.call("level_get_kits", {"scene_name": scene})
+    shape = next((s for s in kits["shapes"] if s["id"] == shape_id), None)
+    check(f"{shape_id} is in the library and states one to four light frames",
+          (shape is not None) and (1 <= len(shape.get("light_frames", [])) <= 4),
+          "no such shape" if shape is None else f"{len(shape.get('light_frames', []))} light frames")
+    if (shape is None) or not shape.get("light_frames"):
+        editor.close(scene)
+        return
+    frames = shape["light_frames"]
+
+    # Placing: one light node per frame on its frame, the starting values, shadow casting off.
+    placed = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [{"shape": shape_id, "position": [0.0, 0.0, 0.0], "name": "lit"}]})["pieces"][0]
+    editor.wait_idle()
+    piece = piece_by_id(editor, scene, placed["id"])
+    lights = piece["lights"]
+    by_frame = {f["name"]: f for f in frames}
+    check("a placed piece has one light node per frame, named after it, on its frame",
+          lights_on_frames(piece) and all(l["name"] == l["frame"] for l in lights), json.dumps(lights)[:400])
+    check("each light node starts with its frame's values and shadow casting off",
+          all((l["type"].lower() == by_frame[l["frame"]]["type"]) and (abs(l["range"] - by_frame[l["frame"]]["range"]) < TOLERANCE) and
+              (abs(l["intensity"] - by_frame[l["frame"]]["intensity"]) < TOLERANCE) and not l["cast_shadow"] for l in lights),
+          json.dumps([(l["type"], l["range"], l["intensity"], l["cast_shadow"]) for l in lights]))
+
+    # An edited light keeps its edit through a parameter change, its undo and its redo; it moves to its frame.
+    first = lights[0]
+    editor.call("set_item_property", {"item_id": first["id"], "property": "intensity", "value": 123.0})
+    editor.call("set_item_property", {"item_id": first["id"], "property": "cast_shadow", "value": True})
+    editor.wait_idle()
+    parameter = next((p for p in shape["parameters"] if changed_value(p) is not None), None)
+    if parameter is not None:
+        depth = undo_depth(editor)
+        editor.call("level_set_piece_parameters", {"scene_name": scene, "node_id": placed["id"], "parameters": {parameter["name"]: changed_value(parameter)}})
+        editor.wait_idle()
+        changed = piece_by_id(editor, scene, placed["id"])
+        kept = next((l for l in changed["lights"] if l["id"] == first["id"]), None)
+        check(f"a parameter change ({parameter['name']}) is one undo entry; the edited light node stays, on its frame, with its edits",
+              (undo_depth(editor) == depth + 1) and lights_on_frames(changed) and (kept is not None) and
+              (abs(kept["intensity"] - 123.0) < TOLERANCE) and kept["cast_shadow"],
+              f"undo {undo_depth(editor) - depth}, lights {json.dumps(changed['lights'])[:400]}")
+        editor.call("undo")
+        editor.wait_idle()
+        undone = piece_by_id(editor, scene, placed["id"])
+        kept = next((l for l in undone["lights"] if l["id"] == first["id"]), None)
+        check("its undo puts the light nodes back on the old frames, the edit kept",
+              lights_on_frames(undone) and (kept is not None) and (abs(kept["intensity"] - 123.0) < TOLERANCE), json.dumps(undone["lights"])[:400])
+        editor.call("redo")
+        editor.wait_idle()
+        check("its redo moves them again", lights_on_frames(piece_by_id(editor, scene, placed["id"])))
+        editor.call("undo")
+        editor.wait_idle()
+
+    # U43: the light nodes follow a live parameter drag at every step; deselecting mid-drag (a cancel) puts them back.
+    if parameter is not None:
+        editor.call("set_active_scene", {"scene_name": scene})
+        editor.call("select_items", {"scene_name": scene, "ids": [placed["id"]]})
+        editor.wait_idle()
+        open_window(editor, "Properties")
+        editor.wait_idle()
+        open_property_groups(editor, ["Kit Piece"])
+        editor.call("clear_undo_history")
+        editor.wait_idle()
+        start_light = piece_by_id(editor, scene, placed["id"])["lights"][0]
+        drag_row(editor, "Properties", parameter["name"], 80.0)
+        editor.wait_idle()
+        mid_piece = piece_by_id(editor, scene, placed["id"])
+        mid_light = next(l for l in mid_piece["lights"] if l["id"] == start_light["id"])
+        moved = any(abs(a - b) > 1.0e-4 for a, b in zip(mid_light["position"], start_light["position"]))
+        editor.call("mouse_release", {})
+        editor.wait_idle()
+        released = piece_by_id(editor, scene, placed["id"])
+        released_light = next(l for l in released["lights"] if l["id"] == start_light["id"])
+        check(f"mid-drag of {parameter['name']} the light node already stands where the release puts it, and the release is one undo entry",
+              moved and (undo_depth(editor) == 1) and lights_on_frames(released) and
+              all(abs(a - b) < TOLERANCE for a, b in zip(mid_light["position"], released_light["position"])),
+              f"start {start_light['position']}, mid {mid_light['position']}, released {released_light['position']}, undo {undo_depth(editor)}")
+        editor.call("undo")
+        editor.wait_idle()
+        undone_light = next(l for l in piece_by_id(editor, scene, placed["id"])["lights"] if l["id"] == start_light["id"])
+        check("its undo puts the light node back where it stood before the drag",
+              all(abs(a - b) < TOLERANCE for a, b in zip(undone_light["position"], start_light["position"])), f"{undone_light['position']}")
+        drag_row(editor, "Properties", parameter["name"], 80.0)
+        editor.wait_idle()
+        dragged_light = next(l for l in piece_by_id(editor, scene, placed["id"])["lights"] if l["id"] == start_light["id"])
+        editor.call("select_items", {"scene_name": scene, "ids": []})
+        editor.wait_idle()
+        editor.call("mouse_release", {})
+        editor.wait_idle()
+        cancelled_light = next(l for l in piece_by_id(editor, scene, placed["id"])["lights"] if l["id"] == start_light["id"])
+        check("deselecting the piece mid-drag (a cancel) puts the moved light node back, no undo entry",
+              any(abs(a - b) > 1.0e-4 for a, b in zip(dragged_light["position"], start_light["position"])) and
+              all(abs(a - b) < TOLERANCE for a, b in zip(cancelled_light["position"], start_light["position"])) and (undo_depth(editor) == 0),
+              f"mid {dragged_light['position']}, after {cancelled_light['position']}, undo {undo_depth(editor)}")
+
+    # A light node moved off its frame goes back at the next regeneration; one removed comes back with the starting values.
+    editor.call("set_node_transform", {"scene_name": scene, "node_id": first["id"], "translation": [3.0, 3.0, 3.0], "rotation_xyzw": [0.0, 0.0, 0.0, 1.0]})
+    editor.wait_idle()
+    seed = next(p for p in shape["parameters"] if p["name"] == "seed")
+    editor.call("level_set_piece_parameters", {"scene_name": scene, "node_id": placed["id"], "parameters": {"seed": seed["default"] + 1}})
+    editor.wait_idle()
+    check("a regeneration puts a light node moved off its frame back on it", lights_on_frames(piece_by_id(editor, scene, placed["id"])))
+
+    # Copies keep the edits.
+    copy = editor.call("level_duplicate_group", {"scene_name": scene, "group_id": placed["id"], "offset": [5.0, 0.0, 0.0]})
+    editor.wait_idle()
+    copied = piece_by_id(editor, scene, copy["id"])
+    copied_first = next((l for l in copied["lights"] if l["frame"] == first["frame"]), None) if copied else None
+    check("a duplicate copies the light nodes with their edited values",
+          (copied is not None) and lights_on_frames(copied) and (copied_first is not None) and (copied_first["id"] != first["id"]) and
+          (abs(copied_first["intensity"] - 123.0) < TOLERANCE),
+          json.dumps(copied["lights"] if copied else None)[:400])
+
+    # Replace by a shape without frames removes the light nodes in the entry; its undo gives the same nodes back.
+    depth = undo_depth(editor)
+    editor.call("level_replace_pieces", {"scene_name": scene, "node_ids": [placed["id"]], "shape": "basic.block"})
+    editor.wait_idle()
+    replaced = piece_by_id(editor, scene, placed["id"])
+    check("Replace by a shape without light frames removes the light nodes in its one undo entry",
+          (replaced["lights"] == []) and (undo_depth(editor) == depth + 1), json.dumps(replaced["lights"])[:200])
+    editor.call("undo")
+    editor.wait_idle()
+    restored = piece_by_id(editor, scene, placed["id"])
+    back = next((l for l in restored["lights"] if l["id"] == first["id"]), None)
+    check("its undo gives the same light nodes back with their edits",
+          lights_on_frames(restored) and (back is not None) and (abs(back["intensity"] - 123.0) < TOLERANCE), json.dumps(restored["lights"])[:400])
+
+    # A kit layout's pieces start with the starting values; a locked layout keeps its children (and their lights) at a refresh.
+    layout = editor.call("level_create_layout", {"scene_name": scene, "name": "lit run", "position": [0.0, 0.0, 20.0],
+                                                 "items": [{"shape": shape_id}], "pattern": {"kind": "line", "count": 3}})
+    editor.wait_idle()
+    children = [piece_by_id(editor, scene, c["id"]) for c in layout["children"]]
+    check("each piece of a kit layout has its light nodes on its frames with the starting values",
+          (len(children) == 3) and all(c and lights_on_frames(c) and all(not l["cast_shadow"] for l in c["lights"]) for c in children),
+          json.dumps([len(c["lights"]) if c else None for c in children]))
+    refreshed = editor.call("level_refresh_layout", {"scene_name": scene, "layout_id": layout["id"]})
+    editor.wait_idle()
+    check("refreshing the locked layout keeps every child and records nothing: light nodes do not count against a match",
+          (refreshed["kept_count"] == 3) and not refreshed["changed"], json.dumps({k: refreshed.get(k) for k in ("kept_count", "removed_count", "added_count", "changed")}))
+
+    # A user's copy of a kit light lives on as a plain light: a regeneration clears its record in the entry, undo gives it back.
+    light_copy = editor.call("level_duplicate_group", {"scene_name": scene, "group_id": first["id"], "offset": [0.0, 0.25, 0.0]})
+    editor.wait_idle()
+    seed_now = piece_by_id(editor, scene, placed["id"])["parameters"]["seed"]
+    editor.call("level_set_piece_parameters", {"scene_name": scene, "node_id": placed["id"], "parameters": {"seed": seed_now + 1}})
+    editor.wait_idle()
+    after_copy = piece_by_id(editor, scene, placed["id"])
+    copy_node = call_error(editor, "get_node_details", {"scene_name": scene, "node_id": light_copy["id"]})
+    check("a regeneration keeps a user's copy of a kit light as a plain light: the node stays, out of the piece's kit lights",
+          (copy_node is None) and lights_on_frames(after_copy) and all(l["id"] != light_copy["id"] for l in after_copy["lights"]),
+          f"{copy_node} {json.dumps(after_copy['lights'])[:300]}")
+    editor.call("undo")
+    editor.wait_idle()
+    undone_copy = piece_by_id(editor, scene, placed["id"])
+    check("its undo gives the copy its Kit_light record back", any(l["id"] == light_copy["id"] for l in undone_copy["lights"]),
+          json.dumps([l["id"] for l in undone_copy["lights"]]))
+
+    # A new light node under a sheared parent chain stands on its frame (the insert keeps the frame as its local transform).
+    sheared = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [{"shape": shape_id, "position": [10.0, 0.0, 0.0], "name": "sheared"}]})["pieces"][0]
+    editor.wait_idle()
+    group = editor.call("level_group_nodes", {"scene_name": scene, "node_ids": [sheared["id"]], "name": "stretch"})
+    editor.wait_idle()
+    editor.call("set_node_transform", {"scene_name": scene, "node_id": group["id"], "scale": [1.0, 2.0, 0.5]})
+    editor.call("set_node_transform", {"scene_name": scene, "node_id": sheared["id"], "rotation_xyzw": [0.0, 0.0, math.sin(math.radians(15.0)), math.cos(math.radians(15.0))]})
+    editor.wait_idle()
+    editor.call("delete_nodes", {"scene_name": scene, "ids": [l["id"] for l in piece_by_id(editor, scene, sheared["id"])["lights"]]})
+    editor.wait_idle()
+    editor.call("level_set_piece_parameters", {"scene_name": scene, "node_id": sheared["id"], "parameters": {"seed": seed_now + 7}})
+    editor.wait_idle()
+    stretched = piece_by_id(editor, scene, sheared["id"])
+    check("a light node a regeneration adds under a sheared parent chain stands exactly on its frame",
+          (len(stretched["lights"]) == len(stretched["light_frames"])) and lights_on_frames(stretched), json.dumps(stretched["lights"])[:400])
+
+    # Save, close and load: the light nodes are back with their edits and records; the user's copy saved with its record
+    # stays as a plain light.
+    path = os.path.join(directory, "piece_lights.glb")
+    editor.save(scene, path)
+    editor.close(scene)
+    loaded = editor.load(path)
+    editor.wait_idle()
+    reloaded = next((p for p in pieces(editor, loaded) if p["name"] == "lit"), None)
+    edited = next((l for l in reloaded["lights"] if l["frame"] == first["frame"]), None) if reloaded else None
+    check("a saved and loaded piece has its light nodes on its frames with their edits",
+          (reloaded is not None) and lights_on_frames(reloaded) and (edited is not None) and (abs(edited["intensity"] - 123.0) < TOLERANCE) and edited["cast_shadow"],
+          json.dumps(reloaded["lights"] if reloaded else None)[:400])
+    loaded_copy = call_error(editor, "get_node_details", {"scene_name": loaded, "node_name": "lit/light Copy"})
+    check("the user's copy of the kit light is still there after the load, as a plain light", (loaded_copy is None) and (reloaded is not None) and
+          all(l["name"] != "light Copy" for l in reloaded["lights"]), f"{loaded_copy}")
+    editor.close(loaded)
+
+
 def check_collision_scale(editor, directory):
     """U40, level plan step 69: a body's collision shape follows its node's world scale after every kind of scale change -
     set_node_transform, a Transform tool scale drag with its undo, redo and Escape cancel, a scale property write, an ancestor's
@@ -13224,6 +13454,8 @@ def main():
     parser.add_argument("--only-layout-connectors", action="store_true", help="run the connector switch checks of path and segments layouts alone (U39)")
     parser.add_argument("--layout-connectors-image", default=os.path.join("logs", "level_tools_layout_connectors"), help="prefix of the two layout connector screenshots (_off.png, _tangent.png)")
     parser.add_argument("--only-more-shapes", action="store_true", help="run the checks of the more shapes alone (doc/plans/level_kit_more_shapes.md build order 1 - 12)")
+    parser.add_argument("--only-piece-lights", action="store_true", help="run the checks of light nodes on pieces alone (D3.15; needs a library shape with light frames)")
+    parser.add_argument("--piece-lights-shape", default=PIECE_LIGHTS_SHAPE, help="the lit shape the piece light checks place")
     parser.add_argument("--only-recreated-shapes", action="store_true", help="run the checks of the recreated shapes beside their originals alone (U41)")
     parser.add_argument("--layout-drag-image", default=DEFAULT_LAYOUT_DRAG_IMAGE, help="mid-drag layout screenshot PNG (relative to the repository root or absolute)")
     args = parser.parse_args()
@@ -13310,6 +13542,8 @@ def main():
             check_more_shapes_3(editor)
         elif args.only_recreated_shapes:
             check_recreated_shapes(editor)
+        elif args.only_piece_lights:
+            check_piece_lights(editor, work, args.piece_lights_shape)
         elif args.only_region_handles:
             check_region_handles(editor)
         elif args.only_layout_selection:
@@ -13379,6 +13613,7 @@ def main():
             check_layout_connectors(editor, layout_connectors_prefix)
             check_collision_scale(editor, work)
             check_stairs_layouts(editor, work, stairs_image_prefix)
+            check_piece_lights(editor, work, args.piece_lights_shape)
     except Exception as error:  # noqa: BLE001 - a failed step is a failed check
         check("run completed without an error", False, f"{type(error).__name__}: {error}")
     finally:

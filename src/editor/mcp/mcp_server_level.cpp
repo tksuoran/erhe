@@ -15,7 +15,9 @@
 #include "level/kit_layout_indicators.hpp"
 #include "level/kit_layout_outline.hpp"
 #include "level/kit_layout_region_tool.hpp"
+#include "level/kit_light.hpp"
 #include "level/kit_piece.hpp"
+#include "level/kit_piece_light.hpp"
 #include "level/kit_shape_checks.hpp"
 #include "level/kit_shapes.hpp"
 #include "level/level_kits.hpp"
@@ -42,6 +44,7 @@
 #include "erhe_primitive/material.hpp"
 #include "erhe_primitive/primitive.hpp"
 #include "erhe_scene/curve.hpp"
+#include "erhe_scene/light.hpp"
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/node.hpp"
 #include "erhe_scene/scene.hpp"
@@ -390,6 +393,52 @@ namespace {
     return result;
 }
 
+// A shape's light frames at the values (D3.15): name, position, direction and the values a new light node starts with.
+[[nodiscard]] auto light_frames_json(const std::vector<Kit_light_frame>& frames) -> json
+{
+    json result = json::array();
+    for (const Kit_light_frame& frame : frames) {
+        result.push_back({
+            {"name",             frame.name},
+            {"position",         vec3_json(frame.position)},
+            {"direction",        vec3_json(frame.direction)},
+            {"type",             c_str(frame.start.type)},
+            {"color",            vec3_json(frame.start.color)},
+            {"intensity",        frame.start.intensity},
+            {"range",            frame.start.range},
+            {"inner_spot_angle", frame.start.inner_spot_angle},
+            {"outer_spot_angle", frame.start.outer_spot_angle}
+        });
+    }
+    return result;
+}
+
+// A piece's kit light nodes (D3.15): id, name, frame, the local position and shine direction, the light's own values.
+[[nodiscard]] auto piece_lights_json(const erhe::scene::Node& piece) -> json
+{
+    std::vector<std::shared_ptr<erhe::scene::Light>> lights;
+    collect_piece_lights(piece, lights);
+    json result = json::array();
+    for (const std::shared_ptr<erhe::scene::Light>& light : lights) {
+        const erhe::scene::Trs_transform& local = light->parent_from_node_transform();
+        result.push_back({
+            {"id",               light->get_id()},
+            {"name",             light->get_name()},
+            {"frame",            read_kit_light_frame(*light).value_or(std::string{})},
+            {"position",         vec3_json(local.get_translation())},
+            {"direction",        vec3_json(local.get_rotation() * glm::vec3{0.0f, 0.0f, -1.0f})},
+            {"type",             erhe::scene::Light::c_type_strings[static_cast<std::size_t>(light->get_light_type())]},
+            {"color",            vec3_json(light->get_color())},
+            {"intensity",        light->get_intensity()},
+            {"range",            light->get_range()},
+            {"inner_spot_angle", light->get_inner_spot_angle()},
+            {"outer_spot_angle", light->get_outer_spot_angle()},
+            {"cast_shadow",      light->get_cast_shadow()}
+        });
+    }
+    return result;
+}
+
 // A placed piece's connectors with their state (U33): every connector of the shape and whether it is enabled.
 [[nodiscard]] auto piece_connectors_json(const std::vector<Kit_connector>& connectors, const Kit_connector_switches& switches) -> json
 {
@@ -516,6 +565,8 @@ auto Mcp_server::query_level_kits(const json& args) -> std::string
         }
         std::vector<Kit_connector> connectors;
         get_shape_connectors(defaults, connectors);
+        std::vector<Kit_light_frame> light_frames;
+        get_shape_light_frames(defaults, light_frames);
         json default_derive = json::array();
         for (const Kit_parameter& parameter : shape.parameters) {
             if ((parameter.derive == Kit_derive::derivable) && (parameter.default_source == Kit_value_source::seed)) {
@@ -536,6 +587,7 @@ auto Mcp_server::query_level_kits(const json& args) -> std::string
             {"default_bounds",  aabb_json(bounds)},
             {"material_slots",  material_slots},
             {"connectors",      connectors_json(connectors)},
+            {"light_frames",    light_frames_json(light_frames)},
             {"normal_style",    c_str(shape.normal_style)},
             {"triangle_budget", shape.triangle_budget},
             {"collision",       c_str(shape.collision)},
@@ -546,7 +598,7 @@ auto Mcp_server::query_level_kits(const json& args) -> std::string
     }
     json palette = json::array();
     for (const Kit_palette_material& material : library.get_palette()) {
-        palette.push_back({{"name", material.name}, {"base_color", vec3_json(material.base_color)}, {"roughness", material.roughness}});
+        palette.push_back({{"name", material.name}, {"base_color", vec3_json(material.base_color)}, {"roughness", material.roughness}, {"emissive", vec3_json(material.emissive)}});
     }
     return make_json_content({
         {"scene_name",  scene_root->get_name()},
@@ -1417,7 +1469,8 @@ auto Mcp_server::query_level_pieces(const json& args) -> std::string
             {"world_aabb",      world_aabb_json(*node)},
             {"materials",       piece_materials_json(*node, shape)},
             {"follows_kit",     check.follows_kit},
-            {"problem",         check.problem}
+            {"problem",         check.problem},
+            {"lights",          piece_lights_json(*node)}
         };
         if (shape != nullptr) {
             Kit_parameter_values values{*shape};
@@ -1425,6 +1478,9 @@ auto Mcp_server::query_level_pieces(const json& args) -> std::string
             if (error.empty()) {
                 piece["parameters"] = values_json(values);
                 piece["mesh_key"]   = Level_kits::get_mesh_key(values);
+                std::vector<Kit_light_frame> light_frames;
+                get_shape_light_frames(values, light_frames);
+                piece["light_frames"] = light_frames_json(light_frames);
                 if (get_contract_id(*shape) == "basic.stairs") {
                     const Kit_stairs_layout layout = get_stairs_layout(values);
                     piece["stairs"] = {

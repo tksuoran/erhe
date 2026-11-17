@@ -671,6 +671,85 @@ R-numbers). The build order is in
   - No name labels: the editor's label path draws per-mesh text and would
     need a per-frame text layout per connector.
 
+- D3.15 Lights on pieces (U34, U36, U43; P2 of `doc/plans/level_kit_extra_shapes.md`).
+  - Frames: `Kit_shape_definition::get_light_frames` (optional) fills
+    `Kit_light_frame`s (`level/kit_light.hpp`, scene-free, tested in
+    `editor_level_tests`) from the values, as `get_connectors` fills connectors
+    (D1.12): a name (a literal), a position and the unit direction the light
+    shines in, in the piece's local space, and `Kit_light_start`, the values a
+    new light node starts with: by default a point light of color (1, 0.78,
+    0.52), 40 cd and range 8 m; a shape may state its own type, color,
+    intensity, range and spot cone angles; shadow casting always starts off.
+    `architecture.stone_lantern` states 12 cd, 6 m and color (1, 0.72, 0.42),
+    an orchestrator choice for the user's review (P2 says 8 m). The names may
+    differ between values. `check_light_frames()` states the contract: at most
+    `c_max_light_frames` (four) frames, unique non-empty names, a unit
+    direction, a positive range and intensity, no negative color component,
+    spot angles 0 <= inner <= outer < pi; `editor_level_tests` runs it over every shape at its defaults and at
+    a seed-derived second set. A generator file states its frames with a
+    function of `Kit_light_frames_function`'s signature that appends to
+    `out_frames` (cleared by the caller, `get_shape_light_frames()`), assigned
+    to the definition's `get_light_frames`; a frame from
+    `Kit_light_frame{.name = "lamp", .position = ..., .direction = ...}` takes
+    the default starting values, and a spot sets `start.type` and its angles.
+  - Nodes (`level/kit_piece_light.hpp`): each frame is a child of the piece
+    node, an `erhe::scene::Light` carrying the attached value group
+    `Kit_light` (the pattern of `Kit_piece`, D3.1) whose key `Kit_light.frame`
+    names the frame, saved with the node. `make_piece_light()` gives it the
+    frame's name, the starting values, the scene's light layer and the local
+    transform of the frame (`get_light_frame_rotation()`: node -Z, where an
+    erhe light shines, on the direction; node +Y nearest the piece's +Y, -Z
+    for a vertical direction; scale 1). Afterwards the kit writes only the
+    node's local transform (the name too is set only at creation); every light
+    property is the node's own, edited in the Properties window.
+  - Matching (`match_light_frames()`): the piece's kit light nodes (its
+    children carrying `Kit_light.frame`, child order) meet the frames by the
+    recorded frame name (not the node's name), the first node of a name taking
+    the frame. A matched node not within 1e-5 of its frame
+    (`is_at_light_frame()`) moves to it; a frame without a node gets a new one;
+    a node recording a frame the values do not state is removed; a further
+    node recording a frame an earlier node took (a user's copy of a kit light,
+    a duplicate or a paste under the piece) is released: its `Kit_light`
+    record is cleared and it lives on as a plain light, in the regenerating
+    entry (a `Property_set_operation`) or directly at load.
+  - Paths: `place()` attaches the new nodes to the piece before its insert, so
+    they ride it (`add_piece_lights()`), which covers placing, a kit layout's
+    new children and a scatter's. `Kit_piece_light_sync` (owned by
+    `Level_kits`) appends the operations of the matching to the operation that
+    regenerates the piece, in its undo entry: the releases, the removes (last
+    child first), the `Node_transform_operation`s and the inserts, which keep
+    the frame as the new node's local transform on their first execute
+    (`Item_insert_transform::keep_local`, so a node under a sheared parent
+    chain lands exactly on its frame). The regenerations are
+    `set_parameters()` (D3.3; values equal to the piece's record return before
+    any of it, so lights moved off their frames stay until the next real
+    change), `replace_shape()` against the new shape's frames (D3.10) and a kit
+    layout generation's kept children (D3.9). `refresh_scene()` (D3.5) applies
+    the same matching without operations under the scene's item_host_mutex
+    and counts the changed nodes in its log line. Its scratch vectors keep
+    their capacity, and a piece of a shape without light frames and without
+    children returns after two checks, so a layout preview step of kept
+    children on their frames allocates nothing.
+  - Live drags (U43): `preview_parameters()` (D3.6) moves the kit light nodes
+    matched to the dragged values' frames onto them at every step, without an
+    operation, after remembering their transforms at the first step; nodes of
+    frames that appear or go during the drag are made or removed by the
+    release, as the mesh preview leaves the record to the release. A cancel
+    gives the remembered transforms back; the release gives them back first
+    and then records the move from them in its one entry. A kit layout value
+    drag lays out its children through operations it undoes at each step
+    (D3.9), so their lights follow it the same way. A kit layout child matches its element with
+    kit light children (`has_only_kit_light_children()`), and
+    `make_layout_from_piece()` removes the piece with its light nodes, deepest
+    first. A duplicate, a copy and paste and a group duplicate clone the light
+    nodes with their properties; `mirror()` reflects them as nodes below the
+    group (D3.8), position and direction, and the next regeneration puts each
+    on the frame of its name.
+  - Count: every lit piece makes its lights, with no limit (U36).
+  - Materials: the slot `glow` has the palette material Kit Glow (default)
+    and Kit Ember; `Kit_palette_material::emissive` is the linear emissive
+    color of the scene material made from it (D3.4).
+
 ## D4 Exposure
 
 - D4.1 UI (R6.2): the "Level Kit" window (`level/level_kit_window.hpp`)

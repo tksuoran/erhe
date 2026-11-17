@@ -9,6 +9,12 @@ namespace editor {
 
 class Item_parent_change_operation;
 
+// The transform an insert's first execute keeps; a redo always keeps the local transform.
+enum class Item_insert_transform : unsigned int {
+    keep_world = 0, // the world transform the caller placed the detached item at
+    keep_local      // the local transform the caller gave the detached item (its place under the parent)
+};
+
 class Item_insert_remove_operation : public Operation
 {
 public:
@@ -38,6 +44,7 @@ public:
         std::shared_ptr<erhe::Hierarchy> parent;
         Mode                             mode;
         std::size_t                      index_in_parent = 0;
+        Item_insert_transform            first_insert    = Item_insert_transform::keep_world;
     };
 
     explicit Item_insert_remove_operation(const Parameters& parameters);
@@ -62,6 +69,7 @@ private:
     std::size_t                                                m_index_in_parent{};
     std::size_t                                                m_index_in_parent_insert{};
     bool                                                       m_inserted_once{false};
+    Item_insert_transform                                      m_first_insert{Item_insert_transform::keep_world};
 
     erhe::Item_host*                              m_scene_host{nullptr};
     std::vector<std::shared_ptr<erhe::Item_base>> m_selection_before;

@@ -223,7 +223,14 @@ Kit_shape_library::Kit_shape_library()
         Kit_palette_material{.name = "Kit Shell",          .base_color = glm::vec3{0.85f, 0.78f, 0.70f}, .roughness = 0.60f},
         Kit_palette_material{.name = "Kit Roof Tile",      .base_color = glm::vec3{0.52f, 0.20f, 0.12f}, .roughness = 0.80f},
         Kit_palette_material{.name = "Kit Water",          .base_color = glm::vec3{0.04f, 0.18f, 0.30f}, .roughness = 0.10f},
-        Kit_palette_material{.name = "Kit Shallow Water",  .base_color = glm::vec3{0.10f, 0.40f, 0.42f}, .roughness = 0.10f}
+        Kit_palette_material{.name = "Kit Shallow Water",  .base_color = glm::vec3{0.10f, 0.40f, 0.42f}, .roughness = 0.10f},
+        Kit_palette_material{.name = "Kit Straw",          .base_color = glm::vec3{0.66f, 0.55f, 0.30f}, .roughness = 0.90f},
+        Kit_palette_material{.name = "Kit Bamboo",         .base_color = glm::vec3{0.30f, 0.42f, 0.10f}, .roughness = 0.55f},
+        Kit_palette_material{.name = "Kit Golden Bamboo",  .base_color = glm::vec3{0.68f, 0.52f, 0.16f}, .roughness = 0.55f},
+        Kit_palette_material{.name = "Kit Pale Wood",      .base_color = glm::vec3{0.62f, 0.47f, 0.28f}, .roughness = 0.80f},
+        Kit_palette_material{.name = "Kit Coral",          .base_color = glm::vec3{0.80f, 0.30f, 0.18f}, .roughness = 0.70f},
+        Kit_palette_material{.name = "Kit Glow",           .base_color = glm::vec3{1.00f, 0.72f, 0.36f}, .roughness = 0.40f, .emissive = glm::vec3{2.20f, 1.20f, 0.35f}},
+        Kit_palette_material{.name = "Kit Ember",          .base_color = glm::vec3{0.60f, 0.18f, 0.05f}, .roughness = 0.60f, .emissive = glm::vec3{1.60f, 0.45f, 0.08f}}
     };
     // One default per slot name and a few alternatives (R2.9).
     m_slot_palettes = {
@@ -241,7 +248,14 @@ Kit_shape_library::Kit_shape_library()
         Kit_slot_palette{.slot = "roof",    .default_material = "Kit Roof Tile", .alternatives = {"Kit Wood", "Kit Stone"}},
         Kit_slot_palette{.slot = "water",   .default_material = "Kit Water",   .alternatives = {"Kit Shallow Water"}},
         Kit_slot_palette{.slot = "wood",    .default_material = "Kit Wood",    .alternatives = {"Kit Vermilion", "Kit Dark Wood", "Kit Bark"}},
-        Kit_slot_palette{.slot = "shoot",   .default_material = "Kit Grass",   .alternatives = {"Kit Foliage", "Kit Autumn Foliage"}}
+        Kit_slot_palette{.slot = "shoot",   .default_material = "Kit Grass",   .alternatives = {"Kit Foliage", "Kit Autumn Foliage"}},
+        Kit_slot_palette{.slot = "plume",   .default_material = "Kit Straw",   .alternatives = {"Kit Shell", "Kit Bark", "Kit Autumn Foliage"}},
+        Kit_slot_palette{.slot = "cane",    .default_material = "Kit Bamboo",  .alternatives = {"Kit Golden Bamboo", "Kit Straw", "Kit Dark Wood"}},
+        Kit_slot_palette{.slot = "sapwood",   .default_material = "Kit Pale Wood", .alternatives = {"Kit Wood", "Kit Straw", "Kit Shell"}},
+        Kit_slot_palette{.slot = "heartwood", .default_material = "Kit Wood",      .alternatives = {"Kit Dark Wood", "Kit Bark", "Kit Pale Wood"}},
+        Kit_slot_palette{.slot = "shell",     .default_material = "Kit Shell",     .alternatives = {"Kit Sand", "Kit Stone", "Kit Coral"}},
+        Kit_slot_palette{.slot = "coral",     .default_material = "Kit Coral",     .alternatives = {"Kit Shell", "Kit Vermilion", "Kit Sand"}},
+        Kit_slot_palette{.slot = "glow",      .default_material = "Kit Glow",      .alternatives = {"Kit Ember"}}
     };
 }
 

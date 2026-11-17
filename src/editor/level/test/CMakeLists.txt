@@ -17,13 +17,14 @@ add_executable(${_target}
     # library to link against. The kit shape library needs erhe::geometry
     # (with its erhe::math headers), glm and fmt only; the region and height
     # map helpers need glm and erhe::math; the repeat expansion glm and fmt; the
-    # group mirror glm and erhe::math; the stairs fit and mesh erhe::math; the kit layout values and outlines nlohmann_json; the snap to
+    # group mirror glm and erhe::math; the stairs fit and mesh erhe::math; the kit layout values and outlines nlohmann_json; the light frames glm and fmt; the snap to
     # surface search (surface_snap_search.hpp) is header-only.
     ${CMAKE_CURRENT_SOURCE_DIR}/../kit_connector.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../kit_layout_connectors.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../kit_layout_outline.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../kit_layout_values.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../kit_leaf.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../kit_light.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../kit_mesh_builder.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../kit_replace.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../kit_shape.cpp
@@ -57,6 +58,7 @@ add_executable(${_target}
     test_kit_layout_connectors.cpp
     test_kit_layout_outline.cpp
     test_kit_layout_values.cpp
+    test_kit_light.cpp
     test_kit_replace.cpp
     test_kit_shapes.cpp
     test_kit_shapes_architecture_v2.cpp

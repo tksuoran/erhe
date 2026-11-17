@@ -16,6 +16,7 @@ Usage:
                                            [--parameters <json object>] [--recreated-parameters <json object>]
                                            [--tag <name>] [--detail <x,y,z,distance>]
                                            [--azimuth <degrees>] [--elevation <degrees>]
+                                           [--single] [--sun <intensity>] [--ambient <level>] [--light-shadows]
                                            [--save <scene path>] [--keep-open]
 
 --parameters gives both shapes of every row these values instead of their defaults
@@ -24,6 +25,12 @@ to the recreated shape alone, for the parameters its original lacks; --tag ends 
 _<name>, so such a run keeps the default images. --detail renders a close-up
 instead of the pair: the camera looks at the point x,y,z in the recreated piece's
 own frame from the given distance. --azimuth and --elevation turn the camera.
+--single renders the shapes that have no recreated twin instead of the pairs, each
+alone on its pad (with --only naming them); --detail then looks at that piece.
+--sun adds a directional light of that intensity and --ambient sets the scene's
+ambient light to that grey level: a shape that carries lights of its own is
+otherwise lit by them alone. --light-shadows turns shadow casting on for every
+light node the pieces carry (doc/editor/level_tools.md "Lights on pieces").
 --save writes the scene (a .gltf or .glb path) so the windowed editor can open it;
 --keep-open leaves the launched editor running with the scene and prints its pid.
 """
@@ -69,17 +76,25 @@ def local_box(piece):
     return [[a - b for a, b in zip(piece["world_aabb"][end], piece["position"])] for end in ("min", "max")]
 
 
-def list_pairs(editor, scene, only):
-    """(original, recreated, seed) per row: the catalog's recreated shapes in catalog order."""
+def list_pairs(editor, scene, only, single):
+    """(original, recreated, seed) per row: the catalog's recreated shapes in catalog order, or its shapes without a twin."""
     shapes = editor.call("level_get_kits", {"scene_name": scene})["shapes"]
     by_id = {shape["id"]: shape for shape in shapes}
     rows = []
+    if single:
+        twinned = {shape["recreates"] for shape in shapes if shape["recreates"]}
+        for shape in shapes:
+            if shape["recreates"] or (shape["id"] in twinned) or not shape["id"].startswith(only):
+                continue
+            for seed in (SEEDS if shape["seeded"] else SEEDS[:1]):
+                rows.append({"original": shape["id"], "recreated": shape["id"], "seed": seed, "seeded": shape["seeded"], "single": True})
+        return rows
     for shape in shapes:
         original_id = shape["recreates"]
         if (not original_id) or (original_id not in by_id) or not original_id.startswith(only):
             continue
         for seed in (SEEDS if shape["seeded"] else SEEDS[:1]):
-            rows.append({"original": original_id, "recreated": shape["id"], "seed": seed, "seeded": shape["seeded"]})
+            rows.append({"original": original_id, "recreated": shape["id"], "seed": seed, "seeded": shape["seeded"], "single": False})
     return rows
 
 
@@ -112,6 +127,8 @@ def lay_out(rows, gap):
         b = row["recreated_box"]
         row["original_x"] = (-0.5 * gap) - a[1][0]
         row["recreated_x"] = (0.5 * gap) - b[0][0]
+        if row["single"]:  # one piece, its bounds centered on the pad
+            row["original_x"] = row["recreated_x"] = -0.5 * (a[0][0] + a[1][0])
         min_x = row["original_x"] + a[0][0]
         max_x = row["recreated_x"] + b[1][0]
         min_z = min(a[0][2], b[0][2])
@@ -168,8 +185,9 @@ def build(editor, scene, rows, parameters):
     for row in rows:
         label = f"{row['original']} seed {row['seed']}" if row["seeded"] else row["original"]
         requests.extend(pad_tiles(row["pad"], f"pad {label}"))
-        requests.append({"shape": row["original"], "position": [row["original_x"], 0.0, row["z"]], "name": f"{label} original",
-                         "parameters": parameters_of(row, parameters, "original")})
+        if not row["single"]:
+            requests.append({"shape": row["original"], "position": [row["original_x"], 0.0, row["z"]], "name": f"{label} original",
+                             "parameters": parameters_of(row, parameters, "original")})
         requests.append({"shape": row["recreated"], "position": [row["recreated_x"], 0.0, row["z"]], "name": f"{label} recreated",
                          "parameters": parameters_of(row, parameters, "recreated")})
     placed = editor.call("level_place_pieces", {"scene_name": scene, "pieces": requests})["pieces"]
@@ -199,6 +217,10 @@ def main():
     parser.add_argument("--detail", default="", help="x,y,z,distance: a close-up of that point of the recreated piece")
     parser.add_argument("--azimuth", type=float, default=AZIMUTH_DEGREES, help="camera azimuth in degrees from +Z toward +X")
     parser.add_argument("--elevation", type=float, default=ELEVATION_DEGREES, help="camera elevation in degrees")
+    parser.add_argument("--single", action="store_true", help="render the shapes without a recreated twin, each alone")
+    parser.add_argument("--sun", type=float, default=0.0, help="intensity of a directional light added to the scene (0: none)")
+    parser.add_argument("--ambient", type=float, default=-1.0, help="grey level of the scene's ambient light (negative: left as it is)")
+    parser.add_argument("--light-shadows", action="store_true", help="turn shadow casting on for the pieces' light nodes")
     parser.add_argument("--save", default="", help="save the comparison scene to this .gltf or .glb path")
     parser.add_argument("--keep-open", action="store_true", help="leave the launched editor running with the scene")
     args = parser.parse_args()
@@ -211,14 +233,26 @@ def main():
     try:
         editor = Editor(args.editor)
         scene = ltv.create_scene(editor)
-        rows = list_pairs(editor, scene, args.only)
+        rows = list_pairs(editor, scene, args.only, args.single)
         if not rows:
-            raise RuntimeError(f"level_get_kits lists no recreated shape whose original starts with '{args.only}'")
+            raise RuntimeError(f"level_get_kits lists no {'shape without a twin' if args.single else 'recreated shape'} whose {'id' if args.single else 'original'} starts with '{args.only}'")
         measure(editor, scene, rows, parameters)
         lay_out(rows, args.gap)
         placed = build(editor, scene, rows, parameters)
-        if len(placed) < 3 * len(rows):
+        if len(placed) < (2 if args.single else 3) * len(rows):
             failures.append(f"placed {len(placed)} pieces for {len(rows)} rows")
+        if args.sun > 0.0:
+            editor.call("create_light", {"scene_name": scene, "type": "directional", "name": "Sun", "intensity": args.sun,
+                                         "position": [3.0, 8.0, 6.0], "cast_shadow": False})
+            editor.wait_idle()
+        if args.light_shadows:
+            for piece in editor.call("level_get_pieces", {"scene_name": scene})["pieces"]:
+                for light in piece.get("lights", []):
+                    editor.call("set_item_property", {"item_id": light["id"], "property": "cast_shadow", "value": True})
+            editor.wait_idle()
+        if args.ambient >= 0.0:
+            editor.call("set_scene_settings", {"scene_name": scene, "ambient_light": [args.ambient, args.ambient, args.ambient]})
+            editor.wait_idle()
         print(f"scene '{scene}': {len(rows)} rows, original at -X, recreated at +X, {args.gap} m apart; the rows run toward -Z")
         for row in rows:
             path = render(editor, scene, row, view)

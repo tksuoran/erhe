@@ -5,6 +5,7 @@
 #include "level/kit_layout_indicators.hpp"
 #include "level/kit_layout.hpp"
 #include "level/kit_piece.hpp"
+#include "level/kit_piece_light.hpp"
 #include "level/kit_piece_operation.hpp"
 #include "level/kit_replace.hpp"
 #include "level/level_group.hpp"
@@ -186,6 +187,7 @@ public:
     std::size_t piece_count  {0};
     std::size_t follow_count {0};
     std::size_t problem_count{0};
+    std::size_t light_change_count{0}; // light nodes moved to, added at or removed from their frames (D3.15)
 };
 
 enum class Kit_snap_apply : unsigned int {
@@ -819,6 +821,8 @@ private:
         std::shared_ptr<Brush>             brush;
     };
     std::optional<Parameter_preview> m_parameter_preview;
+    // Gives the kit lights of the previewed piece their transforms from before the drag back (D3.15).
+    void restore_preview_lights(const erhe::scene::Mesh& mesh);
 
     // The live layout preview: per layout the operations that laid it out (executed in order) and its values from before
     // the drag once a step wrote values.
@@ -865,6 +869,7 @@ private:
     erhe::message_bus::Subscription<Mesh_geometry_changed_message> m_mesh_geometry_changed_subscription;
     erhe::message_bus::Subscription<Kit_layout_changed_message>    m_kit_layout_changed_subscription;
     Kit_connector_indicators                                m_connector_indicators;
+    Kit_piece_light_sync                                    m_light_sync; // D3.15, scratch kept across calls
     Kit_layout_indicators                                   m_layout_indicators;
 };
 
