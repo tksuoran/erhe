@@ -13,7 +13,8 @@ into its subsystem's plan (or is fixed) and its line here is removed.
 The tasks a session continuing earlier work picks up, in order (`AGENTS.md`
 "Session handoff"). Items 1 and 2 come first; items 3 - 13 each need a user
 decision or hardware (Quest, the external 120 Hz display, an NVIDIA GPU):
-ask the user which to pick. Item 14 starts with writing its plan.
+ask the user which to pick. Item 14 starts with writing its plan. Item 15
+is the work in progress.
 
 0. The user rulings on the D8 coder decisions ("Prepared assets" below,
    `doc/plans/prepared_assets_design.md` D8).
@@ -52,13 +53,14 @@ ask the user which to pick. Item 14 starts with writing its plan.
 14. Triangle classification from walkable sample points: a plan to write,
     then build (`doc/plans/navigation_mesh.md` "Triangle classification from
     walkable sample points"; the navigation mesh it reads is built).
-15. Level tools and curves: the "Active" steps of
-    `doc/plans/level_tools_implementation.md` "Next steps", in their order
-    (70, 62, 63; kit shape coders run on the Fable model at medium effort,
-    U41); its "On hold" steps and the "Steps" of
-    `doc/plans/curves.md` wait for the user to make them active (the user
-    tests each change hands-on in the windowed Debug editor and rules on
-    what comes next). State: `memory-bank/topics/level_tools.md`.
+15. Level kit verification pass, next up: tests and renders for the
+    machine elements kit, the verify-script shape tables, the documentation
+    merge, one review of the generators and the final gate
+    (`doc/plans/level_kit_verification.md`; test and script work on Opus).
+16. Level tools and curves: the "On hold" steps of
+    `doc/plans/level_tools_implementation.md` "Next steps" and the "Steps" of
+    `doc/plans/curves.md` wait for the user to make them active.
+    State: `memory-bank/topics/level_tools.md`.
 
 ## Quest session follow-ups
 

@@ -5,9 +5,11 @@ Status: in progress
 The inventory of shapes for step 63 of
 `doc/plans/level_tools_implementation.md` ("Extra shapes of the
 orchestrator's choice"): the topics and the shapes the orchestrator picks,
-within rulings U34 and U36 of `doc/plans/level_tools.md`. Building starts after step
-62 is done and continues only while the weekly usage condition of step 63
-holds. The inventory covers what step 62 leaves open: step 62 owns its five
+within rulings U34 and U36 of `doc/plans/level_tools.md`. All 36 shapes of
+the inventory are built ("Build order"); what remains is the one
+verification pass over every shape (`scripts/level_tools_verify.py` and the
+editor's test suites) and the user's review of the choices the build made
+alone. The inventory covers what step 62 leaves open: step 62 owns its five
 categories (rock formations, tropical plants, palm trees, natural beach
 features, architecture of historical cultures) and the unbuilt shapes of
 R4.3 and R4.4 of `doc/plans/level_tools.md`; the unbuilt basic shapes of
@@ -257,8 +259,10 @@ What the shapes need that is not built, each sized as the shapes are.
 
 ## Build order
 
-P1 first. Then the first eight, by value per effort, if only part of the
-inventory is built.
+The inventory is built in five batches in this order: P1 first, then the
+first eight by value per effort, then the rest. The tables of "Inventory"
+state what was planned; where a built shape differs, the batch's paragraph
+below says how.
 
 Built: lines 1 - 8 (`kit_shapes_extra_01_08.cpp`), with the kits `prop`,
 `ruin`, `traversal`, `harbour` and `light` and the rest of P3. A built shape
@@ -353,6 +357,28 @@ row of the inventory in these points:
 - `industrial.antenna` has its whips over a short mast, the first up to the
   height.
 
+Built: the last four (`kit_shapes_extra_33_36.cpp`): `light.garland`,
+`traversal.rope_bridge`, `ruin.cracked_floor` and `harbour.boat`, which end
+the inventory. A built shape differs from its row of the inventory in these
+points:
+
+- `light.garland` has a third slot `cloth`: its flags and a ribbon at each
+  end, so every item has cloth; a garland of flags has a lamp on a cord at
+  mid span, so every item has glow. Its wire is a chain of sheared boxes, not
+  a sweep. Its origin is under mid span at its lowest point, and its ends are
+  the connectors.
+- `traversal.rope_bridge` takes its plank count from the span and the plank
+  gap, has `width` and `plank_gap` in meters, and has its ropes in slot
+  `cloth` as chains of sheared boxes. A missing plank lies loose on the next
+  plank and leaves a gap, so the plank count is the same at every seed. Its
+  origin is under mid span at its lowest point.
+- `ruin.cracked_floor` cuts the slab into rows and each row into fragments,
+  so every fragment has four corners at every seed; a missing fragment lies
+  deep (0.85 of the thickness, at most 0.3 m) instead of being left out.
+- `harbour.boat` stands on two sleepers at every heel, since its base is
+  level; its skins are triangles, its ends are closed by boards, and the
+  sheer and the heel are parameters the generator draws nothing for.
+
 1. `prop.crate` - S, brings P3's `wood`; stacks by base and top, the
    plainest scatter and grid item.
 2. `prop.barrel` - S; with the crate the first weighted scatter of
@@ -369,7 +395,7 @@ row of the inventory in these points:
 8. `light.lamp_post` with P2 - the first lit shape; every light shape
    after it is S or M.
 
-Then, in this order: `harbour.quay_wall`, `industrial.pipe`, the rest of
+Then, in this order, eight to a batch: `harbour.quay_wall`, `industrial.pipe`, the rest of
 the props, `ruin.broken_pillar` and `ruin.broken_arch`, `light.lantern`,
 `light.fire` and `harbour.buoy`, `traversal.trestle`, `traversal.scaffold`
 and `architecture.tunnel`, `harbour.cargo`, `harbour.crane` and

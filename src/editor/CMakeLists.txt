@@ -429,6 +429,9 @@ erhe_target_sources_grouped(
     level/kit_shapes_extra_09_16.cpp
     level/kit_shapes_extra_17_24.cpp
     level/kit_shapes_extra_25_32.cpp
+    level/kit_shapes_extra_33_36.cpp
+    level/kit_shapes_machine_01_08.cpp
+    level/kit_shapes_machine_09_18.cpp
     level/kit_shapes_classical.cpp
     level/kit_shapes_japanese.cpp
     level/kit_shapes_medieval.cpp

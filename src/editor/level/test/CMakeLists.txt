@@ -11,6 +11,9 @@ add_executable(${_target}
     kit_shape_rows_extra_09_16.cpp
     kit_shape_rows_extra_17_24.cpp
     kit_shape_rows_extra_25_32.cpp
+    kit_shape_rows_extra_33_36.cpp
+    kit_shape_rows_machine_01_08.cpp
+    kit_shape_rows_machine_09_18.cpp
     kit_shape_rows_medieval_v2.cpp
     kit_shape_rows_nature_plants_v2.cpp
     kit_shape_rows_nature_rocks_v2.cpp
@@ -45,6 +48,9 @@ add_executable(${_target}
     ${CMAKE_CURRENT_SOURCE_DIR}/../kit_shapes_extra_09_16.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../kit_shapes_extra_17_24.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../kit_shapes_extra_25_32.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../kit_shapes_extra_33_36.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../kit_shapes_machine_01_08.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../kit_shapes_machine_09_18.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../kit_shapes_classical.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../kit_shapes_japanese.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../kit_shapes_medieval.cpp
@@ -79,6 +85,9 @@ add_executable(${_target}
     test_kit_shapes_extra_09_16.cpp
     test_kit_shapes_extra_17_24.cpp
     test_kit_shapes_extra_25_32.cpp
+    test_kit_shapes_extra_33_36.cpp
+    test_kit_shapes_machine_01_08.cpp
+    test_kit_shapes_machine_09_18.cpp
     test_kit_shapes_medieval_v2.cpp
     test_kit_shapes_nature_plants_v2.cpp
     test_kit_shapes_nature_rocks_v2.cpp

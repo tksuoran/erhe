@@ -245,7 +245,10 @@ auto get_all_rows() -> const std::vector<Kit_shape_rows>&
         get_extra_01_08_rows(),
         get_extra_09_16_rows(),
         get_extra_17_24_rows(),
-        get_extra_25_32_rows()
+        get_extra_25_32_rows(),
+        get_extra_33_36_rows(),
+        get_machine_01_08_rows(),
+        get_machine_09_18_rows()
     };
     return all;
 }

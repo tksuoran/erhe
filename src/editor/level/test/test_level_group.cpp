@@ -245,9 +245,10 @@ TEST(Kit_shape_library, declared_mirror_planes_hold_for_the_generated_meshes)
     // The basic and architecture shapes but the column and the tower (whose leaves and door bands have no exact mirror
     // triangulation) and the two stairs with a turn, and the water, declare planes (the roof x alone: a shed rises
     // toward -Z); the seeded nature shapes none. Of the extra shapes the crate, the ladder, the quay wall, the table,
-    // the market stall, the cart, the trestle and the tunnel declare x, the barrel, the lamp post, the pot, the
-    // lighthouse, the tank and the truss z.
-    EXPECT_EQ(declaring, 36u);
+    // the market stall, the cart, the trestle, the tunnel and the garland declare x, the barrel, the lamp post, the
+    // pot, the lighthouse, the tank and the truss z. Of the machine elements the bolt, the nut, the piston, the
+    // follower, the cylinder and the pillow block declare x and z, the rack x, the bearing and the connecting rod z.
+    EXPECT_EQ(declaring, 46u);
 }
 
 TEST(Kit_shape_library, seeded_shapes_declare_no_mirror_plane)

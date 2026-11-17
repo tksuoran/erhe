@@ -80,18 +80,23 @@ def list_pairs(editor, scene, only, single):
     """(original, recreated, seed) per row: the catalog's recreated shapes in catalog order, or its shapes without a twin."""
     shapes = editor.call("level_get_kits", {"scene_name": scene})["shapes"]
     by_id = {shape["id"]: shape for shape in shapes}
+
+    def selected(shape_id):
+        # An id names that shape alone (machine.cam, not machine.camshaft); anything else is a prefix.
+        return (shape_id == only) if (only in by_id) else shape_id.startswith(only)
+
     rows = []
     if single:
         twinned = {shape["recreates"] for shape in shapes if shape["recreates"]}
         for shape in shapes:
-            if shape["recreates"] or (shape["id"] in twinned) or not shape["id"].startswith(only):
+            if shape["recreates"] or (shape["id"] in twinned) or not selected(shape["id"]):
                 continue
             for seed in (SEEDS if shape["seeded"] else SEEDS[:1]):
                 rows.append({"original": shape["id"], "recreated": shape["id"], "seed": seed, "seeded": shape["seeded"], "single": True})
         return rows
     for shape in shapes:
         original_id = shape["recreates"]
-        if (not original_id) or (original_id not in by_id) or not original_id.startswith(only):
+        if (not original_id) or (original_id not in by_id) or not selected(original_id):
             continue
         for seed in (SEEDS if shape["seeded"] else SEEDS[:1]):
             rows.append({"original": original_id, "recreated": shape["id"], "seed": seed, "seeded": shape["seeded"], "single": False})
@@ -209,7 +214,7 @@ def render(editor, scene, row, view):
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--editor", default=default_editor(), help="editor binary (relative to the repository root or absolute)")
-    parser.add_argument("--only", default="", help="compare only the originals whose id starts with this (for example basic. or nature.rock)")
+    parser.add_argument("--only", default="", help="compare only this shape, or the originals whose id starts with this (for example basic. or nature.rock)")
     parser.add_argument("--gap", type=float, default=1.0, help="meters between the two shapes' bounds")
     parser.add_argument("--parameters", default="{}", help="a JSON object of parameter values for both shapes of every row")
     parser.add_argument("--recreated-parameters", default="{}", help="a JSON object of parameter values for the recreated shape of every row")

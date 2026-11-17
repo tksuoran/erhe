@@ -82,6 +82,9 @@ void add_extra_01_08_shapes (std::vector<Kit_shape_definition>& shapes);
 void add_extra_09_16_shapes (std::vector<Kit_shape_definition>& shapes);
 void add_extra_17_24_shapes (std::vector<Kit_shape_definition>& shapes);
 void add_extra_25_32_shapes (std::vector<Kit_shape_definition>& shapes);
+void add_extra_33_36_shapes (std::vector<Kit_shape_definition>& shapes);
+void add_machine_01_08_shapes(std::vector<Kit_shape_definition>& shapes);
+void add_machine_09_18_shapes(std::vector<Kit_shape_definition>& shapes);
 // The recreated shapes (doc/editor/level_tools.md "Recreated shapes"); called after every original is added.
 void add_basic_shapes_v2        (std::vector<Kit_shape_definition>& shapes);
 void add_architecture_shapes_v2 (std::vector<Kit_shape_definition>& shapes);

@@ -124,6 +124,9 @@ public:
 [[nodiscard]] auto get_extra_09_16_rows      () -> Kit_shape_rows;
 [[nodiscard]] auto get_extra_17_24_rows      () -> Kit_shape_rows;
 [[nodiscard]] auto get_extra_25_32_rows      () -> Kit_shape_rows;
+[[nodiscard]] auto get_extra_33_36_rows      () -> Kit_shape_rows;
+[[nodiscard]] auto get_machine_01_08_rows    () -> Kit_shape_rows;
+[[nodiscard]] auto get_machine_09_18_rows    () -> Kit_shape_rows;
 
 [[nodiscard]] auto get_all_rows() -> const std::vector<Kit_shape_rows>&;
 
