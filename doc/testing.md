@@ -83,8 +83,9 @@ dedicated editor started with a configure-time test token
 - Running the binary by hand against an editor you started yourself: point it
   at that editor with `ERHE_MCP_TEST_PORT` (default 3743); each case waits
   `ERHE_MCP_TEST_TIMEOUT_S` seconds (default 30) before launching one.
-- The editors run on the deterministic clock (`ERHE_DETERMINISTIC_CLOCK=1`,
-  set by the launcher; "Verify scripts" below), and no case waits with a
+- The editors run on the deterministic clock (`ERHE_DETERMINISTIC_CLOCK=1`)
+  and with the default window layout (`ERHE_DEFAULT_LAYOUT=1`), both
+  set by the launcher ("Verify scripts" below, `doc/agents/editor_runs.md`), and no case waits with a
   time-based sleep: `wait_until_idle()` reads `get_async_status` after two
   `advance_time` frames until two consecutive reads are idle, a save is read
   with `get_save_status` between `wait_frames` calls, and the double-click

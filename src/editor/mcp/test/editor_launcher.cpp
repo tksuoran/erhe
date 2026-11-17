@@ -127,8 +127,8 @@ void terminate_process(Launched_editor& editor)
 
 // Spawns the editor detached from this process (no inherited handles, own
 // process group, no console window) with the given working directory and
-// the MCP port (and token file, when not empty) and the deterministic clock
-// (ERHE_DETERMINISTIC_CLOCK) in its environment. Fills
+// the MCP port (and token file, when not empty), the deterministic clock
+// and the default layout (ERHE_DEFAULT_LAYOUT) in its environment. Fills
 // the process handle of editor. Returns false with the reason on stderr.
 auto spawn_editor(
     const std::string& editor_path,
@@ -144,6 +144,7 @@ auto spawn_editor(
     SetEnvironmentVariableA("ERHE_MCP_PORT",       port_text.c_str());
     SetEnvironmentVariableA("ERHE_AI_DRIVER",      "1");
     SetEnvironmentVariableA("ERHE_DETERMINISTIC_CLOCK", "1");
+    SetEnvironmentVariableA("ERHE_DEFAULT_LAYOUT", "1");
     SetEnvironmentVariableA("ERHE_MCP_TOKEN_FILE", token_file.empty() ? nullptr : token_file.c_str());
 
     std::string command_line = "\"" + editor_path + "\"";
@@ -197,6 +198,7 @@ auto spawn_editor(
         setenv("ERHE_MCP_PORT",  port_text.c_str(), 1);
         setenv("ERHE_AI_DRIVER", "1", 1);
         setenv("ERHE_DETERMINISTIC_CLOCK", "1", 1);
+        setenv("ERHE_DEFAULT_LAYOUT", "1", 1);
         if (token_file.empty()) {
             unsetenv("ERHE_MCP_TOKEN_FILE");
         } else {

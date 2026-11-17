@@ -200,6 +200,8 @@ class Editor:
         # The deterministic clock (doc/testing.md "Verify scripts"): ImGui, animation and simulation
         # advance a fixed step per frame, so a run times the same on every machine.
         env.setdefault("ERHE_DETERMINISTIC_CLOCK", "1")
+        # The default dock layout, not the one a windowed session left in the per-user .ini.
+        env.setdefault("ERHE_DEFAULT_LAYOUT", "1")
         flags = subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
         self.process = subprocess.Popen([self.exe], cwd=REPO_ROOT, env=env, creationflags=flags,
                                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)

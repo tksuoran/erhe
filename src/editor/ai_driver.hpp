@@ -22,4 +22,8 @@ namespace editor {
 // driven run times ImGui, animation and simulation the same on every machine.
 [[nodiscard]] auto is_deterministic_clock() -> bool;
 
+// ERHE_DEFAULT_LAYOUT=1: the per-user dock layout .ini is not read; the window
+// layout is the default one (doc/agents/editor_runs.md), the same on every machine.
+[[nodiscard]] auto is_default_layout() -> bool;
+
 }

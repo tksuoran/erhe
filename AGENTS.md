@@ -71,7 +71,9 @@ A script or test that launches the editor for a check sets
 `ERHE_DETERMINISTIC_CLOCK=1` (every frame advances all editor time by
 1/60 s), so everything that depends on time - ImGui double-click windows,
 tooltips, physics, animation - behaves the same on every run and every
-machine. Wall-clock runs are for what measures wall time (benchmarks,
+machine. It also sets `ERHE_DEFAULT_LAYOUT=1`, so the window layout is the
+default one and not the dock layout a windowed session left in the per-user
+`.ini`. Wall-clock runs are for what measures wall time (benchmarks,
 profiling) or for a user's interactive session. `doc/testing.md` "Verify
 scripts" describes the waits; the scripts not converted yet are listed in
 `doc/plans/open_items.md` "Verify scripts".

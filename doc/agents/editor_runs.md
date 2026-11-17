@@ -69,7 +69,7 @@ into an AI chat):
   open state `state/item_trees.json` (doc/editor/windows.md "Row open state"). The per-user dock layout
   `config/editor/desktop_window_imgui_host_imgui.ini` is read (so a seeded
   layout, such as the creations' large headless viewports, applies) but never
-  written.
+  written; with `ERHE_DEFAULT_LAYOUT=1` it is not read either.
 - Window visibility (`config/editor/desktop_windows.json`) and the dock
   layout come from the working copy, so an extra viewport window may be
   open and the scene's viewport may be a hidden dock tab that renders
@@ -90,7 +90,16 @@ ImGui double-click window, a tooltip delay, a physics drop - takes the same
 number of frames on every run; the startup log says
 `ERHE_DETERMINISTIC_CLOCK = 1`, and `advance_time` reports `host_clock`.
 Leave it unset for what measures wall time (benchmarks, profiling) and for a
-user's interactive session. A script waits for the editor by reading a
+user's interactive session.
+
+`ERHE_DEFAULT_LAYOUT=1` (`is_default_layout()`) runs the editor without
+reading the per-user dock layout
+`config/editor/desktop_window_imgui_host_imgui.ini`: the layout is the
+default one built from `config/editor/default_layout.json`, so viewport
+positions and sizes are the same on every machine and after any windowed
+session. `prepared_asset_verify.Editor` and the `mcp_server_tests` launcher
+set it. A run that seeds its own layout through the `.ini` (the creations'
+large headless viewports) leaves it unset. A script waits for the editor by reading a
 reported state - an MCP reply, or a log line read again after each
 `wait_frames` call - never with a time-based sleep (AGENTS.md "Waiting for
 the editor: no time-based sleeps").

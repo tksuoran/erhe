@@ -22,4 +22,13 @@ auto is_deterministic_clock() -> bool
     return s_deterministic_clock;
 }
 
+auto is_default_layout() -> bool
+{
+    static const bool s_default_layout = []() {
+        const char* const value = std::getenv("ERHE_DEFAULT_LAYOUT");
+        return (value != nullptr) && (value[0] == '1');
+    }();
+    return s_default_layout;
+}
+
 }

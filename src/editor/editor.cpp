@@ -4037,6 +4037,10 @@ public:
                     }
                 }
             );
+            if (is_default_layout()) {
+                // No ini path: nothing is read, so install_default_layout() builds the default layout.
+                window_imgui_host->set_imgui_ini_path({});
+            }
             install_default_layout(*window_imgui_host, m_app_context);
             window_imgui_host->set_status_bar_callback(
                 [this](erhe::imgui::Window_imgui_host&) {
