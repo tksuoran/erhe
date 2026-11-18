@@ -832,12 +832,12 @@ auto Level_kits::make_layout_from_piece(Scene_root& scene_root, const Kit_layout
         return result;
     }
     Kit_layout_create create;
-    Kit_layout_item   item;
-    result.error = read_piece_layout_item(*piece, item);
+    Kit_layout_item   layout_item;
+    result.error = read_piece_layout_item(*piece, layout_item);
     if (!result.error.empty()) {
         return result;
     }
-    create.data.items.push_back(std::move(item));
+    create.data.items.push_back(std::move(layout_item));
     create.data.pattern        = from_piece.pattern;
     create.data.snap           = from_piece.snap;
     create.data.surface_snap   = from_piece.surface_snap;

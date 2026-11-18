@@ -1761,6 +1761,9 @@ public:
         // one; before the operation stack, which holds operations while it runs.
         m_scene_save_service->update();
         m_operation_stack->update();
+        if (m_level_kits) {
+            m_level_kits->update_scene_refreshes();
+        }
 
         // Geometry graph background evaluation: apply results of a
         // completed run and launch a new one when the graph is dirty

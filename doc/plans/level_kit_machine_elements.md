@@ -6,9 +6,10 @@ The inventory of the kit `machine` ("Machine Elements"): gears, fasteners,
 pistons, bearings, springs, and cams and followers, as the user asked for
 them. It follows `doc/plans/level_kit_extra_shapes.md` in form and in what a
 shape is (D1 of `doc/plans/level_tools_design.md`, R2 - R3 of
-`doc/plans/level_tools.md`), and extends `doc/editor/level_tools.md`. Every
-shape of the inventory is built; its unit test rows and renders are
-outstanding for the shapes after the first eight.
+`doc/plans/level_tools.md`), and extends `doc/editor/level_kit_shapes.md`.
+Every shape of the inventory is built, tested and described there
+("Machine kit"); the changes the user asked for are step 84 of
+`doc/plans/level_tools_implementation.md`.
 
 ## Conventions of the tables
 
@@ -158,9 +159,6 @@ rows of lines 1 - 8.
 
 ## Open questions
 
-- Q1 Scale: the defaults are oversized (a 0.48 m gear). Is that the scale
-  wanted, or real sizes that the user scales up?
-- Q2 Pose: gears, cams and bearings lie flat. Is a second pose (upright,
-  axis level) wanted as a parameter, or is turning the piece enough?
-- Q3 Thread: a bolt's thread is rings. Is a helical thread wanted where the
-  budget allows?
+None: U49 and U53 of `doc/plans/level_tools.md` answer Q1 - Q3 (oversized
+defaults, flat pose, helical thread); the changes are step 84 of
+`doc/plans/level_tools_implementation.md`.

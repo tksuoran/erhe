@@ -16,7 +16,7 @@
 #include <utility>
 #include <vector>
 
-// The recreated battlement and tower (doc/editor/level_tools.md "Recreated shapes").
+// The recreated battlement and tower (doc/editor/level_kit_shapes.md "Battlement (F)", "Tower (F)").
 
 namespace editor {
 
@@ -1005,17 +1005,14 @@ void add_tower_base_v2(Kit_mesh_builder& builder, const Tower_form_v2& form)
 {
     constexpr float sink     = 0.025f; // the base's back lies this far inside the wall's face at most
     const float     slope_y0 = tower_plinth_high_v2 + tower_plinth_v2;
-    std::vector<glm::vec2> profile{{0.0f, 0.0f}, {form.foot, 0.0f}, {form.foot, tower_plinth_high_v2}};
-    float back = sink;
-    if (form.batter >= 0.02f) {
-        const float slope = (form.cut_height - slope_y0) / form.batter;
-        back = std::min(sink, 0.15f / slope);
-        profile.emplace_back(form.radius + form.batter, slope_y0);
-        profile.emplace_back(form.radius - back, form.cut_height + (back * slope));
-    } else {
-        profile.emplace_back(form.radius - back, slope_y0 + form.batter + back);
-    }
-    profile.front().x = form.radius - back;
+    // Five points at every batter: the batter's face from its foot into the wall, at most 0.15 over the cut's head.
+    // The face stays at least 5 mm into the wall at its top, so a batter of 0 leaves no edge on the wall's face.
+    const float run  = form.cut_height - slope_y0;
+    const float back = std::max(std::min(sink, 0.15f * form.batter / run), 0.005f);
+    const float rise = std::min(0.15f, back * run / std::max(form.batter, 1.0e-6f));
+    std::vector<glm::vec2> profile{{form.radius - back, 0.0f}, {form.foot, 0.0f}, {form.foot, tower_plinth_high_v2}};
+    profile.emplace_back(form.radius + form.batter, slope_y0);
+    profile.emplace_back(form.radius - back, form.cut_height + rise);
 
     // The plan's corners clear of the ends at every scale of the profile.
     const float     end_x   = form.door_half + (0.5f * tower_frame_v2);

@@ -210,7 +210,7 @@ def build_level(editor, scene):
             "a palm clump or shrub found no sand under it: " + ", ".join(f"{p['shape']} {p['surface_found']} {p['position']}" for p in placed_understory))
     ids.update({piece["name"]: piece["id"] for piece in placed_understory})
 
-    # The cultural corners, joined by their connectors (doc/editor/level_tools.md "Column" .. "Tower").
+    # The cultural corners, joined by their connectors (doc/editor/level_kit_shapes.md "Column" .. "Tower").
     def join(piece, to_name, connector, to_connector):
         joined = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [dict(piece, connect={
             "connector": connector, "to_piece_id": ids[to_name], "to_connector": to_connector})]})["pieces"]

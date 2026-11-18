@@ -11,6 +11,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <initializer_list>
+#include <limits>
 #include <numbers>
 #include <span>
 #include <string>
@@ -493,12 +494,14 @@ void generate_rope_bridge(const Kit_parameter_values& values, GEO::Mesh& mesh)
             const Placement place = make_rising_placement(glm::vec3{x, form.get_deck(x) - low, shift}, form.get_slope(x));
             add_placed_box(builder, place, glm::vec3{-0.5f * wide, -bridge_thick, -form.half_w}, glm::vec3{0.5f * wide, 0.0f, form.half_w});
         } else {
-            // It lies turned on the next plank.
+            // It lies turned on the next plank, raised by the deck's curvature at its corners' reach so they stay over it.
             const float x     = form.get_plank_x(i + 1) - (0.2f * wide);
             const float slope = form.get_slope(x);
             const float c     = std::cos(way * turn);
             const float s     = std::sin(way * turn);
-            const Placement place{.origin = glm::vec3{x, form.get_deck(x) + bridge_thick + 0.004f, shift}, .x = glm::vec3{c, slope * c, -s}, .y = y_axis, .z = glm::vec3{s, slope * s, c}};
+            const float reach = (0.5f * wide * std::abs(c)) + (form.half_w * std::abs(s));
+            const float bend  = form.get_drop(reach);
+            const Placement place{.origin = glm::vec3{x, form.get_deck(x) + bend + bridge_thick + 0.004f, shift}, .x = glm::vec3{c, slope * c, -s}, .y = y_axis, .z = glm::vec3{s, slope * s, c}};
             add_placed_box(builder, place, glm::vec3{-0.5f * wide, -bridge_thick, -form.half_w}, glm::vec3{0.5f * wide, 0.0f, form.half_w});
         }
     }
@@ -774,6 +777,20 @@ public:
         const float     ends  = (u == 0.0f) ? skin : ((u == 1.0f) ? -skin : 0.0f);
         return glm::vec3{outer.x + ends, outer.y + (skin * (1.0f - up)), outer.z * std::max(1.0f - (skin / get_half_beam(u)), 0.35f)};
     }
+    // Half the inner skin's width at height y over its strake points at u, as the mesh's lines run between them.
+    [[nodiscard]] auto get_inner_half_width(const float u, const float y) const -> float
+    {
+        glm::vec3 below = get_inner(u, 0.0f);
+        for (int j = 1; j <= (boat_strakes / 2); ++j) {
+            const glm::vec3 above = get_inner(u, static_cast<float>(2 * j) / static_cast<float>(boat_strakes));
+            if ((above.y >= y) && (above.y > below.y)) {
+                const float share = std::clamp((y - below.y) / (above.y - below.y), 0.0f, 1.0f);
+                return below.z + (share * (above.z - below.z));
+            }
+            below = above;
+        }
+        return below.z;
+    }
 
     Boat_form form  {Boat_form::rowboat};
     float     length{0.0f};
@@ -878,14 +895,20 @@ void generate_boat(const Kit_parameter_values& values, GEO::Mesh& mesh)
         const float u     = 0.22f + (0.56f * (static_cast<float>(k) + 0.5f) / static_cast<float>(thwarts));
         const float keel  = lines.get_keel(u);
         const float seat  = keel + (0.62f * (lines.get_gunwale(u) - keel));
-        const float reach = std::abs(lines.get_outer(u, (lines.form == Boat_form::rowboat) ? 0.72f : 0.8f).z) - (0.4f * lines.skin);
+        // Into the inner skin at the board's lower face, where the hull is narrower.
+        const float reach = lines.get_inner_half_width(u, seat - (0.6f * lines.skin)) + (0.4f * lines.skin);
         const float x     = lines.length * (u - 0.5f);
         add_placed_box(builder, place, glm::vec3{x - (0.035f * lines.length), seat - (0.6f * lines.skin), -reach}, glm::vec3{x + (0.035f * lines.length), seat, reach});
     }
-    // Two sleepers on the ground under the hull.
+    // Two sleepers on the ground, each up to the hull's lowest point over its station.
     for (const float side : {-1.0f, 1.0f}) {
-        const float x = side * 0.2f * lines.length;
-        builder.add_box(glm::vec3{x - (0.02f * lines.length), 0.0f, -0.42f * lines.beam}, glm::vec3{x + (0.02f * lines.length), 1.3f * sleeper, 0.42f * lines.beam});
+        const int   station = (boat_bands / 2) + static_cast<int>(side * static_cast<float>(boat_bands / 5));
+        const float x       = lines.length * ((static_cast<float>(station) / static_cast<float>(boat_bands)) - 0.5f);
+        float       top     = std::numeric_limits<float>::max();
+        for (int j = 0; j < across; ++j) {
+            top = std::min(top, builder.get_positions()[out[at(station, j)]].y);
+        }
+        builder.add_box(glm::vec3{x - (0.02f * lines.length), 0.0f, -0.42f * lines.beam}, glm::vec3{x + (0.02f * lines.length), top, 0.42f * lines.beam});
     }
     builder.write(mesh);
 }

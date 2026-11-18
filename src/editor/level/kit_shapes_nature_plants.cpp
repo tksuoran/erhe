@@ -28,7 +28,7 @@ enum class Palm_crown : unsigned int {
     fan
 };
 
-// What a species sets (doc/editor/level_tools.md "Palm").
+// What a species sets (doc/editor/level_kit_shapes.md "Palm").
 class Palm_species
 {
 public:
@@ -306,7 +306,7 @@ void generate_palm(const Kit_parameter_values& values, GEO::Mesh& mesh)
 
 constexpr int palm_clump_most_fronds = 40; // in all: with the stems the clump stays within the kit's ceiling
 
-// The clump's and the shrub's species (doc/editor/level_tools.md "Palm clump", "Palm shrub"); the frond length and the
+// The clump's and the shrub's species (doc/editor/level_kit_shapes.md "Palm clump and palm shrub"); the frond length and the
 // trunk height are shares of a stem's height or of the shrub's size.
 class Palm_habit
 {
@@ -419,7 +419,7 @@ enum class Leaf_arrangement : unsigned int {
     fan         // in one vertical plane, alternating sides (strelitzia)
 };
 
-// What a leaf plant's form sets (doc/editor/level_tools.md "Leaf plant"); lengths are shares of the height.
+// What a leaf plant's form sets (doc/editor/level_kit_shapes.md "Leaf plant"); lengths are shares of the height.
 class Leaf_form
 {
 public:

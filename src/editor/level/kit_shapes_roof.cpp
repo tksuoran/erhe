@@ -45,7 +45,7 @@ enum class Roof_form : unsigned int {
     return Roof_form::gable;
 }
 
-// The roof's sizes from its values (doc/editor/level_tools.md "Roof").
+// The roof's sizes from its values (doc/editor/level_kit_shapes.md "Roof").
 class Roof_frame
 {
 public:

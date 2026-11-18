@@ -18,6 +18,7 @@
 #include <cstdint>
 #include <memory>
 #include <numbers>
+#include <optional>
 #include <set>
 #include <string>
 #include <vector>
@@ -170,6 +171,80 @@ void expect_connector_names(const Kit_parameter_values& values, const std::vecto
     return false;
 }
 
+// The mesh's points carried by a join pose: every facet's edges, each at nine points along it.
+[[nodiscard]] auto sample_edges(const GEO::Mesh& mesh, const editor::Kit_join_pose& pose) -> std::vector<glm::vec3>
+{
+    const glm::mat3 rotation = glm::mat3_cast(pose.rotation);
+    std::vector<glm::vec3> points;
+    for (GEO::index_t f = 0; f < mesh.facets.nb(); ++f) {
+        const GEO::index_t n = mesh.facets.nb_vertices(f);
+        for (GEO::index_t c = 0; c < n; ++c) {
+            const glm::vec3 a = point_of(mesh, mesh.facets.vertex(f, c));
+            const glm::vec3 b = point_of(mesh, mesh.facets.vertex(f, (c + 1) % n));
+            for (int i = 0; i <= 8; ++i) {
+                points.push_back(pose.position + (rotation * glm::mix(a, b, static_cast<float>(i) / 8.0f)));
+            }
+        }
+    }
+    return points;
+}
+
+[[nodiscard]] auto distance_from_line(const glm::vec3& p, const glm::vec3& origin, const glm::vec3& direction) -> float
+{
+    const glm::vec3 offset = p - origin;
+    return glm::length(offset - (glm::dot(offset, direction) * direction));
+}
+
+// Whether the point is inside the closed surface of the facets that `pick` takes: a ray crosses it an odd number
+// of times (the ray leans off the axes, so it misses edges and vertices of axis-aligned parts).
+[[nodiscard]] auto is_inside(const GEO::Mesh& mesh, const auto& pick, const glm::vec3& p) -> bool
+{
+    const glm::vec3 ray = glm::normalize(glm::vec3{0.1234f, 1.0f, 0.0371f});
+    int crossings = 0;
+    for (GEO::index_t f = 0; f < mesh.facets.nb(); ++f) {
+        if (!pick(f)) {
+            continue;
+        }
+        const glm::vec3 p0 = point_of(mesh, mesh.facets.vertex(f, 0));
+        for (GEO::index_t c = 1; (c + 1) < mesh.facets.nb_vertices(f); ++c) {
+            const glm::vec3 e1 = point_of(mesh, mesh.facets.vertex(f, c)) - p0;
+            const glm::vec3 e2 = point_of(mesh, mesh.facets.vertex(f, c + 1)) - p0;
+            const glm::vec3 h  = glm::cross(ray, e2);
+            const float     a  = glm::dot(e1, h);
+            if (std::abs(a) < 1.0e-12f) {
+                continue;
+            }
+            const glm::vec3 s = p - p0;
+            const float     u = glm::dot(s, h) / a;
+            const glm::vec3 q = glm::cross(s, e1);
+            const float     v = glm::dot(ray, q) / a;
+            const float     t = glm::dot(e2, q) / a;
+            crossings += ((u >= 0.0f) && (v >= 0.0f) && ((u + v) <= 1.0f) && (t > 0.0f)) ? 1 : 0;
+        }
+    }
+    return (crossings % 2) == 1;
+}
+
+constexpr uint32_t worm_steel = 1; // the worm's shaft
+
+// The least distance from a line along X through the point of the corners of the facets of the slot (all facets
+// without one).
+[[nodiscard]] auto least_reach_from_x_line(const GEO::Mesh& mesh, const glm::vec3& point, const std::optional<uint32_t> slot) -> float
+{
+    std::vector<uint32_t> slots;
+    editor::read_kit_facet_slots(mesh, slots);
+    float least = 1.0e9f;
+    for (GEO::index_t f = 0; f < mesh.facets.nb(); ++f) {
+        if (slot.has_value() && (slots[f] != slot.value())) {
+            continue;
+        }
+        for (GEO::index_t c = 0; c < mesh.facets.nb_vertices(f); ++c) {
+            least = std::min(least, distance_from_line(point_of(mesh, mesh.facets.vertex(f, c)), point, glm::vec3{1.0f, 0.0f, 0.0f}));
+        }
+    }
+    return least;
+}
+
 // How many vertices lie the given distance from the Y axis.
 [[nodiscard]] auto count_at_reach(const GEO::Mesh& mesh, const float reach, const float tolerance) -> int
 {
@@ -217,8 +292,34 @@ TEST(Kit_connecting_rod, eyes_and_size_follow_the_values)
         EXPECT_NEAR(report.bounds_min.x, (-0.5f * length) - (1.8f * small_bore), 1.0e-5f);
         EXPECT_NEAR(report.bounds_max.x, (0.5f * length) + (1.6f * big_bore), 1.0e-5f);
         const std::unique_ptr<GEO::Mesh> mesh = generate(values);
-        EXPECT_NEAR(least_reach_from_y_line(*mesh, -0.5f * length, 0.0f), small_bore, 1.0e-5f);
-        EXPECT_NEAR(least_reach_from_y_line(*mesh,  0.5f * length, 0.0f), big_bore, 1.0e-5f);
+        // The bores' flats are the bores' radii.
+        EXPECT_NEAR(least_reach_from_y_line(*mesh, -0.5f * length, 0.0f) * std::cos(pi / 12.0f), small_bore, 1.0e-5f);
+        EXPECT_NEAR(least_reach_from_y_line(*mesh,  0.5f * length, 0.0f) * std::cos(pi / 16.0f), big_bore, 1.0e-5f);
+        // The flanges' ends lie in the eyes: on or inside each eye's outline, at the flanges' outer sides.
+        const float z_out = 0.75f * 1.8f * small_bore;
+        float flange_min = 1.0e9f;
+        float flange_max = -1.0e9f;
+        for (GEO::index_t v = 0; v < mesh->vertices.nb(); ++v) {
+            const glm::vec3 p = point_of(*mesh, v);
+            if ((std::abs(std::abs(p.z) - z_out) < 1.0e-6f) && (std::abs(p.y - (0.1f * thickness)) < 1.0e-6f)) {
+                flange_min = std::min(flange_min, p.x);
+                flange_max = std::max(flange_max, p.x);
+            }
+        }
+        // Inside a ring of n points (the first on +X): within the apothem along every side's normal.
+        const auto in_eye = [&](const float x, const float center, const float outer, const int n) -> bool {
+            const glm::vec2 offset{x - center, z_out};
+            const float     step = 2.0f * pi / static_cast<float>(n);
+            for (int k = 0; k < n; ++k) {
+                const float angle = (static_cast<float>(k) + 0.5f) * step;
+                if (glm::dot(offset, glm::vec2{std::cos(angle), std::sin(angle)}) > ((outer * std::cos(0.5f * step)) + 1.0e-6f)) {
+                    return false;
+                }
+            }
+            return true;
+        };
+        EXPECT_TRUE(in_eye(flange_min, -0.5f * length, 1.8f * small_bore, 12)) << flange_min;
+        EXPECT_TRUE(in_eye(flange_max,  0.5f * length, 1.6f * big_bore, 16)) << flange_max;
         expect_connector_names(values, {"base", "small_end", "big_end"});
         const std::vector<Kit_connector> connectors = connectors_of(values);
         EXPECT_EQ(connectors[1].position, (glm::vec3{-0.5f * length, 0.5f * thickness, 0.0f}));
@@ -228,12 +329,41 @@ TEST(Kit_connecting_rod, eyes_and_size_follow_the_values)
     }
 }
 
-// The default big end takes the default crankshaft's pin.
+// The default big end takes the default crankshaft's pin: the pin's corners lie within the bore's flats.
 TEST(Kit_connecting_rod, the_default_big_end_fits_the_default_crank_pin)
 {
     const Kit_parameter_values rod   = explicit_values(get_shape("machine.connecting_rod"), 1);
     const Kit_parameter_values crank = explicit_values(get_shape("machine.crankshaft"), 1);
     EXPECT_EQ(rod.get_float("big_bore"), crank.get_float("journal"));
+    const std::unique_ptr<GEO::Mesh> rod_mesh   = generate(rod);
+    const std::unique_ptr<GEO::Mesh> crank_mesh = generate(crank);
+    const float flats = least_reach_from_y_line(*rod_mesh, 0.5f * rod.get_float("length"), 0.0f) * std::cos(pi / 16.0f);
+    // The crank pin's corners: the least reach of the crankshaft's points from the pin's axis.
+    const std::vector<Kit_connector> pins = connectors_of(crank);
+    float pin = 1.0e9f;
+    for (GEO::index_t v = 0; v < crank_mesh->vertices.nb(); ++v) {
+        pin = std::min(pin, distance_from_line(point_of(*crank_mesh, v), pins[3].position, glm::vec3{1.0f, 0.0f, 0.0f}));
+    }
+    EXPECT_NEAR(pin, 0.5f * crank.get_float("journal"), 1.0e-5f);
+    EXPECT_LE(pin, flats + 1.0e-6f);
+}
+
+// The default small end takes the default piston's wrist pin: the pin's corners lie within the bore's flats.
+TEST(Kit_connecting_rod, the_default_small_end_fits_the_default_wrist_pin)
+{
+    const Kit_parameter_values rod    = explicit_values(get_shape("machine.connecting_rod"), 1);
+    const Kit_parameter_values piston = explicit_values(get_shape("machine.piston"), 1);
+    const std::unique_ptr<GEO::Mesh> rod_mesh    = generate(rod);
+    const std::unique_ptr<GEO::Mesh> piston_mesh = generate(piston);
+    const float flats = least_reach_from_y_line(*rod_mesh, -0.5f * rod.get_float("length"), 0.0f) * std::cos(pi / 12.0f);
+    EXPECT_NEAR(flats, 0.5f * rod.get_float("small_bore"), 1.0e-6f);
+    const glm::vec3 pin_axis{0.0f, connectors_of(piston)[2].position.y, 0.0f};
+    float pin = 1.0e9f;
+    for (GEO::index_t v = 0; v < piston_mesh->vertices.nb(); ++v) {
+        pin = std::min(pin, distance_from_line(point_of(*piston_mesh, v), pin_axis, glm::vec3{0.0f, 0.0f, 1.0f}));
+    }
+    EXPECT_GT(pin, 0.4f * flats);
+    EXPECT_LT(pin, flats);
 }
 
 //
@@ -327,8 +457,8 @@ TEST_P(Kit_follower_forms, passes_at_the_corners_with_every_slot)
     expect_topology_from_integers(values, follower_floats);
 }
 
-// The contact, the stem and its guide sleeve; a roller stands in a fork under a flange. The contact is on the
-// ground around the origin (a knife's edge and a roller's lowest side along Z), the top on the stem's end.
+// The contact, the stem and its guide sleeve; a roller turns on an axle in a fork under a flange. The contact is on
+// the ground around the origin (a knife's edge and a roller's lowest side along Z), the top on the stem's end.
 TEST_P(Kit_follower_forms, parts_and_size_follow_the_values)
 {
     const Kit_shape_definition& follower = get_shape("machine.follower");
@@ -340,8 +470,8 @@ TEST_P(Kit_follower_forms, parts_and_size_follow_the_values)
         EXPECT_TRUE(report.is_valid()) << describe(report);
         const bool roller = (GetParam() == "roller");
         const bool flat   = (GetParam() == "flat");
-        EXPECT_EQ(report.component_count, roller ? 6u : 3u);
-        EXPECT_EQ(report.triangle_count, roller ? 220u : (flat ? 160u : 128u));
+        EXPECT_EQ(report.component_count, roller ? 7u : 3u);
+        EXPECT_EQ(report.triangle_count, roller ? 248u : (flat ? 160u : 128u));
         EXPECT_NEAR(report.bounds_min.y, 0.0f, 1.0e-6f);
         EXPECT_NEAR(report.bounds_max.x, flat ? (1.5f * d * std::cos(pi / 12.0f)) : d, 1.0e-5f);
         expect_connector_names(values, {"base", "contact", "top"});
@@ -368,6 +498,28 @@ TEST_P(Kit_follower_forms, parts_and_size_follow_the_values)
             EXPECT_EQ(on_ground, 4);
             EXPECT_LT(least_x, 0.0f);
             EXPECT_GT(most_x, 0.0f);
+        }
+        const std::unique_ptr<GEO::Mesh> mesh = generate(values);
+        const float head = connectors[2].position.y - values.get_float("stem");
+        // The sleeve's bore lies inside the stem: its points nearest the axis at the sleeve's heights.
+        float sleeve_bore = 1.0e9f;
+        for (GEO::index_t v = 0; v < mesh->vertices.nb(); ++v) {
+            const glm::vec3 p = point_of(*mesh, v);
+            if (p.y > (head + (0.4f * values.get_float("stem")))) {
+                sleeve_bore = std::min(sleeve_bore, glm::length(glm::vec2{p.x, p.z}));
+            }
+        }
+        EXPECT_LT(sleeve_bore, 0.5f * d); // the stem's ten points and the bore's are in step
+        if (roller) {
+            // The axle along Z through the roller's axis spans the fork, from one plate's outer face to the other's.
+            const glm::vec3 axis{0.0f, d * std::cos(pi / 12.0f), 0.0f};
+            int axle_ends = 0;
+            for (GEO::index_t v = 0; v < mesh->vertices.nb(); ++v) {
+                const glm::vec3 p = point_of(*mesh, v);
+                const bool on_axle = std::abs(distance_from_line(p, axis, glm::vec3{0.0f, 0.0f, 1.0f}) - (0.2f * d)) < 1.0e-5f;
+                axle_ends += (on_axle && (std::abs(std::abs(p.z) - (0.7f * d)) < 1.0e-5f)) ? 1 : 0;
+            }
+            EXPECT_EQ(axle_ends, 16);
         }
     }
 }
@@ -464,7 +616,8 @@ TEST(Kit_bevel_gear, every_tooth_count_passes_at_the_corners)
 }
 
 // The body and a tooth for each of the teeth. The mesh connector is on the large end's pitch circle (the teeth
-// times the module across), facing across the cone; the bore is at most half the small end.
+// times the module across), facing across the cone; the body's cone is the root cone, 1.25 modules inside the pitch
+// cone; the bore is at most half the body's small end.
 TEST(Kit_bevel_gear, parts_size_and_the_mesh_point_follow_the_values)
 {
     const Kit_shape_definition& bevel = get_shape("machine.bevel_gear");
@@ -494,16 +647,18 @@ TEST(Kit_bevel_gear, parts_size_and_the_mesh_point_follow_the_values)
             EXPECT_NEAR(connectors[2].outward.x, std::cos(angle), 1.0e-6f);
             EXPECT_NEAR(connectors[2].outward.y, std::sin(angle), 1.0e-6f);
             const std::unique_ptr<GEO::Mesh> mesh = generate(values);
-            // The body's pitch ring lies at the mesh connector's height.
-            int pitch_ring = 0;
+            // The body's root ring lies 1.25 modules inside the mesh connector's pitch circle, across the cone.
+            const float root_r    = pitch - (1.25f * module * std::cos(angle));
+            const float root_y    = connectors[2].position.y - (1.25f * module * std::sin(angle));
+            int         root_ring = 0;
             for (GEO::index_t v = 0; v < mesh->vertices.nb(); ++v) {
                 const glm::vec3 p = point_of(*mesh, v);
-                const bool on_ring = std::abs(glm::length(glm::vec2{p.x, p.z}) - pitch) < 1.0e-5f;
-                pitch_ring += (on_ring && (std::abs(p.y - connectors[2].position.y) < 1.0e-5f)) ? 1 : 0;
+                const bool on_ring = std::abs(glm::length(glm::vec2{p.x, p.z}) - root_r) < 1.0e-5f;
+                root_ring += (on_ring && (std::abs(p.y - root_y) < 1.0e-5f)) ? 1 : 0;
             }
-            EXPECT_EQ(pitch_ring, static_cast<int>(segments));
+            EXPECT_EQ(root_ring, static_cast<int>(segments));
             // The bore; the axis connector is on the bore's top rim.
-            const float bore  = std::min(0.5f * values.get_float("bore"), 0.5f * share * pitch);
+            const float bore  = std::min(0.5f * values.get_float("bore"), 0.5f * share * root_r);
             float       least = 1.0e9f;
             float       rim   = 0.0f;
             for (GEO::index_t v = 0; v < mesh->vertices.nb(); ++v) {
@@ -517,6 +672,35 @@ TEST(Kit_bevel_gear, parts_size_and_the_mesh_point_follow_the_values)
             EXPECT_NEAR(least, bore, 1.0e-5f);
             EXPECT_NEAR(connectors[1].position.y, rim, 1.0e-5f);
         }
+    }
+}
+
+// Two gears joined by their mesh connectors: no point of either's teeth lies in the other's body, and the shafts
+// cross at the cone angles' sum.
+TEST(Kit_bevel_gear, a_joined_pairs_teeth_stay_out_of_the_other_body)
+{
+    const Kit_shape_definition& bevel = get_shape("machine.bevel_gear");
+    for (const int seed : derive_seeds()) {
+        const Kit_parameter_values values = all_derived(bevel, seed);
+        SCOPED_TRACE(values.to_canonical_text());
+        const unsigned int segments = std::clamp(2u * static_cast<unsigned int>(values.get_int("teeth")), 16u, 48u);
+        const std::vector<Kit_connector> connectors = connectors_of(values);
+        const editor::Kit_join_pose pose = editor::join_connectors(connectors[2], connectors[2], 0, 0.0f);
+        const glm::vec3 other_axis = glm::mat3_cast(pose.rotation) * glm::vec3{0.0f, 1.0f, 0.0f};
+        EXPECT_NEAR(std::acos(glm::dot(other_axis, glm::vec3{0.0f, 1.0f, 0.0f})), 2.0f * glm::radians(values.get_float("cone")), 1.0e-4f);
+        const std::unique_ptr<GEO::Mesh> mesh = generate(values);
+        // The body is the lathe's five bands, the mesh's first facets; the same pose carries either gear onto the other.
+        const auto body = [segments](const GEO::index_t f) -> bool { return f < (5u * segments); };
+        // Only points within the body's bounds can lie in it.
+        const Kit_mesh_report report = editor::check_kit_shape(values);
+        const float reach = report.bounds_max.x;
+        const float top   = connectors[1].position.y;
+        int inside = 0;
+        for (const glm::vec3& p : sample_edges(*mesh, pose)) {
+            const bool near_axis = (glm::length(glm::vec2{p.x, p.z}) < reach) && (p.y > 0.0f) && (p.y < top);
+            inside += (near_axis && is_inside(*mesh, body, p)) ? 1 : 0;
+        }
+        EXPECT_EQ(inside, 0);
     }
 }
 
@@ -591,8 +775,15 @@ TEST(Kit_worm, a_worms_parts_and_size_follow_the_values)
                 thread_max = std::max(thread_max, p.x);
             }
         }
-        EXPECT_NEAR(thread_min, -0.5f * thread, 1.0e-5f);
-        EXPECT_NEAR(thread_max,  0.5f * thread, 1.0e-5f);
+        // Shifted along X by less than half the axial pitch, so a joined wheel's tooth stands in a gap.
+        EXPECT_NEAR(thread_max - thread_min, thread, 1.0e-5f);
+        EXPECT_LE(std::abs(thread_min + (0.5f * thread)), (0.5f * pi * module) + 1.0e-6f);
+        // The thread reaches a module out of the pitch cylinder and 1.25 modules in, into the shaft, whose
+        // corners are 1.15 modules in (on the thread's inner chords).
+        const glm::vec3 axis_point{0.0f, axis_y, 0.0f};
+        EXPECT_NEAR(axis_y, (radius + module) * std::cos(pi / 12.0f), 1.0e-5f);
+        EXPECT_NEAR(least_reach_from_x_line(*mesh, axis_point, std::nullopt), radius - (1.25f * module), 1.0e-5f);
+        EXPECT_NEAR(least_reach_from_x_line(*mesh, axis_point, worm_steel), (radius - (1.15f * module)) * std::cos(pi / 12.0f), 1.0e-5f);
     }
 }
 
@@ -613,13 +804,54 @@ TEST(Kit_worm, a_wheels_parts_and_pitch_follow_the_values)
         EXPECT_EQ(report.component_count, teeth + 2u);
         EXPECT_EQ(report.triangle_count, (8u * segments) + 96u + (20u * teeth));
         EXPECT_EQ(report.bounds_min.y, 0.0f);
-        EXPECT_LE(report.bounds_max.x, std::hypot(pitch + module, 0.4f * module) + 1.0e-5f);
+        // The teeth lean by the worm's lead over its pitch circumference, from the face's middle to its ends.
+        const float radius = std::max(0.5f * values.get_float("diameter"), 1.5f * module);
+        const float lean   = (pi * module * static_cast<float>(values.get_int("starts"))) / (2.0f * pi * radius);
+        EXPECT_LE(report.bounds_max.x, std::hypot(pitch + module, (0.4f * module) + (0.6f * radius * lean)) + 1.0e-5f);
         EXPECT_GE(report.bounds_max.x, (pitch + module) * std::cos(pi / static_cast<float>(teeth)));
         expect_connector_names(values, {"base", "axis", "mesh"});
         const std::vector<Kit_connector> connectors = connectors_of(values);
         EXPECT_FLOAT_EQ(connectors[1].position.y, report.bounds_max.y);
         EXPECT_FLOAT_EQ(connectors[2].position.x, pitch);
         EXPECT_EQ(connectors[2].outward, (glm::vec3{1.0f, 0.0f, 0.0f}));
+    }
+}
+
+// A worm joined to its wheel by the two mesh connectors (twist 0): the worm's axis crosses the wheel's, along the
+// wheel's tangent at the mesh point; no point of the wheel reaches the worm's shaft or lies in its thread.
+TEST(Kit_worm, a_joined_worm_and_wheel_mesh)
+{
+    const Kit_shape_definition& worm = get_shape("machine.worm");
+    for (const int seed : derive_seeds()) {
+        const Kit_parameter_values shaft = derived_enum(worm, "form", "worm", seed);
+        Kit_parameter_values       wheel = shaft;
+        ASSERT_TRUE(wheel.set_enum("form", "wheel"));
+        SCOPED_TRACE(shaft.to_canonical_text());
+        const std::vector<Kit_connector> worm_connectors  = connectors_of(shaft);
+        const std::vector<Kit_connector> wheel_connectors = connectors_of(wheel);
+        // The wheel, carried into the worm's frame.
+        const editor::Kit_join_pose pose = editor::join_connectors(wheel_connectors[2], worm_connectors[2], 0, 0.0f);
+        const glm::mat3 rotation   = glm::mat3_cast(pose.rotation);
+        const glm::vec3 wheel_axis = rotation * glm::vec3{0.0f, 1.0f, 0.0f};
+        EXPECT_NEAR(glm::dot(wheel_axis, glm::vec3{1.0f, 0.0f, 0.0f}), 0.0f, 1.0e-5f);
+        EXPECT_NEAR(std::abs(wheel_axis.z), 1.0f, 1.0e-5f);
+        const std::unique_ptr<GEO::Mesh> worm_mesh  = generate(shaft);
+        const std::unique_ptr<GEO::Mesh> wheel_mesh = generate(wheel);
+        const glm::vec3 axis_point{0.0f, worm_connectors[1].position.y, 0.0f};
+        const float     shaft_radius = least_reach_from_x_line(*worm_mesh, axis_point, worm_steel);
+        std::vector<uint32_t> slots;
+        editor::read_kit_facet_slots(*worm_mesh, slots);
+        const auto thread = [&slots](const GEO::index_t f) -> bool { return slots[f] == 0u; };
+        float least     = 1.0e9f;
+        int   in_thread = 0;
+        const float thread_reach = 1.01f * axis_point.y / std::cos(pi / 12.0f); // beyond the thread's outer corners
+        for (const glm::vec3& p : sample_edges(*wheel_mesh, pose)) {
+            const float distance = distance_from_line(p, axis_point, glm::vec3{1.0f, 0.0f, 0.0f});
+            least = std::min(least, distance);
+            in_thread += ((distance < thread_reach) && is_inside(*worm_mesh, thread, p)) ? 1 : 0;
+        }
+        EXPECT_GT(least, shaft_radius);
+        EXPECT_EQ(in_thread, 0);
     }
 }
 
@@ -843,6 +1075,23 @@ TEST(Kit_cylinder, fins_size_and_bore_follow_the_values)
         expect_connector_names(values, {"base", "top"});
         EXPECT_FLOAT_EQ(connectors_of(values)[1].position.y, height);
     }
+}
+
+// The default piston slides in the default cylinder: no point of the piston, its rings included, reaches the
+// liner's flats.
+TEST(Kit_cylinder, the_default_piston_clears_the_default_bore)
+{
+    const Kit_parameter_values cylinder = explicit_values(get_shape("machine.cylinder"), 1);
+    const Kit_parameter_values piston   = explicit_values(get_shape("machine.piston"), 1);
+    EXPECT_EQ(cylinder.get_float("bore"), piston.get_float("diameter"));
+    const float flats = least_reach_from_y_line(*generate(cylinder), 0.0f, 0.0f) * std::cos(pi / 16.0f);
+    const std::unique_ptr<GEO::Mesh> mesh = generate(piston);
+    float reach = 0.0f;
+    for (GEO::index_t v = 0; v < mesh->vertices.nb(); ++v) {
+        reach = std::max(reach, glm::length(glm::vec2{point_of(*mesh, v).x, point_of(*mesh, v).z}));
+    }
+    EXPECT_GT(reach, 0.5f * piston.get_float("diameter"));
+    EXPECT_LT(reach, flats);
 }
 
 //

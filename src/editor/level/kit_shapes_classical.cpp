@@ -22,7 +22,7 @@ enum class Column_capital : unsigned int {
     leaves       // corinthian: a bell with two rows of leaves and corner scrolls
 };
 
-// What an order sets (doc/editor/level_tools.md "Column"); lengths in shaft diameters.
+// What an order sets (doc/editor/level_kit_shapes.md "Column"); lengths in shaft diameters.
 class Column_order
 {
 public:

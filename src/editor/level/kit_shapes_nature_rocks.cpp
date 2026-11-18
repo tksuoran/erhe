@@ -18,7 +18,7 @@ constexpr float spire_ring_spacing = 0.6f;  // base rings about this far apart
 constexpr int   spire_max_rings    = 30;    // with the segments' maximum the spire stays within the kit's ceiling
 constexpr float spire_shelf_rise   = 0.08f; // height of a ledge's or a band's shelf edge
 
-// What a spire's form sets (doc/editor/level_tools.md "Rock spire").
+// What a spire's form sets (doc/editor/level_kit_shapes.md "Rock spire").
 enum class Spire_form : unsigned int {
     pinnacle = 0,
     stack,

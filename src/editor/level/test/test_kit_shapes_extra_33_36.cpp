@@ -339,14 +339,14 @@ TEST(Kit_rope_bridge, walkability_bounds_the_width_the_slope_and_the_gap)
     wide.radius = 0.6f;
     Kit_agent weak{};
     weak.max_slope_degrees = 15.0f;
-    Kit_agent small{};
-    small.radius = 0.2f;
+    Kit_agent small_agent{};
+    small_agent.radius = 0.2f;
     EXPECT_EQ(bridge.check_walkability(values, agent), "");
     EXPECT_NE(bridge.check_walkability(values, wide), "");
     EXPECT_NE(bridge.check_walkability(values, weak), "");
-    EXPECT_NE(bridge.check_walkability(values, small), "");
+    EXPECT_NE(bridge.check_walkability(values, small_agent), "");
     ASSERT_TRUE(values.set_float("missing", 0.0f));
-    EXPECT_EQ(bridge.check_walkability(values, small), "");
+    EXPECT_EQ(bridge.check_walkability(values, small_agent), "");
 }
 
 // With planks missing, some lie on the next plank: over the deck.
@@ -359,6 +359,46 @@ TEST(Kit_rope_bridge, loose_planks_lie_on_the_next)
     ASSERT_TRUE(loose.set_float("missing", 0.15f));
     EXPECT_EQ(topology_of(whole), topology_of(loose));
     EXPECT_FALSE(editor::kit_meshes_equal(*generate(whole), *generate(loose)));
+}
+
+// A loose plank is flat and the deck a parabola: no corner of a loose plank lies under the walking surface, even on
+// the shortest, widest and most sagging bridge.
+TEST(Kit_rope_bridge, loose_plank_corners_stay_over_the_deck)
+{
+    const Kit_shape_definition& bridge = get_shape("traversal.rope_bridge");
+    unsigned int loose_count = 0;
+    for (int seed = 0; seed < 16; ++seed) {
+        for (const float span : {2.0f, 6.0f}) {
+            Kit_parameter_values values = explicit_values(bridge, seed);
+            ASSERT_TRUE(values.set_float("span", span));
+            ASSERT_TRUE(values.set_float("width", 3.0f));
+            ASSERT_TRUE(values.set_float("sag", 0.1f));
+            ASSERT_TRUE(values.set_float("missing", 0.15f));
+            SCOPED_TRACE(values.to_canonical_text());
+            const float sag    = 0.1f * span;
+            const int   planks = std::clamp(static_cast<int>(std::lround(span / (0.2f + values.get_float("plank_gap")))), 4, 64);
+            // The walking surface: the connectors' height at the ends, the sag lower at mid span.
+            const float deck_end = connectors_of(values)[0].position.y;
+            const auto  get_deck = [&](const float x) -> float {
+                const float share = 2.0f * x / span;
+                return deck_end - sag + (sag * share * share);
+            };
+            const std::unique_ptr<GEO::Mesh> mesh = generate(values);
+            for (int i = 0; i < planks; ++i) {
+                const GEO::index_t first = static_cast<GEO::index_t>(8 * i);
+                // A plank's box: a loose one is turned, its side corners apart along X.
+                if (std::abs(point_of(*mesh, first + 3).x - point_of(*mesh, first).x) < 1.0e-4f) {
+                    continue;
+                }
+                ++loose_count;
+                for (GEO::index_t v = first; v < (first + 8); ++v) {
+                    const glm::vec3 p = point_of(*mesh, v);
+                    EXPECT_GE(p.y, get_deck(p.x) - 1.0e-4f) << i << " " << p.x;
+                }
+            }
+        }
+    }
+    EXPECT_GT(loose_count, 0u);
 }
 
 //
@@ -516,6 +556,40 @@ TEST_P(Kit_boat_forms, parts_and_size_follow_the_values)
 }
 
 INSTANTIATE_TEST_SUITE_P(Kit_boat, Kit_boat_forms, testing::Values("rowboat", "skiff", "barge"));
+
+// The hull rests on both sleepers: each sleeper's top is the hull's lowest point over the sleeper's middle, at every
+// form, heel and sheer.
+TEST_P(Kit_boat_forms, the_hull_rests_on_both_sleepers)
+{
+    const Kit_shape_definition& boat = get_shape("harbour.boat");
+    for (int thwarts = 0; thwarts <= 4; thwarts += 2) {
+        Kit_parameter_values values = explicit_enum(boat, "form", GetParam(), 1);
+        ASSERT_TRUE(values.set_int("thwarts", thwarts));
+        for_each_corner(values, boat_floats, [](const Kit_parameter_values& corner) {
+            SCOPED_TRACE(corner.to_canonical_text());
+            const std::unique_ptr<GEO::Mesh> mesh = generate(corner);
+            // The two skins' points come first, the two sleepers' boxes last.
+            const GEO::index_t hull  = 2 * 11 * 9;
+            const GEO::index_t count = mesh->vertices.nb();
+            for (GEO::index_t first = count - 16; first < count; first += 8) {
+                float top    = 0.0f;
+                float middle = 0.0f;
+                for (GEO::index_t v = first; v < (first + 8); ++v) {
+                    top    = std::max(top, point_of(*mesh, v).y);
+                    middle += point_of(*mesh, v).x / 8.0f;
+                }
+                float lowest = 1.0e6f;
+                for (GEO::index_t v = 0; v < hull; ++v) {
+                    const glm::vec3 p = point_of(*mesh, v);
+                    if (std::abs(p.x - middle) < 1.0e-4f) {
+                        lowest = std::min(lowest, p.y);
+                    }
+                }
+                EXPECT_NEAR(top, lowest, 1.0e-5f) << middle;
+            }
+        });
+    }
+}
 
 // The heel lays the boat over toward +Z: its gunwale at +Z comes down and the one at -Z goes up.
 TEST(Kit_boat, the_heel_lays_the_boat_over)

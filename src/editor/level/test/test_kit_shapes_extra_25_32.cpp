@@ -234,6 +234,58 @@ TEST_P(Kit_cargo_loads, parts_and_top_follow_the_values)
     }
 }
 
+// The four crates of a layer stand apart and on the pallet at every seed, fill and width: their turned footprints
+// have a separating axis (the edges of one of the two).
+TEST(Kit_cargo, goods_footprints_are_disjoint)
+{
+    const Kit_shape_definition& cargo = get_shape("harbour.cargo");
+    for (int seed = 0; seed < 24; ++seed) {
+        Kit_parameter_values values = explicit_enum(cargo, "load", "crates", seed);
+        ASSERT_TRUE(values.set_int("layers", 1));
+        for_each_corner(values, cargo_floats, [](const Kit_parameter_values& corner) {
+            SCOPED_TRACE(corner.to_canonical_text());
+            const float half_w = 0.5f * corner.get_float("width");
+            const std::unique_ptr<GEO::Mesh> mesh = generate(corner);
+            // The pallet's eight boxes come first, then a crate's box and lid to a good.
+            std::array<std::array<glm::vec2, 16>, 4> goods{};
+            for (GEO::index_t k = 0; k < 4; ++k) {
+                for (GEO::index_t v = 0; v < 16; ++v) {
+                    const glm::vec3 p = point_of(*mesh, 64 + (16 * k) + v);
+                    goods[k][v] = glm::vec2{p.x, p.z};
+                    EXPECT_LE(std::abs(p.x), half_w + 1.0e-5f);
+                    EXPECT_LE(std::abs(p.z), half_w + 1.0e-5f);
+                }
+            }
+            const auto is_separated = [](const std::array<glm::vec2, 16>& a, const std::array<glm::vec2, 16>& b, const std::array<glm::vec2, 16>& edges) -> bool {
+                // The lid's corners 0, 1 and 3 give its two edge directions.
+                for (const glm::vec2 axis : {edges[9] - edges[8], edges[11] - edges[8]}) {
+                    float a_min = 1.0e6f;
+                    float a_max = -1.0e6f;
+                    float b_min = 1.0e6f;
+                    float b_max = -1.0e6f;
+                    for (const glm::vec2& p : a) {
+                        a_min = std::min(a_min, glm::dot(p, axis));
+                        a_max = std::max(a_max, glm::dot(p, axis));
+                    }
+                    for (const glm::vec2& p : b) {
+                        b_min = std::min(b_min, glm::dot(p, axis));
+                        b_max = std::max(b_max, glm::dot(p, axis));
+                    }
+                    if ((a_max < b_min) || (b_max < a_min)) {
+                        return true;
+                    }
+                }
+                return false;
+            };
+            for (std::size_t i = 0; i < goods.size(); ++i) {
+                for (std::size_t j = i + 1; j < goods.size(); ++j) {
+                    EXPECT_TRUE(is_separated(goods[i], goods[j], goods[i]) || is_separated(goods[i], goods[j], goods[j])) << i << " " << j;
+                }
+            }
+        });
+    }
+}
+
 INSTANTIATE_TEST_SUITE_P(Kit_cargo, Kit_cargo_loads, testing::Values("crates", "sacks", "barrels", "mixed"));
 
 //
@@ -251,8 +303,47 @@ TEST_P(Kit_crane_forms, passes_at_the_corners_with_every_slot)
     const Kit_shape_definition& crane = get_shape("harbour.crane");
     ASSERT_EQ(crane.material_slots, (std::vector<std::string>{"metal", "wood"}));
     const Kit_parameter_values values = explicit_enum(crane, "form", GetParam(), 1);
-    for_each_corner(values, crane_floats, expect_valid_with_every_slot);
-    expect_topology_from_integers(values, crane_floats);
+    // A tower refuses a jib whose end stays over its slewing deck (a short jib at a steep angle on a tall tower).
+    unsigned int refused = 0;
+    for_each_corner(values, crane_floats, [&refused](const Kit_parameter_values& corner) {
+        if (corner.validate() != "") {
+            EXPECT_EQ(corner.get_enum("form"), "tower") << corner.to_canonical_text();
+            ++refused;
+            return;
+        }
+        expect_valid_with_every_slot(corner);
+    });
+    EXPECT_EQ(refused, (GetParam() == "tower") ? 4u : 0u);
+    Kit_parameter_values long_jib = values;
+    ASSERT_TRUE(long_jib.set_float("jib_length", 20.0f));
+    expect_topology_from_integers(long_jib, {"height", "jib_heading", "jib_angle"});
+    expect_topology_from_integers(values, {"jib_length", "jib_heading", "jib_angle"});
+}
+
+// A tower's hook line and hook hang clear of the slewing deck at every heading where the jib is long enough; a
+// shorter jib is refused with a reason.
+TEST(Kit_crane, tower_hook_hangs_clear_of_the_deck)
+{
+    const Kit_shape_definition& crane = get_shape("harbour.crane");
+    Kit_parameter_values values = explicit_enum(crane, "form", "tower", 1);
+    ASSERT_TRUE(values.set_float("height", 40.0f));
+    ASSERT_TRUE(values.set_float("jib_angle", 60.0f));
+    ASSERT_TRUE(values.set_float("jib_length", 1.0f));
+    EXPECT_NE(values.validate(), "");
+    ASSERT_TRUE(values.set_float("jib_length", 3.5f));
+    ASSERT_EQ(values.validate(), "");
+    const float deck = 1.2f * 1.2f; // half the deck's width at the tallest tower
+    for (const float heading : {0.0f, 30.0f, 45.0f, 135.0f, 225.0f, 300.0f}) {
+        ASSERT_TRUE(values.set_float("jib_heading", heading));
+        SCOPED_TRACE(values.to_canonical_text());
+        const std::unique_ptr<GEO::Mesh> mesh = generate(values);
+        // The hook line's box and the hook's are the last sixteen vertices.
+        const GEO::index_t count = mesh->vertices.nb();
+        for (GEO::index_t v = count - 16; v < count; ++v) {
+            const glm::vec3 p = point_of(*mesh, v);
+            EXPECT_TRUE((std::abs(p.x) > deck) || (std::abs(p.z) > deck)) << p.x << " " << p.z;
+        }
+    }
 }
 
 // The parts of each form. The mast or the tower's head is the height, and the jib reaches out along its heading by
@@ -646,6 +737,37 @@ TEST_P(Kit_antenna_forms, parts_and_height_follow_the_values)
 }
 
 INSTANTIATE_TEST_SUITE_P(Kit_antenna, Kit_antenna_forms, testing::Values("dish", "whip", "array"));
+
+// Each dish stands above the next one down, at every height, tilt and heading: their height ranges are disjoint.
+TEST(Kit_antenna, dishes_stand_apart)
+{
+    const Kit_shape_definition& antenna = get_shape("industrial.antenna");
+    for (const int seed : {1, 2, 3, 4, 5, 6}) {
+        for (int elements = 2; elements <= 5; ++elements) {
+            Kit_parameter_values values = explicit_enum(antenna, "form", "dish", seed);
+            ASSERT_TRUE(values.set_int("elements", elements));
+            for_each_corner(values, antenna_floats, [elements](const Kit_parameter_values& corner) {
+                SCOPED_TRACE(corner.to_canonical_text());
+                const std::unique_ptr<GEO::Mesh> mesh = generate(corner);
+                // The plate and the mast come first, then a dish's five rings of eight and its feed's box to an element.
+                std::vector<std::array<float, 2>> ranges;
+                for (int k = 0; k < elements; ++k) {
+                    std::array<float, 2> range{1.0e6f, -1.0e6f};
+                    for (GEO::index_t v = 0; v < 48; ++v) {
+                        const float y = point_of(*mesh, static_cast<GEO::index_t>(20 + (48 * k)) + v).y;
+                        range[0] = std::min(range[0], y);
+                        range[1] = std::max(range[1], y);
+                    }
+                    ranges.push_back(range);
+                }
+                ASSERT_EQ(mesh->vertices.nb(), static_cast<GEO::index_t>(20 + (48 * elements)));
+                for (std::size_t k = 0; (k + 1) < ranges.size(); ++k) {
+                    EXPECT_GT(ranges[k][0], ranges[k + 1][1]) << k;
+                }
+            });
+        }
+    }
+}
 
 // The elements' headings come from the seed.
 TEST(Kit_antenna, the_seed_turns_the_elements)

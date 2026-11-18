@@ -5,11 +5,12 @@ Status: in progress
 The shape list for step 62 of `doc/plans/level_tools_implementation.md`
 ("Expand the kit with more shapes"), chosen by the orchestrator within
 rulings U34 and U36 of `doc/plans/level_tools.md`; the user reviews the
-built shapes. It covers the user's five categories and the unbuilt shapes
+built shapes. Every shape of the list is built and described in
+`doc/editor/level_kit_shapes.md`; the open questions below remain. It covers the user's five categories and the unbuilt shapes
 of R4.3 and R4.4. Every shape joins an existing kit (U34), `nature` or
 `architecture`; the new kits are step 63's
 (`doc/plans/level_kit_extra_shapes.md`, "the extra shapes document"
-below). This plan extends `doc/editor/level_tools.md`.
+below). This plan extends `doc/editor/level_kit_shapes.md`.
 
 ## Conventions of the tables
 
@@ -205,7 +206,7 @@ the first shape that needs them.
 The lines are built in order, about four lines to a commit (one coder
 session and one review per commit), each shape with its checks in
 `scripts/level_tools_verify.py` and its entry in
-`doc/editor/level_tools.md`. The first ten put one strong silhouette of
+`doc/editor/level_kit_shapes.md`. The first ten put one strong silhouette of
 every category in front of the user; the rest follow by category.
 
 Built: lines 1 - 12 (P1, Q1, `nature.cliff`, `nature.palm` with P4

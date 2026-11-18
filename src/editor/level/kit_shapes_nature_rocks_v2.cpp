@@ -13,7 +13,7 @@
 #include <string_view>
 #include <vector>
 
-// The recreated rocks (doc/editor/level_tools.md "Recreated shapes").
+// The recreated rocks (doc/editor/level_kit_shapes.md "Rock spire (F)").
 // The mesh's topology follows from its integer values and integer draws alone; random floats only move vertices.
 
 namespace editor {

@@ -228,7 +228,7 @@ public:
     float                      side{0.0f}; // -1 or +1 along the cut's lateral axis
 };
 
-// The tower's plan (doc/editor/level_tools.md "Tower"): the body's ring with its openings, and the parapet's pattern.
+// The tower's plan (doc/editor/level_kit_shapes.md "Tower"): the body's ring with its openings, and the parapet's pattern.
 class Tower_plan
 {
 public:

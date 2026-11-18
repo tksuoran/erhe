@@ -208,6 +208,15 @@ an empty scene and checks over MCP:
   Stairs and Make Layout On Curve, every layout kind and the shapes through
   Commands > Create and the Scene Hierarchy window's Create menu.
 
+Each group of checks (the catalog level, the walkable level, the Level Kit
+window's scene and the groups after them) closes the scenes it made and gives
+back what it changed; after each group a check compares the open scenes, the
+Brush tool and kit mode, the rotation step, the surface and connector snap
+settings, the gizmo parts, the transform space and mode, the selection and the
+shown tool windows with the state before it, and a last check compares the
+scenes and the Brush tool with the start of the run. A group run alone
+(--only-*) passes as it does in the full run.
+
 The run restores config/editor/editor_settings.json, desktop_windows.json,
 user_state.json and desktop_window_imgui_host_imgui.ini, which the window's
 checkboxes and its visibility could rewrite. The viewport cameras of the
@@ -302,8 +311,11 @@ RECREATED_SHAPES = ("basic.block", "basic.wedge", "basic.cylinder", "basic.stair
                     "nature.leaf_plant", "nature.palm_shrub", "nature.rock_spire", "nature.rock", "nature.land_mass", "nature.hill",
                     "nature.tree", "nature.bush")
 # The library: its originals and all its recreated shapes (those above and the later batches').
-ORIGINAL_SHAPE_COUNT = 50
+ORIGINAL_SHAPE_COUNT = 104
 RECREATED_SHAPE_COUNT = len(RECREATED_SHAPES)
+# The kits in catalog order and their original shapes' counts.
+KIT_ORIGINALS = [("basic", 5), ("architecture", 21), ("nature", 25), ("prop", 8), ("ruin", 5), ("traversal", 4),
+                 ("harbour", 8), ("light", 4), ("industrial", 6), ("machine", 18)]
 SHAPE_COUNT = ORIGINAL_SHAPE_COUNT + RECREATED_SHAPE_COUNT
 
 
@@ -383,8 +395,8 @@ def check_catalog(editor, scene):
           f"{catalog['shape_count']} shapes, {len(originals)} originals")
     recreates_of = {shape["id"]: shape["recreates"] for shape in shapes}
     kit_originals = [(k["name"], len([i for i in k["shapes"] if not recreates_of[i]])) for k in catalog["kits"]]
-    check("level_get_kits lists the basic, architecture and nature kits with 5, 10 and 16 original shapes",
-          kit_originals == [("basic", 5), ("architecture", 10), ("nature", 16)], json.dumps(kit_originals))
+    check(f"level_get_kits lists the kits {', '.join(f'{k} ({n})' for k, n in KIT_ORIGINALS)} with their original shapes",
+          kit_originals == KIT_ORIGINALS, json.dumps(kit_originals))
     check("level_get_kits reports the default level lengths (module 1 m, wall height 3 m)",
           close([catalog["level"]["module"], catalog["level"]["wall_height"]], [1.0, 3.0]), json.dumps(catalog["level"]))
     every_field = all(all(key in shape for key in ("id", "kind", "description", "tags", "parameters", "default_size",
@@ -441,18 +453,16 @@ def check_catalog_row(editor, scene, catalog):
         catalog_size = by_id[piece["shape"]]["default_size"]
         if not close(size, catalog_size):
             size_problems.append(f"{piece['shape']} {fmt3(size)} vs catalog {fmt3(catalog_size)}")
-        # A recreated shape has its original's sizes.
-        size_key = by_id[piece["shape"]]["recreates"] or piece["shape"]
+        # A recreated shape may change its original's contract (sizes included): the catalog size above is its check.
+        size_key = piece["shape"]
         if size_key in EXACT_DEFAULT_SIZES:
             if not close(size, EXACT_DEFAULT_SIZES[size_key]):
                 size_problems.append(f"{piece['shape']} {fmt3(size)} vs expected {fmt3(EXACT_DEFAULT_SIZES[size_key])}")
-        elif not by_id[piece["shape"]]["default_derive"]:
-            # A shape with a default mask has derived sizes; its catalog default_size is the check.
-            nominal = NOMINAL_DEFAULT_SIZES.get(size_key)
-            if nominal is None:
-                size_problems.append(f"{piece['shape']} has no expected size in EXACT_DEFAULT_SIZES or NOMINAL_DEFAULT_SIZES")
-            elif not all(abs(s - n) <= NOMINAL_SHARE * n for s, n in zip(size, nominal)):
+        elif (size_key in NOMINAL_DEFAULT_SIZES) and not by_id[piece["shape"]]["default_derive"]:
+            nominal = NOMINAL_DEFAULT_SIZES[size_key]
+            if not all(abs(s - n) <= NOMINAL_SHARE * n for s, n in zip(size, nominal)):
                 size_problems.append(f"{piece['shape']} {fmt3(size)} vs nominal {fmt3(nominal)}")
+        # Other shapes: the catalog default_size above; editor_level_tests pins their default bounds.
     check("every catalog row piece's world_aabb matches its shape's default size (exact sizes for the unseeded shapes)",
           not size_problems, "; ".join(size_problems) if size_problems else f"{len(placed)} pieces")
 
@@ -4917,8 +4927,7 @@ def check_layout_live_drags(editor, image_path):
     print(f"layout preview step: 12-pillar fence value drag {len(times_fence)} steps, median {median(times_fence):.3f} ms, max {max(times_fence) if times_fence else 0:.3f} ms; "
           f"20-stone surface-snapped path Transform drag {len(times_stones)} steps, median {median(times_stones):.3f} ms, max {max(times_stones) if times_stones else 0:.3f} ms", flush=True)
     editor.call("set_log_levels", {"loggers": {"editor.scene": "info"}})
-    editor.call("select_items", {"scene_name": scene, "ids": []})
-    editor.wait_idle()
+    editor.close(scene)
 
 
 def check_layout_transform_rows(editor):
@@ -4926,6 +4935,7 @@ def check_layout_transform_rows(editor):
     a held drag of a Local Transform row of a locked surface-snapped layout node, of its ancestor, of two layouts together, a
     Rotation row, a selection change that abandons the drag, Paste Properties of a transform and set_item_property."""
     properties = "Properties"
+    windows = shown_windows(editor, editor.scene_names())
     scene = create_scene(editor)
     editor.call("set_active_scene", {"scene_name": scene})
     editor.call("level_place_pieces", {"scene_name": scene, "pieces": [
@@ -5140,9 +5150,9 @@ def check_layout_transform_rows(editor):
           close(lay(ring_id)["position"], before["position"]) and (child_snapshot(lay(ring_id)) == child_snapshot(before)), "")
     editor.call("select_items", {"scene_name": scene, "ids": []})
     editor.wait_idle()
-    # The title click cases showed Node Properties and Level Kit floating over the viewport, where later pointer drags press.
-    hide_windows_over_viewports(editor)
     editor.close(scene)
+    # The title click cases showed Node Properties and Level Kit.
+    hide_windows_shown_since(editor, windows)
 
 
 def scatter_local(layout):
@@ -5181,6 +5191,7 @@ def check_scatter_layouts(editor, directory):
     same seed through undo, redo, save and reopen, another seed elsewhere, surface snap over the hill, what fits of an impossible
     request, lock / unlock / refresh, the Properties and Level Kit window rows and a held value drag (scene closed afterwards)."""
     properties = "Properties"
+    windows = shown_windows(editor, editor.scene_names())
     scene = create_scene(editor)
     editor.call("set_active_scene", {"scene_name": scene})
     editor.call("level_place_pieces", {"scene_name": scene, "pieces": [
@@ -5477,6 +5488,7 @@ def check_scatter_layouts(editor, directory):
     editor.call("clear_undo_history")
     editor.wait_idle()
     editor.close(scene)
+    hide_windows_shown_since(editor, windows)
 
 
 def scene_tree(editor, scene):
@@ -6331,26 +6343,28 @@ def check_reloaded(label, editor, before, materials_before, name):
     groups = sum(1 for p in after) - len(brushes)
     check(f"{label}: equal values share one mesh and different values do not ({groups} pieces share an earlier piece's mesh)",
           shared and distinct and (groups > 0 or label == "walkable level"), f"{len(brushes)} value sets")
-    # A water or leaf plant piece has no body (P5) and keeps its pass_through flag through the file.
-    no_body = ("nature.water", "nature.leaf_plant")
+    # A piece of a shape without collision (water, plants, ...) has no body (P5) and keeps its pass_through flag through the file.
+    no_body = {shape["id"] for shape in editor.call("level_get_kits", {"scene_name": name})["shapes"] if shape["collision"] == "none"}
     bodies = [p["name"] for p in after if (p["shape"] not in no_body) and not (p["physics"]["has_body"] and p["physics"]["motion_mode"] == "static")]
     bodiless = [p["name"] for p in after if (p["shape"] in no_body) and (p["physics"]["has_body"] or not p["pass_through"])]
-    check(f"{label}: every reloaded piece has its static body, a water or leaf plant piece none and its pass_through flag", not bodies and not bodiless, ", ".join((bodies + bodiless)[:5]))
+    check(f"{label}: every reloaded piece has its static body, a piece of a shape without collision none and its pass_through flag", not bodies and not bodiless, ", ".join((bodies + bodiless)[:5]))
     check(f"{label}: the palette materials are back by name, none added",
           material_count(editor, name) <= materials_before and all(p["materials"] and all(p["materials"].values()) for p in after),
           f"{material_count(editor, name)} materials, {materials_before} before the save")
     return after
 
 
-def check_persistence(editor, catalog_scene, walkable_scene, directory):
-    """Save, close and load the kit levels (doc/editor/level_tools.md "Persistence")."""
-    if catalog_scene is not None:
-        catalog_path = os.path.join(directory, "catalog_level.gltf")
-        before, materials, name = save_close_load(editor, catalog_scene, catalog_path)
-        check_saved_file("catalog level", catalog_path)
-        check_reloaded("catalog level", editor, before, materials, name)
-        editor.close(name)
+def check_catalog_persistence(editor, catalog_scene, directory):
+    """Save, close and load the catalog level (doc/editor/level_tools.md "Persistence"); closes it."""
+    catalog_path = os.path.join(directory, "catalog_level.gltf")
+    before, materials, name = save_close_load(editor, catalog_scene, catalog_path)
+    check_saved_file("catalog level", catalog_path)
+    check_reloaded("catalog level", editor, before, materials, name)
+    editor.close(name)
 
+
+def check_persistence(editor, walkable_scene, directory):
+    """Save, close and load the walkable level (doc/editor/level_tools.md "Persistence"); closes it."""
     walkable_path = os.path.join(directory, "walkable_level.gltf")
     before, materials, name = save_close_load(editor, walkable_scene, walkable_path)
     document = check_saved_file("walkable level", walkable_path)
@@ -7462,6 +7476,8 @@ def surface_step_times(log_text, entries):
 
 def check_transform_surface(editor, image_path):
     """D4.6: the shared surface pair in three UI sites, and the Transform tool's drags resting moved meshes."""
+    saved = Saved_tool_settings(editor)
+    windows = shown_windows(editor, editor.scene_names())
     editor.call("set_surface_snap_settings", {"snap": False, "orient": False})
     scene = create_scene(editor)
     fixtures = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [
@@ -7659,6 +7675,9 @@ def check_transform_surface(editor, image_path):
     check("capture_screenshot of the toolbar buttons and the Move rows is written", os.path.isfile(image_path), image_path)
     print(f"surface settings screenshot: {image_path}", flush=True)
     editor.call("set_surface_snap_settings", {"snap": False, "orient": False, "max_distance": saved_max_distance})
+    saved.restore()
+    editor.close(scene)
+    hide_windows_shown_since(editor, windows)
 
 
 ROTATE_Y = (11,)
@@ -7904,8 +7923,7 @@ def check_transform_drag_cancel(editor):
     check("undo of that layout drag restores the node and the pre-drag children exactly", layout_state() == before, "")
 
     editor.call("set_gizmo_visibility", {k: gizmo_state[k] for k in ("translate", "rotate", "scale", "scale_gizmo_mode") if k in gizmo_state})
-    editor.call("select_items", {"scene_name": scene, "ids": []})
-    editor.wait_idle()
+    editor.close(scene)
 
 
 def check_transform_record_rule(editor):
@@ -8162,8 +8180,7 @@ def check_transform_record_rule(editor):
     check("undo of that layout drag restores the node and its children exactly", layout_state() == before, "")
 
     editor.call("set_gizmo_visibility", {k: gizmo_state[k] for k in ("translate", "rotate", "scale", "scale_gizmo_mode") if k in gizmo_state})
-    editor.call("select_items", {"scene_name": scene, "ids": []})
-    editor.wait_idle()
+    editor.close(scene)
 
 
 def replace_state(editor, scene, node_id):
@@ -9539,6 +9556,8 @@ def close_without_leak(editor, scene, label):
 def check_connector_snap(editor):
     """R5.13, D3.13: snap to connectors during Transform tool translate drags (doc/editor/level_tools.md "Connector snap")."""
     import curve_verify as cv  # noqa: E402 - frames the camera from the viewport's real size
+    saved = Saved_tool_settings(editor)
+    windows = shown_windows(editor, editor.scene_names())
     editor.call("set_surface_snap_settings", {"snap": False, "orient": False, "connector_snap_distance": 0.0})
     scene = create_scene(editor)
     editor.call("set_active_scene", {"scene_name": scene})
@@ -10148,6 +10167,8 @@ def check_connector_snap(editor):
     check_connector_snap_surface(editor)
     check_connector_snap_persistence(editor)
     check_connector_snap_orientation(editor)
+    saved.restore()
+    hide_windows_shown_since(editor, windows)
 
 
 
@@ -12759,6 +12780,7 @@ def check_recreated_shapes(editor):
     check("with the door wall replaced by a wall no complete path leads to the back: the opening was the only way",
           (job.get("state") == "done") and not (blocked.get("found") and blocked.get("complete")),
           f"job {job.get('state')}, found {blocked.get('found')}, complete {blocked.get('complete')}, length {blocked.get('length')}")
+    editor.close(scene)
 
 
 def check_region_handles(editor):
@@ -14301,6 +14323,7 @@ def new_layouts(editor, scene, known):
 def check_create_menu(editor):
     """U46, U47: path stairs from the Level Kit window, the Create menu's Level Kit submenu in the Scene Hierarchy window
     and in the main menu (Commands > Create): every shape, every layout kind, parent, place, selection, undo."""
+    windows = shown_windows(editor, editor.scene_names())
     scene = create_scene(editor)
     # The main menu creates in the active scene and the Level Kit window acts on the last hovered viewport's scene.
     editor.call("set_active_scene", {"scene_name": scene})
@@ -14515,6 +14538,94 @@ def check_create_menu(editor):
           (entry is not None) and entry["status"].get("disabled") and (len(new_layouts(editor, scene, set(layouts_by_id(editor, scene)) - {unlocked["id"]})) <= 1), "")
     editor.call("select_items", {"scene_name": scene, "ids": []})
     editor.close(scene)
+    hide_windows_shown_since(editor, windows)
+
+
+def shown_windows(editor, scenes=()):
+    """The display names of the shown tool windows: not the scene viewports, hierarchies, menus, popups or dock nodes."""
+    names = set()
+    for w in editor.call("get_imgui_windows").get("windows", []):
+        name = w.get("display_name", "")
+        if (not w.get("active")) or (not name) or ("/" in name) or ("##" in w.get("name", "")) or name.startswith("erhe root window"):
+            continue
+        if (name in scenes) or (name == "Viewport") or name.startswith("Scene Hierarchy"):
+            continue
+        names.add(name)
+    return names
+
+
+def hide_windows_shown_since(editor, before):
+    """Hides the tool windows a group showed that were not shown before it."""
+    for name in sorted(shown_windows(editor, editor.scene_names()) - before):
+        editor.call("set_window_visibility", {"title": name, "visible": False})
+    editor.wait_idle()
+
+
+class Saved_tool_settings:
+    """The global settings tool checks change: surface / connector snap and the gizmo parts; restore() gives them back."""
+    GIZMO_KEYS = ("translate", "rotate", "scale", "scale_gizmo_mode")
+
+    def __init__(self, editor):
+        self.editor = editor
+        self.snap = editor.call("get_surface_snap_settings", {})
+        gizmo = editor.call("set_gizmo_visibility", {})
+        self.gizmo = {k: gizmo[k] for k in self.GIZMO_KEYS if k in gizmo}
+
+    def restore(self):
+        self.editor.call("set_surface_snap_settings", dict(self.snap))
+        self.editor.call("set_gizmo_visibility", dict(self.gizmo))
+        self.editor.wait_idle()
+
+
+def leave_brush_tool(editor):
+    """Hotbar slot keys until the Brush tool is not the active tool (kit mode ends with it)."""
+    for key in "123456789":
+        if not preview(editor).get("tool_active"):
+            return
+        editor.call("key_press", {"key": key})
+        wait_preview(editor, lambda r: not r.get("tool_active"), timeout=1.0)
+
+
+def editor_state(editor):
+    """What a group may change and has to give back: open scenes, the Brush tool, the global tool settings, shown windows."""
+    preview_reply = preview(editor)
+    gizmo = editor.call("set_gizmo_visibility", {})
+    transform = editor.call("get_transform_state")
+    scenes = sorted(editor.scene_names())
+    return {
+        "scenes": scenes,
+        "Brush tool active": bool(preview_reply.get("tool_active")),
+        "kit mode": bool(preview_reply.get("active")),
+        "rotation step": preview_reply.get("rotation_step_degrees"),
+        "surface snap settings": editor.call("get_surface_snap_settings"),
+        "gizmo": {k: gizmo.get(k) for k in Saved_tool_settings.GIZMO_KEYS},
+        "transform space": transform.get("reference_mode"),
+        "transform mode": transform.get("transform_mode"),
+        "selection": sorted(i["id"] for i in editor.call("get_selection").get("items", [])),
+        "windows": sorted(shown_windows(editor, scenes)),
+    }
+
+
+def state_differences(before, after):
+    texts = []
+    for key in before:
+        if before[key] == after[key]:
+            continue
+        if isinstance(before[key], list) and isinstance(after[key], list):
+            texts.append(f"{key}: added {sorted(set(after[key]) - set(before[key]))}, removed {sorted(set(before[key]) - set(after[key]))}")
+        else:
+            texts.append(f"{key}: {json.dumps(before[key])} -> {json.dumps(after[key])}")
+    return "; ".join(texts)
+
+
+def run_group(editor, name, function, *arguments):
+    """Runs one group of checks and checks that it closed what it created and restored what it changed."""
+    before = editor_state(editor)
+    result = function(editor, *arguments)
+    editor.wait_idle()
+    differences = state_differences(before, editor_state(editor))
+    check(f"group {name} leaves the editor as it found it (scenes, tool, settings, selection, windows)", not differences, differences)
+    return result
 
 
 def main():
@@ -14603,143 +14714,172 @@ def main():
         hide_windows_over_viewports(editor)
         # The pointer drags assume no connector snap; the saved editor_settings.json may hold a distance.
         editor.call("set_surface_snap_settings", {"connector_snap_distance": 0.0})
-        scene = None
+        start_state = editor_state(editor)
+
+        def catalog_level(editor):
+            scene = create_scene(editor)
+            print(f"scene {scene}", flush=True)
+            catalog = check_catalog(editor, scene)
+            check_derive_catalog(catalog)
+            row, length = check_catalog_row(editor, scene, catalog)
+            render_row(editor, scene, length, image_path)
+            check_sharing_and_undo(editor, scene, row)
+            check_rejections(editor, scene)
+            check_snap(editor, scene, 1.0, [1.3, 0.2, -2.6], [1.0, 0.0, -3.0], "module 1")
+            check_level_settings(editor, scene)
+            check_parameter_changes(editor, scene)
+            check_surface_placement(editor, scene, surface_image_path)
+            check_catalog_persistence(editor, scene, work)
+
+        def walkable_level(editor):
+            check_persistence(editor, check_walkable_level(editor, walkable_image_path), work)
+
+        def level_kit_window(*steps):
+            """The Level Kit window's scene and stairs, handed to each step in turn; closed at the end."""
+            def run(editor):
+                saved = Saved_tool_settings(editor)
+                windows = shown_windows(editor, editor.scene_names())
+                rotation_step = preview(editor).get("rotation_step_degrees")
+                window_scene, stairs = check_level_kit_window(editor, window_image_path)
+                for step in steps:
+                    step(editor, window_scene, stairs)
+                if preview(editor).get("rotation_step_degrees") != rotation_step:
+                    open_window(editor, WINDOW)
+                    click(editor, "Rotation Step")
+                    editor.call("imgui_click", {"label": f"{rotation_step} deg"})
+                leave_brush_tool(editor)
+                saved.restore()
+                editor.close(window_scene)
+                hide_windows_shown_since(editor, windows)
+            return run
+
+        window_layout = [
+            lambda e, s, _: check_window_layout(e, s, layout_image_path),
+            lambda e, s, _: check_properties_layout(e, s),
+            lambda e, s, _: check_properties_layout_write(e, s),
+        ]
+        window_replace = [lambda e, s, _: check_window_replace(e, s)]
+        window_connect = [lambda e, s, _: check_window_connect(e, s)]
+        window_all = [
+            lambda e, s, stairs: check_properties_rows(e, s, stairs, properties_image_path),
+            lambda e, s, _: check_from_seed_toggle(e, s),
+            lambda e, s, stairs: check_live_drags(e, s, stairs, e.call("level_get_kits", {"scene_name": s})),
+            lambda e, s, _: check_window_queries(e, s, queries_image_path),
+            *window_layout,
+            lambda e, s, _: check_window_group(e, s, group_image_path),
+            lambda e, s, _: check_window_materials(e, s, materials_image_path),
+            *window_replace,
+            *window_connect,
+        ]
+
+        more_shapes = [("more shapes", check_more_shapes), ("more shapes 2", check_more_shapes_2), ("more shapes 3", check_more_shapes_3)]
+        groups = []  # (name, function, arguments...)
         if args.only_transform:
-            check_transform_surface(editor, transform_image_path)
+            groups = [("transform surface", check_transform_surface, transform_image_path)]
         elif args.only_layouts:
-            check_layout_patterns(editor)
-            check_layouts(editor, work)
-            check_path_layouts(editor, work, path_image_path)
-            check_layout_tree(editor)
+            groups = [("layout patterns", check_layout_patterns), ("layouts", check_layouts, work),
+                      ("path layouts", check_path_layouts, work, path_image_path), ("layout tree", check_layout_tree)]
         elif args.only_path_layouts:
-            check_path_layouts(editor, work, path_image_path)
+            groups = [("path layouts", check_path_layouts, work, path_image_path)]
         elif args.only_segments:
-            check_segment_layouts(editor, work, segments_image_path)
+            groups = [("segment layouts", check_segment_layouts, work, segments_image_path)]
         elif args.only_stairs_layout:
-            check_stairs_layouts(editor, work, stairs_image_prefix)
-            check_stairs_drag_uploads(editor)
+            groups = [("stairs layouts", check_stairs_layouts, work, stairs_image_prefix), ("stairs drag uploads", check_stairs_drag_uploads)]
         elif args.only_stairs_drag_uploads:
-            check_stairs_drag_uploads(editor)
+            groups = [("stairs drag uploads", check_stairs_drag_uploads)]
         elif args.only_collision_scale:
-            check_collision_scale(editor, work)
+            groups = [("collision scale", check_collision_scale, work)]
         elif args.only_segment_handles:
-            check_segment_handles(editor, segment_handles_image_path)
+            groups = [("segment handles", check_segment_handles, segment_handles_image_path)]
         elif args.only_window_layout:
-            window_scene, _ = check_level_kit_window(editor, window_image_path)
-            check_window_layout(editor, window_scene, layout_image_path)
-            check_properties_layout(editor, window_scene)
-            check_properties_layout_write(editor, window_scene)
+            groups = [("Level Kit window layout", level_kit_window(*window_layout))]
         elif args.only_layout_drags:
-            check_layout_live_drags(editor, layout_drag_image_path)
-            check_layout_transform_rows(editor)
+            groups = [("layout live drags", check_layout_live_drags, layout_drag_image_path), ("layout transform rows", check_layout_transform_rows)]
         elif args.only_transform_rows:
-            check_layout_transform_rows(editor)
+            groups = [("layout transform rows", check_layout_transform_rows)]
         elif args.only_drag_cancel:
-            check_transform_drag_cancel(editor)
-            check_transform_record_rule(editor)
+            groups = [("transform drag cancel", check_transform_drag_cancel), ("transform record rule", check_transform_record_rule)]
         elif args.only_snap_to_surface:
-            check_snap_to_surface(editor)
+            groups = [("snap to surface", check_snap_to_surface)]
         elif args.only_rotated_mesh_snap:
-            check_rotated_mesh_snap(editor)
+            groups = [("rotated mesh snap", check_rotated_mesh_snap)]
         elif args.only_scatter:
-            check_scatter_layouts(editor, work)
+            groups = [("scatter layouts", check_scatter_layouts, work)]
         elif args.only_connectors:
-            check_connectors(editor)
-            window_scene, _ = check_level_kit_window(editor, window_image_path)
-            check_window_connect(editor, window_scene)
+            groups = [("connectors", check_connectors), ("Level Kit window connect", level_kit_window(*window_connect))]
         elif args.only_connector_snap:
-            check_connector_snap(editor)
+            groups = [("connector snap", check_connector_snap)]
         elif args.only_layout_indicators:
-            check_layout_indicators(editor)
+            groups = [("layout indicators", check_layout_indicators)]
         elif args.only_layout_connectors:
-            check_layout_connectors(editor, layout_connectors_prefix)
+            groups = [("layout connectors", check_layout_connectors, layout_connectors_prefix)]
         elif args.only_more_shapes:
-            check_more_shapes(editor)
-            check_more_shapes_2(editor)
-            check_more_shapes_3(editor)
+            groups = more_shapes
         elif args.only_recreated_shapes:
-            check_recreated_shapes(editor)
+            groups = [("recreated shapes", check_recreated_shapes)]
         elif args.only_wrap_with_path:
-            check_wrap_with_path(editor, work)
+            groups = [("wrap with path", check_wrap_with_path, work)]
         elif args.only_create_menu:
-            check_create_menu(editor)
+            groups = [("create menu", check_create_menu)]
         elif args.only_piece_lights:
-            check_piece_lights(editor, work, args.piece_lights_shape)
+            groups = [("piece lights", check_piece_lights, work, args.piece_lights_shape)]
         elif args.only_region_handles:
-            check_region_handles(editor)
+            groups = [("region handles", check_region_handles)]
         elif args.only_layout_selection:
-            check_locked_layout_selection(editor)
+            groups = [("locked layout selection", check_locked_layout_selection)]
         elif args.only_replace:
-            check_replace(editor)
-            window_scene, _ = check_level_kit_window(editor, window_image_path)
-            check_window_replace(editor, window_scene)
+            groups = [("replace", check_replace), ("Level Kit window replace", level_kit_window(*window_replace))]
         else:
             if not args.only_walkable:
-                scene = create_scene(editor)
-                print(f"scene {scene}", flush=True)
-                catalog = check_catalog(editor, scene)
-                check_derive_catalog(catalog)
-                row, length = check_catalog_row(editor, scene, catalog)
-                render_row(editor, scene, length, image_path)
-                check_sharing_and_undo(editor, scene, row)
-                check_rejections(editor, scene)
-                check_snap(editor, scene, 1.0, [1.3, 0.2, -2.6], [1.0, 0.0, -3.0], "module 1")
-                check_level_settings(editor, scene)
-                check_parameter_changes(editor, scene)
-                check_surface_placement(editor, scene, surface_image_path)
-                check_rock_forms_and_derive(editor, work, rock_image_path)
-                check_spatial_queries(editor)
-                check_overlap_report(editor)
-                check_level_check(editor)
-                check_layout_patterns(editor)
-                check_groups(editor, work)
-                check_material_slots(editor, work)
-                check_replace(editor)
-                check_connectors(editor)
-                check_layouts(editor, work)
-                check_path_layouts(editor, work, path_image_path)
-                check_segment_layouts(editor, work, segments_image_path)
-                check_layout_tree(editor)
-                check_locked_layout_selection(editor)
-            walkable_scene = check_walkable_level(editor, walkable_image_path)
-            check_persistence(editor, scene, walkable_scene, work)
-            window_scene, stairs = check_level_kit_window(editor, window_image_path)
-            check_properties_rows(editor, window_scene, stairs, properties_image_path)
-            check_from_seed_toggle(editor, window_scene)
-            check_live_drags(editor, window_scene, stairs, editor.call("level_get_kits", {"scene_name": window_scene}))
-            check_window_queries(editor, window_scene, queries_image_path)
-            check_window_layout(editor, window_scene, layout_image_path)
-            check_properties_layout(editor, window_scene)
-            check_properties_layout_write(editor, window_scene)
-            check_window_group(editor, window_scene, group_image_path)
-            check_window_materials(editor, window_scene, materials_image_path)
-            check_window_replace(editor, window_scene)
-            check_window_connect(editor, window_scene)
-            check_transform_surface(editor, transform_image_path)
-            # Last: it makes its own scene the active one.
-            check_layout_live_drags(editor, layout_drag_image_path)
-            check_layout_transform_rows(editor)
-            check_transform_drag_cancel(editor)
-            check_transform_record_rule(editor)
-            check_snap_to_surface(editor)
-            check_rotated_mesh_snap(editor)
-            check_scatter_layouts(editor, work)
-            check_connector_snap(editor)
-            check_layout_indicators(editor)
-            check_region_handles(editor)
-            check_segment_handles(editor, segment_handles_image_path)
-            check_more_shapes(editor)
-            check_more_shapes_2(editor)
-            check_more_shapes_3(editor)
-            check_recreated_shapes(editor)
-            check_layout_connectors(editor, layout_connectors_prefix)
-            check_collision_scale(editor, work)
-            check_stairs_layouts(editor, work, stairs_image_prefix)
-            check_stairs_drag_uploads(editor)
-            check_piece_lights(editor, work, args.piece_lights_shape)
-            check_wrap_with_path(editor, work)
-            # After groups that left viewports behind as unselected dock tabs: the Level Kit window follows the hovered one.
-            check_create_menu(editor)
+                groups += [
+                    ("catalog level", catalog_level),
+                    ("rock forms and derive", check_rock_forms_and_derive, work, rock_image_path),
+                    ("spatial queries", check_spatial_queries),
+                    ("overlap report", check_overlap_report),
+                    ("level check", check_level_check),
+                    ("layout patterns", check_layout_patterns),
+                    ("groups", check_groups, work),
+                    ("material slots", check_material_slots, work),
+                    ("replace", check_replace),
+                    ("connectors", check_connectors),
+                    ("layouts", check_layouts, work),
+                    ("path layouts", check_path_layouts, work, path_image_path),
+                    ("segment layouts", check_segment_layouts, work, segments_image_path),
+                    ("layout tree", check_layout_tree),
+                    ("locked layout selection", check_locked_layout_selection),
+                ]
+            groups += [
+                ("walkable level", walkable_level),
+                ("Level Kit window", level_kit_window(*window_all)),
+                ("transform surface", check_transform_surface, transform_image_path),
+                ("layout live drags", check_layout_live_drags, layout_drag_image_path),
+                ("layout transform rows", check_layout_transform_rows),
+                ("transform drag cancel", check_transform_drag_cancel),
+                ("transform record rule", check_transform_record_rule),
+                ("snap to surface", check_snap_to_surface),
+                ("rotated mesh snap", check_rotated_mesh_snap),
+                ("scatter layouts", check_scatter_layouts, work),
+                ("connector snap", check_connector_snap),
+                ("layout indicators", check_layout_indicators),
+                ("region handles", check_region_handles),
+                ("segment handles", check_segment_handles, segment_handles_image_path),
+                *more_shapes,
+                ("recreated shapes", check_recreated_shapes),
+                ("layout connectors", check_layout_connectors, layout_connectors_prefix),
+                ("collision scale", check_collision_scale, work),
+                ("stairs layouts", check_stairs_layouts, work, stairs_image_prefix),
+                ("stairs drag uploads", check_stairs_drag_uploads),
+                ("piece lights", check_piece_lights, work, args.piece_lights_shape),
+                ("wrap with path", check_wrap_with_path, work),
+                ("create menu", check_create_menu),
+            ]
+        for name, function, *arguments in groups:
+            run_group(editor, name, function, *arguments)
+        end_state = editor_state(editor)
+        check("the run ends with the scenes it started with open and the tool it started with active",
+              (end_state["scenes"] == start_state["scenes"]) and
+              (end_state["Brush tool active"] == start_state["Brush tool active"]) and (end_state["kit mode"] == start_state["kit mode"]),
+              state_differences(start_state, end_state))
     except Exception as error:  # noqa: BLE001 - a failed step is a failed check
         check("run completed without an error", False, f"{type(error).__name__}: {error}")
     finally:

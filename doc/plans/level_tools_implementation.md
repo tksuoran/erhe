@@ -189,64 +189,56 @@ are built and described in
 
 ### Active
 
-The steps to build, in this order (user, 2026-11-15).
+The steps the user's rulings of 2026-11-18 ask for (U50 - U56 of
+`doc/plans/level_tools.md`; the order is the orchestrator's), then steps 13,
+40 and 41 (made active by the user, 2026-11-18).
 
-62. Expand the kit with more shapes (user, 2026-11-15), after step 44. The
-    user's list: geological rock formations such as cliffs, in diverse
-    sizes; tropical plants, in diverse sizes; palm trees of different
-    species; natural features found on beaches (U34: man-made harbour
-    shapes belong to step 63); architecture modules of different
-    historical cultures. It takes in the nature and architecture shapes of
-    R4.3 and R4.4 that are not built. First a shape list per category
-    (which shapes, their parameters and derive ranges, material slots,
-    connectors, the physics body kind) in
-    `doc/plans/level_kit_more_shapes.md`, chosen by the orchestrator (user,
-    2026-11-15: build from it, the user reviews the shapes afterwards), then
-    one commit per
-    shape or small family, each with its checks in
-    `scripts/level_tools_verify.py` and its entry in
-    `doc/editor/level_tools.md`. Hanging vines (foliage) and "path" from the
-    user's list are future work, not part of this step.
-63. Extra shapes of the orchestrator's choice (user, 2026-11-15), after
-    step 62 and only while the account's weekly usage is below 85 percent
-    of its limit: the orchestrator picks the topic and the shapes, whatever
-    it judges useful or good-looking, and builds them as step 62's shapes
-    are built. The figure is the seven-day usage percentage the status line
-    shows; read it before starting and before each further shape. The
-    inventory, with the rulings of U34, is
-    `doc/plans/level_kit_extra_shapes.md`.
-70. Recreate the kit shapes (user, 2026-11-16, U41): a shape written afresh
-    from its description by a coder on the Fable model at medium effort,
-    registered beside its original (`doc/editor/level_tools.md` "Recreated
-    shapes"), one commit per batch, each with the batch's rows in
-    `generated_meshes_are_pinned`, its checks in
-    `scripts/level_tools_verify.py` and its images from
-    `scripts/level_shape_compare.py`. The user's scope (2026-11-16): "You
-    judge which of the opus shapes can improve from using Fable - then redo
-    the selected shapes - then new shapes". The orchestrator's judgment
-    from renders at the default values, for the user's review - selected
-    for a redo: `architecture.arch`, `architecture.door_wall`,
-    `architecture.pillar`; `architecture.battlement`, `architecture.tower`;
-    `nature.rock`, `nature.land_mass`, `nature.hill`, `nature.tree`,
-    `nature.bush`; `nature.palm_shrub`. Kept as they are:
-    `architecture.wall` (flush tiling leaves no room), column, entablature,
-    torii, roof, basalt columns, cliff, shore, water, dune, ground patch,
-    palm, palm clump. Built: the parallel-version infrastructure
-    (`recreates`, the pairing rule and its test, the comparison script),
-    the basic kit, and the arch, the door wall and the pillar. To build, in
-    this order: battlement and tower; rock, land mass, hill, tree and bush;
-    palm shrub. Open for the user: the square pillar's recreated version is
-    its original's box, because the square profile states every side as a
-    seam side; a base and a capital on it need the four upright sides taken
-    out of the recreated shape's seam sides, which is a change of the
-    pairing rule. The user then rules per shape which version keeps the
-    canonical id. The ruling step (to build): the kept version takes the
-    canonical id, the other definition is removed, and the dropped id
+77. Canonical ids (U55): every recreated shape's `.v2` version takes the
+    canonical id, the original definition is removed, and the dropped id
     becomes a former id of the kept shape that `Kit_shape_library::find()`
     resolves, so saved pieces and layout item texts of either id keep
-    loading, as `erhe::property` former names do. A later batch extends
-    `recreated_originals()` in `test_kit_shapes.cpp` and `RECREATED_SHAPES`
-    in `scripts/level_tools_verify.py`.
+    loading, as `erhe::property` former names do. `recreated_originals()`
+    in `test_kit_shapes.cpp`, `RECREATED_SHAPES` in
+    `scripts/level_tools_verify.py`, `scripts/level_shape_compare.py` and
+    `doc/editor/level_kit_shapes.md` follow.
+78. Snap search direction and distances of kit layout items (U51): the
+    layout values search direction (default (0, -1, 0)), forward distance
+    (1 m) and backward distance (0 m) replace the one `max_distance` searched
+    either way; a non-zero backward distance searches both ways and takes
+    the nearest place. The surface base rule `from_pose` of step 76 goes:
+    every mesh rests on its local -Y face.
+79. The Brush tool's kit mode places along the surface normal under the
+    pointer (U51): the snap and orient direction is the hit's normal.
+80. Transform drag snap of the anchor (U51): a drag snaps the transform
+    anchor (node origin; BBox mode: the bounding box center) along a
+    setting's direction, an explicit vector (default (0, -1, 0)) or the ray
+    from the viewport camera through the anchor; one line, no footprint. A
+    drag along the axis parallel to the direction is not snapped (the axis
+    rule of today, generalized).
+81. Snap orientation modes Off, Rotate and Full (U50) for every drag kind:
+    Rotate turns the moved set only about the surface normal Orient To
+    Surface chose; Full is the alignment as built.
+82. The support rule of kit layout items as a setting (U52): five lines
+    support and block; only the center line blocks; fall back to the
+    surface under the base center when blocked.
+83. Box collision bodies (U54) for every shape that is a box or close to
+    one (blocks, walls, slabs and the like), with a check per shape of
+    which body it states.
+84. Machine kit (U53): the cap nut's dome on the tip side; `pillow_block`
+    `bolts` a choice of two or four; at least four boundary connectors on a
+    gear; a helical bolt thread with a relaxed budget, and whether the
+    thread style becomes a property.
+85. `get_input_state` reports `active_tool`, and
+    `scripts/level_tools_verify.py` restores the tool it found (U56).
+
+13. Shape thumbnails in the Level Kit window (R4.5) and a live preview
+    while a parameter row is dragged (R6.2).
+40. Placing a connected piece from the Brush tool's viewport preview (R5.3):
+    the kit mode preview snaps to the nearest connector of the hovered piece
+    and a click places through `Kit_placement::connect`.
+41. A persistent connector attachment (R5.3): a joined piece remembers its
+    target and connectors and follows a move or parameter change of the
+    target.
 
 ### On hold
 
@@ -312,8 +304,6 @@ is started from this list alone.
     rows' target connector is highlighted with one piece selected too and
     stays highlighted while the Level Kit window is closed, until the
     selection changes; no connector name labels; drawn x-ray, as curves.
-13. Shape thumbnails in the Level Kit window (R4.5) and a live preview
-    while a parameter row is dragged (R6.2).
 14. `Level_kits::refresh_scene()` for USD opens, foreign glTF imports and
     prefab instances of a level file (D3.5 covers erhe glTF opens).
 16. A kit brush stays cached after its piece is placed with
@@ -381,12 +371,8 @@ is started from this list alone.
     `Kit_piece` record carries the scale, so follows-kit (D3.5), load,
     snap to surface (scaled bounds), replace and the child match of D3.9
     keep it; the scale key quantization bounds the meshes per item.
-40. Placing a connected piece from the Brush tool's viewport preview (R5.3):
-    the kit mode preview snaps to the nearest connector of the hovered piece
-    and a click places through `Kit_placement::connect`.
-41. A persistent connector attachment (R5.3): a joined piece remembers its
-    target and connectors and follows a move or parameter change of the
-    target.
+86. Future work (U53): a circular gear connector around a gear, so another
+    gear snaps at the ideal operating distance in any valid direction.
 57. Future work, skipped in this plan (user, 2026-11-15): snap to surface
     considering solidness (U31): free space from
     the solids along a base-point line, so a piece inside a solid taller than

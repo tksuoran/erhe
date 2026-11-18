@@ -14,7 +14,7 @@ The tasks a session continuing earlier work picks up, in order (`AGENTS.md`
 "Session handoff"). Items 1 and 2 come first; items 3 - 13 each need a user
 decision or hardware (Quest, the external 120 Hz display, an NVIDIA GPU):
 ask the user which to pick. Item 14 starts with writing its plan. Item 15
-is the work in progress.
+is the next level tools work.
 
 0. The user rulings on the D8 coder decisions ("Prepared assets" below,
    `doc/plans/prepared_assets_design.md` D8).
@@ -53,10 +53,9 @@ is the work in progress.
 14. Triangle classification from walkable sample points: a plan to write,
     then build (`doc/plans/navigation_mesh.md` "Triangle classification from
     walkable sample points"; the navigation mesh it reads is built).
-15. Level kit verification pass, next up: tests and renders for the
-    machine elements kit, the verify-script shape tables, the documentation
-    merge, one review of the generators and the final gate
-    (`doc/plans/level_kit_verification.md`; test and script work on Opus).
+15. Level tools: the "Active" steps of
+    `doc/plans/level_tools_implementation.md` "Next steps" (77 - 85 from the
+    user's rulings U50 - U56 of `doc/plans/level_tools.md`, then 13, 40, 41).
 16. Level tools and curves: the "On hold" steps of
     `doc/plans/level_tools_implementation.md` "Next steps" and the "Steps" of
     `doc/plans/curves.md` wait for the user to make them active.
@@ -149,6 +148,15 @@ Plans: `doc/plans/prepared_assets_design.md` (D8 per-step "Open" notes),
 
 ## Editor defects found in passing
 
+- Kit pieces refresh over frames after a load (`doc/editor/level_tools.md`
+  "Persistence"); three edges of that window remain. A parameter edit made
+  and undone before the piece's turn leaves the piece without its brush
+  (undo restores the loaded mesh and no brush placement, and the queue has
+  passed it), and a copy made in the window is not queued; Level Check then
+  reports it until the scene reloads. The navigation item installs when the
+  last piece is refreshed and replaces a navigation clear or settings edit
+  made in the window. The raytrace kickoff of the open still works on the
+  loaded primitives that the refresh replaces (worker time only).
 - Mirroring a registered mesh at run time is fatal: `set_node_transform` with
   scale [-1, 1, 1] on a placed kit piece, or `level_place_pieces` under a
   mirrored parent, logs "Runtime negative-determinant flip on registered mesh
@@ -176,7 +184,7 @@ Plans: `doc/plans/prepared_assets_design.md` (D8 per-step "Open" notes),
   150, land mass 21, shore 21; at module 1 m, wall height 2.4 m the arch 79;
   at module 2 m, wall height 2.4 m the arch 54; at module 0.25 m nearly all.
   The torii and the tower state their agent-bound sizes in meters
-  (`doc/editor/level_tools.md` "Derive from seed").
+  (`doc/editor/level_kit_shapes.md` "Derive ranges").
 
 - `erhe::raytrace` hit filters (`doc/erhe/raytrace.md` "Hit filters"): the
   tinybvh and embree paths are verified only by `erhe_raytrace_tests` in
@@ -285,6 +293,10 @@ Plans: `doc/plans/prepared_assets_design.md` (D8 per-step "Open" notes),
   items (IK settings slice, pole picker and angle rows, live drag with pole,
   Move tool Effector Orientation combo, chain / root / pole visualization
   during drag) (`doc/plans/rigging/interactive_test_pass.md`).
+
+- Level tools, windowed Metal: a path stairs control point drag shows no
+  stale staircase geometry (the mesh upload order is verified headless
+  only).
 
 ## Performance and measurement
 
@@ -419,6 +431,11 @@ Plans: `doc/plans/culling.md`, `doc/plans/occlusion_culling.md`.
   building it from scratch takes about 5 minutes. `ERHE_VERIFY` /
   `ERHE_FATAL` stay active; `assert()` and the libraries' debug checks do
   not.
+
+- The tracked config files `desktop_windows.json` and
+  `editor_settings.json` still change a headless run when a windowed session
+  modified them; a test launcher could ignore them as `ERHE_DEFAULT_LAYOUT`
+  does the dock layout.
 
 ## Editor features
 

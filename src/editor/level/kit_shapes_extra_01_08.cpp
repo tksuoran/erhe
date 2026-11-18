@@ -393,9 +393,17 @@ public:
         return (hoops == 2) ? two[index] : ((hoops == 3) ? three[index] : four[index]);
     }
 
+    // A lying barrel's top is its widest ring's highest point: a side for an even count, a vertex for an odd one.
     [[nodiscard]] auto get_top() const -> float
     {
-        return lying ? (2.0f * axis_height) : height;
+        if (!lying) {
+            return height;
+        }
+        float lowest_x = 1.0f;
+        for (int i = 0; i < segments; ++i) {
+            lowest_x = std::min(lowest_x, get_ring_point(i, segments, Lathe_phase::side).x);
+        }
+        return axis_height - (widest * lowest_x);
     }
 
     float height     {0.0f};
@@ -1061,10 +1069,11 @@ void generate_mooring(const Kit_parameter_values& values, GEO::Mesh& mesh)
 // Lamp post: a post on a plinth with a head on its top, or under a finial with a head on each of its arms.
 //
 
-constexpr uint32_t lamp_metal_slot = 0;
-constexpr uint32_t lamp_glow_slot  = 1;
-constexpr int      lamp_arm_max    = 4;
-constexpr int      lamp_globe      = 8; // points around a globe
+constexpr uint32_t lamp_metal_slot    = 0;
+constexpr uint32_t lamp_glow_slot     = 1;
+constexpr int      lamp_arm_max       = 4;
+constexpr int      lamp_globe         = 8;    // points around a globe
+constexpr float    lamp_collar_radius = 1.2f; // the post's widest by the arms, in units
 constexpr std::array<const char*, lamp_arm_max> c_lamp_light_names{"light_1", "light_2", "light_3", "light_4"};
 
 enum class Lamp_head : unsigned int { lantern = 0, globe, hood };
@@ -1091,7 +1100,12 @@ public:
         , height    {values.get_float("height")}
         , arm_length{values.get_float("arm_length")}
     {
-        unit = std::clamp(0.028f * height, 0.045f, 0.16f);
+        unit      = std::clamp(0.028f * height, 0.045f, 0.16f);
+        head_unit = unit;
+        if (arms > 0) {
+            // A head on an arm keeps clear of the post's collar: smaller heads on short arms of thick posts.
+            head_unit = std::min(unit, (arm_length - (lamp_collar_radius * unit) - 0.01f) / get_head_radius());
+        }
         if (arms == 0) {
             shaft_top = height - (get_head_height() * unit);
             arm_y     = shaft_top;
@@ -1105,6 +1119,11 @@ public:
     [[nodiscard]] auto get_head_height() const -> float
     {
         return (head == Lamp_head::lantern) ? 4.6f : ((head == Lamp_head::globe) ? 3.95f : 3.6f);
+    }
+    // How far a head on an arm reaches from its anchor toward the post, in head units.
+    [[nodiscard]] auto get_head_radius() const -> float
+    {
+        return (head == Lamp_head::lantern) ? 1.65f : ((head == Lamp_head::globe) ? 1.6f : 2.5f);
     }
     [[nodiscard]] auto get_head_count() const -> int
     {
@@ -1129,7 +1148,7 @@ public:
         if (arms == 0) {
             return glm::vec3{0.0f, shaft_top, 0.0f};
         }
-        const float y = hangs() ? (arm_y - (2.0f * unit)) : (arm_y + (0.3f * unit));
+        const float y = hangs() ? (arm_y - (2.0f * head_unit)) : (arm_y + (0.3f * unit));
         return (arm_length * get_direction(i)) + (y * y_axis);
     }
     // The light of head i: in the open between the glowing part and what covers it, under a hanging hood, over a globe.
@@ -1143,7 +1162,7 @@ public:
         } else {
             y = hangs() ? -0.55f : 1.85f;
         }
-        return get_anchor(i) + ((y * unit) * y_axis);
+        return get_anchor(i) + ((y * head_unit) * y_axis);
     }
 
     Lamp_head head      {Lamp_head::lantern};
@@ -1152,6 +1171,7 @@ public:
     float     height    {0.0f};
     float     arm_length{0.0f};
     float     unit      {0.0f};
+    float     head_unit {0.0f}; // the heads' unit: `unit`, or less where an arm is too short for a head of it
     float     shaft_top {0.0f}; // the post's top under a head or the finial
     float     arm_y     {0.0f}; // the arms' axis
 };
@@ -1273,7 +1293,7 @@ void generate_lamp_post(const Kit_parameter_values& values, GEO::Mesh& mesh)
     {
         const std::array<Lathe_ring, 9> rings{{
             {2.0f * m, 0.0f}, {2.0f * m, 0.05f * h}, {1.4f * m, 0.07f * h}, {1.4f * m, 0.2f * h}, {1.0f * m, 0.22f * h},
-            {0.75f * m, form.shaft_top - (1.2f * m)}, {1.2f * m, form.shaft_top - (1.0f * m)}, {1.2f * m, form.shaft_top - (0.4f * m)},
+            {0.75f * m, form.shaft_top - (1.2f * m)}, {lamp_collar_radius * m, form.shaft_top - (1.0f * m)}, {lamp_collar_radius * m, form.shaft_top - (0.4f * m)},
             {0.8f * m, form.shaft_top}
         }};
         add_lathe(builder, Placement{}, Lathe{.rings = rings, .segments = form.segments, .slot = lamp_metal_slot});
@@ -1298,14 +1318,15 @@ void generate_lamp_post(const Kit_parameter_values& values, GEO::Mesh& mesh)
         const Placement place = make_turned_placement(form.get_anchor(i), form.get_direction(i));
         // A round head keeps its points on the axes: the lamp is its own mirror image about z = 0.
         const Placement upright{.origin = place.origin};
+        const float     hm = form.head_unit;
         if (form.head == Lamp_head::lantern) {
-            add_lamp_lantern(builder, place, m);
+            add_lamp_lantern(builder, place, hm);
         } else if (form.head == Lamp_head::globe) {
-            add_lamp_globe(builder, upright, m, form.segments);
+            add_lamp_globe(builder, upright, hm, form.segments);
         } else if (form.hangs()) {
-            add_lamp_hood_hanging(builder, upright, m, form.segments);
+            add_lamp_hood_hanging(builder, upright, hm, form.segments);
         } else {
-            add_lamp_hood_on_post(builder, upright, m, form.segments);
+            add_lamp_hood_on_post(builder, upright, hm, form.segments);
         }
     }
     builder.write(mesh);

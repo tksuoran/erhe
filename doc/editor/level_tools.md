@@ -35,18 +35,12 @@ the editor.
   hexadecimal floats, then `"derive"` with the masked names when the mask is
   not empty, which is the piece's saved form and its mesh key. Equality
   compares the values and the mask.
-- `Kit_shape_library` (`kit_shape_library.hpp`): the three kits (basic,
-  architecture, nature), each with a triangle ceiling of 2000
-  (`Kit_definition::triangle_ceiling`, R2.6) that binds at every in-range
-  value: each shape's ranges and cell counts keep it within the ceiling at
-  its range maxima (`nature.hill` takes at most 60 segments), the 31 shapes - the
-  14 of the starter set (R4.1) and the cliff, shore, water, palm, column,
-  entablature, torii, battlement, tower, leaf plant, rock spire, basalt
-  columns, roof, palm clump, palm shrub, dune and ground patch of
-  `doc/plans/level_kit_more_shapes.md` ("Cliff" to "Dune and ground patch" below) -
-  a recreated shape beside each original that has one ("Recreated shapes"),
+- `Kit_shape_library` (`kit_shape_library.hpp`): the kits, each with a
+  triangle ceiling (`Kit_definition::triangle_ceiling`, R2.6), the shapes, a
+  recreated shape beside each original that has one ("Recreated shapes"),
   and the palette ("Materials"). Adding a shape is one generator and one
-  table entry.
+  table entry. The kits, the palette and every shape's generator are
+  described in `doc/editor/level_kit_shapes.md`.
 - Shape conventions: Y up, front toward +Z, the origin at the center of the
   base (a seeded shape, and a shape whose `origin_rule` is
   `Kit_origin_rule::base_contains_origin`: inside its base; the tower, whose
@@ -86,625 +80,10 @@ values when the level lengths or a derive range change later. A record without
 the `seed` parameter, or with a name the shape does not have, does not read and
 keeps its loaded mesh (R8.4); there is no migration.
 
-The derivable parameters, their derive ranges and the default masks (masked in
-bold); every seed and every segment count is fixed:
-
-| Shape | Derivable (range) |
-|---|---|
-| basic.block | width, height, depth (0.5 - 3 modules, step 0.25) |
-| basic.wedge | run (2 - 4 modules), rise (0.25 - 1.25 modules), width (1 - 3 modules), step 0.25 |
-| basic.cylinder | radius (0.25 - 1.5 modules, step 0.05), height (0.5 - 3 modules, step 0.25) |
-| basic.stairs | rise (0.25 - 1.5 wall heights, step 0.05), width (1 - 3 modules, step 0.25); step_rise_limit fixed |
-| basic.floor_slab | width, depth (1 - 4 modules, step 0.5), thickness (0.1 - 0.4 m, step 0.05) |
-| architecture.wall | length (1 - 6 modules, step 0.5), height (0.75 - 1.25 wall heights, step 0.05), thickness (0.15 - 0.4 m, step 0.05) |
-| architecture.door_wall | length (2.5 - 6 modules, step 0.5), height (0.85 - 1.25 wall heights), thickness (0.15 - 0.4 m), opening_height (2.0 - 2.4 m), step 0.05; opening_width (0.9 - 1.6 m, step 0.1) |
-| architecture.pillar | profile, width (0.3 - 1 modules), height (0.5 - 1.5 wall heights), step 0.05 |
-| architecture.arch | span (2 - 4 modules, step 0.25), rise (0.8 - 1.2 wall heights), depth (0.3 - 1 modules), thickness (0.2 - 0.5 m), step 0.05 |
-| nature.rock | form, **size** (0.6 - 1.5 modules, step 0.05), roughness (0.1 - 0.6, step 0.01), bevels (0 - 2) |
-| nature.land_mass | footprint (3 - 8 modules, step 0.5), height (0.5 - 2 modules, step 0.25), **roundness** (0.2 - 0.8, step 0.01) |
-| nature.hill | radius (2.5 - 6 modules, step 0.5), **height** (0.5 - 1.25 modules, step 0.05) |
-| nature.tree | **trunk_height** (0.4 - 0.8 wall heights, step 0.05), **canopy_size** (1.5 - 3 modules, step 0.1), canopy |
-| nature.bush | **size** (0.6 - 1.4 modules, step 0.05) |
-| nature.cliff | length (2 - 16 modules, step 0.5), **height** (1 - 4 wall heights, step 0.1), depth (1.5 - 3 modules, step 0.25), strata, **overhang** (-0.2 - 0.05, step 0.05), roughness (0.3 - 0.8, step 0.05), ledges (0 - 3) |
-| nature.shore | length (2 - 8 modules), run (5 - 10 modules), step 1; **undulation** (0 - 0.15 m, step 0.01), berm (0 - 0.4, step 0.05); rise fixed |
-| nature.water | width, depth (4 - 16 modules, step 1); subdivisions fixed |
-| nature.palm | species, **height** (1 - 5 wall heights, step 0.1), **bend** (0 - 0.35, step 0.01), **fronds** (8 - 20), frond_length (3 - 5.5 m, step 0.1), **droop** (0.2 - 0.7, step 0.01) |
-| architecture.column | order, height (0.8 - 1.6 wall heights, step 0.05), width (0.3 - 0.9 modules, step 0.05), flutes (12 - 24), taper (0 - 0.2, step 0.01) |
-| architecture.entablature | length (1 - 4 modules, step 0.5), height (0.2 - 0.35 wall heights), cornice (0.05 - 0.3 m), step 0.01; depth (0.3 - 0.9 modules, step 0.05), frieze |
-| architecture.torii | width (2.5 - 5 m, step 0.25), height (3.2 - 4.8 m, step 0.1), **curve** (0 - 0.15, step 0.01), post_width (0.2 - 0.45 m, step 0.01), lean (0 - 4 degrees, step 0.5) |
-| architecture.battlement | length (1 - 6 modules, step 0.5), height (0.8 - 1.2 m), thickness (0.2 - 0.6 m), merlon_height (0.7 - 1.2 m), crenel_width (0.5 - 1 m), step 0.05; merlon_width (0.8 - 1.6 m, step 0.1), merlon |
-| architecture.tower | profile, width (3 - 6 m, step 0.5), height (1.2 - 3 wall heights, step 0.1), batter (0 - 8 degrees, step 0.5), wall (0.3 - 0.6 m, step 0.05), top, slit_rows (0 - 2); opening_width and opening_height fixed |
-| nature.leaf_plant | form, **height** (0.4 - 4 m, step 0.1), **leaves** (4 - 12), **droop** (0.1 - 0.7), leaf_width (0.25 - 0.45), step 0.01 |
-| nature.rock_spire | form, **height** (1 - 6 wall heights, step 0.1), **radius** (0.5 - 4 modules, step 0.1), taper (0.2 - 0.8), roughness (0.3 - 0.9), step 0.05; **lean** (0 - 8 degrees, step 0.5) |
-| nature.basalt_columns | **radius** (1 - 3 modules, step 0.25), column_width (0.4 - 0.8 modules), height (0.5 - 1.5 wall heights), **height_spread** (0.1 - 0.6), step 0.05; step fixed |
-| architecture.roof | form, width, depth (2 - 8 modules, step 0.5), pitch (20 - 45 degrees, step 5), overhang (0.1 - 0.5 m), curve (0 - 0.3), step 0.05 |
-| nature.palm_clump | species, **stems** (3 - 9), **height** (0.6 - 1.6 wall heights, step 0.1), spread (0.2 - 0.8, step 0.05), fronds (4 - 8) |
-| nature.palm_shrub | species, **size** (0.6 - 2.5 m, step 0.1), **fronds** (5 - 16) |
-| nature.dune | **length** (9 - 15 m, step 0.5), **width** (4.5 - 7 m, step 0.25), **height** (0.5 - 0.85 m), asymmetry (0 - 0.4), step 0.05 |
-| nature.ground_patch | **size** (1 - 6 modules, step 0.25), **irregularity** (0.1 - 0.5, step 0.01), dome (0 - 0.1, step 0.01); thickness fixed |
-
-The basic and architecture shapes mask nothing by default but the torii's
-curve. The ranges of the
-walkable shapes keep them walkable at every seed at the default lengths (R2.10):
-a derived wedge is at most 32 degrees steep, a derived hill's height is at most
-half its radius, a derived door opening and arch opening pass the opening
-check, the stairs' step rise limit and the shore's rise are never derived, a
-derived shore is at most 40 degrees steep, a cliff's setbacks leave its top
-walkable at every value, a derived torii's tie beam stays above the agent and
-its posts apart, a derived tower keeps its doorway, inside and walkway
-(its doorway is never derived), the basalt columns' step is never derived, a
-derived dune's lee stays within 45 degrees and a derived ground patch's dome
-within the agent's slope. The torii, the tower and the dune state the sizes the
-agent bounds in meters, so their derived values are accepted and walkable at
-any level lengths; six built shapes (the wedge, stairs, floor slab, arch, land
-mass and shore) scale theirs with the lengths and derive unwalkable values at
-other lengths (`doc/plans/open_items.md` "Editor defects found in passing").
-
-## Rock forms
-
-`nature.rock` (D1.9) has the parameters `form` (`blob`, `angular` - the
-default -, `worn`, `slab`), `size`, `roughness`, `bevels` (0 - 2, default 1;
-the blob has none) and `seed`.
-
-- `blob`: the star-shaped blob of seven segments around Y, its dents scaled by
-  the roughness.
-- The hull forms: the convex hull (`erhe::geometry::shapes::make_convex_hull()`)
-  of a jittered Fibonacci sphere scaled to the form's half extents per meter of
-  size (angular 10 points, x and z 0.5, y 0.42; worn 22 points, y 0.40; slab 12
-  points, y 0.18, z 0.42), each axis jittered by up to 20 percent (angular) or
-  12 percent, each point's direction by up to the point spacing and its radius
-  by up to 40 percent, both times the roughness. With two bevel passes the
-  forms take 9 points (worn 10), which keeps them within the kit's ceiling.
-  Each bevel pass is `erhe::geometry::operation::chamfer3()`, the operation of
-  MCP `chamfer`, over the whole mesh, with a bevel ratio of 0.22 for the first
-  pass and 0.12 for the second; it runs in the generator as other geometry
-  operations run on workers (`make_convex_hull()` takes the geogram lock).
-- The base: the beveled mesh's vertices above a plane 22 percent (slab 25
-  percent) of its height above its lowest point and its edges' crossings of
-  that plane, welded within 1 mm per meter of size, are hulled again; the
-  triangles on the plane become one base polygon at y = 0 and the origin is the
-  average of its corners. The second hull also makes the result exactly convex
-  with planar facets, which the chamfer's best-fit hexagons are not.
-
-The rock collides as a convex hull. At the defaults it has 112 triangles
-(budget 120). Over seeds 0 - 39 and roughness 0, 0.3 and 1 the hull forms have
-at most 32 (angular), 60 (worn) and 38 (slab) triangles without a bevel, 120,
-272 and 138 with one, and 396, 460 and 392 with two; the blob has 42.
-
-## Cliff
-
-`nature.cliff` (`kit_shapes_nature_terrain.cpp`) is a cliff segment along X
-with its rock face toward +Z: parameters `length`, `height` (the flat top),
-`depth` (from the back at z = -depth / 2 to the face's plane at +depth / 2),
-`strata` (`massive`, `layered`, `blocky`), `overhang` (how far the face leans
-out at the top, a share of the height, -0.25 - 0.25; default -0.1 and derived
-within -0.2 - 0.05, so a cliff is battered: its base reaches further out than
-its top), `roughness`, `ledges` (0 - 3) and `seed`; slots `cliff` (the face,
-ends, back and base; Kit Dark Rock) and `grass` (the top); connectors start
-and end (the base's end centers), base and top (the center of the walkable
-top, between the back and the rim's nominal line); a triangle mesh body; seam
-side -z (the flat back, for placing against a hill).
-
-- Rows (`Cliff_row`, `Cliff_profile`) depend on the values alone: base rows
-  about every 0.4 m, and a shelf - a row 0.06 m above another - at each ledge
-  and, for layered strata about every 1 m and for blocky about every 1.6 m
-  (at most eight), at each band boundary; at most 28 rows. Columns about
-  every 0.35 m, at most 28. Two triangles per cell, the diagonal alternating.
-- The nominal line, also of the values alone: the batter (the overhang), a
-  talus foot (the lowest quarter of the height pushed out by up to 0.08 of
-  the height, 0.2 - 1 m) and the ledge setbacks (0.4 m each), the setbacks
-  and a backward lean scaled down together so the top keeps 1.5 m of depth.
-- The relief, seeded from the stream "cliff face", scaled by the roughness
-  and by the depth (0.4 - 1.2 m at roughness 1): bulges of 0.7 - 2.2 m radius
-  (strongest for massive strata), each band stepping in or out (layered), each
-  block of three columns by a band doing so (blocky), cracks (one column cut
-  in) and buttresses (two columns standing out), and per-vertex noise.
-- Joining rule: the end columns take no seeded relief and the next ones half,
-  so a segment's end profiles depend on `height`, `depth`, `strata`,
-  `overhang`, `ledges` and `roughness` alone; segments with those values equal
-  join in a run without a gap, whatever their seeds and lengths.
-- The top row's front rim wanders within 0.4 m of its nominal line; the top
-  stays flat. Walkability (R2.10): the top's depth less the rim's 0.4 m is at
-  least the agent's width at every value.
-- The back, the base and the grass top are one quad per column; each end is a
-  fan of triangles from its back bottom corner, which sees the whole outline.
-
-At the defaults (height derived from seed 1: 6.9 m) the cliff has 428
-triangles (budget 500); at its range maxima at most 2000.
-
-## Shore and water
-
-`nature.shore` (`kit_shapes_nature_terrain.cpp`) is a beach tile along X:
-sand from a flat berm at its back edge (z = -run / 2) sloping down toward +Z
-to a front lip 0.1 m high. Parameters `length`, `run`, `rise` (the berm's
-height above the lip, fixed: walkability depends on it), `undulation`, `berm`
-(the flat share of the run) and `seed`; slot `sand`; connectors start, end,
-top (the back edge's center at the berm's height, facing -Z) and base; a
-triangle mesh body; seam side -y; smooth shading.
-
-- The sand is a height grid, a sample about every 0.5 m (2 - 32 per side),
-  two triangles per cell. Its nominal profile is flat over the berm, then an
-  S curve (`1 - (3q^2 - 2q^3)` over the slope) steepest halfway down and flat
-  at the lip. The undulation adds two crossing waves of seeded heading and
-  phase (wavelength 3 - 6 m, stream "shore undulation"), faded to zero at the
-  four edges, so the ends and edges depend on the values alone and tiles
-  join. At most 30 cells per side, which keeps the shore within the ceiling.
-- The bottom is one quad; the back, front and ends are fans of triangles
-  from a bottom corner (the sand falls toward the front, so a back corner sees
-  each end's outline).
-- Walkability (R2.10): the steepest slope, `atan(1.5 rise / slope run +
-  2 pi undulation / 3)`, is at most the agent's maximum slope; the derive
-  ranges keep a derived shore within 40 degrees.
-
-At the defaults it has 238 triangles (budget 260).
-
-`nature.water` is a flat rectangular water surface at y = 0 facing up, the
-first shape with `Kit_mesh_kind::surface` and `Kit_collision::none` (P5 of
-`doc/plans/level_kit_extra_shapes.md`): parameters `width`, `depth` and
-`subdivisions` (quads along each side, 1 - 31, fixed, within the ceiling; vertices for later
-vertex effects) and `seed` (draws nothing); slot `water`; connectors left,
-right, front and back (the edge centers); mirror planes x and z; 2
-triangles at the defaults (budget 2). A piece of it has no physics body and
-is not navigation input ("Kit brushes"), and it is no surface for snap to
-surface or support ("Surface placement"): what is snapped from above passes
-through it to the sand below. It is placed at the water level and other
-pieces pass through it (U20): a shore slopes down under it, the shoreline
-being where they meet, and a cliff stands in it.
-
-## Palm
-
-`nature.palm` (`kit_shapes_nature_plants.cpp`) is a single-trunk palm standing
-at its origin. Parameters `species` (`coconut`, `date`, `royal`, `fan`,
-`bottle`), `height` (the crown above the base), `bend` (the crown's
-horizontal offset, a share of the height, 0 - 0.5), `fronds` (3 - 24),
-`frond_length` (bounded to 0.1 - 0.6 of the height, so no leaf, fan rim or
-dead leaf reaches the ground and no frond is too small for the mesh checks),
-`droop`, `seed` and `segments` (trunk sides, 4 - 12); slots
-`bark` (trunk, nuts, dead leaves) and `foliage` (fronds, fan leaves,
-crownshaft); a triangle mesh body.
-
-- The species sets the trunk's radius per meter of height, how much of the
-  bend the trunk takes, the trunk's taper and rings (every second station
-  wider), a green crownshaft (royal, bottle), the crown (feather fronds or
-  fan leaves), the fronds' elevations from the lowest to the youngest, their
-  droop factor, width and fold, and the nuts (coconut: three). Coconut: a
-  slender curved trunk; date: a thick ringed trunk, stiff upright fronds;
-  royal: a straight smooth column; fan: palmate leaves on stalks with a skirt
-  of dead leaves (`bark`) below the crown; bottle: a trunk swollen low.
-- The trunk is a `make_sweep()` of a regular polygon along a cubic Bezier that
-  starts vertical (its base ring lies flat at y = 0) and leans toward a
-  seeded heading (stream "palm trunk"); the crownshaft a short sweep along
-  the trunk's end tangent; a nut a sweep tapering to a point.
-- A feather frond is a folded leaf ("Leaf helper") along a cubic Bezier that
-  leaves the crown at its elevation and sags by the droop; a fan leaf a
-  pleated half disc on a stalk, a closed thin shell. The fronds go around the
-  crown at the golden angle from a seeded heading (stream "palm fronds").
-  `editor_level_tests` checks every species at the corners of its size
-  parameters (least height with the longest, most drooping fronds, and the
-  opposite corners) over four seeds: the base is the lowest point.
-
-At the defaults (seed 1 derives height 11.1 m, bend 0.1, 20 fronds, droop
-0.69) it has 1510 triangles (budget 1600); over derived seeds every species
-keeps within the kit's ceiling (`editor_level_tests` records the counts).
-
-### Leaf helper
-
-`add_leaf(builder, leaf, scratch)` (`kit_leaf.hpp`, Q2 of
-`doc/plans/level_kit_more_shapes.md`) adds one leaf, frond or blade: a
-`Kit_leaf` holds the spine (four cubic Bezier points, base to tip), the
-section (`Kit_leaf_section::flat`, a thin lens; `thick`, a lens a third of its
-width; `folded`, two thin wedges meeting at the midrib in an inverted V, the
-leaflet rows of a feather frond), the width, thickness, fold, the spine
-parameters of the widest station and of the end of the widest stretch
-(`widest_end`: an oblong blade; at most `widest_at`, one station), the base's
-share of the width, the section's roll about the spine (`roll`: pi / 2 stands
-the blade on edge) and the station count. Each part is a `make_sweep()` tapered from the base share to
-the widest station and to a point (folded: to a small cap, so the halves
-share no vertex), made in the generator's scratch mesh and taken in by
-`Kit_mesh_builder::add_mesh()`, which adds a generated mesh's facets under
-the current slot and splits each quad into two triangles (a bent sweep's
-quads are not planar). `add_kit_sweep()` is the same for a sweep a generator
-sets up itself.
-
-The builder's other helpers (P4 of `doc/plans/level_kit_extra_shapes.md`):
-`add_beam(a, b, width, height)` adds a box from a to b (a and b distinct, a
-verified precondition), its width along the
-axis' horizontal normal and its height along the normal above it (the
-torii's tie beam and strut); `add_ring_solid(points, segments, bottom,
-top)` closes rings of equal point counts with fans to two cap points (the
-rock spire and ground patch), `add_ring_solid_paired_caps()` with strips (the
-dune); `add_band(first, first_keys, second,
-second_keys)` triangulates between two polylines whose keys rise along each,
-advancing on the smaller next key (a closed ring repeats its first vertex a
-turn later): the tower's rings of different corners.
-
-`Kit_mesh_builder::write()` makes the facets in runs of equal corner count,
-one resize of the mesh's attribute stores per run: at the defaults the palm
-generates in about 4 ms (Debug, about the rock's), the cliff and shore in
-under 0.5 ms.
-
-## Column
-
-`architecture.column` (`kit_shapes_classical.cpp`) is a classical column
-standing at its origin, its top the top of a square abacus. Parameters `order`
-(`doric`, `ionic`, `corinthian`), `height` (1 wall height), `width` (the
-shaft's diameter at its foot, 0.5 modules), `flutes` (0 - 24, 0 a plain
-shaft), `taper` (how much narrower the shaft's top is, 0 - 0.3), `seed` (draws
-nothing) and `segments` (sides of the base and the capital, 8 - 20); slot
-`trim`; connectors base and top (the abacus' top); a convex hull body (it
-stands off the shaft by at most the capital's overhang, 0.06 - 0.11 shaft
-diameters, under the agent's radius at the usual sizes); no
-declared mirror plane (the corinthian leaves have no exact mirror
-triangulation).
-
-- The order sets, in shaft diameters: the base (doric: a low torus; ionic and
-  corinthian: a square plinth under an Attic base of two tori and a scotia),
-  the capital (doric: annulets and a flaring echinus under a 1.26 diameter
-  abacus; ionic: a small echinus, two scrolls along Z on the sides with an eye
-  standing out of each face and the channel between them, under a thin
-  abacus; corinthian: a bell of one diameter with two rows of eight leaves
-  curling out and four scrolls reaching for the abacus' corners), and the
-  flutes (doric: sharp arrises; ionic and corinthian: flat fillets between
-  the grooves).
-- The shaft is a lathe of its section through three rings: its foot, a third
-  of its height (entasis: the width holds to there) and its top, narrower by
-  the taper. Each flute is a rounded groove sampled so the section has about
-  twice the segments' points; the section is symmetric about the plane z = 0.
-  The base and the capital are round lathes in quads, the plinth and abacus
-  boxes; the parts overlap (closed parts, R2.5).
-- Base and capital keep at most half the height: a short column squashes them
-  vertically, its scrolls with them, so every height keeps a shaft.
-- A line layout of columns at the module spacing (2 m) is a colonnade; a
-  column stands on a floor slab by base on top and carries an entablature by
-  the entablature's base on its top. Replace carries `width` and `height` to
-  and from `architecture.pillar`.
-
-At the defaults (doric, 20 flutes) it has 724 triangles (budget 760) and
-generates in about 1 ms (Debug); the most is 1560 (corinthian, 24 flutes, 20
-segments) in about 3 ms.
-
-## Entablature
-
-`architecture.entablature` (`kit_shapes_classical.cpp`) is a classical beam run
-along X that rests on column tops. Parameters `length` (2 modules), `height`
-(0.25 wall heights), `depth` (the architrave's, 0.5 modules), `cornice` (the
-corona's projection beyond the architrave, 0 - 0.3 m), `frieze` (`triglyph`,
-`plain`) and `seed` (draws nothing); slot `trim`; connectors base, top, start
-and end (the base's end centers); a triangle mesh body (a hull would fill the
-space under the cornice and before the recessed frieze); mirror planes x and z.
-
-- The profile, bottom to top: two fasciae and a taenia (the architrave, 0.35
-  of the height), the frieze recessed 4 cm behind the architrave's face (0.38),
-  a bed moulding, the corona and a cyma (the cornice). It is extruded along X;
-  each band's end is one quad, or where a narrower neighbouring band's
-  corners lie on its line, a middle quad and two side pieces, so the ends are
-  their own mirror images.
-- Triglyphs stand 5.5 cm out of the frieze on both faces: at every bay's ends
-  and center, the bays about 1.6 frieze heights long (at most 16 per run),
-  each three bars with the two glyphs between them and a regula under the
-  taenia. The run's ends carry half triglyphs, so runs joined end to start
-  make whole ones; both ends' outlines are equal, so runs join flush.
-
-At the defaults it has 540 triangles (budget 560), about 0.5 ms; the most is
-1692 (8 m long, 0.2 m high: 16 bays of triglyphs).
-
-## Torii
-
-`architecture.torii` (`kit_shapes_japanese.cpp`) is a Japanese gate across X
-standing at its origin, walked through along Z. Parameters `width` (the posts'
-feet apart, 3 m), `height` (the top lintel's top at the center, 3.6 m; both in
-meters, because the agent fixes the least opening at every level length), `curve` (how far the top lintel's ends turn up, a share of the width,
-0 - 0.2; in the default mask), `post_width` (0.3 m), `lean` (the posts' inward
-lean, 0 - 8 degrees), `seed` and `segments` (stations along the lintels, 2 -
-24); slot `wood`; connectors base, opening_front and opening_back (the
-threshold on each face); a triangle mesh body; mirror planes x and z; tags
-`opening` and `japanese`.
-
-- Two round posts of horizontal caps (a leaning post's foot lies flat) on
-  stone sleeves, a straight tie beam (`Kit_mesh_builder::add_beam()`) through
-  the posts and out past them, a strut from it to the lower lintel, and the
-  lower and the top lintel, both following the top lintel's curve: its
-  underside rises with the square of the distance from the center, the curve
-  times the width at its ends. The lintels are closed strips of quads between
-  vertical stations.
-- Refused combinations (`check_combination`): posts whose lean brings their
-  tops closer than a post's width. Walkability (R2.10): the clear width
-  between the posts at the agent's height and the tie beam's underside pass
-  the opening check; the derive ranges keep a derived torii accepted and
-  walkable at any level lengths.
-- A path or line layout of torii makes a gate tunnel; the composition image
-  stands four in vermilion (`Kit Vermilion`) along a path slab.
-
-At the defaults it has 400 triangles (budget 420), about 0.4 ms; the most is
-592 (1 m wide, 24 stations).
-
-## Battlement
-
-`architecture.battlement` (`kit_shapes_medieval.cpp`) is a medieval parapet
-run along X on a wall top. Parameters `length` (2 modules), `height` (the
-crenels' sill, 0.9 m), `thickness` (the wall's default, 0.25 m),
-`merlon_height` (above the sill, 0.9 m), `merlon_width` (1.2 m) and
-`crenel_width` (0.8 m) (nominal: the bays fit the length), `merlon`
-(`square`, `swallowtail`, `pointed`) and `seed`; slot `wall`; connectors base,
-start and end; a triangle mesh body; mirror planes x and z; seam sides -x, +x
-and -y for square merlons, -y otherwise.
-
-- The run has a whole number of bays (at most 32), each a crenel at its center
-  between half merlons, so runs joined end to start make whole merlons and a
-  run's ends are equal. A swallowtail merlon's notch and a pointed merlon's
-  shoulders lie 0.3 of the merlon height below its top.
-- The front elevation is columns of quads at every merlon corner's x (the
-  breastwork under each, a merlon's face split at its top's inner corners),
-  so the faces are their own mirror images; the outline is extruded through
-  the thickness.
-- It rests on a wall's top by base on top, keeping the wall's direction; a
-  line layout of battlements without a step steps by their length, end to
-  end along a wall. Replace carries `length`, `thickness` and `height`
-  (clamped to the sill's range) to and from `architecture.wall`.
-
-At the defaults it has 44 triangles (budget 48), under 0.1 ms; the most is
-1160 (24 m of swallowtail merlons 0.4 m wide: 32 bays).
-
-## Tower
-
-`architecture.tower` (`kit_shapes_medieval.cpp`) is a medieval tower segment
-standing at its origin. Parameters `profile` (`round`, `square`), `width` (the
-outer width above the batter, 3 m: in meters, because the doorway and the
-agent fix the least width at every module), `height` (the top floor, 1.5 wall
-heights), `batter` (the walls' outward slope below the doorway's head, 0 - 10
-degrees), `wall` (0.4 m), `opening_width` and `opening_height` (the doorway's
-clear size under its lintel, fixed: 0.8 - 1.8 m and 2 - 3.4 m, default 1.2 by
-2.2 m, the agent's clearance at their minimums), `top` (`battlement`,
-`flat`), `slit_rows` (rows of arrow slits, 0 - 2, default 1) and `seed`;
-slots `wall` and `floor` (the walkable top); connectors base, top (the top
-floor's center), opening_front (the doorway's outer threshold), left, right
-and back (the sides' wall middles at the base, where joined walls end inside
-the tower's wall); a triangle mesh body; tags `walkable`, `opening` and
-`medieval`; origin rule `base_contains_origin`.
-
-- The plan: a round tower has three sides per merlon, 4 - 10 merlons as its
-  width allows (a crenel at the front, over the doorway); a square tower's
-  sides have corner merlons and one to six crenels between merlons 1.6 times
-  as wide. The walls below the doorway's head are battered out.
-- Openings go through the wall: each is a cut in plan (two jamb planes
-  toward a direction) over a height. The doorway at the front rises 0.1 m
-  above its clear height behind a stone lintel 0.35 m high that stands out
-  of the wall over it, its ends in the wall. Arrow slits, 0.12 m wide and
-  1 m high, in rows 1.6 m apart starting 0.5 m above the doorway's head,
-  as many rows as stay 0.2 m under the ceiling and the corbel course: on a
-  round tower at the four diagonals, on a square one two per side face at
-  half the inner half width from the middle, on the left, right and back
-  faces; the connectors' wall ends lie between them. The rows share their
-  cuts.
-- The body is rings of the same entries at every level (the plan's corners,
-  less those a jamb plane passes near or between radii, and every cut's two
-  jambs), so its bands are quads between equal entries; a segment of a cut
-  is open in the bands its openings span, which get jamb faces, a sill and
-  a head instead. Inside, the hollow rises to a ceiling 0.3 m under the top
-  floor. The battlement top stands on a sloped corbel course 0.35 m high,
-  0.15 m out: a 1 m breastwork with merlons 0.9 m above it around a walkway
-  at the height; a flat top is the floor itself, which a further segment
-  stands on by base on top. The tower declares no mirror plane.
-- Refused combinations: an inside narrower than the doorway and 0.4 m, and a
-  height less than the doorway's and 0.9 m. Walkability (R2.10): the doorway
-  passes the opening check, the inside and the walkway are at least the
-  agent's width; the derive ranges keep a derived tower accepted and walkable
-  at any level lengths.
-- A wall's start joined to the tower's right side ends inside the tower's
-  wall; a navigation build reaches the hollow through the doorway, and the
-  top is a walkable floor (an island of its own until stairs reach it).
-
-At the defaults (round, battlement top, one row of slits) it has 676
-triangles (budget 700), about 0.8 ms; the most is 1524 (round, 16 m wide,
-two rows), within the ceiling.
-
-## Leaf plant
-
-`nature.leaf_plant` (`kit_shapes_nature_plants.cpp`) is a rosette of large
-leaves on stalks standing at its origin. Parameters `form` (`banana`, `taro`,
-`strelitzia`, `fern`, `tree_fern`), `height` (0.3 - 8 m), `leaves` (3 - 14),
-`droop` (0 - 1), `leaf_width` (a share of a leaf's length, 0.1 - 0.6) and
-`seed`; height, leaves and droop in the default mask; slots `bark` (the trunk
-or stump) and `foliage`; no connectors; no body (`Kit_collision::none`, P5:
-soft dressing a walker passes through; its pieces carry `pass_through`).
-
-- The form sets the trunk (banana: 0.45 of the height; tree fern: 0.62; the
-  others a stump), the stalks' and blades' shares of the height, the blades'
-  width, the stalks' elevations from the oldest to the youngest leaf, the
-  blade's turn from its stalk (taro: hanging down), the droop, the fold, the
-  blade's outline (banana: oblong, widest from 0.2 to 0.75 of its length;
-  taro: broad and heart-like from a wide base) and the arrangement (spiral at
-  the golden angle; strelitzia: a fan in one vertical plane, its blades
-  rolled into that plane).
-- Each leaf is a thick stalk and a folded blade ("Leaf helper"); sizes vary
-  by 0.65 - 1.1 per leaf (stream "leaf plant leaves"), the trunk leans toward
-  a seeded heading (stream "leaf plant trunk"). No control point of a leaf
-  lies lower than its half width above the ground, so a drooping or hanging
-  leaf rests just above it at every value: `editor_level_tests` checks every
-  form at the corners of height, leaves, droop and leaf width over four
-  seeds, the base the lowest point.
-
-At the defaults (seed 1 derives a banana of 1.25 m) it has 620 triangles
-(budget 640), about 1.7 ms; the most is 1340 (14 leaves).
-
-## Rock spire
-
-`nature.rock_spire` (`kit_shapes_nature_rocks.cpp`) is a standing rock on a
-flat base at its origin. Parameters `form` (`pinnacle`, `stack`, `hoodoo`,
-`mesa`), `height` (2 wall heights), `radius` (the base's, 1 module),
-`taper` (how much narrower the top is), `lean` (0 - 15 degrees, toward a
-seeded heading), `roughness`, `seed` and `segments` (sides, 6 - 20); height,
-radius and lean in the default mask; slot `rock`; connector base; a triangle
-mesh body.
-
-- Rings about every 0.6 m (at most 30 with the shelves), each scaled by the
-  form's profile: a pinnacle tapers to a point set off its axis, a stack
-  stands near vertical with a wave-cut notch above its foot on one side, a
-  hoodoo's column narrows to a neck under a wider cap rock (a shelf whose
-  upper ring is 1.6 times the lower), a mesa rises steeply from a short talus
-  foot to a flat top. Each form has two or three shelves; above each the face
-  is set back on one seeded side only, so ledges, not rings, show.
-- The relief, seeded from the stream "rock spire": two lobes shared by every
-  ring, waves over the angle and the height (ribs and gullies winding up the
-  rock), unequal sides (each angle shifted by up to a third of a side), a
-  bulge per ring, a wandering, leaning center, per-vertex noise and a dip of
-  the bedding: every ring rises on one side and falls on the other by the
-  same amount, eased in above the base, so rings never cross.
-- The solid is `Kit_mesh_builder::add_ring_solid()`: rings of equal point
-  counts, two triangles per quad, fans to a base point at the origin and to
-  the apex or the flat top's center.
-- Replace carries `roughness` to and from `nature.rock`; the forms take
-  their default (the rock's form names differ).
-
-At the defaults (seed 1 derives a 14.1 m pinnacle of 3.5 m radius) it has
-720 triangles (budget 760), about 0.8 ms (Debug); the most is 1200 (60 m,
-20 segments).
-
-## Basalt columns
-
-`nature.basalt_columns` (`kit_shapes_nature_rocks.cpp`) is a cluster of
-hexagonal columns in a round footprint at its origin. Parameters `radius`
-(1.5 modules), `column_width` (across the flats, 0.5 modules), `height` (the
-highest top, 1 wall height), `height_spread` (the share of the height the
-lowest tops stand below it, 0 - 0.9), `step` (the height quantum, 0.3 m;
-fixed: walkability depends on it) and `seed`; radius and height spread in
-the default mask; slot `rock`; connector base; a triangle mesh body; tags
-`walkable` and `rock`.
-
-- The columns stand on a hexagonal lattice inside the footprint (the center
-  cell always), each 2 - 5 cm in from its cell (joints, so neighbours share
-  no vertex); a lattice of more than 72 columns widens its spacing, which
-  keeps the shape within the ceiling.
-- Each top lies a whole number of steps below the height: a smooth field
-  rising toward a seeded side and toward the middle, with a wave and a little
-  noise (stream "basalt columns"), then lowered until neighbouring tops
-  differ by at most one step: terraces.
-- Walkability (R2.10): with the step at most the agent's climb the tops are
-  stairs among themselves; the outer columns stand from the ground at their
-  full height.
-
-At the defaults (seed 1 derives a radius of 1.75 m) it has 740 triangles
-(budget 760), about 1.1 ms; the most is 1220.
-
-## Roof
-
-`architecture.roof` (`kit_shapes_roof.cpp`) is a roof over a rectangle of
-wall lines (the walls' center lines), its base at the walls' top. Parameters
-`form` (`gable`, `hip`, `shed`, `pyramid`), `width` and `depth` (4 modules
-each), `pitch` (15 - 60 degrees, 35), `overhang` (the eaves beyond the wall
-lines, 0 - 0.6 m, 0.3), `curve` (0 - 0.3: the slope's height along its run is
-`s - 2.5 curve s (1 - s)`, so the eaves flatten and the ridge steepens: the
-Japanese roof) and `seed` (draws nothing); slots `roof` (the slab, tiles and
-caps; Kit Roof Tile) and `trim` (the body: gable ends and underside);
-connectors base, left, right, front and back (on the base plane at the wall
-lines, facing down, their up axes facing out of the room); a triangle mesh
-body; mirror plane x (a shed rises toward -Z); origin rule
-`base_contains_origin`.
-
-- The slab is 0.15 m thick (vertically), its eaves' underside at y = 0. The
-  gable and the shed are a section along Z extruded along X over the width
-  plus the overhang at each rake end; the hip and the pyramid are rings of
-  four corners from the eave to the ridge (a hip roof whose ridge would be
-  shorter than 0.1 m, and a pyramid, end in an apex), a ring collapsing to
-  the ridge or the apex giving triangles at the hip ends.
-- The body closes the roof below: the stations inside the wall lines
-  (2 cm in, so it meets no slab vertex at any overhang) from y = 0 up into the
-  slab's middle; its gable ends are the gable's trim triangles.
-- Tile courses about 0.32 m along the slope (2 - 14 per slope): each a
-  closed strip on the slab, its butt 5 cm above it at the lower edge, 1.2 cm
-  at the upper, ending 2 cm short of the next station and 1.5 cm short of a
-  hip line; a ridge cap (gable, hip), hip caps (in pieces of two stations
-  over a curved roof) and a finial on a pyramid.
-- On walls: four walls whose fronts face out, the roof's front connector
-  joined to the front wall's top, the roof covers the room centred on it;
-  a door wall's top serves the same.
-
-At the defaults (gable, 4 by 4 m) it has 508 triangles (budget 520), about
-0.3 ms; the most is 1360 (a curved hip roof).
-
-## Palm clump and palm shrub
-
-`nature.palm_clump` (`kit_shapes_nature_plants.cpp`) is several slender
-stems from one root ball at its origin. Parameters `species` (`areca`:
-ringed canes and arching feather fronds; `rhapis`: thin canes with fan
-leaves; `nipa`: long erect fronds from short stems at the ground), `stems`
-(1 - 9), `height` (the tallest stem's crown, 1.2 wall heights), `spread`
-(how far the outer stems lean out), `fronds` (per stem, 2 - 10) and `seed`;
-stems and height in the default mask; slots `bark` and `foliage`; a
-triangle mesh body.
-
-- Each stem is the palm's trunk and crown (`add_palm_tree()`, shared with
-  `nature.palm`) with a lighter crown: five trunk sides, three stations per
-  frond, five sectors per fan leaf, no skirt. The first stem stands in the
-  middle at the full height, the others around it (stream "palm clump
-  stems") at 0.55 - 0.95 of it, leaning out by the spread. The clump has at
-  most 40 fronds in all, which keeps it within the ceiling: nine stems carry
-  four or five each.
-- No frond's or fan's control point lies lower than its own reach below its
-  spine above the ground, so a low clump's fronds rest above it.
-
-`nature.palm_shrub` is a trunkless crown at the ground at its origin.
-Parameters `species` (`palmetto`: fan leaves on long stalks from a low
-stump; `cycad`: a rosette of stiff feather fronds on a short rough stump;
-`seedling`: a few broad upright fronds on a thin stem), `size` (1.2 m),
-`fronds` (3 - 16) and `seed`; size and fronds in the default mask; slots
-`bark` and `foliage`; a convex hull body.
-
-- Replace carries `height` and `fronds` (clamped) between the palm and the
-  clump; the species take their default.
-
-At the defaults the clump (seed 1: eight areca stems of 3.9 m) has 1912
-triangles (budget 1940), about 4 - 6.5 ms, the most 1948; the shrub
-(seed 1: a palmetto of 2 m, 12 fans) 584 (budget 600), about 0.8 ms, the
-most 876.
-
-## Dune and ground patch
-
-`nature.dune` (`kit_shapes_nature_terrain.cpp`) is an elongated sand mound
-along X. Parameters `length` (10 m), `width` (5.5 m) and `height` (0.9 m; all
-in meters, because the lee's slope bounds the height by the width at every
-level length), `asymmetry` (how far the crest lies toward the lee, +Z, a
-share of the half width, 0 - 0.8), `seed` and `segments` (points around,
-8 - 48; an odd count uses one less); length, width and height in the default
-mask; refused combination (`check_combination`): a length under 1.04 times
-the width (the derive ranges keep to it; a Replace whose carried values give
-one is refused); slot `sand`;
-smooth shading with hard edges above 30 degrees (the brink stays sharp); a
-convex hull body; tag `walkable`.
-
-- Nine rings from the rim to a narrow flat crest, each a stadium: straight
-  sides of the length less the width between half
-  circles whose radius shrinks by the half width over the rings, the center
-  drifting toward the lee by the asymmetry and along X by a seeded share (at
-  most 0.1 of the half width), the radius scaled by a seeded outline of up to
-  6 percent that fades out at the rim and the crest. The profile eases in at
-  the foot and over the crest, straight between (its steepest rate 1.25).
-- The base and the crest are strips of quads pairing each point with its
-  mirror across x = 0 (`Kit_mesh_builder::add_ring_solid_paired_caps()`):
-  a fan from one point over a long narrow ring makes slivers.
-- Walkability (R2.10): the next ring lies inside each ring by at least the
-  half width times (0.94 less the drift), so the steepest slope is
-  `atan(1.25 height / (0.95 x that distance))`; `editor_level_tests` checks
-  that no facet of a dune the check passes is steeper than the agent's slope.
-
-`nature.ground_patch` is a thin irregular patch lying on other ground.
-Parameters `size` (3 modules), `thickness` (the edge's height, 0.01 - 0.4 m:
-at most the agent's climb; fixed), `irregularity` (0 - 0.6), `dome` (0 - 0.1
-of the size), `seed` and `segments` (24); size and irregularity in the
-default mask; slot `earth` (Kit Sand and Kit Grass among its alternatives);
-smooth shading; a convex hull body; tag `walkable`.
-
-- Three rings: the outline at y = 0, a bevelled edge at the thickness (0.97
-  of it) and the dome's ring (0.55 of it), then the dome's top. The outline
-  is 1 plus harmonics 2, 3 and 4 of seeded amplitudes falling with their
-  order, scaled to the irregularity.
-- Walkability: the edge is at most the climb; the slope is measured on the
-  patch's own top triangles (the outline varies between neighbouring
-  points, so no closed form bounds it).
-
-At the defaults the dune has 284 triangles (budget 290), about 0.3 ms, the
-most 860 (48 segments); the patch 144 (budget 150), about 0.2 ms, the most
-288.
+The derivable parameters, their derive ranges and the default masks of
+every shape, and how the ranges keep the walkable shapes walkable, are in
+`doc/editor/level_kit_shapes.md` ("Derive ranges" and each shape's
+section).
 
 ## Recreated shapes
 
@@ -734,8 +113,9 @@ its id, generator and pinned mesh.
   `kit_shapes_<name>_v2.cpp`, added by `add_<name>_shapes_v2()` after the
   originals. A batch of shapes - recreated (`basic_v2`, `architecture_v2`,
   `medieval_v2`, `nature_v2`, `nature_plants_v2`, `nature_rocks_v2`) or new
-  (`build_13_16`, `build_17_20`, `build_21_24`, by the build-order lines of
-  `doc/plans/level_kit_more_shapes.md`) - edits only its generator file
+  (`build_13_16`, `build_17_20`, `build_21_24`, `extra_01_08`,
+  `extra_09_16`, `extra_17_24`, `extra_25_32`, `extra_33_36`,
+  `machine_01_08`, `machine_09_18`) - edits only its generator file
   `kit_shapes_<batch>.cpp`, its expectation rows
   `src/editor/level/test/kit_shape_rows_<batch>.cpp` and its tests
   `src/editor/level/test/test_kit_shapes_<batch>.cpp`; the tests that go
@@ -749,78 +129,8 @@ its id, generator and pinned mesh.
   ids exist until that ruling, and a saved piece or layout item names the
   one it was placed with.
 
-Recreated so far, the basic kit:
-
-- `basic.block.v2`, `basic.floor_slab.v2`: the box, six quads over eight
-  corners.
-- `basic.wedge.v2`: the triangular prism, five facets over six corners.
-- `basic.cylinder.v2`: the sides one quad per segment, each cap one polygon.
-  The ring's points are mirror images of each other to the bit (about
-  z = 0 at every segment count, about x = 0 at an even one), the points on
-  the axes are exact, and a side edge uses one (x, z) at both ends.
-- `basic.stairs.v2`: the side walls are a column per step - a trapezoid
-  from the base up to the line of the riser feet and the step's triangle
-  above it - and the base a strip per step, 12 triangles a step (180 at the
-  defaults, 1536 at 128 steps). No vertex has more than six facets; the
-  original's side walls fan from one corner, 8 triangles a step plus 4. The
-  riser feet lie on one line, so a side wall without a fan needs vertices
-  on the base, and each one costs four triangles.
-
-These five have their originals' forms, bounds and shading: a plain
-building block's description leaves no room for a bevel that would keep it
-tiling flush. `get_kit_circle_point()` (`kit_shapes.hpp`) is the ring point
-the recreated round shapes share.
-
-The architecture kit (`kit_shapes_architecture_v2.cpp`); each keeps its
-original's bounds, so its detail is cut into the original's envelope:
-
-- `architecture.door_wall.v2`: a door frame on both faces - a chamfer from
-  the frame down to the opening's edge (the reveal), a flat frame band, and
-  a V groove around the band that turns out under the lintel and back over
-  it, so the lintel is a block with an ear past each jamb. The frame's face
-  is the wall's face; the opening is the stated clear width and height at
-  the reveal's edge, and the ends and the top are full rectangles. The
-  frame's widths (chamfer 0.07 m, band 0.10 m, groove 0.07 m) shrink with a
-  jamb narrower than 0.42 m and its heights (lintel 0.20 m) with a header
-  lower than 0.45 m; the groove is at most 0.16 and the reveal 0.28 of the
-  thickness deep. 572 triangles at every value (the original: 44). The wall
-  has no threshold: a sill would lower the stated clear height.
-  `Relief_slab_v2` builds it: a grid in the XY plane whose nodes lie at one
-  of a few depths below the faces, mirrored about z = 0; a cell between two
-  depths is a bevel (a quad), a cell with three corners at one depth is a
-  mitre (two triangles split through the fourth corner), and an open cell
-  is an opening with a wall through the slab on each of its edges.
-- `architecture.pillar.v2`, round: a base (a plinth and a torus), a shaft
-  that tapers from 0.80 to 0.70 of the radius, and a capital (an astragal, a
-  necking, an echinus and an abacus), all inside the original's cylinder:
-  the plinth and the abacus have the full radius. Base and capital follow
-  the width (0.34 and 0.40 of it), take at most 0.20 and 0.22 of a low
-  pillar's height and at least 0.02 of a thin tall one's. 15 rings of the
-  segment count, a quad per segment between two rings and a polygon per
-  cap: 30 triangles a segment less 4 (356 at 12 segments, 1916 at 64; the
-  original: 4 a segment less 4). Square: the original's box, since every
-  side of the square pillar is a seam side (`get_seam_sides`) and a box is
-  the only solid that fills all six.
-- `architecture.arch.v2`: a masonry arch. The opening is the half ellipse
-  of the span and the rise, its points on the ellipse at equal steps of the
-  angle, at least 32 of them and among them every vertex of the original's
-  opening, so `get_arch_clear_width()` holds for it. The ring is the
-  thickness measured along the ellipse's normal (the original's outer curve
-  is a second ellipse, thinner at the haunches). `segments` counts the
-  stones: one keystone at the crown, a springer at each foot and voussoirs
-  between them (11 stones at 12 segments: an even count has its keystone
-  across the crown and springers of one and a half segments; 2 segments
-  make 3 stones). The keystone and the springers fill the envelope - the
-  feet are the original's footprint, the keystone's top is at rise +
-  thickness; the voussoirs lie back from it (0.16 of the thickness at the
-  extrados, 0.16 of the half depth on each face, 0.05 of the thickness
-  outside the opening's curve), so every joint to them is a step. A joint
-  between two voussoirs is a V groove around the ring. The curve is smooth
-  shaded inside a stone and the steps and grooves are hard edges. 516
-  triangles at 12 segments, at most 1476 (48 segments); the original: 100.
-  An arch of an odd segment count is taller than its original by the
-  original's missing crown: the original's top is a chord below rise +
-  thickness there, where the `top` connector is.
+The recreated shapes and how each differs from its original are described
+in `doc/editor/level_kit_shapes.md` (the "(F)" sections of each kit).
 
 `scripts/level_shape_compare.py [--editor <binary>] [--only <id prefix>]
 [--gap <meters>] [--parameters <json object>] [--tag <name>]
@@ -840,9 +150,18 @@ belong to) and `--tag` ends the image names with `_<name>`, so such a run
 keeps the default images; `--detail` renders a close-up of the point x, y, z
 of the recreated piece's own frame from the given distance instead of the
 pair (a negative x is written `--detail=-1,2,0,6`); `--azimuth` and
-`--elevation` turn the camera. `--save` writes the scene for the
-windowed editor to open; `--keep-open` leaves the launched editor running
-with the scene.
+`--elevation` turn the camera. `--recreated-parameters <json object>`
+gives values to the recreated shape of every row alone, for the parameters
+its original lacks; a value for a parameter that is derived by default needs
+`"derive": []` in the same object. `--single` renders the shapes that have no
+recreated twin, each alone on its pad (with `--only <id>`, `--parameters`,
+`--tag`, `--detail`, `--azimuth`, `--elevation`). `--sun <intensity>` adds a
+directional light and `--ambient <level>` sets the scene's ambient light: a
+scene whose only light is a piece's own renders everything that light does
+not reach black, so a lit shape is rendered with both; `--light-shadows`
+turns shadow casting on for the pieces' light nodes. `--save` writes the
+scene for the windowed editor to open; `--keep-open` leaves the launched
+editor running with the scene.
 
 ## Pieces
 
@@ -866,13 +185,8 @@ carries, one mesh primitive per material slot ("Materials").
 ## Materials
 
 A shape declares an ordered list of named material slots,
-`Kit_shape_definition::material_slots` (R2.9, D1.11): one slot for most
-shapes (`stone`, `floor`, `wall`, `trim`, `rock`, `earth`, `grass`,
-`foliage`, `sand`, `water`, `wood`), `bark` and `foliage` for `nature.tree` (the
-trunk and the canopy), `nature.palm` and `nature.leaf_plant`, `cliff` and
-`grass` for `nature.cliff` (the rock face and the top), `wall` and `floor` for
-`architecture.tower` (the walls and the walkable top). The `roof` slot has its palette for
-the roof shapes to come. The generator assigns every facet to a slot:
+`Kit_shape_definition::material_slots` (R2.9, D1.11); each shape's slots are
+in its section of `doc/editor/level_kit_shapes.md`. The generator assigns every facet to a slot:
 `Kit_mesh_builder::set_slot()` names the slot of the facets added after it,
 and `write()` stores each facet's slot index in the facet attribute
 `kit_slot` (`c_kit_slot_attribute`, `kit_mesh_builder.hpp`).
@@ -880,32 +194,11 @@ and `write()` stores each facet's slot index in the facet attribute
 the facets of one slot with their vertices.
 
 The palette (`Kit_shape_library::get_palette()`) is a list of flat-color
-materials (`Kit_palette_material`: name, linear base color, roughness, linear
-emissive color): Kit
-Stone, Kit Floor, Kit Plaster, Kit Trim, Kit Wood, Kit Dark Wood, Kit
-Vermilion, Kit Rock, Kit Earth, Kit Grass, Kit Foliage, Kit Autumn Foliage,
-Kit Bark, Kit Dark Rock, Kit Sand, Kit Shell, Kit Roof Tile, Kit Water, Kit
-Shallow Water and the glowing Kit Glow (warm) and Kit Ember (red). Each slot name has a
-`Kit_slot_palette` (`get_slot_palettes()`, `find_slot_palette()`): its default
-material and a few alternatives, by palette name:
-
-| Slot | Default | Alternatives |
-|---|---|---|
-| stone | Kit Stone | Kit Rock, Kit Plaster, Kit Wood, Kit Shell |
-| floor | Kit Floor | Kit Wood, Kit Stone, Kit Earth |
-| wall | Kit Plaster | Kit Stone, Kit Wood, Kit Trim |
-| trim | Kit Trim | Kit Wood, Kit Stone, Kit Plaster |
-| rock | Kit Rock | Kit Stone, Kit Earth |
-| earth | Kit Earth | Kit Grass, Kit Rock, Kit Stone, Kit Sand |
-| grass | Kit Grass | Kit Earth, Kit Foliage |
-| foliage | Kit Foliage | Kit Autumn Foliage, Kit Grass |
-| bark | Kit Bark | Kit Wood, Kit Rock |
-| cliff | Kit Dark Rock | Kit Rock, Kit Stone, Kit Sand |
-| sand | Kit Sand | Kit Earth, Kit Rock |
-| roof | Kit Roof Tile | Kit Wood, Kit Stone |
-| water | Kit Water | Kit Shallow Water |
-| wood | Kit Wood | Kit Vermilion, Kit Dark Wood, Kit Bark |
-| glow | Kit Glow | Kit Ember |
+materials (`Kit_palette_material`: name, linear base color, roughness,
+metallic, linear emissive color). Each slot name has a `Kit_slot_palette`
+(`get_slot_palettes()`, `find_slot_palette()`): its default material and a
+few alternatives, by palette name. Both lists are in
+`doc/editor/level_kit_shapes.md` "Slots and palette".
 
 A piece's mesh has one primitive per slot, in slot order, each with its own
 material; the primitives' materials are the piece's per-slot assignment, so
@@ -3199,8 +2492,19 @@ after the file is read:
 So `finish_open_scene_gltf()` (`parsers/gltf.cpp`), the tail of every
 erhe-authored glTF open (`load_scene`, File > Load Scene, `--scene`, the
 asynchronous load included), calls `Level_kits::refresh_scene()` once the nodes
-are in the scene and before the navigation item's input check. For each node
-carrying `Kit_piece` it reads the record (`read_piece_values()`: known shape,
+are in the scene. It queues the scene's pieces, and
+`Level_kits::update_scene_refreshes()` refreshes them over the following
+frames: each frame refreshes the pieces in order until the next one would
+make a new brush, at most one of those, so a level of many distinct pieces
+does not stall one frame while their brushes are made, and a run on the
+deterministic clock refreshes the same pieces on the same frames. Until its
+turn a piece shows its loaded mesh, the same geometry. The pending pieces count
+as work in flight (`App_context::get_async_in_flight_count()`): `get_async_status`
+is not idle, a save waits, and viewport hover and picking are gated. A piece
+that follows its kit by then (an edit gave it its brush) is left as it is, and
+closing the scene drops its queue.
+Once the last piece of a scene is refreshed the navigation item's input check
+runs. For each node carrying `Kit_piece` the refresh reads the record (`read_piece_values()`: known shape,
 readable text, values in range) and gives the node the cached brush of those
 values the way a parameter change does, without an undo entry: the brush's
 part primitives in place of the loaded ones (each primitive keeps its slot's
@@ -3418,7 +2722,7 @@ stays in kit mode for the next piece.
   `light_frames` (at the defaults: `name`, `position`, `direction` and the
   starting values, "Lights on pieces"), normal style, triangle budget, collision, `seeded` (the generator draws
   from the seed) and `mirror_planes` ("Groups"); the scene's level lengths and the `palette` (`name`,
-  `base_color`, `roughness`, `emissive`).
+  `base_color`, `roughness`, `metallic`, `emissive`).
 - `level_place_pieces {scene_name, snap, surface_snap, surface_orient,
   surface_direction, surface_max_distance, pieces: [{shape, parameters, position, rotation_xyzw,
   name, materials, parent_id, parent_index, surface_snap, surface_orient}]}`:
@@ -4829,4 +4133,3 @@ Kit window and the MCP tools both call; their scene-free parts are in
 - [Level tools: requirements](../plans/level_tools.md)
 - [Level tools: design](../plans/level_tools_design.md)
 - [Level tools: implementation steps](../plans/level_tools_implementation.md)
-- [Level kit: extra shapes](../plans/level_kit_extra_shapes.md)

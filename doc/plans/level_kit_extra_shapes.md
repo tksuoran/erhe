@@ -6,14 +6,15 @@ The inventory of shapes for step 63 of
 `doc/plans/level_tools_implementation.md` ("Extra shapes of the
 orchestrator's choice"): the topics and the shapes the orchestrator picks,
 within rulings U34 and U36 of `doc/plans/level_tools.md`. All 36 shapes of
-the inventory are built ("Build order"); what remains is the one
+the inventory are built ("Build order") and described in
+`doc/editor/level_kit_shapes.md`; what remains is the one
 verification pass over every shape (`scripts/level_tools_verify.py` and the
 editor's test suites) and the user's review of the choices the build made
 alone. The inventory covers what step 62 leaves open: step 62 owns its five
 categories (rock formations, tropical plants, palm trees, natural beach
 features, architecture of historical cultures) and the unbuilt shapes of
 R4.3 and R4.4 of `doc/plans/level_tools.md`; the unbuilt basic shapes of
-R4.2 stay with step 12. This plan extends `doc/editor/level_tools.md`.
+R4.2 stay with step 12. This plan extends `doc/editor/level_kit_shapes.md`.
 
 ## Conventions of the tables
 

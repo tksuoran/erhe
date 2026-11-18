@@ -949,13 +949,13 @@ void generate_cart(const Kit_parameter_values& values, GEO::Mesh& mesh)
         add_placed_box(builder, place, glm::vec3{x - (0.5f * shaft), 0.0f, form.back}, glm::vec3{x + (0.5f * shaft), shaft, form.tips});
     }
     add_placed_box(builder, place, glm::vec3{-form.bed, 0.9f * shaft, form.back + 0.01f}, glm::vec3{form.bed, shaft + deck, form.front});
-    // Two legs under the bed's front, on the ground, under a cross piece.
+    // Two legs from the ground up into the deck's middle under the bed's front; the deck's tilt stays within its thickness.
     {
-        const glm::vec3 under = place.at(glm::vec3{0.0f, 0.0f, 0.85f * form.front});
-        const float     half  = 0.5f * shaft;
+        const glm::vec3 into = place.at(glm::vec3{0.0f, (0.9f * shaft) + (0.5f * ((0.1f * shaft) + deck)), 0.85f * form.front});
+        const float     half = 0.5f * shaft;
         for (const float side : {-1.0f, 1.0f}) {
             const float x = side * (form.bed - (2.2f * shaft));
-            builder.add_box(glm::vec3{x - half, 0.0f, under.z - half}, glm::vec3{x + half, under.y + (0.6f * shaft), under.z + half});
+            builder.add_box(glm::vec3{x - half, 0.0f, into.z - half}, glm::vec3{x + half, into.y, into.z + half});
         }
     }
     const float top = shaft + deck;
@@ -1165,7 +1165,9 @@ void generate_signpost(const Kit_parameter_values& values, GEO::Mesh& mesh)
         // The board lies against the post's side, its point ahead.
         const glm::vec3 ahead = around_y(turn);
         const glm::vec3 aside = glm::cross(ahead, y_axis);
-        const glm::vec3 at    = post.at(glm::vec3{0.0f, y, 0.0f}) + ((half + thick + 0.004f) * aside);
+        // The square post's support distance along the board's side keeps the board off its corners.
+        const float     reach = half * (std::abs(aside.x) + std::abs(aside.z));
+        const glm::vec3 at    = post.at(glm::vec3{0.0f, y, 0.0f}) + ((reach + thick + 0.004f) * aside);
         const float     x0    = -0.22f * length;
         const float     x1    = 0.78f * length;
         const float     neck  = x1 - (0.8f * board);

@@ -393,6 +393,7 @@ The user's rulings (2026-11-15):
     icon font.
   Built as step 72 of `doc/plans/level_tools_implementation.md`,
   `doc/editor/level_tools.md` "Connector snap".
+  U50 replaces the first choice.
 - U45 (2026-11-17), Wrap with Path. The user's request: "Add scene
   hierarchy context menu operation: Wrap with path - so you can create curve
   of selected nodes - inserting path in place of selected item and using the
@@ -526,6 +527,66 @@ The user's rulings (2026-11-15):
     or not, and from the transform.
   Built as step 76 of `doc/plans/level_tools_implementation.md`,
   `doc/editor/level_tools.md` "Surface placement".
+  U51 replaces this ruling: every mesh rests on its local -Y face.
+- U49 (2026-11-18), the user's review of the choices recorded for review.
+  Accepted as built: U45 (Wrap with Path), U46 and U47 (Add Path Stairs,
+  Make Layout On Curve, the Create menu's Level Kit submenu, the Level Kit
+  window acting on the last hovered viewport's scene), every choice in the
+  "Built" paragraphs of `doc/plans/level_kit_extra_shapes.md` and the
+  machine kit's own choices, the stone lantern's light (12 cd, 6 m, warm;
+  its platform shading the ground beside it with shadows on), the machine
+  kit's oversized defaults (Q1) and its flat pose (Q2: turning the piece is
+  enough). No second pass for `nature.boulder_cluster`, `nature.rock_arch`
+  or the conch.
+- U50 (2026-11-18), snap orientation modes; replaces the first choice of
+  U44. The user: "There shall be two separate snap orientation modes".
+  Connector snap orientation is Off, Rotate or Full. Rotate: with Orient To
+  Surface on, the surface sets the axis aligned with the surface normal and
+  the connector snap only turns the moved set about that normal to face the
+  pair. Full: the connector alignment overrides Orient To Surface (U44 as
+  built). Without Orient To Surface, Rotate and Full act alike. Every drag
+  kind takes the mode: free translate, axis and plane handles, rotate and
+  scale.
+- U51 (2026-11-18), snap search direction and distances; replaces U48 and
+  the "either way" of U30. The user: "Bistro should be rotated to Y-up
+  before working on it - orient to surface should orient to surface normal,
+  regardless of which way it is pointing. We should be able to attach gears
+  to wall surface and ceiling surface". Y-up content is a precondition:
+  every mesh rests on its local -Y face, and a kit shape's origin is at its
+  base.
+  - Kit layout items: three values, the search direction (default (0, -1,
+    0)), the forward search distance (default 1 m) and the backward search
+    distance (default 0 m). A non-zero backward distance casts along the
+    direction and against it and takes the nearest place. Direction up
+    attaches a path to a ceiling.
+  - The Brush tool places along the surface normal under the pointer, with
+    no further logic.
+  - Transform tool drags snap one point, the transform anchor (the node
+    origin; in the BBox reference mode the bounding box center), along a
+    configurable direction: an explicit vector (default (0, -1, 0)) or the
+    ray from the viewport camera through the anchor. The point under the
+    mouse does not take part: a handle drag moves the anchor and the anchor
+    is snapped. The footprint lines take no part in drags.
+- U52 (2026-11-18), the support rule of kit layout items in dense scenes is
+  a setting with three modes: the five lines (base center and four
+  footprint corners) both support and block (as built); only the center
+  line blocks; when blocked, rest on the surface under the base center.
+- U53 (2026-11-18), machine kit changes. A cap nut's dome is on the tip side
+  of its `bolt` connector, so a joined cap nut covers the bolt's tip.
+  `machine.pillow_block` `bolts` is a choice of two or four. A gear carries
+  at least four connectors on its boundary. A bolt's thread is a true helix
+  (the triangle budget relaxed for it), with a property for the thread
+  style considered now or later. Future work: a circular gear connector
+  around the gear that lets another gear snap at the ideal operating
+  distance in any valid direction.
+- U54 (2026-11-18), box collision bodies now: "everything that is box shaped
+  or close to box shaped should use box collision" (completes U40's "simple
+  shapes like walls could use box collision shapes").
+- U55 (2026-11-18), canonical ids: the recreated (`.v2`) version wins for
+  every recreated shape; each original is removed and its id resolves as a
+  former id of the kept shape.
+- U56 (2026-11-18), `get_input_state` reports the active tool, so the verify
+  script restores the tool it found.
 
 ## Terms
 

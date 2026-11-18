@@ -705,9 +705,41 @@ TEST(Kit_rock_arch, opening_is_at_least_the_stated_ellipse)
         EXPECT_STREQ(connectors[0].name, "start");
         EXPECT_STREQ(connectors[1].name, "end");
         EXPECT_STREQ(connectors[2].name, "base");
-        EXPECT_GT(connectors[1].position.x, half_span + values.get_float("thickness"));
-        EXPECT_EQ(connectors[0].position.x, -connectors[1].position.x);
+        EXPECT_GT(connectors[1].position.x, half_span + (0.9f * values.get_float("thickness")));
+        EXPECT_LT(connectors[0].position.x, -(half_span + (0.9f * values.get_float("thickness"))));
     }
+}
+
+// Each side connector sits on its own foot's outer edge: the far end of the foot's section from the opening's
+// outline through the section's center. The heavy leg is seeded, so the two reaches differ with the seed.
+TEST(Kit_rock_arch, side_connectors_sit_on_the_feet)
+{
+    const Kit_shape_definition& arch = get_shape("nature.rock_arch");
+    unsigned int uneven = 0;
+    for (int seed = 0; seed < 12; ++seed) {
+        for (const int segments : {8, 14, 24}) {
+            Kit_parameter_values values = all_derived(arch, seed);
+            ASSERT_TRUE(values.set_int("segments", segments));
+            SCOPED_TRACE(values.to_canonical_text());
+            const std::unique_ptr<GEO::Mesh> mesh = generate(values);
+            // The band's ring points come first, a foot's section first and last, then the two feet's centers.
+            const GEO::index_t band         = static_cast<GEO::index_t>(10 * (segments + 1));
+            const glm::vec3    right        = point_of(*mesh, 0);
+            const glm::vec3    left         = point_of(*mesh, band - 10);
+            const glm::vec3    center_right = point_of(*mesh, band);
+            const glm::vec3    center_left  = point_of(*mesh, band + 1);
+            ASSERT_EQ(right.y, 0.0f);
+            ASSERT_EQ(center_right.y, 0.0f);
+            const std::vector<Kit_connector> connectors = connectors_of(values);
+            ASSERT_EQ(connectors.size(), 3u);
+            EXPECT_NEAR(connectors[1].position.x, (2.0f * center_right.x) - right.x, 1.0e-4f);
+            EXPECT_NEAR(connectors[0].position.x, (2.0f * center_left.x) - left.x, 1.0e-4f);
+            if (std::abs(connectors[0].position.x + connectors[1].position.x) > 0.05f) {
+                ++uneven;
+            }
+        }
+    }
+    EXPECT_GT(uneven, 0u);
 }
 
 // The opening suits the agent at its height, not only at the ground.

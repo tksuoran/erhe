@@ -84,6 +84,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <functional>
 #include <chrono>
 #include <unordered_map>
 #include <unordered_set>
@@ -2561,17 +2562,23 @@ auto finish_open_scene_gltf(
     }
     scene_root->apply_variant_selections(context);
 
-    // Kit pieces take their kit brushes (doc/editor/level_tools.md "Persistence"), before the
-    // navigation item's input check; a prepared run keeps the meshes it was built with.
-    if (!prepared_asset && (context.level_kits != nullptr)) {
-        static_cast<void>(context.level_kits->refresh_scene(*scene_root));
-    }
-
-    // Editor-only state from the editor asset; a prepared run has none.
+    // Kit pieces take their kit brushes over the next frames (doc/editor/level_tools.md "Persistence"); the
+    // navigation item's input check runs once they have. A prepared run keeps the meshes it was built with.
     if (!prepared_asset) {
+        // Editor-only state from the editor asset; a prepared run has none.
+        std::function<void()> load_editor_state = [&context, scene_root]() {
 #if defined(ERHE_USE_DETOUR)
-        load_navigation_item(context, *scene_root);
+            load_navigation_item(context, *scene_root);
+#else
+            static_cast<void>(context);
+            static_cast<void>(scene_root);
 #endif
+        };
+        if (context.level_kits != nullptr) {
+            context.level_kits->refresh_scene(scene_root, std::move(load_editor_state));
+        } else {
+            load_editor_state();
+        }
     }
 
     // After the nodes are in the scene: a saved library_folders path may name

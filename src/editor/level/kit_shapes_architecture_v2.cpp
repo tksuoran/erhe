@@ -9,7 +9,7 @@
 #include <numbers>
 #include <vector>
 
-// The forms built here are described in doc/editor/level_tools.md "Recreated shapes".
+// The forms built here are described in doc/editor/level_kit_shapes.md "Recreated architecture shapes".
 
 namespace editor {
 

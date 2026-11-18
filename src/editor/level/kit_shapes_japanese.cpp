@@ -14,7 +14,7 @@ namespace {
 
 constexpr int torii_post_sides = 12;
 
-// The torii's members (doc/editor/level_tools.md "Torii"), from its values.
+// The torii's members (doc/editor/level_kit_shapes.md "Torii"), from its values.
 class Torii_layout
 {
 public:

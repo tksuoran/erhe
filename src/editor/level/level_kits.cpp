@@ -929,11 +929,11 @@ auto Level_kits::check_piece(const erhe::scene::Node& node) const -> Kit_piece_c
     return result;
 }
 
-auto Level_kits::refresh_scene(Scene_root& scene_root) -> Kit_refresh_report
+void Level_kits::refresh_scene(const std::shared_ptr<Scene_root>& scene_root, std::function<void()> on_done)
 {
-    Kit_refresh_report report;
+    Scene_refresh refresh{.scene_root = scene_root, .on_done = std::move(on_done)};
     std::vector<std::shared_ptr<erhe::scene::Mesh>> pieces;
-    scene_root.get_scene().for_each_node(
+    scene_root->get_scene().for_each_node(
         [&pieces](const std::shared_ptr<erhe::scene::Node>& node) -> bool {
             if (carries_kit_piece(*node)) {
                 const std::shared_ptr<erhe::scene::Mesh> mesh = std::dynamic_pointer_cast<erhe::scene::Mesh>(node);
@@ -944,34 +944,7 @@ auto Level_kits::refresh_scene(Scene_root& scene_root) -> Kit_refresh_report
             return true;
         }
     );
-    report.piece_count = pieces.size();
-    Kit_parameter_values values;
-    for (const std::shared_ptr<erhe::scene::Mesh>& mesh : pieces) {
-        std::string problem = read_piece_values(read_kit_piece(*mesh).value(), values);
-        std::shared_ptr<Brush> brush = problem.empty() ? get_brush(values) : std::shared_ptr<Brush>{};
-        const Brush::Scaled* const scaled = brush ? brush->get_scaled(1.0) : nullptr;
-        if (problem.empty() && (scaled == nullptr)) {
-            problem = "the shape made no geometry";
-        }
-        if (problem.empty() && (mesh->get_primitives().size() != scaled->part_primitives.size())) {
-            problem = part_count_problem(*mesh, *scaled);
-        }
-        if (!problem.empty()) {
-            ++report.problem_count;
-            log_scene->warn("Kit piece '{}' (id {}) keeps its loaded mesh: {}", mesh->get_name(), mesh->get_id(), problem);
-            continue;
-        }
-        // As Kit_piece_parameters_operation applies it, without an undo entry: loading is not an edit.
-        const std::vector<erhe::scene::Mesh_primitive> primitives = with_brush_primitives(mesh->get_primitives(), *scaled);
-        std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> scene_lock{scene_root.item_host_mutex};
-        swap_mesh_primitives(mesh, primitives);
-        if (carries_node_physics(*mesh)) {
-            set_node_collision_shape(*mesh, scaled->collision_shape);
-        }
-        set_brush_placement(*mesh, brush, GEO::NO_INDEX, GEO::NO_INDEX);
-        report.light_change_count += m_light_sync.apply_now(scene_root, mesh, values);
-        ++report.follow_count;
-    }
+    refresh.report.piece_count = pieces.size();
     // U33: switch values a write would refuse (a hand-edited file) are kept as loaded and named in one warning.
     std::string switch_problems;
     std::size_t switch_problem_count = 0;
@@ -988,21 +961,111 @@ auto Level_kits::refresh_scene(Scene_root& scene_root) -> Kit_refresh_report
             ++switch_problem_count;
             switch_problems += fmt::format("{}'{}' (id {}) {}: {}", switch_problems.empty() ? "" : "; ", mesh->get_name(), mesh->get_id(), property->get_name(), problem);
         }
+        refresh.pieces.push_back(mesh);
     }
     if (switch_problem_count > 0) {
         log_scene->warn(
             "Scene '{}': {} kit piece connector switch value(s) kept as loaded although a write would refuse them (a listed name "
             "that is a connector of the shape is off, any other has no effect): {}",
-            scene_root.get_name(), switch_problem_count, switch_problems
+            scene_root->get_name(), switch_problem_count, switch_problems
         );
     }
+    m_scene_refreshes.push_back(std::move(refresh));
+}
+
+auto Level_kits::refresh_piece(Scene_refresh& refresh, const std::shared_ptr<erhe::scene::Mesh>& mesh) -> bool
+{
+    Scene_root& scene_root = *refresh.scene_root;
+    const std::optional<Kit_piece_data> record = read_kit_piece(*mesh);
+    if (!record.has_value() || (mesh->get_item_host() != &scene_root)) {
+        return false; // no longer a piece of the scene
+    }
+    if (check_piece(*mesh).follows_kit) {
+        ++refresh.report.follow_count; // an edit since the load gave it its brush
+        return false;
+    }
+    Kit_parameter_values values;
+    std::string problem = read_piece_values(record.value(), values);
+    const bool made = problem.empty() && !find_cached_brush(values);
+    std::shared_ptr<Brush> brush = problem.empty() ? get_brush(values) : std::shared_ptr<Brush>{};
+    const Brush::Scaled* const scaled = brush ? brush->get_scaled(1.0) : nullptr;
+    if (problem.empty() && (scaled == nullptr)) {
+        problem = "the shape made no geometry";
+    }
+    if (problem.empty() && (mesh->get_primitives().size() != scaled->part_primitives.size())) {
+        problem = part_count_problem(*mesh, *scaled);
+    }
+    if (!problem.empty()) {
+        ++refresh.report.problem_count;
+        log_scene->warn("Kit piece '{}' (id {}) keeps its loaded mesh: {}", mesh->get_name(), mesh->get_id(), problem);
+        return made;
+    }
+    // As Kit_piece_parameters_operation applies it, without an undo entry: loading is not an edit.
+    const std::vector<erhe::scene::Mesh_primitive> primitives = with_brush_primitives(mesh->get_primitives(), *scaled);
+    {
+        std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> scene_lock{scene_root.item_host_mutex};
+        swap_mesh_primitives(mesh, primitives);
+        if (carries_node_physics(*mesh)) {
+            set_node_collision_shape(*mesh, scaled->collision_shape);
+        }
+        set_brush_placement(*mesh, brush, GEO::NO_INDEX, GEO::NO_INDEX);
+    }
+    refresh.report.light_change_count += m_light_sync.apply_now(scene_root, mesh, values);
+    ++refresh.report.follow_count;
+    return made;
+}
+
+void Level_kits::finish_scene_refresh(Scene_refresh& refresh)
+{
+    const Kit_refresh_report& report = refresh.report;
     if (report.piece_count > 0) {
         log_scene->info(
             "Scene '{}': {} kit pieces, {} follow the kit, {} keep their loaded mesh, {} light nodes put on their frames",
-            scene_root.get_name(), report.piece_count, report.follow_count, report.problem_count, report.light_change_count
+            refresh.scene_root->get_name(), report.piece_count, report.follow_count, report.problem_count, report.light_change_count
         );
     }
-    return report;
+    if (refresh.on_done) {
+        refresh.on_done();
+    }
+}
+
+void Level_kits::update_scene_refreshes()
+{
+    // Pieces whose brush is cached cost little; making a brush can take 200 ms in a Debug build, so a frame
+    // makes at most one. A piece count, not a time budget, keeps runs on the deterministic clock alike.
+    bool made = false;
+    while (!m_scene_refreshes.empty()) {
+        Scene_refresh& refresh = m_scene_refreshes.front();
+        if (refresh.scene_root->is_close_requested()) {
+            m_scene_refreshes.erase(m_scene_refreshes.begin()); // its close drops it; nothing more is done to it
+            continue;
+        }
+        while (refresh.next < refresh.pieces.size()) {
+            const std::shared_ptr<erhe::scene::Mesh> mesh = refresh.pieces[refresh.next].lock();
+            if (mesh) {
+                Kit_parameter_values values;
+                const std::optional<Kit_piece_data> record = read_kit_piece(*mesh);
+                const bool would_make = record.has_value() && read_piece_values(record.value(), values).empty() && !find_cached_brush(values);
+                if (made && would_make) {
+                    return;
+                }
+                made = refresh_piece(refresh, mesh) || made;
+            }
+            ++refresh.next;
+        }
+        Scene_refresh done = std::move(refresh);
+        m_scene_refreshes.erase(m_scene_refreshes.begin());
+        finish_scene_refresh(done);
+    }
+}
+
+auto Level_kits::get_pending_refresh_count() const -> std::size_t
+{
+    std::size_t count = 0;
+    for (const Scene_refresh& refresh : m_scene_refreshes) {
+        count += (refresh.pieces.size() - refresh.next) + 1; // the finish (on_done) is pending too
+    }
+    return count;
 }
 
 namespace {
@@ -2185,6 +2248,8 @@ void Level_kits::on_items_removed(const Removed_items& removed)
 
 void Level_kits::on_close_scene(const erhe::Item_host* const closing_host)
 {
+    // A closing scene's queued refresh goes with it; its on_done is not called.
+    std::erase_if(m_scene_refreshes, [closing_host](const Scene_refresh& refresh) -> bool { return refresh.scene_root.get() == closing_host; });
     m_connector_indicators.forget_all();
     m_layout_indicators.forget_all();
     if (m_parameter_preview.has_value() && (m_parameter_preview.value().mesh->get_item_host() == closing_host)) {

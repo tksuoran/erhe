@@ -22,6 +22,7 @@
 #include <memory>
 #include <set>
 #include <string>
+#include <string_view>
 #include <vector>
 
 // Tests of the shapes of kit_shapes_extra_01_08.cpp.
@@ -310,6 +311,24 @@ TEST(Kit_barrel, hoops_are_the_metal_slot)
         editor::read_kit_facet_slots(*mesh, facet_slots);
         const std::ptrdiff_t segments = values.get_int("segments");
         EXPECT_EQ(std::count(facet_slots.begin(), facet_slots.end(), 1u), 3 * hoops * segments);
+    }
+}
+
+// A lying barrel's top connector is on its mesh's top at odd and even segment counts.
+TEST(Kit_barrel, lying_top_connector_is_on_the_top)
+{
+    const Kit_shape_definition& barrel = get_shape("prop.barrel");
+    for (const int segments : {8, 9, 11, 12, 15}) {
+        for (int hoops = 2; hoops <= 4; ++hoops) {
+            Kit_parameter_values values = explicit_enum(barrel, "pose", "lying", 1);
+            ASSERT_TRUE(values.set_int("segments", segments));
+            ASSERT_TRUE(values.set_int("hoops", hoops));
+            SCOPED_TRACE(values.to_canonical_text());
+            const Kit_mesh_report            report     = editor::check_kit_shape(values);
+            const std::vector<Kit_connector> connectors = connectors_of(values);
+            ASSERT_TRUE(report.is_valid()) << describe(report);
+            EXPECT_NEAR(connectors[1].position.y, report.bounds_max.y, 1.0e-5f);
+        }
     }
 }
 
@@ -747,6 +766,22 @@ TEST(Kit_mooring, the_seed_turns_the_lean)
 
 const std::vector<std::string> lamp_floats{"height", "arm_length"};
 
+// The lamp's unit, and its heads' unit: less on an arm too short for a head of the post's unit.
+[[nodiscard]] auto lamp_unit(const Kit_parameter_values& values) -> float
+{
+    return std::clamp(0.028f * values.get_float("height"), 0.045f, 0.16f);
+}
+[[nodiscard]] auto lamp_head_unit(const Kit_parameter_values& values) -> float
+{
+    const float unit = lamp_unit(values);
+    if (values.get_int("arms") == 0) {
+        return unit;
+    }
+    const std::string_view head   = values.get_enum("head");
+    const float            radius = (head == "lantern") ? 1.65f : ((head == "globe") ? 1.6f : 2.5f);
+    return std::min(unit, (values.get_float("arm_length") - (1.2f * unit) - 0.01f) / radius);
+}
+
 class Kit_lamp_post_heads : public testing::TestWithParam<std::string>
 {
 };
@@ -826,7 +861,7 @@ TEST_P(Kit_lamp_post_heads, each_head_carries_a_light_beside_its_glowing_part)
             const std::unique_ptr<GEO::Mesh> mesh = generate(corner);
             std::vector<uint32_t> facet_slots;
             editor::read_kit_facet_slots(*mesh, facet_slots);
-            const float unit    = std::clamp(0.028f * corner.get_float("height"), 0.045f, 0.16f);
+            const float unit    = lamp_head_unit(corner);
             const bool  hanging = (head == "hood") && (arms > 0);
             for (std::size_t i = 0; i < frames.size(); ++i) {
                 const editor::Kit_light_frame& frame = frames[i];
@@ -863,6 +898,42 @@ TEST_P(Kit_lamp_post_heads, each_head_carries_a_light_beside_its_glowing_part)
             }
         });
     }
+}
+
+// A head on an arm keeps clear of the post's collar: on short arms of tall posts the heads are smaller, and no
+// glowing part of a head comes within the collar's radius of the post's axis.
+TEST_P(Kit_lamp_post_heads, heads_on_arms_keep_clear_of_the_post)
+{
+    const Kit_shape_definition& lamp = get_shape("light.lamp_post");
+    const std::string head = GetParam();
+    for (int arms = 1; arms <= 4; ++arms) {
+        Kit_parameter_values values = explicit_enum(lamp, "head", head, 1);
+        ASSERT_TRUE(values.set_int("arms", arms));
+        for_each_corner(values, lamp_floats, [](const Kit_parameter_values& corner) {
+            SCOPED_TRACE(corner.to_canonical_text());
+            const float unit      = lamp_unit(corner);
+            const float head_unit = lamp_head_unit(corner);
+            EXPECT_GT(head_unit, 0.0f);
+            const std::unique_ptr<GEO::Mesh> mesh = generate(corner);
+            std::vector<uint32_t> facet_slots;
+            editor::read_kit_facet_slots(*mesh, facet_slots);
+            for (GEO::index_t f = 0; f < mesh->facets.nb(); ++f) {
+                if (facet_slots[f] != 1u) {
+                    continue;
+                }
+                for (GEO::index_t c = 0; c < mesh->facets.nb_vertices(f); ++c) {
+                    const glm::vec3 p = point_of(*mesh, mesh->facets.vertex(f, c));
+                    EXPECT_GT(glm::length(glm::vec2{p.x, p.z}), 1.2f * unit);
+                }
+            }
+        });
+    }
+    // At the shortest arm on the tallest post the heads are smaller than the post's unit.
+    Kit_parameter_values values = explicit_enum(lamp, "head", head, 1);
+    ASSERT_TRUE(values.set_int("arms", 1));
+    ASSERT_TRUE(values.set_float("height", 12.0f));
+    ASSERT_TRUE(values.set_float("arm_length", 0.3f));
+    EXPECT_LT(lamp_head_unit(values), lamp_unit(values));
 }
 
 INSTANTIATE_TEST_SUITE_P(Kit_lamp_post, Kit_lamp_post_heads, testing::Values("lantern", "globe", "hood"));

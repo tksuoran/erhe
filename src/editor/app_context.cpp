@@ -104,7 +104,8 @@ auto App_context::get_async_in_flight_count() const -> std::size_t
         static_cast<std::size_t>(running_async_ops.load()) +
         ((operation_stack    != nullptr) ? operation_stack->get_queued_count()     : 0u) +
         ((scene_commit_queue != nullptr) ? scene_commit_queue->get_pending_count() : 0u) +
-        ((asset_manager      != nullptr) ? asset_manager->get_load_task_count()    : 0u);
+        ((asset_manager      != nullptr) ? asset_manager->get_load_task_count()    : 0u) +
+        ((level_kits         != nullptr) ? level_kits->get_pending_refresh_count() : 0u);
 }
 
 auto App_context::get_results_frame_index() const -> std::optional<uint64_t>

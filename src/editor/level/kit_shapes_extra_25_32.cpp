@@ -11,6 +11,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <initializer_list>
+#include <limits>
 #include <numbers>
 #include <span>
 #include <string>
@@ -313,18 +314,22 @@ void generate_cargo(const Kit_parameter_values& values, GEO::Mesh& mesh)
         const float x = (hw - (0.08f * w)) * ((0.5f * static_cast<float>(k)) - 1.0f);
         builder.add_box(glm::vec3{x - (0.075f * w), 0.7f * form.pallet, -(hw - 0.004f)}, glm::vec3{x + (0.075f * w), form.pallet, hw - 0.004f});
     }
-    // Four goods to a layer about the middle; the fill is the share of the pallet they cover.
-    const float side = hw * std::sqrt(form.fill) * 0.94f;
+    // Four goods to a layer about the middle; the fill is the share of the pallet they cover. Each good's center
+    // stands off the middle by its footprint's reach at the most turn and offset, so the four stay apart on the pallet.
+    constexpr float most_turn = 0.1f;
+    const float side   = hw * std::sqrt(form.fill) * 0.83f;
+    const float offset = 0.02f * w;
+    const float apart  = (0.5f * side * (std::cos(most_turn) + std::sin(most_turn))) + offset + (0.002f * w);
     for (int layer = 0; layer < form.layers; ++layer) {
         const Cargo_kind kind = get_cargo_kind(form.load, layer);
         const float      foot = form.get_layer_foot(layer);
         const float      high = get_cargo_layer_height(kind) * w;
         for (int k = 0; k < 4; ++k) {
-            const float     off_x = 0.02f * w * next_signed(random);
-            const float     off_z = 0.02f * w * next_signed(random);
-            const float     turn  = 0.1f * next_signed(random);
-            const float     x     = (((k % 2) == 0) ? -0.52f : 0.52f) * side;
-            const float     z     = ((k < 2) ? -0.52f : 0.52f) * side;
+            const float     off_x = offset * next_signed(random);
+            const float     off_z = offset * next_signed(random);
+            const float     turn  = most_turn * next_signed(random);
+            const float     x     = ((k % 2) == 0) ? -apart : apart;
+            const float     z     = (k < 2) ? -apart : apart;
             const glm::vec3 at{x + off_x, foot, z + off_z};
             const Placement place = make_turned_placement(at, around_y(turn));
             const float     half  = 0.5f * side;
@@ -397,6 +402,26 @@ public:
     glm::vec3 pivot {0.0f};
     glm::vec3 tip   {0.0f};
 };
+
+// A tower's jib reaches its end beyond the slewing deck's corners, so the hook hangs clear of the deck and the tower.
+[[nodiscard]] auto check_crane_combination(const Kit_parameter_values& values) -> std::string
+{
+    const Crane_form form{values};
+    if (!form.tower) {
+        return {};
+    }
+    const float tip_reach  = glm::length(glm::vec2{form.tip.x, form.tip.z});
+    const float deck_reach = 1.2f * form.half * std::numbers::sqrt2_v<float>;
+    const float hook_half  = 0.6f * (2.0f * form.chord);
+    const float least      = deck_reach + hook_half + 0.01f;
+    if (tip_reach < least) {
+        return fmt::format(
+            "{}: the jib's end reaches {} m from the tower's axis, inside the slewing deck's {} m; lengthen the jib or lower its angle",
+            values.get_shape()->id, tip_reach, least
+        );
+    }
+    return {};
+}
 
 // The hook line down from the jib's end, and the hook.
 void add_crane_hook(Kit_mesh_builder& builder, const Crane_form& form, const float thick)
@@ -881,9 +906,9 @@ void add_vent_slats(Kit_mesh_builder& builder, const int slats, const float half
         const float y = y0 + (pitch * (static_cast<float>(k) + 0.7f));
         const Placement place = make_sloping_placement(glm::vec3{0.0f, y, z}, -out * 0.8f);
         // A slat stands out by at most what keeps it over the one below.
-        const float far = std::min(reach, 0.6f * pitch);
-        const float z0  = std::min(0.0f, out * far);
-        const float z1  = std::max(0.0f, out * far);
+        const float slat_reach = std::min(reach, 0.6f * pitch);
+        const float z0         = std::min(0.0f, out * slat_reach);
+        const float z1         = std::max(0.0f, out * slat_reach);
         add_placed_box(builder, place, glm::vec3{-half_x, -0.12f * pitch, z0}, glm::vec3{half_x, 0.12f * pitch, z1});
     }
 }
@@ -944,7 +969,8 @@ void generate_vent(const Kit_parameter_values& values, GEO::Mesh& mesh)
 
 constexpr uint32_t antenna_metal_slot  = 0;
 constexpr int      antenna_element_max = 5;
-constexpr int      antenna_dish        = 8; // points around a dish
+constexpr int      antenna_dish        = 8;     // points around a dish
+constexpr float    antenna_dish_pitch  = 0.15f; // heights between two dishes
 
 void generate_antenna(const Kit_parameter_values& values, GEO::Mesh& mesh)
 {
@@ -954,6 +980,8 @@ void generate_antenna(const Kit_parameter_values& values, GEO::Mesh& mesh)
     const float            tilt     = glm::radians(values.get_float("tilt"));
     const float            u        = std::clamp(0.03f * height, 0.04f, 0.15f); // the mast's width
     const float            mast     = (form == "whip") ? (0.55f * height) : height;
+    // Two dishes one above the other stay apart: a dish reaches at most 1.06 r over its center and r under it.
+    const float most_dish = (elements > 1) ? ((antenna_dish_pitch * height) - 0.01f) / 2.06f : std::numeric_limits<float>::max();
     Kit_random random{values.get_seed()};
     Kit_mesh_builder builder;
     builder.set_slot(antenna_metal_slot);
@@ -968,8 +996,8 @@ void generate_antenna(const Kit_parameter_values& values, GEO::Mesh& mesh)
         const glm::vec3 ahead   = around_y(heading);
         if (form == "dish") {
             // A dish on the mast's side, its axis tilted up from the heading.
-            const float     r     = std::clamp(0.1f * height, 0.15f, 0.7f) * size;
-            const float     y     = height * (0.86f - (0.15f * static_cast<float>(k)));
+            const float     r     = std::min(std::clamp(0.1f * height, 0.15f, 0.7f), most_dish) * size;
+            const float     y     = height * (0.86f - (antenna_dish_pitch * static_cast<float>(k)));
             const glm::vec3 axis  = (std::cos(tilt) * ahead) + (std::sin(tilt) * y_axis);
             const glm::vec3 aside = glm::normalize(glm::cross(y_axis, axis));
             const Placement place{.origin = (y * y_axis) + ((0.3f * u) * ahead), .x = aside, .y = axis, .z = glm::cross(aside, axis)};
@@ -1054,6 +1082,7 @@ void add_extra_25_32_shapes(std::vector<Kit_shape_definition>& shapes)
         shape.triangle_budget = 110;
         shape.collision       = Kit_collision::triangle_mesh;
         shape.generator       = generate_crane;
+        shape.check_combination = check_crane_combination;
         shape.get_connectors  = [](const Kit_parameter_values&, std::vector<Kit_connector>& out_connectors) {
             out_connectors.push_back(make_base_connector());
         };

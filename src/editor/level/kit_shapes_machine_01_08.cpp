@@ -628,7 +628,6 @@ constexpr int      spring_coil_min   = 3;
 constexpr int      spring_coil_max   = 16;
 constexpr float    spring_closed     = 1.08f; // a closed coil's pitch in wires
 constexpr float    spring_leg        = 1.5f;  // a torsion spring's leg in coil diameters
-constexpr float    spring_eye        = 0.9f;  // a hook's radius in coil radii, at most
 
 enum class Spring_form : unsigned int { compression = 0, extension, torsion };
 
@@ -656,9 +655,8 @@ public:
         const float tight = spring_closed * wire * static_cast<float>(coils);
         // A compression spring is its length high, at least its closed height; the others are wound tight.
         length = (form == Spring_form::compression) ? std::max(values.get_float("length"), least) : (tight + wire);
-        // A lying spring's axis is over the ground by its coils' lowest sides; a hook reaches no lower than they do.
+        // A lying spring's axis is over the ground by its coils' lowest sides.
         axis_y = (radius + (0.5f * wire)) * std::cos(pi / static_cast<float>(spring_stretches));
-        eye    = std::min(spring_eye * radius, axis_y - (0.5f * wire));
     }
 
     Spring_form form  {Spring_form::compression};
@@ -667,7 +665,6 @@ public:
     float       wire  {0.0f}; // the wire's thickness
     float       length{0.0f}; // along the axis
     float       axis_y{0.0f};
-    float       eye   {0.0f}; // a hook's radius
 };
 
 void generate_spring(const Kit_parameter_values& values, GEO::Mesh& mesh)
@@ -690,15 +687,21 @@ void generate_spring(const Kit_parameter_values& values, GEO::Mesh& mesh)
             points.push_back(Wire_point{.center = glm::vec3{start + (pitch * turn), spring.axis_y, 0.0f} + (r * out), .up = x_axis, .side = out});
         }
         add_wire(builder, points, half);
-        // A hook at each end: the last coil bent up into half a ring in the upright plane through the axis.
+        // A hook at each end: half a ring of the coil's radius from the coil's end point, in the plane through the
+        // axis and that point, so it rises from the coil's lowest side.
+        const float     end_angle = pi / static_cast<float>(spring_stretches);
+        const glm::vec3 rise{0.0f, std::cos(end_angle), std::sin(end_angle)};
+        const glm::vec3 normal = glm::cross(x_axis, rise);
         for (const float side : {-1.0f, 1.0f}) {
             const glm::vec3 center{side * (-start), spring.axis_y, 0.0f};
             std::vector<Wire_point> hook;
             for (int k = 0; k <= spring_hook; ++k) {
                 const float     angle = pi * ((static_cast<float>(k) / static_cast<float>(spring_hook)) - 0.5f);
-                const glm::vec3 out{side * std::cos(angle), std::sin(angle), 0.0f};
+                const glm::vec3 out   = ((side * std::cos(angle)) * x_axis) + (std::sin(angle) * rise);
+                // The first point steps a quarter wire back into the coil, so no corner sits on the coil's end corners.
+                const glm::vec3 back = (k == 0) ? ((side * 0.5f * half) * x_axis) : glm::vec3{0.0f};
                 // `up` turns with the end, so the travel crossed with `up` is `out` at both.
-                hook.push_back(Wire_point{.center = center + (spring.eye * out), .up = side * z_axis, .side = out});
+                hook.push_back(Wire_point{.center = center + (r * out) - back, .up = side * normal, .side = out});
             }
             add_wire(builder, hook, half);
         }
@@ -798,6 +801,7 @@ constexpr uint32_t piston_steel_slot = 1;
 constexpr int      piston_round      = 16;    // points around the piston
 constexpr int      piston_ring_max   = 4;
 constexpr float    piston_pin        = 0.42f; // the pin's height in heights
+constexpr float    piston_ring_reach = 1.008f; // inside the flats of a cylinder of the diameter: 1.0102 radii
 
 void generate_piston(const Kit_parameter_values& values, GEO::Mesh& mesh)
 {
@@ -824,8 +828,8 @@ void generate_piston(const Kit_parameter_values& values, GEO::Mesh& mesh)
         for (int k = 0; k < rings; ++k) {
             const float y = (0.66f * height) + (zone * (static_cast<float>(k) + 0.5f) / static_cast<float>(rings));
             add_ring(r, y - band, piston_metal_slot);
-            add_ring(1.015f * r, y - band, piston_steel_slot);
-            add_ring(1.015f * r, y + band, piston_steel_slot);
+            add_ring(piston_ring_reach * r, y - band, piston_steel_slot);
+            add_ring(piston_ring_reach * r, y + band, piston_steel_slot);
             add_ring(r, y + band, piston_steel_slot);
         }
         add_ring(r, 0.96f * height, piston_metal_slot);
@@ -833,9 +837,9 @@ void generate_piston(const Kit_parameter_values& values, GEO::Mesh& mesh)
         add_lathe(builder, Placement{}, Lathe{.rings = profile, .segments = piston_round, .phase = Lathe_phase::side, .band_slots = slots});
     }
     {
-        // The wrist pin: its ends show on the skirt's flats at +Z and -Z.
+        // The wrist pin: its ends show on the skirt's flats at +Z and -Z; it fits a rod's bore of a sixth of the diameter.
         const Placement place{.origin = glm::vec3{0.0f, piston_pin * height, 0.0f}, .x = -y_axis, .y = z_axis, .z = -x_axis};
-        const float pin = std::min(0.17f * r, 0.12f * height);
+        const float pin = std::min(0.16f * r, 0.12f * height);
         const std::array<Lathe_ring, 2> pins{{{pin, -0.992f * r}, {pin, 0.992f * r}}};
         add_lathe(builder, place, Lathe{.rings = pins, .segments = 8, .slot = piston_steel_slot});
     }
@@ -1016,7 +1020,8 @@ void add_machine_01_08_shapes(std::vector<Kit_shape_definition>& shapes)
         shape.description     =
             "Bolt standing on its tip at the origin, its head up: a shank threaded from the tip in rings, a ridge to a "
             "turn, under a hexagon head, a socket head, a round head or a countersunk head; without a head it is a "
-            "stud. The seat connector is under the head, and a nut joins the nut connector near the tip.";
+            "stud. The seat connector is under the head, and a nut's bolt connector joins the nut connector, a "
+            "diameter over the tip.";
         shape.tags            = {"decoration", "machine", "fastener", "bolt", "size:0.1x0.3"};
         shape.parameters      = {
             derive_enum (make_enum_parameter  ("head",     "Hexagon, socket, round, countersunk, or none", {"hex", "socket", "round", "countersunk", "none"}, 0)),
@@ -1034,10 +1039,11 @@ void add_machine_01_08_shapes(std::vector<Kit_shape_definition>& shapes)
         shape.mirror_planes   = std::vector<Kit_mirror_plane>{Kit_mirror_plane::x, Kit_mirror_plane::z};
         shape.get_connectors  = [](const Kit_parameter_values& values, std::vector<Kit_connector>& out_connectors) {
             const float length = values.get_float("length");
-            const float down   = std::min(0.8f * values.get_float("diameter"), 0.4f * values.get_float("thread") * length);
+            // A diameter over the tip: a nut of the bolt's diameter and its default height joined there clears the tip.
+            const float nut_y  = std::min(values.get_float("diameter"), length);
             out_connectors.push_back(make_base_connector());
             out_connectors.push_back(Kit_connector{.name = "seat", .position = glm::vec3{0.0f, length, 0.0f}, .outward = -y_axis, .up = z_axis});
-            out_connectors.push_back(Kit_connector{.name = "nut",  .position = glm::vec3{0.0f, down, 0.0f},   .outward = -y_axis, .up = z_axis});
+            out_connectors.push_back(Kit_connector{.name = "nut",  .position = glm::vec3{0.0f, nut_y, 0.0f},  .outward = -y_axis, .up = z_axis});
         };
         shapes.push_back(std::move(shape));
     }
@@ -1048,8 +1054,8 @@ void add_machine_01_08_shapes(std::vector<Kit_shape_definition>& shapes)
         shape.display_name    = "Nut";
         shape.description     =
             "Nut lying flat at its origin, bored along Y for a bolt of its diameter: a hexagon, a square, a round nut "
-            "with two wings toward +X and -X, or a hexagon under a dome that closes the bore. Its top connector "
-            "joins a bolt's nut connector.";
+            "with two wings toward +X and -X, or a hexagon under a dome that closes the bore. Its bolt connector, on "
+            "the top of its bored body, joins a bolt's nut connector; its top connector is on the whole nut's top.";
         shape.tags            = {"decoration", "machine", "fastener", "nut", "size:0.1x0.05"};
         shape.parameters      = {
             derive_enum (make_enum_parameter  ("form",     "Hexagon, square, wing or cap nut", {"hex", "square", "wing", "cap"}, 0)),
@@ -1065,6 +1071,7 @@ void add_machine_01_08_shapes(std::vector<Kit_shape_definition>& shapes)
         shape.mirror_planes   = std::vector<Kit_mirror_plane>{Kit_mirror_plane::x, Kit_mirror_plane::z};
         shape.get_connectors  = [](const Kit_parameter_values& values, std::vector<Kit_connector>& out_connectors) {
             add_base_and_top_connectors(out_connectors, get_nut_top(values));
+            out_connectors.push_back(Kit_connector{.name = "bolt", .position = glm::vec3{0.0f, values.get_float("height"), 0.0f}, .outward = y_axis, .up = z_axis});
         };
         shapes.push_back(std::move(shape));
     }
@@ -1100,7 +1107,7 @@ void add_machine_01_08_shapes(std::vector<Kit_shape_definition>& shapes)
                 out_connectors.push_back(Kit_connector{.name = "end", .position = glm::vec3{0.0f, spring.length, 0.0f}, .outward = y_axis, .up = z_axis});
             } else if (spring.form == Spring_form::extension) {
                 // The hooks' far points.
-                const float reach = (0.5f * spring_closed * spring.wire * static_cast<float>(spring.coils)) + spring.eye;
+                const float reach = (0.5f * spring_closed * spring.wire * static_cast<float>(spring.coils)) + spring.radius;
                 add_side_connector(out_connectors, "start", glm::vec3{-reach, spring.axis_y, 0.0f}, glm::vec3{-1.0f, 0.0f, 0.0f});
                 add_side_connector(out_connectors, "end",   glm::vec3{ reach, spring.axis_y, 0.0f}, glm::vec3{ 1.0f, 0.0f, 0.0f});
             } else {

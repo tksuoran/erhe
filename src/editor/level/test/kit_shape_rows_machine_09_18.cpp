@@ -16,7 +16,7 @@ auto get_machine_09_18_rows() -> Kit_shape_rows
     rows.components          = {
         {"machine.connecting_rod", Kit_component_rule::exactly, 7},
         {"machine.crankshaft", Kit_component_rule::exactly, 11},
-        {"machine.follower", Kit_component_rule::exactly, 6},
+        {"machine.follower", Kit_component_rule::exactly, 7},
         {"machine.camshaft", Kit_component_rule::exactly, 7},
         {"machine.bevel_gear", Kit_component_rule::exactly, 17},
         {"machine.worm", Kit_component_rule::exactly, 2},
@@ -25,7 +25,7 @@ auto get_machine_09_18_rows() -> Kit_shape_rows
     };
     rows.walkability_open    = {};
     rows.triangle_counts     = {
-        {"machine.connecting_rod", 284}, {"machine.crankshaft", 292}, {"machine.follower", 220}, {"machine.camshaft", 580},
+        {"machine.connecting_rod", 284}, {"machine.crankshaft", 292}, {"machine.follower", 248}, {"machine.camshaft", 580},
         {"machine.bevel_gear", 512}, {"machine.worm", 432}, {"machine.pulley", 336}, {"machine.washer", 128},
         {"machine.cylinder", 1088}, {"machine.pillow_block", 288}
     };
@@ -41,12 +41,12 @@ auto get_machine_09_18_rows() -> Kit_shape_rows
         {"machine.pillow_block", R"({"bore":"0x1.99999ap-4","height":"0x1.333334p-3","width":"0x1.99999ap-2","depth":"0x1.99999ap-4","bolts":4,"seed":0})"}
     };
     rows.pins                = {
-        {"machine.connecting_rod 1", 152, 142, 568, 0xe40bbaeb0e74d0cbull, {-0.29500f, 0.00000f, -0.08128f}, {0.31400f, 0.06000f, 0.08128f}, {0.05128f, 0.03000f, 0.00000f}, 0.26680f},
+        {"machine.connecting_rod 1", 152, 142, 568, 0xe40bbaeb0e74d0cbull, {-0.29500f, 0.00000f, -0.08128f}, {0.31400f, 0.06000f, 0.08128f}, {0.05085f, 0.03000f, 0.00000f}, 0.27296f},
         {"machine.crankshaft 1", 168, 106, 504, 0x0c0f053431255cc7ull, {-0.34000f, 0.00000f, -0.06400f}, {0.34000f, 0.36005f, 0.06400f}, {-0.00000f, 0.18614f, -0.00000f}, 0.76887f},
-        {"machine.follower 1", 120, 90, 400, 0x0c63f78fe315f877ull, {-0.04000f, 0.00000f, -0.03804f}, {0.04000f, 0.48800f, 0.03804f}, {0.00000f, 0.18873f, 0.00000f}, 0.14224f},
+        {"machine.follower 1", 136, 100, 448, 0xcc43ffc1e85863ddull, {-0.04000f, 0.00000f, -0.03804f}, {0.04000f, 0.48800f, 0.03804f}, {0.00000f, 0.17107f, 0.00000f}, 0.14376f},
         {"machine.camshaft 1", 296, 282, 1144, 0xdc144145a283ea7cull, {-0.50000f, 0.00000f, -0.10000f}, {0.50000f, 0.21800f, 0.10000f}, {0.00000f, 0.11452f, 0.00000f}, 0.60720f},
-        {"machine.bevel_gear 1", 288, 256, 1024, 0x447bfb7f98e6154aull, {-0.26113f, 0.00000f, -0.26113f}, {0.26113f, 0.09878f, 0.26113f}, {0.00000f, 0.04827f, 0.00000f}, 0.64419f},
-        {"machine.worm 1", 220, 400, 1232, 0x5f03d6ec05b0ae02ull, {-0.28122f, -0.00000f, -0.07244f}, {0.28122f, 0.14489f, 0.07244f}, {0.00000f, 0.07139f, -0.00028f}, 0.30219f},
+        {"machine.bevel_gear 1", 288, 256, 1024, 0x447bfb7f98e6154aull, {-0.26113f, 0.00000f, -0.26113f}, {0.26113f, 0.12212f, 0.26113f}, {0.00000f, 0.05440f, 0.00000f}, 0.70933f},
+        {"machine.worm 1", 220, 400, 1232, 0x5f03d6ec05b0ae02ull, {-0.25739f, -0.00000f, -0.08693f}, {0.25739f, 0.17387f, 0.08693f}, {-0.01749f, 0.08595f, -0.00026f}, 0.29299f},
         {"machine.pulley 1", 168, 168, 672, 0x4afb59e2a3a2aeddull, {-0.15000f, 0.00000f, -0.15000f}, {0.15000f, 0.06000f, 0.15000f}, {0.00000f, 0.03000f, 0.00000f}, 0.21389f},
         {"machine.washer 1", 64, 64, 256, 0x4bd078952b3d3835ull, {-0.06600f, 0.00000f, -0.06600f}, {0.06600f, 0.01000f, 0.06600f}, {0.00000f, 0.00500f, 0.00000f}, 0.02618f},
         {"machine.cylinder 1", 544, 544, 2176, 0x4186e0391e65974aull, {-0.22950f, 0.00000f, -0.22950f}, {0.22950f, 0.50000f, 0.22950f}, {0.00000f, 0.25088f, 0.00000f}, 2.84611f},

@@ -567,6 +567,31 @@ TEST_P(Kit_cart_sides, parts_and_stance_follow_the_values)
 
 INSTANTIATE_TEST_SUITE_P(Kit_cart, Kit_cart_sides, testing::Values("open", "rails", "boards"));
 
+// The two legs rise from the ground into the deck: each leg's top corners lie inside the deck's box at every tilt,
+// length and wheel.
+TEST(Kit_cart, legs_meet_the_deck)
+{
+    const Kit_shape_definition& cart = get_shape("prop.cart");
+    for_each_corner(explicit_values(cart, 1), cart_floats, [](const Kit_parameter_values& corner) {
+        SCOPED_TRACE(corner.to_canonical_text());
+        const std::unique_ptr<GEO::Mesh> mesh = generate(corner);
+        // Two shafts' boxes, the deck's box, then the two legs' boxes; a box's corners 1, 2 and 3 are its edges from 0.
+        const glm::vec3 origin = point_of(*mesh, 16);
+        const std::array<glm::vec3, 3> edges{point_of(*mesh, 17) - origin, point_of(*mesh, 18) - origin, point_of(*mesh, 19) - origin};
+        for (GEO::index_t leg = 24; leg < 40; leg += 8) {
+            EXPECT_NEAR(point_of(*mesh, leg).y, 0.0f, 1.0e-6f);
+            for (const GEO::index_t top : {2u, 4u, 6u, 7u}) {
+                const glm::vec3 p = point_of(*mesh, leg + top);
+                for (const glm::vec3& edge : edges) {
+                    const float share = glm::dot(p - origin, edge) / glm::dot(edge, edge);
+                    EXPECT_GT(share, 0.0f);
+                    EXPECT_LT(share, 1.0f);
+                }
+            }
+        }
+    });
+}
+
 // The tilt lowers the handles' ends, which stay over the ground at every tilt.
 TEST(Kit_cart, the_tilt_lowers_the_handles)
 {

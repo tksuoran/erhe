@@ -393,8 +393,8 @@ TEST_P(Kit_bolt_heads, parts_and_size_follow_the_values)
         const std::vector<Kit_connector> connectors = connectors_of(values);
         EXPECT_FLOAT_EQ(connectors[1].position.y, length);
         EXPECT_EQ(connectors[1].outward, (glm::vec3{0.0f, -1.0f, 0.0f}));
-        // The nut's place lies on the thread.
-        EXPECT_GT(connectors[2].position.y, 0.0f);
+        // The nut's place lies on the thread, a diameter over the tip.
+        EXPECT_FLOAT_EQ(connectors[2].position.y, std::min(d, length));
         EXPECT_LT(connectors[2].position.y, values.get_float("thread") * length);
     }
 }
@@ -420,8 +420,8 @@ TEST_P(Kit_nut_forms, passes_at_the_corners)
     expect_topology_from_integers(values, nut_floats);
 }
 
-// The top connector is on the nut's highest point; the nut is wider than its bolt, and bored for it: the bore is
-// the bolt's thread root wide (0.84 of the diameter).
+// The top connector is on the nut's highest point and the bolt connector on its bored body's top; the nut is wider
+// than its bolt, and bored for it: the bore is the bolt's thread root wide (0.84 of the diameter).
 TEST_P(Kit_nut_forms, size_and_bore_follow_the_values)
 {
     const Kit_shape_definition& nut = get_shape("machine.nut");
@@ -434,9 +434,11 @@ TEST_P(Kit_nut_forms, size_and_bore_follow_the_values)
         EXPECT_EQ(report.component_count, (GetParam() == "wing") ? 3u : ((GetParam() == "cap") ? 2u : 1u));
         EXPECT_EQ(report.bounds_min.y, 0.0f);
         EXPECT_GT(report.bounds_max.x, 0.7f * d);
-        expect_connector_names(values, {"base", "top"});
+        expect_connector_names(values, {"base", "top", "bolt"});
         const std::vector<Kit_connector> connectors = connectors_of(values);
         EXPECT_NEAR(connectors[1].position.y, report.bounds_max.y, 1.0e-6f);
+        EXPECT_EQ(connectors[2].position, (glm::vec3{0.0f, values.get_float("height"), 0.0f}));
+        EXPECT_EQ(connectors[2].outward, (glm::vec3{0.0f, 1.0f, 0.0f}));
         // The points nearest the axis are the bore's.
         const std::unique_ptr<GEO::Mesh> mesh = generate(values);
         float least = 1.0e9f;
@@ -448,6 +450,32 @@ TEST_P(Kit_nut_forms, size_and_bore_follow_the_values)
         }
         EXPECT_NEAR(least, 0.42f * d, 1.0e-6f);
     }
+}
+
+// A default nut of each form joined by its bolt connector to a default bolt's nut connector (twist 0): its body
+// stands around the shank, at or over the bolt's tip and under the nut connector, upright.
+TEST_P(Kit_nut_forms, a_joined_nut_sits_on_the_bolt_over_its_tip)
+{
+    const Kit_parameter_values bolt = explicit_values(get_shape("machine.bolt"), 1);
+    const Kit_parameter_values nut  = explicit_enum(get_shape("machine.nut"), "form", GetParam(), 1);
+    const std::vector<Kit_connector> bolt_connectors = connectors_of(bolt);
+    const std::vector<Kit_connector> nut_connectors  = connectors_of(nut);
+    const float nut_y = bolt_connectors[2].position.y;
+    EXPECT_GE(nut_y, nut.get_float("height"));
+    const editor::Kit_join_pose pose = editor::join_connectors(nut_connectors[2], bolt_connectors[2], 0, 0.0f);
+    const glm::mat3 rotation = glm::mat3_cast(pose.rotation);
+    EXPECT_NEAR(glm::dot(rotation * glm::vec3{0.0f, 1.0f, 0.0f}, glm::vec3{0.0f, 1.0f, 0.0f}), 1.0f, 1.0e-6f);
+    EXPECT_NEAR(glm::length(glm::vec2{pose.position.x, pose.position.z}), 0.0f, 1.0e-6f);
+    const std::unique_ptr<GEO::Mesh> mesh = generate(nut);
+    float lowest = 1.0e9f;
+    for (GEO::index_t v = 0; v < mesh->vertices.nb(); ++v) {
+        lowest = std::min(lowest, (pose.position + (rotation * point_of(*mesh, v))).y);
+    }
+    EXPECT_GE(lowest, -1.0e-6f);
+    // The body's top face is at the nut connector, so the body lies between the tip and the connector.
+    EXPECT_NEAR((pose.position + (rotation * nut_connectors[2].position)).y, nut_y, 1.0e-6f);
+    EXPECT_NEAR(pose.position.y, nut_y - nut.get_float("height"), 1.0e-6f);
+    EXPECT_LT(nut_y, bolt.get_float("length"));
 }
 
 INSTANTIATE_TEST_SUITE_P(Kit_nut, Kit_nut_forms, testing::Values("hex", "square", "wing", "cap"));
@@ -526,6 +554,38 @@ TEST_P(Kit_spring_forms, parts_size_and_ends_follow_the_values)
 }
 
 INSTANTIATE_TEST_SUITE_P(Kit_spring, Kit_spring_forms, testing::Values("compression", "extension", "torsion"));
+
+// An extension spring's hooks start where the coil ends, at every wire (thin wires included): each hook's first
+// section lies within a quarter wire of the coil's end section. The coil's points come first, then the hook at -X,
+// then the one at +X, four corners to a point.
+TEST(Kit_spring, an_extension_springs_hooks_start_at_the_coils_ends)
+{
+    const Kit_shape_definition& spring = get_shape("machine.spring");
+    for (const float wire : {0.004f, 0.006f, 0.02f, 0.1f}) {
+        for (const int coils : {3, 8, 16}) {
+            Kit_parameter_values values = explicit_enum(spring, "form", "extension", 1);
+            ASSERT_TRUE(values.set_float("diameter", 0.2f));
+            ASSERT_TRUE(values.set_float("wire", wire));
+            ASSERT_TRUE(values.set_int("coils", coils));
+            SCOPED_TRACE(values.to_canonical_text());
+            const std::unique_ptr<GEO::Mesh> mesh = generate(values);
+            const auto section = [&mesh](const GEO::index_t first) -> glm::vec3 {
+                return 0.25f * (point_of(*mesh, first) + point_of(*mesh, first + 1) + point_of(*mesh, first + 2) + point_of(*mesh, first + 3));
+            };
+            const GEO::index_t coil_points = static_cast<GEO::index_t>((12 * coils) + 1);
+            const GEO::index_t hook_points = 9;
+            ASSERT_EQ(mesh->vertices.nb(), 4u * (coil_points + (2u * hook_points)));
+            const glm::vec3 coil_start = section(0);
+            const glm::vec3 coil_end   = section(4u * (coil_points - 1u));
+            const glm::vec3 hook_start = section(4u * coil_points);
+            const glm::vec3 hook_end   = section(4u * (coil_points + hook_points));
+            EXPECT_NEAR(glm::distance(hook_start, coil_start), 0.25f * wire, 1.0e-5f);
+            EXPECT_NEAR(glm::distance(hook_end, coil_end), 0.25f * wire, 1.0e-5f);
+            // The hooks reach no lower than the coils: the spring stands on the ground.
+            EXPECT_NEAR(editor::check_kit_shape(values).bounds_min.y, 0.0f, 1.0e-6f);
+        }
+    }
+}
 
 // A compression spring's two end coils lie flat: twelve of the wire's points on the ground and as many at the top.
 TEST(Kit_spring, a_compression_springs_end_coils_are_flat)
@@ -630,9 +690,8 @@ TEST(Kit_piston, parts_and_size_follow_the_values)
         EXPECT_EQ(report.component_count, 2u);
         EXPECT_EQ(report.bounds_min.y, 0.0f);
         EXPECT_FLOAT_EQ(report.bounds_max.y, height);
-        // Sixteen sides with a flat toward +X; the rings stand out of the body.
-        EXPECT_GT(report.bounds_max.x, 0.99f * radius);
-        EXPECT_LE(report.bounds_max.x, 1.0151f * radius);
+        // Sixteen sides with a flat toward +X; the rings stand 0.008 radii out of the body.
+        EXPECT_NEAR(report.bounds_max.x, 1.008f * radius * std::cos(pi / 16.0f), 1.0e-5f);
         const std::unique_ptr<GEO::Mesh> mesh = generate(values);
         EXPECT_EQ(count_slot_facets(*mesh, 1), (48 * rings) + 10);
         expect_connector_names(values, {"base", "crown", "pin"});

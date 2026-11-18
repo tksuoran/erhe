@@ -29,6 +29,7 @@
 #include <glm/gtc/quaternion.hpp>
 
 #include <cstddef>
+#include <functional>
 #include <map>
 #include <memory>
 #include <optional>
@@ -567,8 +568,12 @@ public:
 
     [[nodiscard]] auto check_piece(const erhe::scene::Node& node) const -> Kit_piece_check;
 
-    // D3.5: after a scene has loaded, gives each piece the mesh and collision shape of its kit brush.
-    auto refresh_scene(Scene_root& scene_root) -> Kit_refresh_report;
+    // D3.5: after a scene has loaded, queues each piece to take the mesh and collision shape of its kit brush;
+    // update_scene_refreshes() applies them over the next frames and then calls on_done.
+    void refresh_scene(const std::shared_ptr<Scene_root>& scene_root, std::function<void()> on_done);
+    // Once per frame: refreshes queued pieces, at most one of them making a new brush.
+    void update_scene_refreshes();
+    [[nodiscard]] auto get_pending_refresh_count() const -> std::size_t;
 
     // D7.3 on placed meshes (excluded from each other's hits); with move, the meshes that found a
     // surface move as one undo entry. Returns the moved count.
@@ -936,6 +941,20 @@ private:
     Kit_connector_indicators                                m_connector_indicators;
     Kit_piece_light_sync                                    m_light_sync; // D3.15, scratch kept across calls
     Kit_layout_indicators                                   m_layout_indicators;
+
+    class Scene_refresh
+    {
+    public:
+        std::shared_ptr<Scene_root>                     scene_root;
+        std::vector<std::weak_ptr<erhe::scene::Mesh>>   pieces;
+        std::size_t                                     next{0};
+        Kit_refresh_report                              report;
+        std::function<void()>                           on_done;
+    };
+    // Returns true when it made a new brush.
+    auto refresh_piece(Scene_refresh& refresh, const std::shared_ptr<erhe::scene::Mesh>& mesh) -> bool;
+    void finish_scene_refresh(Scene_refresh& refresh);
+    std::vector<Scene_refresh>                              m_scene_refreshes; // in load order
 };
 
 } // namespace editor

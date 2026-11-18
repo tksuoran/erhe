@@ -197,8 +197,9 @@ void add_lathe(Kit_mesh_builder& builder, const Placement& place, const Lathe& l
     return Kit_connector{.name = "base", .position = glm::vec3{0.0f}, .outward = glm::vec3{0.0f, -1.0f, 0.0f}, .up = glm::vec3{0.0f, 0.0f, 1.0f}};
 }
 
-// A prism from the level outline at its top down by the height; the outline may run either way around.
-void add_flat_prism(Kit_mesh_builder& builder, std::vector<glm::vec3> outline, const float height)
+// A prism from the level outline at its top down to its copy moved by `depth` (downward); the outline may run
+// either way around.
+void add_flat_prism(Kit_mesh_builder& builder, std::vector<glm::vec3> outline, const glm::vec3& depth)
 {
     // Twice the outline's area seen from above: positive when it runs counter-clockwise.
     float area = 0.0f;
@@ -210,23 +211,33 @@ void add_flat_prism(Kit_mesh_builder& builder, std::vector<glm::vec3> outline, c
     if (area < 0.0f) {
         std::reverse(outline.begin(), outline.end());
     }
-    add_prism_between(builder, outline, glm::vec3{0.0f, -height, 0.0f});
+    add_prism_between(builder, outline, depth);
 }
 
-// A gear tooth from y0 up to y1: its middle on the pitch line at `center`, standing out along `out` (unit, level).
+// A gear tooth from y0 up to y1: its middle on the pitch line at `center` halfway up, standing out along `out`
+// (unit, level), leaning `lean` along out x y for each unit up (a helical tooth; 0 for a spur tooth).
 // An involute's stand-in: wide at the root, half a pitch wide on the pitch line, narrow at the tip.
-void add_gear_tooth(Kit_mesh_builder& builder, const glm::vec3& center, const glm::vec3& out, const float module, const float y0, const float y1)
+void add_gear_tooth(
+    Kit_mesh_builder& builder,
+    const glm::vec3&  center,
+    const glm::vec3&  out,
+    const float       module,
+    const float       y0,
+    const float       y1,
+    const float       lean
+)
 {
-    const glm::vec3 along = glm::cross(y_axis, out);
-    const float     root  = -1.4f * module; // a little inside the root line
-    const float     tip   = module;
-    const float     pitch = 0.25f * pi * module;
-    const glm::vec3 top   = glm::vec3{center.x, y1, center.z};
+    const glm::vec3 along  = glm::cross(y_axis, out);
+    const float     root   = -1.4f * module; // a little inside the root line
+    const float     tip    = module;
+    const float     pitch  = 0.25f * pi * module;
+    const float     height = y1 - y0;
+    const glm::vec3 top    = glm::vec3{center.x, y1, center.z} + (((0.5f * height) * lean) * along);
     const std::vector<glm::vec3> outline{
         top + (root * out) - ((1.05f * module) * along), top - (pitch * along), top + (tip * out) - ((0.4f * module) * along),
         top + (tip * out) + ((0.4f * module) * along), top + (pitch * along), top + (root * out) + ((1.05f * module) * along)
     };
-    add_flat_prism(builder, outline, y1 - y0);
+    add_flat_prism(builder, outline, glm::vec3{0.0f, -height, 0.0f} - ((height * lean) * along));
 }
 
 // A point of a wire's path: its middle, and the two unit directions its four corners stand off along: `up`, and
@@ -239,16 +250,17 @@ public:
     glm::vec3 side  {0.0f, 0.0f, 1.0f};
 };
 
-// A wire along its points: a tube of four corners in triangles, between two end faces.
-void add_wire(Kit_mesh_builder& builder, const std::span<const Wire_point> points, const float half)
+// A wire along its points: a tube of four corners in triangles, between two end faces; its corners stand
+// `half_up` off along `up` and `half_side` off along `side`.
+void add_wire(Kit_mesh_builder& builder, const std::span<const Wire_point> points, const float half_up, const float half_side)
 {
     const uint32_t count = static_cast<uint32_t>(points.size());
     const uint32_t first = static_cast<uint32_t>(builder.get_positions().size());
     for (const Wire_point& point : points) {
-        builder.add_vertex(point.center - (half * point.up));
-        builder.add_vertex(point.center - (half * point.side));
-        builder.add_vertex(point.center + (half * point.up));
-        builder.add_vertex(point.center + (half * point.side));
+        builder.add_vertex(point.center - (half_up * point.up));
+        builder.add_vertex(point.center - (half_side * point.side));
+        builder.add_vertex(point.center + (half_up * point.up));
+        builder.add_vertex(point.center + (half_side * point.side));
     }
     for (uint32_t r = 0; (r + 1) < count; ++r) {
         const uint32_t lower = first + (4 * r);
@@ -262,6 +274,11 @@ void add_wire(Kit_mesh_builder& builder, const std::span<const Wire_point> point
     const uint32_t last = first + (4 * (count - 1));
     builder.add_quad(first + 3, first + 2, first + 1, first);
     builder.add_quad(last, last + 1, last + 2, last + 3);
+}
+
+void add_wire(Kit_mesh_builder& builder, const std::span<const Wire_point> points, const float half)
+{
+    add_wire(builder, points, half, half);
 }
 
 // A lathe's placement with its axis along +X from the origin given.
@@ -354,8 +371,10 @@ void add_bored_plate(Kit_mesh_builder& builder, const Bored_plate& plate)
 // Connecting rod: lying flat, its two eyes' axes along Y: the small end at -X, the big end with its two cap bolts at +X.
 //
 
-constexpr uint32_t rod_metal_slot = 0;
-constexpr uint32_t rod_steel_slot = 1;
+constexpr uint32_t rod_metal_slot  = 0;
+constexpr uint32_t rod_steel_slot  = 1;
+constexpr int      rod_small_round = 12; // points around the small eye
+constexpr int      rod_big_round   = 16;
 
 class Rod_form
 {
@@ -367,17 +386,35 @@ public:
         // The eyes stay apart on a short rod.
         small_bore  = std::min(0.5f * values.get_float("small_bore"), 0.1f * length);
         big_bore    = std::min(0.5f * values.get_float("big_bore"), 0.16f * length);
+        small_hole  = small_bore / std::cos(pi / static_cast<float>(rod_small_round));
+        big_hole    = big_bore / std::cos(pi / static_cast<float>(rod_big_round));
         small_outer = 1.8f * small_bore;
         big_outer   = 1.6f * big_bore;
     }
 
     float length     {0.0f}; // between the two eyes' axes
     float thickness  {0.0f};
-    float small_bore {0.0f}; // radii
+    float small_bore {0.0f}; // radii: a pin of the bore's diameter fits between the hole's flats
     float big_bore   {0.0f};
+    float small_hole {0.0f}; // the holes' corners
+    float big_hole   {0.0f};
     float small_outer{0.0f};
     float big_outer  {0.0f};
 };
+
+// How far a ring of `n` points (the first on +X) of the radius reaches toward +X at the distance z beside its axis.
+[[nodiscard]] auto get_ring_reach(const int n, const float radius, const float z) -> float
+{
+    float reach = 0.0f;
+    for (int i = 0; i < n; ++i) {
+        const glm::vec2 a = radius * get_kit_circle_point(i, n);
+        const glm::vec2 b = radius * get_kit_circle_point((i + 1) % n, n);
+        if ((std::min(a.y, b.y) <= z) && (z <= std::max(a.y, b.y)) && (a.y != b.y)) {
+            reach = std::max(reach, a.x + ((b.x - a.x) * ((z - a.y) / (b.y - a.y))));
+        }
+    }
+    return reach;
+}
 
 void generate_connecting_rod(const Kit_parameter_values& values, GEO::Mesh& mesh)
 {
@@ -385,16 +422,22 @@ void generate_connecting_rod(const Kit_parameter_values& values, GEO::Mesh& mesh
     const float half = 0.5f * rod.length;
     const float t    = rod.thickness;
     Kit_mesh_builder builder;
-    add_ring(builder, Placement{.origin = glm::vec3{-half, 0.0f, 0.0f}}, rod.small_bore, rod.small_outer, 0.0f, t, 12, rod_metal_slot);
-    add_ring(builder, Placement{.origin = glm::vec3{ half, 0.0f, 0.0f}}, rod.big_bore, rod.big_outer, 0.0f, t, 16, rod_metal_slot);
+    add_ring(builder, Placement{.origin = glm::vec3{-half, 0.0f, 0.0f}}, rod.small_hole, rod.small_outer, 0.0f, t, rod_small_round, rod_metal_slot);
+    add_ring(builder, Placement{.origin = glm::vec3{ half, 0.0f, 0.0f}}, rod.big_hole, rod.big_outer, 0.0f, t, rod_big_round, rod_metal_slot);
     builder.set_slot(rod_metal_slot);
     // The shank: a web between two flanges, from inside one eye's wall to inside the other's.
     const float x0 = -half + (0.9f * rod.small_outer);
     const float x1 = half - (0.9f * rod.big_outer);
     const float z  = 0.75f * rod.small_outer;
     builder.add_box(glm::vec3{x0, 0.3f * t, -0.8f * z}, glm::vec3{x1, 0.7f * t, 0.8f * z});
-    builder.add_box(glm::vec3{x0 + (0.01f * rod.length), 0.1f * t, -z}, glm::vec3{x1 - (0.01f * rod.length), 0.9f * t, -0.75f * z});
-    builder.add_box(glm::vec3{x0 + (0.01f * rod.length), 0.1f * t,  0.75f * z}, glm::vec3{x1 - (0.01f * rod.length), 0.9f * t, z});
+    // The flanges start at the eyes' outlines at their outer sides, so their ends lie in the eyes; beside an eye
+    // too small to reach them, where the web starts.
+    const float small_reach = get_ring_reach(rod_small_round, rod.small_outer, z);
+    const float big_reach   = get_ring_reach(rod_big_round, rod.big_outer, z);
+    const float f0 = -half + ((small_reach > 0.0f) ? small_reach : (0.9f * rod.small_outer));
+    const float f1 = half - ((big_reach > 0.0f) ? big_reach : (0.9f * rod.big_outer));
+    builder.add_box(glm::vec3{f0, 0.1f * t, -z}, glm::vec3{f1, 0.9f * t, -0.75f * z});
+    builder.add_box(glm::vec3{f0, 0.1f * t,  0.75f * z}, glm::vec3{f1, 0.9f * t, z});
     // The cap's two bolts beside the big end.
     builder.set_slot(rod_steel_slot);
     for (const float side : {-1.0f, 1.0f}) {
@@ -515,6 +558,9 @@ void generate_follower(const Kit_parameter_values& values, GEO::Mesh& mesh)
         const Placement place{.origin = glm::vec3{0.0f, d * std::cos(pi / 12.0f), 0.0f}, .x = -y_axis, .y = z_axis, .z = -x_axis};
         const std::array<Lathe_ring, 2> rings{{{d, -0.4f * d}, {d, 0.4f * d}}};
         add_lathe(builder, place, Lathe{.rings = rings, .segments = 12, .phase = Lathe_phase::side, .slot = follower_steel_slot});
+        // The axle through the roller, from one fork plate's outer face to the other's.
+        const std::array<Lathe_ring, 2> axle{{{0.2f * d, -0.7f * d}, {0.2f * d, 0.7f * d}}};
+        add_lathe(builder, place, Lathe{.rings = axle, .segments = 8, .slot = follower_metal_slot});
         builder.set_slot(follower_metal_slot);
         for (const float side : {-1.0f, 1.0f}) {
             const float z0 = side * 0.45f * d;
@@ -538,7 +584,8 @@ void generate_follower(const Kit_parameter_values& values, GEO::Mesh& mesh)
         const std::array<Lathe_ring, 2> rings{{{0.5f * d, head}, {0.5f * d, head + stem}}};
         add_lathe(builder, Placement{}, Lathe{.rings = rings, .segments = 10, .slot = follower_steel_slot});
     }
-    add_ring(builder, Placement{}, 0.56f * d, d, head + (0.45f * stem), head + (0.75f * stem), 10, follower_metal_slot);
+    // The sleeve's bore lies a little inside the stem, so the sleeve holds it.
+    add_ring(builder, Placement{}, 0.48f * d, d, head + (0.45f * stem), head + (0.75f * stem), 10, follower_metal_slot);
     builder.write(mesh);
 }
 
@@ -600,12 +647,16 @@ public:
         , cone  {glm::radians(values.get_float("cone"))}
     {
         pitch  = 0.5f * module * static_cast<float>(teeth);
-        foot   = (0.6f * module) + (0.1f * values.get_float("face_width"));
+        // The teeth's feet, 1.4 modules inside the pitch cone, stand over the ground.
+        foot   = (0.6f * module) + (0.1f * values.get_float("face_width")) + ((1.1f * module) * std::sin(cone));
         // The teeth's small end: where the face width along the cone ends, at least 0.4 of the way to the apex.
         share  = std::clamp(1.0f - ((values.get_float("face_width") * std::sin(cone)) / pitch), 0.4f, 0.95f);
         apex   = foot + (pitch / std::tan(cone));
-        top    = foot + ((1.0f - share) * (apex - foot));
-        bore   = std::min(0.5f * values.get_float("bore"), 0.5f * share * pitch);
+        // The body's cone is the root cone, 1.25 modules inside the pitch cone, with the same apex.
+        root_r = pitch - ((1.25f * module) * std::cos(cone));
+        root_y = foot - ((1.25f * module) * std::sin(cone));
+        top    = apex + (share * (root_y - apex));
+        bore   = std::min(0.5f * values.get_float("bore"), 0.5f * share * root_r);
     }
 
     int   teeth {16};
@@ -615,7 +666,9 @@ public:
     float foot  {0.0f}; // height of the large end's pitch circle
     float share {0.0f}; // the small end's size in large ends
     float apex  {0.0f}; // height of the cone's apex
-    float top   {0.0f};
+    float root_r{0.0f}; // the root cone at the large end
+    float root_y{0.0f};
+    float top   {0.0f}; // of the body, where the root cone ends at the small end
     float bore  {0.0f};
 };
 
@@ -626,7 +679,7 @@ void generate_bevel_gear(const Kit_parameter_values& values, GEO::Mesh& mesh)
     Kit_mesh_builder builder;
     {
         const std::array<Lathe_ring, 5> rings{{
-            {bevel.bore, 0.0f}, {bevel.pitch, 0.0f}, {bevel.pitch, bevel.foot}, {bevel.share * bevel.pitch, bevel.top}, {bevel.bore, bevel.top}
+            {bevel.bore, 0.0f}, {bevel.root_r, 0.0f}, {bevel.root_r, bevel.root_y}, {bevel.share * bevel.root_r, bevel.top}, {bevel.bore, bevel.top}
         }};
         add_lathe(builder, Placement{}, Lathe{
             .rings = rings, .segments = std::clamp(2 * bevel.teeth, 16, 48), .bottom = Lathe_cap::loop, .top = Lathe_cap::loop, .slot = bevel_metal_slot
@@ -635,14 +688,15 @@ void generate_bevel_gear(const Kit_parameter_values& values, GEO::Mesh& mesh)
     builder.set_slot(bevel_metal_slot);
     const glm::vec3 apex{0.0f, bevel.apex, 0.0f};
     for (int i = 0; i < bevel.teeth; ++i) {
-        // A tooth narrows toward the cone's apex; its large end is a trapezoid across the cone.
+        // A tooth narrows toward the cone's apex; its large end is a trapezoid across the cone, from a foot in the
+        // body to a tip a module outside the pitch cone.
         const float     angle  = (two_pi * (static_cast<float>(i) - 0.25f)) / static_cast<float>(bevel.teeth);
         const glm::vec3 out    = around_y(angle);
         const glm::vec3 along  = glm::cross(y_axis, out);
         const glm::vec3 normal = (std::cos(bevel.cone) * out) + (std::sin(bevel.cone) * y_axis);
         const glm::vec3 center = (bevel.pitch * out) + (bevel.foot * y_axis);
         const std::array<glm::vec3, 4> large{{
-            center - ((0.75f * m) * along) - ((0.3f * m) * normal), center + ((0.75f * m) * along) - ((0.3f * m) * normal),
+            center - ((1.05f * m) * along) - ((1.4f * m) * normal), center + ((1.05f * m) * along) - ((1.4f * m) * normal),
             center + ((0.4f * m) * along) + (m * normal),           center - ((0.4f * m) * along) + (m * normal)
         }};
         std::array<uint32_t, 4> b{};
@@ -688,11 +742,22 @@ public:
         half   = 0.5f * module;
         lead   = pi * module * static_cast<float>(starts);
         length = lead * static_cast<float>(turns);
-        // Under the thread's inner chords, so a lying worm rests on its thread at any diameter.
-        shaft  = (radius - (0.8f * half)) * std::cos(pi / static_cast<float>(worm_stretches));
-        axis_y = (radius + half) * std::cos(pi / static_cast<float>(worm_stretches));
+        // The thread reaches a module outside the pitch cylinder and 1.25 modules inside it, like a rack's tooth.
+        depth  = 1.125f * module;
+        middle = radius - (0.125f * module);
+        // Over the thread's inner chords and under a wheel's tooth tips, so a lying worm rests on its thread.
+        shaft  = (radius - (1.15f * module)) * std::cos(pi / static_cast<float>(worm_stretches));
+        axis_y = (radius + module) * std::cos(pi / static_cast<float>(worm_stretches));
+        // The thread crosses the top a quarter of the axial pitch along +X from a gap's middle, so a joined wheel's
+        // tooth, a quarter pitch beside its mesh connector, stands in that gap.
+        const float s = static_cast<float>(starts);
+        float phase = 0.25f - (s * (11.0f / 24.0f)) + (0.5f * s * static_cast<float>(turns));
+        phase -= std::round(phase);
+        shift  = pi * module * phase;
+        reach  = (0.5f * length) + (2.0f * shaft) + std::abs(shift);
         pitch  = 0.5f * module * static_cast<float>(teeth);
         width  = 1.2f * radius;
+        lean   = lead / (two_pi * radius);
     }
 
     bool  wheel {false};
@@ -701,13 +766,18 @@ public:
     int   teeth {24};
     float module{0.0f};
     float radius{0.0f}; // of the worm's pitch cylinder
-    float half  {0.0f}; // half the thread's section
+    float half  {0.0f}; // half the thread's width along the axis
+    float depth {0.0f}; // half the thread's height across the axis
+    float middle{0.0f}; // radius of the thread's middle
     float lead  {0.0f}; // the thread's advance in a turn
     float length{0.0f}; // of the threaded part
     float shaft {0.0f}; // radius of the shaft under the thread
     float axis_y{0.0f}; // height of a lying worm's axis
+    float shift {0.0f}; // of the thread along X from the middle
+    float reach {0.0f}; // of the shaft's ends from the middle
     float pitch {0.0f}; // radius of the wheel's pitch circle
     float width {0.0f}; // face width of the wheel
+    float lean  {0.0f}; // of the wheel's teeth: the thread's lead over the pitch circumference
 };
 
 void generate_worm(const Kit_parameter_values& values, GEO::Mesh& mesh)
@@ -723,13 +793,10 @@ void generate_worm(const Kit_parameter_values& values, GEO::Mesh& mesh)
         builder.set_slot(worm_metal_slot);
         for (int i = 0; i < worm.teeth; ++i) {
             const glm::vec3 out = around_y((two_pi * (static_cast<float>(i) - 0.25f)) / static_cast<float>(worm.teeth));
-            add_gear_tooth(builder, worm.pitch * out, out, worm.module, 0.0f, worm.width);
+            add_gear_tooth(builder, worm.pitch * out, out, worm.module, 0.0f, worm.width, worm.lean);
         }
     } else {
-        add_x_bar(
-            builder, glm::vec3{(-0.5f * worm.length) - (2.0f * worm.shaft), worm.axis_y, 0.0f}, worm.shaft,
-            worm.length + (4.0f * worm.shaft), worm_steel_slot
-        );
+        add_x_bar(builder, glm::vec3{-worm.reach, worm.axis_y, 0.0f}, worm.shaft, 2.0f * worm.reach, worm_steel_slot);
         builder.set_slot(worm_metal_slot);
         const int total = worm.turns * worm_stretches;
         for (int start = 0; start < worm.starts; ++start) {
@@ -739,10 +806,10 @@ void generate_worm(const Kit_parameter_values& values, GEO::Mesh& mesh)
                 const float     turn  = static_cast<float>(k) / static_cast<float>(worm_stretches);
                 const float     angle = two_pi * (turn + (0.5f / static_cast<float>(worm_stretches)) + (static_cast<float>(start) / static_cast<float>(worm.starts)));
                 const glm::vec3 out{0.0f, -std::cos(angle), -std::sin(angle)};
-                const float     x     = (-0.5f * worm.length) + (worm.lead * turn);
-                points.push_back(Wire_point{.center = glm::vec3{x, worm.axis_y, 0.0f} + (worm.radius * out), .up = x_axis, .side = out});
+                const float     x     = (-0.5f * worm.length) + worm.shift + (worm.lead * turn);
+                points.push_back(Wire_point{.center = glm::vec3{x, worm.axis_y, 0.0f} + (worm.middle * out), .up = x_axis, .side = out});
             }
-            add_wire(builder, points, worm.half);
+            add_wire(builder, points, worm.half, worm.depth);
         }
     }
     builder.write(mesh);
@@ -779,7 +846,7 @@ void generate_pulley(const Kit_parameter_values& values, GEO::Mesh& mesh)
         builder.set_slot(pulley_metal_slot);
         for (int i = 0; i < teeth; ++i) {
             const glm::vec3 out = around_y((two_pi * (static_cast<float>(i) - 0.25f)) / static_cast<float>(teeth));
-            add_gear_tooth(builder, radius * out, out, module, 0.0f, plate);
+            add_gear_tooth(builder, radius * out, out, module, 0.0f, plate, 0.0f);
         }
     } else {
         const float bore  = std::min(0.5f * values.get_float("bore"), 0.4f * radius);
@@ -1008,7 +1075,7 @@ void add_machine_09_18_shapes(std::vector<Kit_shape_definition>& shapes)
         shape.kit             = "machine";
         shape.display_name    = "Cam follower";
         shape.description     =
-            "Cam follower standing on its contact at the origin: a knife edge along Z, a roller in a fork whose axis "
+            "Cam follower standing on its contact at the origin: a knife edge along Z, a roller on an axle in a fork, its axis "
             "lies along Z, or a flat face, under a stem in a guide sleeve (slot metal). The contact connector joins "
             "a cam's follower connector: the stem then points away from the cam and the roller's axis lies along the "
             "cam's.";
@@ -1135,9 +1202,9 @@ void add_machine_09_18_shapes(std::vector<Kit_shape_definition>& shapes)
                 out_connectors.push_back(Kit_connector{.name = "axis", .position = glm::vec3{0.0f, 1.25f * worm.width, 0.0f}, .outward = y_axis, .up = z_axis});
                 add_side_connector(out_connectors, "mesh", glm::vec3{worm.pitch, 0.5f * worm.width, 0.0f}, x_axis);
             } else {
-                const float end = (0.5f * worm.length) + (2.0f * worm.shaft);
-                out_connectors.push_back(Kit_connector{.name = "axis", .position = glm::vec3{end, worm.axis_y, 0.0f}, .outward = x_axis, .up = y_axis});
-                out_connectors.push_back(Kit_connector{.name = "mesh", .position = glm::vec3{0.0f, worm.axis_y + worm.radius, 0.0f}, .outward = y_axis, .up = x_axis});
+                out_connectors.push_back(Kit_connector{.name = "axis", .position = glm::vec3{worm.reach, worm.axis_y, 0.0f}, .outward = x_axis, .up = y_axis});
+                // Up across the axis, so that joined to a wheel's mesh connector the worm's axis crosses the wheel's.
+                out_connectors.push_back(Kit_connector{.name = "mesh", .position = glm::vec3{0.0f, worm.axis_y + worm.radius, 0.0f}, .outward = y_axis, .up = z_axis});
             }
         };
         shapes.push_back(std::move(shape));

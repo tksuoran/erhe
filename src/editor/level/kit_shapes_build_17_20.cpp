@@ -1213,10 +1213,40 @@ public:
     float top   {0.0f}; // height of the outline over the origin's side of the crown
 };
 
-void generate_rock_arch(const Kit_parameter_values& values, GEO::Mesh& mesh)
+// The opening's outline and the two sides (0 toward +X, 1 toward -X): the first draws of the arch's random.
+class Rock_arch_frame
+{
+public:
+    std::vector<glm::vec2>        inner;
+    std::array<Rock_arch_side, 2> sides{};
+};
+
+[[nodiscard]] auto make_rock_arch_frame(const Kit_parameter_values& values, Kit_random& random) -> Rock_arch_frame
 {
     const float span      = values.get_float("span");
     const float rise      = values.get_float("rise");
+    const float thickness = values.get_float("thickness");
+    const int   segments  = std::max(values.get_int("segments"), 4);
+    const float jitter    = get_rock_arch_jitter(values);
+    const float scale     = get_rock_arch_scale(jitter, segments);
+    Rock_arch_frame frame;
+    frame.inner = make_kit_arch_head_points(Kit_arch_head::round, 0.5f * span * scale, rise * scale, segments, jitter, &random);
+    // What makes this arch its own: a heavy leg and a light one, a square shoulder and a worn one.
+    const std::size_t heavy = static_cast<std::size_t>(random.next_u32() % 2u);
+    const std::size_t worn  = static_cast<std::size_t>(random.next_u32() % 2u);
+    for (std::size_t i = 0; i < frame.sides.size(); ++i) {
+        const float leg = thickness * ((i == heavy) ? random.next_range(1.5f, 2.0f) : random.next_range(0.9f, 1.3f));
+        Rock_arch_side& side = frame.sides[i];
+        side.reach  = (0.5f * span * scale) + leg;
+        side.corner = (i == worn) ? random.next_range(0.7f, 0.85f) : random.next_range(0.5f, 0.62f);
+        side.top    = (rise * scale) + thickness;
+    }
+    return frame;
+}
+
+void generate_rock_arch(const Kit_parameter_values& values, GEO::Mesh& mesh)
+{
+    const float span      = values.get_float("span");
     const float thickness = values.get_float("thickness");
     const float depth     = values.get_float("depth");
     const float roughness = values.get_float("roughness");
@@ -1224,21 +1254,11 @@ void generate_rock_arch(const Kit_parameter_values& values, GEO::Mesh& mesh)
     Kit_random random{values.get_seed(), "rock arch"};
     Kit_mesh_builder builder;
 
-    const float jitter = get_rock_arch_jitter(values);
-    const float scale  = get_rock_arch_scale(jitter, segments);
-    const std::vector<glm::vec2> inner = make_kit_arch_head_points(Kit_arch_head::round, 0.5f * span * scale, rise * scale, segments, jitter, &random);
-
-    // What makes this arch its own: a heavy leg and a light one, a square shoulder and a worn one, a slow sway across
-    // the opening.
-    const std::size_t heavy = static_cast<std::size_t>(random.next_u32() % 2u);
-    const std::size_t worn  = static_cast<std::size_t>(random.next_u32() % 2u);
-    std::array<Rock_arch_side, 2> sides{};
-    for (std::size_t i = 0; i < sides.size(); ++i) {
-        const float leg = thickness * ((i == heavy) ? random.next_range(1.5f, 2.0f) : random.next_range(0.9f, 1.3f));
-        sides[i].reach  = (0.5f * span * scale) + leg;
-        sides[i].corner = (i == worn) ? random.next_range(0.7f, 0.85f) : random.next_range(0.5f, 0.62f);
-        sides[i].top    = (rise * scale) + thickness;
-    }
+    const float scale = get_rock_arch_scale(get_rock_arch_jitter(values), segments);
+    const Rock_arch_frame                frame = make_rock_arch_frame(values, random);
+    const std::vector<glm::vec2>&        inner = frame.inner;
+    const std::array<Rock_arch_side, 2>& sides = frame.sides;
+    // A slow sway across the opening.
     const float tilt       = 0.12f * roughness * next_signed(random); // one shoulder stands higher
     const float sway_phase = random.next_range(0.0f, two_pi);
     const float sway_turns = random.next_range(0.7f, 1.4f);
@@ -1501,10 +1521,11 @@ void add_build_17_20_shapes(std::vector<Kit_shape_definition>& shapes)
             return check_kit_opening(*values.get_shape(), clear, values.get_float("rise"), agent);
         };
         shape.get_connectors    = [](const Kit_parameter_values& values, std::vector<Kit_connector>& out_connectors) {
-            const float scale = get_rock_arch_scale(get_rock_arch_jitter(values), std::max(values.get_int("segments"), 4));
-            const float reach = (0.5f * values.get_float("span") * scale) + (1.5f * values.get_float("thickness"));
-            add_side_connector(out_connectors, "start", glm::vec3{-reach, 0.0f, 0.0f}, glm::vec3{-1.0f, 0.0f, 0.0f});
-            add_side_connector(out_connectors, "end",   glm::vec3{ reach, 0.0f, 0.0f}, glm::vec3{ 1.0f, 0.0f, 0.0f});
+            // Each side connector on its own foot's outer edge, drawn as the generator draws it.
+            Kit_random            random{values.get_seed(), "rock arch"};
+            const Rock_arch_frame frame = make_rock_arch_frame(values, random);
+            add_side_connector(out_connectors, "start", glm::vec3{-frame.sides[1].reach, 0.0f, 0.0f}, glm::vec3{-1.0f, 0.0f, 0.0f});
+            add_side_connector(out_connectors, "end",   glm::vec3{ frame.sides[0].reach, 0.0f, 0.0f}, glm::vec3{ 1.0f, 0.0f, 0.0f});
             out_connectors.push_back(Kit_connector{.name = "base", .position = glm::vec3{0.0f}, .outward = glm::vec3{0.0f, -1.0f, 0.0f}, .up = glm::vec3{0.0f, 0.0f, 1.0f}});
         };
         shapes.push_back(std::move(shape));

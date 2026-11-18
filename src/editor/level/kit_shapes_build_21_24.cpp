@@ -743,7 +743,9 @@ void add_lying_trunk(Kit_mesh_builder& builder, const Log_values& log, Kit_rando
     const std::size_t count  = static_cast<std::size_t>(n);
     const bool        is_log = (log.form == Log_form::log);
     // How the two cuts lean from square: the run of x per z.
-    const std::array<float, 2> cut{0.3f * next_signed(random), 0.3f * next_signed(random)};
+    const float                cut_start = 0.3f * next_signed(random);
+    const float                cut_end   = 0.3f * next_signed(random);
+    const std::array<float, 2> cut{cut_start, cut_end};
     std::vector<glm::vec3> outer;  // the rings of the trunk's surface
     std::vector<glm::vec3> centers;
     for (int k = 0; k <= log_bands; ++k) {
@@ -777,8 +779,14 @@ void add_lying_trunk(Kit_mesh_builder& builder, const Log_values& log, Kit_rando
         slots.front() = log_heartwood_slot;
         slots.back()  = log_heartwood_slot;
         const float     reach = 0.06f * log.length;
-        const glm::vec3 start = centers.front() + glm::vec3{-reach * random.next_range(0.6f, 1.2f), 0.3f * log.radius * random.next_unit(), 0.3f * log.radius * next_signed(random)};
-        const glm::vec3 end   = centers.back()  + glm::vec3{ reach * random.next_range(0.6f, 1.2f), 0.3f * log.radius * random.next_unit(), 0.3f * log.radius * next_signed(random)};
+        const float     start_x = -reach * random.next_range(0.6f, 1.2f);
+        const float     start_y = 0.3f * log.radius * random.next_unit();
+        const float     start_z = 0.3f * log.radius * next_signed(random);
+        const float     end_x   = reach * random.next_range(0.6f, 1.2f);
+        const float     end_y   = 0.3f * log.radius * random.next_unit();
+        const float     end_z   = 0.3f * log.radius * next_signed(random);
+        const glm::vec3 start   = centers.front() + glm::vec3{start_x, start_y, start_z};
+        const glm::vec3 end     = centers.back()  + glm::vec3{end_x, end_y, end_z};
         // A patch of bark is left on the upper side about the middle.
         const uint32_t quarter = static_cast<uint32_t>(n) / 4;
         const Limb_patch bark{.first_band = (log_bands / 2) - 2, .band_count = 3, .first_point = quarter, .point_count = quarter + 1, .slot = log_bark_slot};
@@ -886,7 +894,9 @@ void add_stump(Kit_mesh_builder& builder, const Log_values& log, Kit_random& ran
             points.push_back(top + out + (glm::dot(cut_slope, out) * y_axis));
         }
     }
-    const glm::vec3 pith = (0.12f * log.radius) * glm::vec3{next_signed(random), 0.0f, next_signed(random)};
+    const float     pith_x = next_signed(random);
+    const float     pith_z = next_signed(random);
+    const glm::vec3 pith   = (0.12f * log.radius) * glm::vec3{pith_x, 0.0f, pith_z};
     const std::array<uint32_t, 8> slots{
         log_bark_slot, log_bark_slot, log_bark_slot, log_bark_slot, log_bark_slot, log_bark_slot, log_sapwood_slot, log_heartwood_slot
     };
