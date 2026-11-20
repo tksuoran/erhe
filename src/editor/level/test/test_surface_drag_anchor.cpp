@@ -76,16 +76,16 @@ TEST(Surface_drag_anchor, a_point_within_the_tolerance_of_its_rest_stays_bit_for
     const Surface_search_window window{.forward_distance = 1.0f, .backward_distance = 1.0f};
     const glm::vec3  point{0.1f, 0.7f, -0.3f};
     const float      inside = 0.5f * editor::c_surface_snap_tolerance;
-    const Point_rest near   = rest_point(point, c_down, {Surface_hit_point{.height = -inside, .surface = true}}, window);
-    ASSERT_TRUE(near.found);
-    EXPECT_EQ(near.position, point);
-    EXPECT_EQ(near.distance, 0.0f);
+    const Point_rest near_rest = rest_point(point, c_down, {Surface_hit_point{.height = -inside, .surface = true}}, window);
+    ASSERT_TRUE(near_rest.found);
+    EXPECT_EQ(near_rest.position, point);
+    EXPECT_EQ(near_rest.distance, 0.0f);
     // Just past the tolerance the point moves.
     const float      outside = 2.0f * editor::c_surface_snap_tolerance;
-    const Point_rest far     = rest_point(point, c_down, {Surface_hit_point{.height = -outside, .surface = true}}, window);
-    ASSERT_TRUE(far.found);
-    EXPECT_NE(far.position, point);
-    EXPECT_FLOAT_EQ(far.distance, outside);
+    const Point_rest far_rest  = rest_point(point, c_down, {Surface_hit_point{.height = -outside, .surface = true}}, window);
+    ASSERT_TRUE(far_rest.found);
+    EXPECT_NE(far_rest.position, point);
+    EXPECT_FLOAT_EQ(far_rest.distance, outside);
 }
 
 TEST(Surface_drag_anchor, a_point_line_takes_the_nearest_surface_and_nothing_blocks_it)
@@ -102,8 +102,8 @@ TEST(Surface_drag_anchor, a_point_line_takes_the_nearest_surface_and_nothing_blo
     const Surface_offset down = find_point(hits, Surface_search_window{.forward_distance = 1.0f, .backward_distance = 0.0f});
     ASSERT_TRUE(down.found);
     EXPECT_FLOAT_EQ(down.height, -0.4f);
-    const Surface_offset near = find_point(hits, Surface_search_window{.forward_distance = 0.2f, .backward_distance = 0.2f});
-    EXPECT_FALSE(near.found);
+    const Surface_offset near_offset = find_point(hits, Surface_search_window{.forward_distance = 0.2f, .backward_distance = 0.2f});
+    EXPECT_FALSE(near_offset.found);
 }
 
 TEST(Surface_drag_anchor, a_point_on_a_surface_stays_there)
@@ -216,8 +216,8 @@ TEST(Surface_drag_anchor, the_anchor_rest_moves_the_origin_and_keeps_rotation_an
     EXPECT_EQ(rested.pose.scale, start.scale);
     EXPECT_EQ(rested.distance, 0.0f);
     // Nothing within the window: not found, the start pose kept.
-    const std::vector<Surface_hit_point> far{Surface_hit_point{.height = -3.0f, .surface = true}};
-    const editor::Anchor_rest            none = editor::get_anchor_rest(start, c_down, Surface_line{.hits = far, .span = 0.0f}, window);
+    const std::vector<Surface_hit_point> far_hits{Surface_hit_point{.height = -3.0f, .surface = true}};
+    const editor::Anchor_rest            none = editor::get_anchor_rest(start, c_down, Surface_line{.hits = far_hits, .span = 0.0f}, window);
     EXPECT_FALSE(none.found);
     EXPECT_EQ(none.pose.position, start.position);
 }

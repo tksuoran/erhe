@@ -173,6 +173,7 @@ diagnostic that depends on reproducing the exact same bits.
 - **Prefer explicit types over `auto`** - spell out the actual type for readability. Reviewers should not need to trace through code to determine types.
 - **Use sufficient parentheses** - do not rely on C++ operator precedence. Add parentheses so the intent is unambiguous to readers (e.g., `(a & b) != 0` not `a & b != 0`).
 - **No boolean function arguments in new code** - use a named `enum class` instead, so call sites read as `f(Visibility::hidden)` rather than `f(true)`.
+- **Banned identifiers: `near`, `far`** (and `small`) - `<windows.h>` defines them as macros, so a variable, member or parameter with that name fails to compile on MSVC. Use `near_plane`, `far_rest`, `z_near` and the like.
 - **Never use lock-free / atomic techniques** without explicitly asking the user for permission first. Prefer simple mutex-based synchronization.
 
 This project uses **C++20**. Prefer modern C++20 features over older alternatives (e.g. concepts over SFINAE, `std::span` over pointer+size, `std::format`/`fmt` over `sprintf`, `constexpr` where possible, designated initializers, `requires` clauses).
