@@ -5634,3 +5634,4 @@ Kit window and the MCP tools both call; their scene-free parts are in
 - [Level tools: implementation steps](../plans/level_tools_implementation.md)
 - [Level kit connections: implementation steps](../plans/level_kit_connections_implementation.md)
 - [Kit layout composition: plan](../plans/kit_layout_composition.md)
+- [Level kit surface attachments: plan](../plans/level_kit_surface_attachment.md)

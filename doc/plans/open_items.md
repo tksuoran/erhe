@@ -14,7 +14,7 @@ The tasks a session continuing earlier work picks up, in order (`AGENTS.md`
 "Session handoff"). Items 1 and 2 come first; items 3 - 13 each need a user
 decision or hardware (Quest, the external 120 Hz display, an NVIDIA GPU):
 ask the user which to pick. Item 14 starts with writing its plan. Items 15,
-17 and 18 wait for the user's review.
+17, 18 and 20 wait for the user's review.
 
 0. The user rulings on the D8 coder decisions ("Prepared assets" below,
    `doc/plans/prepared_assets_design.md` D8).
@@ -76,6 +76,9 @@ ask the user which to pick. Item 14 starts with writing its plan. Items 15,
     Curve hover gizmo (U62 - U65) waits for the
     user's windowed review; its last commit (the miniature scale) is not
     built.
+20. Level kit surface attachments (GitHub issue 304): the user's rulings on
+    the open questions of `doc/plans/level_kit_surface_attachment.md`, then
+    its build order.
 
 ## Quest session follow-ups
 
