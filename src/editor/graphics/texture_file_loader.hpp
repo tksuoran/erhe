@@ -1,5 +1,7 @@
 #pragma once
 
+#include "background_work.hpp"
+
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
@@ -35,7 +37,8 @@ enum class Texture_file_use : unsigned int
 [[nodiscard]] auto is_texture_file_extension(const std::filesystem::path& path) -> bool;
 
 // Loads image files (PNG / JPEG / KTX2 / DDS) into GPU textures without
-// blocking the frame: the decode runs on the executor and the texture is
+// blocking the frame: the decode runs on App_context::get_streaming_executor()
+// (owner texture_file_loader, doc/editor/editor.md "Worker executors") and the texture is
 // created and its upload recorded from tick(), against the frame's command
 // buffer. Two clients:
 //
@@ -83,6 +86,7 @@ private:
     [[nodiscard]] auto start_request(const std::filesystem::path& path, Texture_file_use use) -> std::shared_ptr<Request>;
     void publish(Request& request, erhe::graphics::Command_buffer& command_buffer, std::size_t& remaining_budget_bytes);
     void evict_if_needed();
+    [[nodiscard]] auto get_background_work_counts() const -> Background_work_counts;
 
     class Cache_entry
     {
@@ -99,6 +103,8 @@ private:
     std::vector<Cache_entry>                    m_cache;
     std::vector<std::shared_ptr<Request>>       m_pending; // both preview and load_async requests
     uint64_t                                    m_use_counter{0};
+    std::shared_ptr<Background_task_counter>    m_decode_task_counts; // shared with the decode tasks
+    Background_work_owner                       m_background_work;    // last: reads the members above
 };
 
 // Draws a texture preview - the image scaled to fit max_size while keeping its

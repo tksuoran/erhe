@@ -85,7 +85,7 @@ public:
         App_context&                       app_context,
         App_settings&                      app_settings,
         erhe::scene_renderer::Mesh_memory& mesh_memory,
-        tf::Executor&                      executor
+        tf::Executor&                      brush_geometry_executor
     );
     ~Scene_builder() noexcept;
 
@@ -142,6 +142,8 @@ public:
     // True when the palette's brush geometry preparation queue has nothing
     // pending and no task in flight (doc/editor/brushes.md G5).
     [[nodiscard]] auto is_brush_geometry_idle() const -> bool;
+    // At shutdown, before the executors are drained: drops the pending requests and refuses new ones.
+    void stop_brush_geometry_queue();
     [[nodiscard]] auto collision_shapes_size() const -> std::size_t;
 
 private:

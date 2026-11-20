@@ -2742,10 +2742,20 @@ void Operations::make_geometry()
                 std::shared_ptr<erhe::scene::Mesh> scene_mesh = erhe::scene::get_mesh(item);
                 ERHE_VERIFY(scene_mesh);
 
-                erhe::scene::Node*                              node              = scene_mesh.get();
-                const Mesh_operation::Entry::Version            physics_state     = Mesh_operation::capture_physics(*node);
-                const std::vector<erhe::scene::Mesh_primitive>& primitives_before = scene_mesh->get_primitives();
-                std::vector<erhe::scene::Mesh_primitive>        primitives_after  = primitives_before;
+                erhe::scene::Node*                       node = scene_mesh.get();
+                Mesh_operation::Entry::Version           physics_state;
+                std::vector<erhe::scene::Mesh_primitive> primitives_before;
+                {
+                    erhe::Item_host* const item_host = item->get_item_host();
+                    ERHE_VERIFY(item_host != nullptr);
+                    const Scene_task_lock scene_lock{*item_host};
+                    if (!scene_lock.is_scene_open()) {
+                        return;
+                    }
+                    physics_state     = Mesh_operation::capture_physics(*node);
+                    primitives_before = scene_mesh->get_primitives();
+                }
+                std::vector<erhe::scene::Mesh_primitive> primitives_after = primitives_before;
 
                 for (erhe::scene::Mesh_primitive& mesh_primitive : primitives_after) {
                     erhe::primitive::Primitive& primitive = *mesh_primitive.primitive.get();
@@ -2807,7 +2817,10 @@ void Operations::make_raytrace()
 
                 std::vector<erhe::scene::Mesh_primitive> mesh_primitives;
                 {
-                    std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> scene_lock{scene_root->item_host_mutex};
+                    const Scene_task_lock scene_lock{*scene_root};
+                    if (!scene_lock.is_scene_open()) {
+                        return;
+                    }
                     mesh_primitives = scene_mesh->get_primitives();
                 }
                 for (const erhe::scene::Mesh_primitive& mesh_primitive : mesh_primitives) {

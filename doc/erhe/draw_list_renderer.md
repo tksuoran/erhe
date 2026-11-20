@@ -1417,8 +1417,9 @@ Drawing:
   off. An entry added after the bake is untracked and never culled by PVS.
   `detach_pvs_database()` (main thread) drops the database, the callback
   and any queued `set_pvs_database()` for an owner going away: the editor
-  calls it first in a scene close (`Scene_root::detach_pvs_consumer()` from
-  `Editor::on_close_scene()`), so the entries leaving with the scene mark
+  calls it before any content leaves in a scene close
+  (`Scene_root::detach_pvs_consumer()` from `Editor::on_close_scene()`,
+  under the scene's item host mutex), so the entries leaving with the scene mark
   nothing stale. Queued `set_pvs_database()` operations apply in order: the
   last one queued wins.
   **PVS resident set and page table**: the classification reads a resident
@@ -1438,14 +1439,19 @@ Drawing:
   or the one before), the request list is rebuilt: the stored pages within
   the stream radius (Chebyshev distance in pages from the box) of any active
   view, neither resident, in flight nor failed, nearest first. A
-  `Pvs_page_streamer` read task on the task executor
-  (`Draw_list_scene_create_info::executor`, `erhe::task::spawn()`; one task
-  at a time, which drains the queued requests; it touches no scene or GPU
-  state and holds the queue state and the databases by `shared_ptr`, so it
-  may outlive the streamer; without an executor the reads run inline)
+  `Pvs_page_streamer` read task on the executor that
+  `Draw_list_scene_create_info::pvs_read_executor` returns when the task is
+  spawned (`erhe::task::spawn()`; one task at a time, which drains the queued
+  requests and never re-spawns; it touches no scene or GPU state and holds
+  the queue state and the databases by `shared_ptr`, so it may outlive the
+  streamer; with no function or a null executor the reads run inline; the
+  editor's function is `App_context::get_streaming_executor()`,
+  `doc/editor/editor.md` "Worker executors")
   reads one requested page at a time with `Pvs_database::read_page_words()` (a
   copy out of the bits the database holds) into pooled word buffers and hands it back through a mutex-protected
-  queue. Each `publish()` takes at most one finished read and reserves its
+  queue. `Pvs_page_streamer::get_counts()` reports the requests queued, the
+  read running and the finished reads not taken
+  (`Draw_list_scene::get_pvs_page_streamer_counts()`). Each `publish()` takes at most one finished read and reserves its
   slot (`Pvs_residency::place()`): a free slot, else the slot of the
   resident page farthest from every active view, only when that page is
   more than one page (the hysteresis) farther away than the arriving page

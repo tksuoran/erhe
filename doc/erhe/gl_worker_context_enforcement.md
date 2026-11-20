@@ -338,7 +338,11 @@ comments stripped for the scheduling forms - `silent_async`,
 `*/test/*` (tests run their own executors with no shared device).
 `taskflow.emplace` is deliberately NOT in the list (graph construction, see
 A); `subflow->emplace` deliberately is, because it is the lightmap shape that
-motivates this document.
+motivates this document. The same scan flags a `tf::Executor` constructed
+outside `erhe::task::make_executor` (a stack object or member, a temporary,
+`make_unique` / `make_shared`, `new`), so every executor's workers get the
+per-thread setup of `doc/erhe/task.md` "Executors"; references, pointers and
+forward declarations pass.
 
 Without D, A decays from construction into documentation, and
 `doc/erhe/gl_worker_thread_contexts.md` warns in its Traps: do not trust derived

@@ -528,7 +528,10 @@ count or vertex density.
   scratch.
 - **Streaming** (`Lightmap_streamer`). When the baker does not own the lightmap
   binding, the streamer keeps the `resident_tile_budget` nearest tiles resident
-  in its own slot atlas (worker-thread file read, staging-buffer upload, at most
+  in its own slot atlas (file read on `App_context::get_streaming_executor()`:
+  the foreground executor during a scene load, the background executor
+  otherwise, owner `lightmap_streamer` in `doc/editor/editor.md` "Worker
+  executors"; staging-buffer upload inside a `Background_apply_meter` scope; at most
   one load per frame, eviction hysteresis of a quarter of the incoming tile's XZ
   extent) and remaps `Mesh_primitive::lightmap_uv_scale_offset` per residency
   change. Region identity across reloads is the node path plus the node index

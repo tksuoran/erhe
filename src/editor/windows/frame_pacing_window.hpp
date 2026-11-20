@@ -36,10 +36,16 @@ namespace erhe::frame_pacing { class Frame_pacing_observer; }
 
 namespace editor {
 
+class Executor_status;
+
 class Frame_pacing_window : public erhe::imgui::Imgui_window
 {
 public:
-    Frame_pacing_window(erhe::imgui::Imgui_renderer& imgui_renderer, erhe::imgui::Imgui_windows& imgui_windows);
+    Frame_pacing_window(
+        erhe::imgui::Imgui_renderer& imgui_renderer,
+        erhe::imgui::Imgui_windows&  imgui_windows,
+        Executor_status&             executor_status // drawn as the "Workers" section
+    );
 
     // Called once per frame from the editor tick, right after the observer
     // has computed this frame's schedule decision: appends the new frame to
@@ -174,7 +180,8 @@ private:
     void draw_display_timeline(const Region& region);
     void frame_tooltip      (const Frame_sample& sample, const char* section);
 
-    Frame_history m_history;
+    Executor_status& m_executor_status;
+    Frame_history    m_history;
     std::int64_t  m_latest_frame_id{-1};
     double        m_refresh_period {0.0};
     double        m_now            {0.0};

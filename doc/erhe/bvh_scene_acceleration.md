@@ -140,10 +140,11 @@ returns the BVH, the member list and the build generation. It dereferences no
 `Bvh_geometry` or `Bvh_instance` and reads no scene state, so nothing needs
 locking.
 
-Dispatch goes through `erhe::raytrace::get_executor()`, set once by the editor at
-startup from `App_context::executor` through
-`erhe::raytrace::set_executor(tf::Executor*)` and null by default. With a null
-executor the build runs synchronously, which keeps the unit tests deterministic
+Dispatch goes through the task spawner of `erhe::raytrace::set_task_spawner()`,
+set once by the editor at startup to spawn onto
+`erhe::task::Executors::get_inherited()` of its executors (the executor of the work that
+requests the build) and empty by default. With no spawner the build runs
+synchronously, which keeps the unit tests deterministic
 and keeps headless and tool use working without an executor.
 
 The async handshake is a `shared_ptr` task with an atomic `done` flag, polled in

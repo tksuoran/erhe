@@ -23,6 +23,7 @@
 
 #include "erhe_math/aabb.hpp"
 #include "erhe_math/curve_path.hpp"
+#include "erhe_primitive/enums.hpp"
 #include "erhe_message_bus/message_bus.hpp"
 #include "erhe_property/expression.hpp"
 #include "erhe_property/property_value.hpp"
@@ -50,6 +51,8 @@ namespace erhe::property { class Dependency_property; }
 namespace erhe::primitive { class Material; }
 namespace erhe::math     { class Curve_path_table; }
 namespace erhe::scene    { class Curve; class Mesh; class Xformable; using Node = Xformable; }
+namespace tf             { class Executor; }
+namespace erhe::graphics { class Device; }
 
 namespace editor {
 
@@ -493,12 +496,15 @@ public:
 // A new material of the palette material's color, owned by no content library.
 [[nodiscard]] auto make_palette_material(const Kit_palette_material& palette) -> std::shared_ptr<erhe::primitive::Material>;
 
-// What a kit brush made outside the cache is for: a placement carries its shape's physics body (D2.3) and every
-// primitive type; a thumbnail has no collision shape and fill triangles only.
-enum class Kit_brush_use : unsigned int {
-    placement = 0,
-    thumbnail
-};
+// The whole mesh of the values, every slot. Any thread: the generators read only the values and the library.
+[[nodiscard]] auto make_kit_geometry(const Kit_parameter_values& values) -> std::shared_ptr<erhe::geometry::Geometry>;
+// One geometry per material slot of the shape (D2.1); returns the problem, empty when every slot has facets. Any thread.
+[[nodiscard]] auto make_kit_part_geometries(
+    const Kit_parameter_values&                             values,
+    std::vector<std::shared_ptr<erhe::geometry::Geometry>>& out_parts
+) -> std::string;
+// The normal style the shape's renderable meshes are built with.
+[[nodiscard]] auto get_kit_normal_style(const Kit_shape_definition& shape) -> erhe::primitive::Normal_style;
 
 class Kit_thumbnails;
 
@@ -554,7 +560,8 @@ public:
 class Level_kits
 {
 public:
-    Level_kits(App_context& context, App_message_bus& app_message_bus);
+    // The thumbnails build on background_executor; graphics_device tells whether it can (worker contexts).
+    Level_kits(App_context& context, App_message_bus& app_message_bus, erhe::graphics::Device& graphics_device, tf::Executor& background_executor);
     ~Level_kits() noexcept;
     Level_kits(const Level_kits&) = delete;
     auto operator=(const Level_kits&) -> Level_kits& = delete;
@@ -667,8 +674,9 @@ public:
     // The cached brushes still alive: held by a piece or by an operation of the undo history.
     [[nodiscard]] auto get_cached_brush_count() const -> std::size_t;
 
-    // A new brush of the values outside the cache; null when its geometry fails.
-    [[nodiscard]] auto make_brush(const Kit_parameter_values& values, Kit_brush_use use) -> std::shared_ptr<Brush>;
+    // A new placement brush of the values outside the cache, with its shape's physics body (D2.3) and every primitive
+    // type; null when its geometry fails.
+    [[nodiscard]] auto make_brush(const Kit_parameter_values& values) -> std::shared_ptr<Brush>;
 
     // The Level Kit window's shape thumbnails (doc/editor/level_tools.md "Shape thumbnails").
     [[nodiscard]] auto get_thumbnails() -> Kit_thumbnails&;

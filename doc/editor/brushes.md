@@ -85,11 +85,15 @@ something needs it.
   built therefore still has a brush, and the palette keeps its name.
 
 - **G5. The preparation queue.** `Brush_geometry_queue` is constructed with the
-  `tf::Executor`. It holds the pending requests in request order under its own
-  mutex, front first, each as a `std::weak_ptr<Brush>` plus a copy of the
-  brush's name, and keeps at most `executor.num_workers() - 1` preparation
-  tasks in flight, each started through `erhe::task::spawn` - one worker is
-  left for the rest of the editor's task work. A request removes the entry the
+  editor's background executor (`doc/editor/editor.md` "Worker executors"), so
+  tier 2 preparation runs on lowered-priority workers. It holds the pending
+  requests in request order under its own mutex, front first, each as a
+  `std::weak_ptr<Brush>` plus a copy of the brush's name, and keeps at most
+  `executor.num_workers()` preparation tasks in flight, each started through
+  `erhe::task::spawn`. Tier 1 is the path for a consumer that needs a geometry
+  now: it never waits behind the queue, only for a preparation already
+  running. It reports itself as the background work owner `brush_geometry`
+  (pending requests queued, tasks in flight running). A request removes the entry the
   brush already had and pushes it to the front, so the brushes wanted now
   overtake the ones that scrolled out of view. A task pops the front entry and
   calls `Brush::prepare_geometry_if_queued()`, which runs the generator only
@@ -101,8 +105,9 @@ something needs it.
 - **G6. Lifetime.** The queue's state is co-owned by `shared_ptr` from two
   sides, the `Brush_geometry_queue` and every task in flight, and a brush
   reaches it through the `std::weak_ptr` its `Brush_data` carries. Nothing
-  needs cancelling: the queue destructor calls `stop()`, which refuses further
-  requests and drops the pending list, the last task to finish releases the
+  needs cancelling: editor shutdown (`Scene_builder::stop_brush_geometry_queue()`,
+  before the executors are drained) and the queue destructor call `stop()`,
+  which refuses further requests and drops the pending list, the last task to finish releases the
   state, a task whose brush is gone returns, a brush left `queued` is prepared
   by its next tier 1 consumer, and a brush that outlives the queue prepares on
   the calling thread. `Scene_builder` declares the queue before the palette, so

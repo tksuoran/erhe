@@ -154,6 +154,18 @@ if (other->get_bvh_source() != Bvh_source::prebuilt) {
   used. A prebuilt BVH gives the same nodes, ids and hits as the build it was
   taken from (`test/test_prebuilt_bvh.cpp`).
 
+## Build thread pool
+
+The `bvh` backend builds every BVH on one process-wide
+`bvh::v2::ThreadPool` (one thread per hardware thread, named and
+prioritized as the thread that constructs it); the `embree` backend builds on
+its device's threads (`rtcNewDevice` with `start_threads=1`). Either is
+otherwise constructed by the first build. `start_thread_pool()`
+(`raytrace_executor.hpp`) constructs it now, on the calling thread; on
+`tinybvh` and `none` it does nothing. An application whose threads run at
+different priorities calls it at startup from a normal priority thread
+(`doc/editor/editor.md` "Outside thread pools").
+
 ## BVH sources
 
 The `bvh` and `tinybvh` backends' `commit()` takes a prebuilt BVH when one

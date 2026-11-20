@@ -743,6 +743,8 @@ auto Mcp_server::get_dispatch_table() -> std::span<const Mcp_server::Tool_dispat
         { "get_frame_pacing_status",        &Mcp_server::query_frame_pacing_status            },
         { "get_gpu_timers",                 &Mcp_server::query_gpu_timers                     },
         { "get_frame_pacing_frames",        &Mcp_server::query_frame_pacing_frames            },
+        { "get_frame_ticks",                &Mcp_server::query_frame_ticks                    },
+        { "get_executor_status",            &Mcp_server::query_executor_status                },
         { "recalibrate_present",            &Mcp_server::action_recalibrate_present           },
         { "set_frame_pacing_min_vsyncs",    &Mcp_server::action_set_frame_pacing_min_vsyncs   },
         { "set_frame_pacing_workload",      &Mcp_server::action_set_frame_pacing_workload     },

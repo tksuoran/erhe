@@ -254,6 +254,8 @@ private:
     auto query_frame_pacing_status  (const nlohmann::json& args) -> std::string;
     auto query_gpu_timers           (const nlohmann::json& args) -> std::string;
     auto query_frame_pacing_frames  (const nlohmann::json& args) -> std::string;
+    auto query_frame_ticks          (const nlohmann::json& args) -> std::string;
+    auto query_executor_status      (const nlohmann::json& args) -> std::string;
     auto action_recalibrate_present        (const nlohmann::json& args) -> std::string;
     auto action_set_frame_pacing_min_vsyncs(const nlohmann::json& args) -> std::string;
     auto action_set_frame_pacing_workload  (const nlohmann::json& args) -> std::string;

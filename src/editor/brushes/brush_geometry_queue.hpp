@@ -1,5 +1,7 @@
 #pragma once
 
+#include "background_work.hpp"
+
 #include <cstddef>
 #include <deque>
 #include <memory>
@@ -79,7 +81,7 @@ private:
 class Brush_geometry_queue final
 {
 public:
-    explicit Brush_geometry_queue(tf::Executor& executor);
+    Brush_geometry_queue(tf::Executor& executor, Executor_status& executor_status);
     ~Brush_geometry_queue() noexcept;
 
     Brush_geometry_queue           (const Brush_geometry_queue&) = delete;
@@ -92,6 +94,7 @@ public:
 
 private:
     std::shared_ptr<Brush_geometry_queue_state> m_state;
+    Background_work_owner                       m_background_work;
 };
 
 }

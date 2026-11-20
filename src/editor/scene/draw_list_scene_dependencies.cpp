@@ -23,7 +23,8 @@ auto make_draw_list_scene_dependencies(App_context& context) -> Draw_list_scene_
     dependencies.primitive_interface  = (context.program_interface != nullptr) ? &context.program_interface->primitive_interface : nullptr;
     dependencies.gpu_cull_classifier  = context.gpu_cull_classifier;
     dependencies.cull_frame_registry  = context.cull_frame_registry;
-    dependencies.executor             = context.executor;
+    // The App_context outlives every scene root, so the function never outlives what it reads.
+    dependencies.pvs_read_executor    = [&context]() { return context.get_streaming_executor(); };
     dependencies.exclude_unlit_from_shadows =
         (context.editor_settings != nullptr) && context.editor_settings->exclude_unlit_primitives;
     // The draw-list set holds the materials of a root that renders content,

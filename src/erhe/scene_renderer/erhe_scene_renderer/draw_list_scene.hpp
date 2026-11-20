@@ -32,9 +32,6 @@
 #include <unordered_map>
 #include <vector>
 
-namespace tf {
-    class Executor;
-}
 namespace erhe::graphics {
     class Base_render_pipeline;
     class Buffer;
@@ -507,10 +504,10 @@ public:
     // phase 6a). The scene registers with it at its first add_cull_view()
     // of each frame; Cull_frame_registry::classify_frame() classifies it.
     Cull_frame_registry*       cull_frame_registry{nullptr};
-    // The executor the PVS page streamer's reads run on, one task at a
-    // time (doc/plans/pvs.md "Residency and streaming"); null: the reads
-    // run inline at the request.
-    tf::Executor*              executor           {nullptr};
+    // Returns, at each read task spawn, the executor the PVS page streamer's
+    // reads run on, one task at a time (doc/plans/pvs.md "Residency and
+    // streaming"); empty or a null result: the reads run inline.
+    Pvs_page_read_executor     pvs_read_executor  {};
 };
 
 // One (entry, view) whose GPU classification bit differs from the CPU bit
@@ -934,6 +931,8 @@ public:
     // settings' change sites and at a scene registration.
     void set_pvs_streaming_settings(const Pvs_streaming_settings& settings);
     [[nodiscard]] auto get_pvs_streaming_settings() const -> const Pvs_streaming_settings& { return m_pvs_streaming_settings; }
+    // Main thread: the page streamer's read task as counts (zero before the first read).
+    [[nodiscard]] auto get_pvs_page_streamer_counts() const -> Pvs_page_streamer_counts;
     // Main thread, prepare phase of frame_index: the residency policy's
     // change site, a color view's PVS query box registration (the box the
     // render phase gives add_cull_view() for the view). view_key names the
@@ -2214,7 +2213,7 @@ private:
     Pvs_streaming_settings                                           m_pvs_streaming_settings{};
     std::unique_ptr<Pvs_residency>                                   m_pvs_residency;
     uint64_t                                                         m_pvs_residency_generation{0};
-    tf::Executor*                                                    m_executor{nullptr};
+    Pvs_page_read_executor                                           m_pvs_read_executor;
     std::unique_ptr<Pvs_page_streamer>                               m_pvs_page_streamer;
     uint32_t                                                         m_pvs_read_page{Pvs_residency::no_page};
     Pvs_page_read                                                    m_pvs_read{};

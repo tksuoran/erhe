@@ -442,6 +442,31 @@
     "name": "get_frame_pacing_frames"
   },
   {
+    "description": "The main loop's recent ticks, for wall-clock frame time measurements (doc/agents/mcp_server_usage.md \"get_frame_ticks\"). The editor records every tick of its main loop in a ring of the newest 8192: its sequence number (1 for the first main-loop tick), its end in seconds since the editor process started, its duration in milliseconds (start_frame() begin to frame() end: the loop period) and whether the scene load predicate of get_async_status read idle at its end. Poll with after_tick set to the latest tick of the previous reply to collect a gap-free series; a reply whose oldest_tick is above after_tick + 1 means the ring overwrote ticks in between. Returns oldest_tick, latest_tick (0 before the first tick), now_s (the process time when the call is served), scene_idle (get_async_status idle now), columns ['tick', 'end_s', 'duration_ms', 'scene_idle'] and ticks (one array per tick in column order; scene_idle 1 or 0).",
+    "inputSchema": {
+      "properties": {
+        "after_tick": {
+          "description": "Return the ticks after this one (default 0: from the oldest tick in the ring)",
+          "type": "integer"
+        },
+        "max_count": {
+          "description": "Most ticks to return, oldest first (default 2000, at most 8192)",
+          "type": "integer"
+        }
+      },
+      "type": "object"
+    },
+    "name": "get_frame_ticks"
+  },
+  {
+    "description": "The editor's two Taskflow executors and the owners of background work (doc/agents/mcp_server_usage.md \"get_executor_status\"). executors: one object per executor with role ('foreground' or 'background'), name (the worker thread name prefix), worker_count, configured_thread_count (the threading.thread_count or threading.background_thread_count setting it was made with; 0 or less is one worker per hardware thread), requested_priority ('normal' or 'lowered'), priority_applied_workers (workers on which the requested priority is in effect), read_back_priorities (the distinct priority values read back on the workers: nice on Linux and Android, qos_class_t on macOS, GetThreadPriority() on Windows), busy_workers (workers not parked, sampled now) and topologies (task graphs running). background: per owner of background work (brush_geometry, scene_payload_release, asset_browser, kit_thumbnails, texture_file_loader, lightmap_streamer, pvs_page_streamer, and shader_analytics and shader_session_programs when the session analyzes shaders) queued, running and ready (results waiting for the main thread); background_idle: true when every owner reports 0 for all three.",
+    "inputSchema": {
+      "properties": {},
+      "type": "object"
+    },
+    "name": "get_executor_status"
+  },
+  {
     "description": "Set the frame pacer's application-commanded cadence floor N_min (FR1 set_min_vsyncs, behavior doc scenario 9). Raising above the current cadence downshifts immediately; lowering lets the normal upshift path (dwell + headroom) bring the cadence back down. Clamped to [1, 8]; applied at the next frame tick.",
     "inputSchema": {
       "properties": {
@@ -561,7 +586,7 @@
     "name": "reset_editor_state"
   },
   {
-    "description": "Get in-flight operation counts: pending/running async workers plus queued_operations (queued on the operation stack, not yet executed on the main thread), pending_scene_commits (worker-prepared scene changes waiting for the main thread's per-tick flush) and asset_loads (asset load tasks in flight, which change the scene when they publish). The scene is settled only when all five are 0. Also carries a lightmap_prepare sub-object: in_flight/regions_done/regions_total/cancel_requested plus last_result{committed, mesh_count, piece_count, tile_count, abort_reason} of the most recent lightmap_prepare_tiles.",
+    "description": "Get in-flight operation counts: pending/running async workers plus queued_operations (queued on the operation stack, not yet executed on the main thread), pending_scene_commits (worker-prepared scene changes waiting for the main thread's per-tick flush) and asset_loads (asset load tasks in flight, which change the scene when they publish). The scene is settled only when all five are 0. Also carries a lightmap_prepare sub-object: in_flight/regions_done/regions_total/cancel_requested plus last_result{committed, mesh_count, piece_count, tile_count, abort_reason} of the most recent lightmap_prepare_tiles. background reports the owners of background work (brush_geometry, scene_payload_release, asset_browser, kit_thumbnails, texture_file_loader, lightmap_streamer, pvs_page_streamer, and shader_analytics and shader_session_programs when the session analyzes shaders), each with queued, running and ready (results waiting for the main thread); background_idle is true when all of them are 0. Background work is not part of idle: a script that needs it finished waits for background_idle as well.",
     "inputSchema": {
       "properties": {},
       "type": "object"
@@ -1430,10 +1455,19 @@
     "name": "level_get_kits"
   },
   {
-    "description": "The Level Kit window's shape thumbnails (doc/editor/level_tools.md \"Shape thumbnails\"): each library shape at its defaults at the window scene's lengths in its default palette materials, rendered once when its row is first drawn (at most two per frame) and again only when a lengths change (the window's Level Settings rows, set_scene_settings) changes its default mesh key or a graphics preset change other than its LOD fields (set_graphics_preset) re-renders every shape. Returns lengths {module, wall_height} (null before the window first drew its shape rows), size_pixels (the editor setting thumbnails.size_pixels), shape_count, none_count, queued_count, current_count, failed_count, render_count (total renders) and per shape in library order id, state (none: its row not drawn yet; queued: waiting for its render, showing its former image when it has one; current: rendered at lengths; failed: the defaults made no geometry), has_image, render_count and mesh_key (shape id + canonical parameter text of the defaults its image shows).",
+    "description": "The Level Kit window's shape thumbnails (doc/editor/level_tools.md \"Shape thumbnails\"): each library shape at its defaults at the window scene's lengths in its default palette materials, built on the background executor and rendered once when its row is first drawn, and again only when a lengths change (the window's Level Settings rows, set_scene_settings) changes its default mesh key or a graphics preset change other than its LOD fields (set_graphics_preset) re-renders every shape. request_all: true queues every shape whose row was not drawn yet (state none), as if the Level Kit window drew every row; the thumbnails need the lengths of a scene, so until the window has drawn its shape rows the call names it with scene_name (the thumbnails then follow that scene until the window draws with another). Returns lengths {module, wall_height} (null before the window first drew its shape rows), size_pixels (the editor setting thumbnails.size_pixels), shape_count, none_count, queued_count, building_count, current_count, failed_count, render_count (total renders), requested_count (shapes request_all queued, 0 without it) and per shape in library order id, state (none: its row not drawn yet; queued: waiting for a build task, showing its former image when it has one; building: a build task has taken it or its result waits to be rendered, showing its former image as queued; current: rendered at lengths; failed: the defaults made no geometry), has_image, render_count and mesh_key (shape id + canonical parameter text of the defaults its image shows).",
     "inputSchema": {
       "additionalProperties": false,
-      "properties": {},
+      "properties": {
+        "request_all": {
+          "description": "Queue every shape not requested yet (default false)",
+          "type": "boolean"
+        },
+        "scene_name": {
+          "description": "With request_all: the scene whose level lengths the thumbnails take; needed until the Level Kit window has drawn its shape rows",
+          "type": "string"
+        }
+      },
       "type": "object"
     },
     "name": "level_get_kit_thumbnails"

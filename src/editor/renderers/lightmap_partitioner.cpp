@@ -532,7 +532,7 @@ auto Lightmap_partitioner::request_prepare(
     const bool worker_contexts =
         (m_context.graphics_device != nullptr) &&
         m_context.graphics_device->supports_worker_contexts();
-    if ((m_context.executor == nullptr) || !worker_contexts || (raw_job->tasks.size() <= 1)) {
+    if ((m_context.foreground_executor == nullptr) || !worker_contexts || (raw_job->tasks.size() <= 1)) {
         // Synchronous fallback: run inline (no subflow) and commit before
         // returning. Also taken when the device has no worker contexts
         // (GL, headless / null window) - process_piece builds GPU meshes,
@@ -560,7 +560,7 @@ auto Lightmap_partitioner::request_prepare(
             }
         );
     }
-    raw_job->future = erhe::task::run(*m_context.executor, raw_job->taskflow);
+    raw_job->future = erhe::task::run(*m_context.foreground_executor, raw_job->taskflow);
     log_render->info("Lightmap_partitioner: prepare launched ({} regions)", raw_job->tasks.size());
     return true;
 }

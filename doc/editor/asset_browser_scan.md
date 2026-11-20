@@ -7,7 +7,14 @@ fills its tree in two phases. Phase 1 is the directory walk: it lists what
 files exist and classifies them by extension. Phase 2 is the content peek:
 it reads inside one asset file (today `scan_gltf`, a whole-file read plus a
 JSON parse) and runs only for the file the user hovers. Both phases run on
-executor workers; the main thread only picks results up.
+the background executor (lowered priority, `doc/editor/editor.md` "Worker
+executors"); the main thread only picks results up. A drop on a viewport,
+which needs a file's bounds on that frame, scans it on the main thread
+(`ensure_scanned_blocking`) and does not wait for a background scan of the
+same file. The browser reports its scan tasks as the background work owner
+`asset_browser`: tasks not started as `queued`, tasks running as
+`running`; a result is picked up by its consumer when it next draws (the
+window's tree, a hovered file's tooltip), so none counts as `ready`.
 
 ## 1. Requirements
 
@@ -31,7 +38,7 @@ executor workers; the main thread only picks results up.
   file (or the file whose context menu is open), and its result is cached
   on the node so the peek runs once per node. The main thread picks each
   file's result up as it lands, independently of other files. This is
-  what `ensure_scanned` / `Gltf_scan_request` do today for glTF files.
+  what `Asset_browser::ensure_scanned` / `Gltf_scan_request` do for glTF files.
 
 ## 2. Design
 

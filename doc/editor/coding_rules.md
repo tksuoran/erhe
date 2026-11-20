@@ -110,6 +110,52 @@ out of the scene. So a cached reference must handle BOTH.
   reports every such cached reference. See
   `doc/editor/import_undo_reference_clearing.md`.
 
+## Scenes and tasks
+
+Two mutexes guard scenes against worker tasks: `App_scenes::m_mutex` guards
+the set of open scenes, and each `Scene_root`'s `item_host_mutex` guards that
+scene's hosted state (nodes, meshes, primitives, attachments, content
+library, raytrace scene, physics world, draw-list scene) and its closed
+state (`Scene_root::is_closed()`).
+
+- Lock order: a thread takes a scene's `item_host_mutex` first and may then
+  take `App_scenes::m_mutex` briefly inside it (`is_host_registered()`,
+  `copy_scene_roots()`). Code that holds `App_scenes::m_mutex` calls nothing
+  that locks a scene.
+- The set is written on the main thread only (`register_scene_root()`,
+  `unregister_scene_root()`), so the main thread reads it through
+  `App_scenes::get_scene_roots()`, which checks the thread. Any other thread
+  reads it through `App_scenes::copy_scene_roots()` (clear-and-fill, under
+  the set mutex).
+- A task that works in a scene holds the scene by shared ownership
+  (`async_for_nodes_with_mesh()` keeps the `Scene_root` in its task), and
+  each locked section of its work is a `Scene_task_lock`
+  (`scene/scene_root.hpp`): it locks the scene's `item_host_mutex` and reads
+  the closed state under it. An open scene: the section does its work under
+  the lock. A closed scene: the task returns without touching it; an
+  operation it builds refuses (`Operation::set_refused()`), so nothing is
+  recorded.
+- The closed state, not registration, is what a task reads: an undone scene
+  open unregisters the scene and a redo registers the same `Scene_root`
+  again, so work for an unregistered scene still lands in it. A close is
+  final: `Editor::on_close_scene()` is the one place that sets the state, a
+  close is not undoable, and `register_to_editor_scenes()` verifies that the
+  scene is not closed.
+- An operation a task queues (`Operation_stack::queue_from_thread()`) applies
+  on the main thread later; `Mesh_operation::execute()` takes a
+  `Scene_task_lock` and refuses when the scene closed in between.
+- A task holds the lock for the part of its work that reads or writes the
+  scene; work on captured input (primitive builds, BVH builds) runs outside
+  it (`deferred_finalize_mesh_items()`, the display-color rebuild).
+- `Editor::on_close_scene()` first removes the scene from the set, then
+  takes the scene's `item_host_mutex`, sets the closed state and detaches the
+  PVS consumer: a task inside a locked section finishes it first, and every
+  later section finds the scene closed. Each mutex is taken once on that
+  path (neither is recursive): code that locks the scene itself (the
+  lightmap partitioner's job cancel, the selection change messages) runs
+  after that section. `reset_editor_state` closes every scene through the
+  same handler.
+
 ## ImGui-time work
 
 A window's `imgui()`, a menu entry and a host begin callback run inside the

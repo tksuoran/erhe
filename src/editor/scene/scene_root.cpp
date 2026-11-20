@@ -237,7 +237,7 @@ Scene_root::Scene_root(
                 .exclude_unlit_from_shadows = draw_list_dependencies->exclude_unlit_from_shadows,
                 .gpu_cull_classifier        = draw_list_dependencies->gpu_cull_classifier,
                 .cull_frame_registry        = draw_list_dependencies->cull_frame_registry,
-                .executor                   = draw_list_dependencies->executor
+                .pvs_read_executor          = draw_list_dependencies->pvs_read_executor
             }
         );
         // The staleness rule of the PVS database (doc/plans/pvs.md D4): the
@@ -1584,11 +1584,33 @@ auto Scene_root::get_browser_window() const -> Item_tree_window*
 void Scene_root::register_to_editor_scenes(App_scenes& app_scenes)
 {
     ERHE_VERIFY(m_is_registered == false);
+    ERHE_VERIFY(!m_closed);
     ERHE_VERIFY(m_app_scenes == nullptr);
     m_app_scenes = &app_scenes;
     m_payload_release = app_scenes.get_scene_payload_release();
     app_scenes.register_scene_root(shared_from_this());
     m_is_registered = true;
+}
+
+Scene_task_lock::Scene_task_lock(Scene_root& scene_root)
+    : m_lock      {scene_root.item_host_mutex}
+    , m_scene_open{!scene_root.is_closed()}
+{
+}
+
+Scene_task_lock::Scene_task_lock(erhe::Item_host& item_host)
+    : Scene_task_lock{static_cast<Scene_root&>(item_host)}
+{
+}
+
+auto Scene_task_lock::is_scene_open() const -> bool
+{
+    return m_scene_open;
+}
+
+void Scene_root::set_closed()
+{
+    m_closed = true;
 }
 
 auto Scene_root::request_close(App_message_bus& app_message_bus) -> bool

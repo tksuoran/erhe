@@ -36,9 +36,25 @@ Scene_payload_release::~Scene_payload_release() noexcept
     ERHE_VERIFY(m_pending_count == 0);
 }
 
-void Scene_payload_release::set_executor(tf::Executor* executor)
+void Scene_payload_release::attach(tf::Executor& executor, Executor_status& executor_status)
 {
-    m_executor = executor;
+    m_executor        = &executor;
+    m_background_work = std::make_unique<Background_work_owner>(
+        executor_status, "scene_payload_release",
+        [this]() { return get_background_work_counts(); }
+    );
+}
+
+void Scene_payload_release::detach()
+{
+    m_background_work.reset();
+    m_executor = nullptr;
+}
+
+auto Scene_payload_release::get_background_work_counts() -> Background_work_counts
+{
+    const std::lock_guard<std::mutex> lock{m_mutex};
+    return Background_work_counts{.queued = m_pending_count - m_running_count, .running = m_running_count};
 }
 
 void Scene_payload_release::release(std::vector<std::shared_ptr<erhe::primitive::Primitive>>&& primitives, const std::string_view scene_name)
@@ -65,10 +81,18 @@ void Scene_payload_release::release(std::vector<std::shared_ptr<erhe::primitive:
     erhe::task::spawn(
         *m_executor,
         [this, payload, name = std::string{scene_name}]() {
+            on_task_started();
             destroy_payload(*payload, name);
             on_task_finished();
         }
     );
+}
+
+void Scene_payload_release::on_task_started()
+{
+    const std::lock_guard<std::mutex> lock{m_mutex};
+    ERHE_VERIFY(m_running_count < m_pending_count);
+    ++m_running_count;
 }
 
 void Scene_payload_release::on_task_finished()
@@ -76,8 +100,9 @@ void Scene_payload_release::on_task_finished()
     // Notify under the lock: wait_idle() may return, and its caller destroy
     // this object, as soon as the count reads zero.
     const std::lock_guard<std::mutex> lock{m_mutex};
-    ERHE_VERIFY(m_pending_count > 0);
+    ERHE_VERIFY((m_pending_count > 0) && (m_running_count > 0));
     --m_pending_count;
+    --m_running_count;
     m_idle_condition.notify_all();
 }
 

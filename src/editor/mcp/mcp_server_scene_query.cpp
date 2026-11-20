@@ -25,6 +25,8 @@
 #include "scene/viewport_scene_views.hpp"
 #include "parsers/gltf_extensions_names.hpp"
 #include "windows/transform_update_stats.hpp"
+#include "frame_tick_history.hpp"
+#include "executor_status.hpp"
 #include "renderers/composition_pass.hpp"
 #include "renderers/lightmap_partitioner.hpp"
 #include "config/generated/culling_classification.hpp"
@@ -3479,6 +3481,26 @@ auto Mcp_server::action_clear_undo_history(const json& args) -> std::string
     }).dump();
 }
 
+namespace {
+
+// Per owner of background work: {queued, running, ready}, keyed by the owner's name.
+[[nodiscard]] auto make_background_work_json(const Executor_status& executor_status) -> json
+{
+    std::vector<Background_work_report> reports;
+    executor_status.get_background_work(reports);
+    json result = json::object();
+    for (const Background_work_report& report : reports) {
+        result[report.name] = {
+            {"queued",  report.counts.queued},
+            {"running", report.counts.running},
+            {"ready",   report.counts.ready}
+        };
+    }
+    return result;
+}
+
+} // anonymous namespace
+
 auto Mcp_server::query_async_status(const json& args) -> std::string
 {
     static_cast<void>(args);
@@ -3502,6 +3524,11 @@ auto Mcp_server::query_async_status(const json& args) -> std::string
         {"asset_loads",           (m_context.asset_manager      != nullptr) ? m_context.asset_manager->get_load_task_count()    : 0u},
         {"idle",                  !m_context.is_scene_load_in_flight()}
     };
+    // Background work is reported per owner and has a verdict of its own; it is not part of idle.
+    if (m_context.executor_status != nullptr) {
+        result["background"]      = make_background_work_json(*m_context.executor_status);
+        result["background_idle"] = m_context.executor_status->is_background_idle();
+    }
     // Recent failed loads, kept after their tasks are reaped.
     json failed_loads = json::array();
     if (m_context.asset_manager != nullptr) {
@@ -3991,6 +4018,68 @@ auto Mcp_server::query_frame_pacing_frames(const json& args) -> std::string
         {"count",             frames.size()},
         {"refresh_period",    window->get_refresh_period()},
         {"frames",            std::move(frames)}
+    };
+    return make_json_content(result).dump();
+}
+
+// The main loop's recent tick durations (doc/agents/mcp_server_usage.md "get_frame_ticks").
+auto Mcp_server::query_executor_status(const json& args) -> std::string
+{
+    static_cast<void>(args);
+    const Executor_status* const executor_status = m_context.executor_status;
+    if (executor_status == nullptr) {
+        return make_error_content("get_executor_status: no executor status");
+    }
+    json executors = json::array();
+    for (const Executor_status_entry& entry : executor_status->get_executors()) {
+        executors.push_back({
+            {"role",                     entry.role},
+            {"name",                     entry.priority_report.name},
+            {"worker_count",             entry.executor->num_workers()},
+            {"configured_thread_count",  entry.configured_thread_count},
+            {"requested_priority",       erhe::task::c_str(entry.priority_report.requested)},
+            {"priority_applied_workers", entry.priority_applied_count},
+            {"read_back_priorities",     entry.read_back_values},
+            {"busy_workers",             entry.get_busy_worker_count()},
+            {"topologies",               entry.executor->num_topologies()}
+        });
+    }
+    const json result = {
+        {"executors",       std::move(executors)},
+        {"background",      make_background_work_json(*executor_status)},
+        {"background_idle", executor_status->is_background_idle()}
+    };
+    return make_json_content(result).dump();
+}
+
+auto Mcp_server::query_frame_ticks(const json& args) -> std::string
+{
+    const Frame_tick_history* const history = m_context.frame_tick_history;
+    if (history == nullptr) {
+        return make_error_content("get_frame_ticks: no frame tick history");
+    }
+    const std::uint64_t latest     = history->get_latest_tick();
+    const std::uint64_t oldest     = history->get_oldest_tick();
+    const std::int64_t  max_count  = std::clamp<std::int64_t>(args.value("max_count", std::int64_t{2000}), 1, static_cast<std::int64_t>(Frame_tick_history::c_capacity));
+    const std::int64_t  after_tick = std::max<std::int64_t>(args.value("after_tick", std::int64_t{0}), 0);
+    const std::uint64_t first      = std::max<std::uint64_t>(static_cast<std::uint64_t>(after_tick) + 1, std::max<std::uint64_t>(oldest, 1));
+    const std::uint64_t last       = std::min<std::uint64_t>(latest, first + static_cast<std::uint64_t>(max_count) - 1);
+
+    json ticks = json::array();
+    for (std::uint64_t tick = first; tick <= last; ++tick) {
+        const Frame_tick* const entry = history->get(tick);
+        if (entry == nullptr) {
+            continue;
+        }
+        ticks.push_back(json::array({entry->tick, entry->end_s, entry->duration_ms, (entry->scene_state == Frame_tick_scene_state::idle) ? 1 : 0}));
+    }
+    const json result = {
+        {"oldest_tick", oldest},
+        {"latest_tick", latest},
+        {"now_s",       Frame_tick_history::get_process_time_s(std::chrono::steady_clock::now())},
+        {"scene_idle",  !m_context.is_scene_load_in_flight()},
+        {"columns",     json::array({"tick", "end_s", "duration_ms", "scene_idle"})},
+        {"ticks",       std::move(ticks)}
     };
     return make_json_content(result).dump();
 }

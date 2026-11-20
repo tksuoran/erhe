@@ -9,9 +9,9 @@
 
 namespace erhe::scene_renderer {
 
-Pvs_page_streamer::Pvs_page_streamer(tf::Executor* const executor)
-    : m_executor{executor}
-    , m_state   {std::make_shared<Shared_state>()}
+Pvs_page_streamer::Pvs_page_streamer(Pvs_page_read_executor read_executor)
+    : m_read_executor{std::move(read_executor)}
+    , m_state        {std::make_shared<Shared_state>()}
 {
 }
 
@@ -39,12 +39,14 @@ void Pvs_page_streamer::request(std::shared_ptr<const erhe::scene::Pvs_database>
     if (!start_task) {
         return;
     }
-    if (m_executor == nullptr) {
+    // The drain task never re-spawns, so its executor is the one chosen here.
+    tf::Executor* const executor = m_read_executor ? m_read_executor() : nullptr;
+    if (executor == nullptr) {
         drain(m_state);
         return;
     }
     std::shared_ptr<Shared_state> state = m_state;
-    erhe::task::spawn(*m_executor, [state]() { drain(state); });
+    erhe::task::spawn(*executor, [state]() { drain(state); });
 }
 
 void Pvs_page_streamer::drain(const std::shared_ptr<Shared_state>& state)
@@ -58,6 +60,7 @@ void Pvs_page_streamer::drain(const std::shared_ptr<Shared_state>& state)
             words = std::move(state->free_buffers.back());
             state->free_buffers.pop_back();
         }
+        state->reading = true;
         lock.unlock();
 
         // The read: the in-memory copy or a range of the bits source.
@@ -66,6 +69,7 @@ void Pvs_page_streamer::drain(const std::shared_ptr<Shared_state>& state)
         request.database.reset();
 
         lock.lock();
+        state->reading = false;
         state->results.push_back(Pvs_page_read{.generation = request.generation, .page = request.page, .ok = ok, .words = std::move(words)});
     }
     state->task_running = false;
@@ -95,6 +99,16 @@ void Pvs_page_streamer::cancel()
         m_state->free_buffers.push_back(std::move(result.words));
     }
     m_state->results.clear();
+}
+
+auto Pvs_page_streamer::get_counts() const -> Pvs_page_streamer_counts
+{
+    const std::lock_guard<std::mutex> lock{m_state->mutex};
+    return Pvs_page_streamer_counts{
+        .queued  = m_state->requests.size(),
+        .running = m_state->reading ? std::size_t{1} : std::size_t{0},
+        .ready   = m_state->results.size()
+    };
 }
 
 auto Pvs_page_upload_queue::push(

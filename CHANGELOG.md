@@ -9,6 +9,20 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::scene_renderer`: `pvs_page_streamer.hpp` - `Pvs_page_streamer::get_counts()`
+  (`Pvs_page_streamer_counts`: requests queued, the read running, finished reads not taken)
+  and `Draw_list_scene::get_pvs_page_streamer_counts()` (`doc/erhe/draw_list_renderer.md` Q6).
+- `erhe::raytrace`: `raytrace_executor.hpp` - `start_thread_pool()`: the backend's build
+  thread pool is constructed on the calling thread (`doc/erhe/raytrace.md` "Build thread pool").
+
+- `erhe::task`: `executor.hpp` - `Executors` (a foreground and a background executor;
+  `get_inherited()` returns the executor of the calling worker's work); `task.hpp` -
+  `verify_executor_may_spawn()`: the spawn wrappers abort when a worker of a
+  `Worker_priority::lowered` executor spawns onto another executor (`doc/erhe/task.md` "Two executors").
+- `erhe::task`: `executor.hpp` - `make_executor()` with `Executor_create_info` and
+  `Worker_priority` (`normal`, `lowered`): an executor whose workers are named and run at
+  the requested priority; `get_worker_priority_report()` reads back each worker's priority;
+  `task_log.hpp` - `initialize_logging()` (`doc/erhe/task.md` "Executors").
 - `erhe::codegen`: the enum `value()` option `former_names` - earlier names of a
   value that the generated `from_string()` reads as it; `to_string()` writes the
   current name (`doc/erhe/codegen.md` "Enum Value Options").
@@ -180,6 +194,11 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Changed
 
+- `erhe::scene_renderer`: `Pvs_page_streamer` takes a `Pvs_page_read_executor`
+  (`std::function<tf::Executor*()>`, called at each spawn of its read task; empty or a null
+  result reads inline) in place of a `tf::Executor*`, and
+  `Draw_list_scene_create_info::executor` is replaced by `pvs_read_executor`
+  (`doc/erhe/draw_list_renderer.md` Q6).
 - `erhe::physics` (Jolt): a compound shape's `describe()` names its children
   (`Jolt_compound_shape(Jolt_box_shape)`).
 - `erhe::physics` (Jolt): mass convention - a body without an explicit mass weighs its shape

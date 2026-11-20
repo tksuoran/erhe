@@ -57,6 +57,10 @@
 #include "input_state.hpp"
 #include "task_guard.hpp"
 #include "time.hpp"
+#include "frame_tick_history.hpp"
+#include "background_apply_meter.hpp"
+#include "executor_status.hpp"
+#include "thread_pools.hpp"
 
 #include "animation/animation_player.hpp"
 #include "animation/animation_window.hpp"
@@ -235,7 +239,9 @@
 #include "erhe_physics/iworld.hpp"
 #include "erhe_primitive/primitive_log.hpp"
 #include "erhe_raytrace/raytrace_executor.hpp"
+#include "erhe_task/executor.hpp"
 #include "erhe_task/task.hpp"
+#include "erhe_task/task_log.hpp"
 #include "erhe_raytrace/raytrace_log.hpp"
 #include "erhe_renderer/debug_renderer.hpp"
 #include "erhe_scene_renderer/content_wide_line_interface.hpp"
@@ -354,6 +360,14 @@ void apply_graphics_config_environment_overrides(Graphics_config& graphics_confi
 {
     apply_graphics_config_environment_override("ERHE_FORCE_DISABLE_REVERSE_DEPTH", "force_disable_reverse_depth", graphics_config.force_disable_reverse_depth);
     apply_graphics_config_environment_override("ERHE_SPIRV_OPTIMIZATION",          "spirv_optimization",          graphics_config.spirv_optimization);
+}
+
+// A thread count of 0 or less is one worker per hardware thread.
+auto get_executor_thread_count(const int configured_thread_count) -> std::size_t
+{
+    return (configured_thread_count > 0)
+        ? static_cast<std::size_t>(configured_thread_count)
+        : std::max<std::size_t>(std::thread::hardware_concurrency(), 1);
 }
 
 // Command buffer thread slots of the frame phases (doc/editor/render_thread.md
@@ -535,6 +549,8 @@ public:
         double swapchain_us        {0.0}; // wait_for_swapchain + begin_swapchain (both part of R)
         double join_wait_us        {0.0}; // main thread blocked joining the previous frame's R (Render_thread::join() in M1, or before the kick with frame pipelining); R minus join_wait = overlapped R
         double full_tick_us        {0.0}; // start_frame() begin to frame() end: frame start wait + poll + frame()
+        double fg_busy_workers     {0.0}; // foreground executor workers not parked, sampled once per tick
+        double bg_busy_workers     {0.0}; // background executor workers not parked, sampled once per tick
         unsigned int frame_count   {0};
     };
     Phase_timing m_phase_timing{};
@@ -551,7 +567,16 @@ public:
     {
         const std::chrono::steady_clock::time_point tick_end = std::chrono::steady_clock::now();
         m_phase_timing.full_tick_us += elapsed_us(tick_begin, tick_end);
+        const std::array<Executor_status_entry, 2>& executors = m_executor_status->get_executors();
+        m_phase_timing.fg_busy_workers += static_cast<double>(executors[Executor_status::c_foreground].get_busy_worker_count());
+        m_phase_timing.bg_busy_workers += static_cast<double>(executors[Executor_status::c_background].get_busy_worker_count());
         ++m_phase_timing.frame_count;
+        m_background_apply_meter->end_frame();
+        m_frame_tick_history->record(
+            tick_begin,
+            tick_end,
+            m_app_context.is_scene_load_in_flight() ? Frame_tick_scene_state::loading : Frame_tick_scene_state::idle
+        );
         if (m_benchmark_driver) {
             hand_off_benchmark_frame(tick_end);
         }
@@ -565,7 +590,7 @@ public:
         const double render_us   = m_phase_timing.render_us    / frame_count;
         const double full_us     = m_phase_timing.full_tick_us / frame_count;
         log_frame->info(
-            "Phase timing (us/frame, avg of {} frames): M1 {:.1f} (frame_start_wait {:.1f}) M2 {:.1f} (slot_acquire {:.1f}; start {:.1f} upload {:.1f} sim {:.1f} imgui {:.1f} update {:.1f} scene {:.1f}) M3 {:.1f} R {:.1f} (swapchain {:.1f} draw_data_wait {:.1f}) join_wait {:.1f} handoff (kick {:.1f} join {:.1f}) full tick {:.1f}",
+            "Phase timing (us/frame, avg of {} frames): M1 {:.1f} (frame_start_wait {:.1f}) M2 {:.1f} (slot_acquire {:.1f}; start {:.1f} upload {:.1f} sim {:.1f} imgui {:.1f} update {:.1f} scene {:.1f}) M3 {:.1f} R {:.1f} (swapchain {:.1f} draw_data_wait {:.1f}) join_wait {:.1f} handoff (kick {:.1f} join {:.1f}) full tick {:.1f} workers fg {:.1f} bg {:.1f}",
             m_phase_timing.frame_count,
             m1_us,
             m_phase_timing.frame_start_wait_us / frame_count,
@@ -584,7 +609,9 @@ public:
             m_phase_timing.join_wait_us / frame_count,
             m_phase_timing.kick_latency_us / frame_count,
             m_phase_timing.join_latency_us / frame_count,
-            full_us
+            full_us,
+            m_phase_timing.fg_busy_workers / frame_count,
+            m_phase_timing.bg_busy_workers / frame_count
         );
         m_phase_timing           = Phase_timing{};
         m_benchmark_phase_timing = Phase_timing{};
@@ -1598,7 +1625,7 @@ public:
                 .app_context                 = m_app_context,
                 .graphics_device             = *m_graphics_device,
                 .command_buffer              = command_buffer,
-                .executor                    = *m_app_context.executor,
+                .executor                    = *m_app_context.foreground_executor,
                 .budget                      = budget,
                 .max_in_flight_bytes = static_cast<std::size_t>(
                     std::max(0, m_app_context.editor_settings->load.max_in_flight_bytes)
@@ -2855,26 +2882,47 @@ public:
         m_app_context.render_thread_id = m_app_context.main_thread_id;
         erhe::utility::Thread_roles::set_main_thread(m_app_context.main_thread_id);
 
-        // thread_count <= 0 means one worker per hardware thread.
-        const int configured_thread_count = m_editor_settings.threading.thread_count;
-        const std::size_t thread_count = (configured_thread_count > 0)
-            ? static_cast<std::size_t>(configured_thread_count)
-            : std::max<std::size_t>(std::thread::hardware_concurrency(), 1);
+        // Before the executors: no background task has run yet (doc/editor/editor.md "Outside thread pools").
+        start_outside_thread_pools();
 
-        m_executor = std::make_unique<tf::Executor>(thread_count);
+        // doc/editor/editor.md "Worker executors"
+        m_foreground_executor = erhe::task::make_executor(
+            erhe::task::Executor_create_info{
+                .name         = "Worker",
+                .thread_count = get_executor_thread_count(m_editor_settings.threading.thread_count),
+                .priority     = erhe::task::Worker_priority::normal
+            }
+        );
+        m_background_executor = erhe::task::make_executor(
+            erhe::task::Executor_create_info{
+                .name         = "Bg worker",
+                .thread_count = get_executor_thread_count(m_editor_settings.threading.background_thread_count),
+                .priority     = erhe::task::Worker_priority::lowered
+            }
+        );
+        m_executors = std::make_unique<erhe::task::Executors>(*m_foreground_executor.get(), *m_background_executor.get());
 
         // Debug-only abort when a context-holding task parks and gets a
         // task co-run onto it - proposal B, catches what the spawn guard
         // cannot see (see task_guard.hpp).
-        attach_gl_context_task_guard(*m_executor.get());
+        attach_gl_context_task_guard(*m_foreground_executor.get());
+        attach_gl_context_task_guard(*m_background_executor.get());
+        m_executor_status = std::make_unique<Executor_status>(
+            *m_foreground_executor.get(), m_editor_settings.threading.thread_count,
+            *m_background_executor.get(), m_editor_settings.threading.background_thread_count
+        );
+        m_app_context.executor_status = m_executor_status.get();
+        m_background_apply_meter = std::make_unique<Background_apply_meter>(m_editor_settings.threading);
+        m_app_context.background_apply_meter = m_background_apply_meter.get();
 
-        // Scene level raytrace BVH builds run on the executor, so that they
+        // Scene level raytrace BVH builds run on a worker, so that they
         // never land on the frame. Injected as a spawn function routing
         // through the guarded wrapper, so the library's spawn stays covered
-        // by the GL worker-context spawn guard (proposal A).
+        // by the GL worker-context spawn guard (proposal A). The build runs
+        // on the executor of the work that requests it.
         erhe::raytrace::set_task_spawner(
-            [executor = m_executor.get()](std::function<void()> work) {
-                erhe::task::spawn(*executor, std::move(work));
+            [executors = m_executors.get()](std::function<void()> work) {
+                erhe::task::spawn(executors->get_inherited(), std::move(work));
             }
         );
 
@@ -2898,6 +2946,7 @@ public:
             }
             m_input_state       = std::make_unique<Input_state                   >();
             m_time              = std::make_unique<Time                          >();
+            m_frame_tick_history = std::make_unique<Frame_tick_history           >();
             if (is_deterministic_clock()) {
                 m_time->set_fixed_frame_duration_ns(Time::c_deterministic_frame_duration_ns);
                 log_startup->info(
@@ -3167,13 +3216,13 @@ public:
                 }
 #if defined(ERHE_SPIRV)
                 // Before the programs build, so each one is observed.
-                m_shader_session_programs = std::make_unique<Shader_session_programs>(*m_graphics_device.get());
+                m_shader_session_programs = std::make_unique<Shader_session_programs>(*m_graphics_device.get(), *m_executor_status.get());
                 if (
                     (shader_analytics_default == Shader_analytics_default::offline_compilers) &&
                     m_editor_settings.shader_analytics.enabled
                 ) {
                     m_shader_analytics_service = std::make_unique<Shader_analytics_service>(
-                        m_editor_settings.shader_analytics, *m_shader_session_programs.get(), *m_executor.get(), *m_shader_analytics.get()
+                        m_editor_settings.shader_analytics, *m_shader_session_programs.get(), *m_background_executor.get(), *m_executor_status.get(), *m_shader_analytics.get()
                     );
                 }
 #else
@@ -3235,7 +3284,7 @@ public:
                 init_status_display.set_line(1, "Loading shader stages");
 
                 m_programs->load_programs(
-                    *m_executor.get(),
+                    *m_foreground_executor.get(),
                     *m_graphics_device.get(),
                     *m_mesh_memory.get(),
                     *m_program_interface.get(),
@@ -3455,7 +3504,7 @@ public:
                 if (m_shader_session_programs) {
                     m_shader_session_programs->start(
                         m_scene_commit_queue,
-                        *m_executor.get(),
+                        *m_background_executor.get(),
                         static_cast<std::size_t>(std::max(m_editor_settings.shader_analytics.max_jobs, 1))
                     );
                 }
@@ -3554,9 +3603,9 @@ public:
                 m_operation_stack        = std::make_unique<Operation_stack                 >(*m_commands.get(),       *m_imgui_renderer.get(), *m_imgui_windows.get(), m_app_context);
                 m_scene_save_service     = std::make_unique<Scene_save_service              >(m_app_context);
                 m_editor_asset_registry  = std::make_unique<Editor_asset_registry           >(std::filesystem::path{"cache"} / "editor_assets");
-                m_asset_browser          = std::make_unique<Asset_browser                   >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context, *m_app_message_bus.get(), *m_executor.get());
+                m_asset_browser          = std::make_unique<Asset_browser                   >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context, *m_app_message_bus.get(), *m_background_executor.get());
                 m_asset_fetch            = std::make_unique<Asset_fetch                     >(m_app_context, *m_asset_browser.get());
-                m_level_kits             = std::make_unique<Level_kits                      >(m_app_context, *m_app_message_bus.get());
+                m_level_kits             = std::make_unique<Level_kits                      >(m_app_context, *m_app_message_bus.get(), *m_graphics_device.get(), *m_background_executor.get());
                 m_composer_window        = std::make_unique<Composer_window                 >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context);
                 m_selection_window       = std::make_unique<Selection_window                >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context);
                 m_settings_window        = std::make_unique<Settings_window                 >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context, *m_app_message_bus.get());
@@ -3584,7 +3633,7 @@ public:
                 m_properties             = std::make_unique<Properties                      >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context, *m_app_message_bus.get());
                 m_geometry_spreadsheet_window = std::make_unique<Geometry_spreadsheet_window>(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context, *m_app_message_bus.get());
                 m_editor_windows         = std::make_unique<Editor_windows                  >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context);
-                m_frame_pacing_window    = std::make_unique<Frame_pacing_window             >(*m_imgui_renderer.get(), *m_imgui_windows.get());
+                m_frame_pacing_window    = std::make_unique<Frame_pacing_window             >(*m_imgui_renderer.get(), *m_imgui_windows.get(), *m_executor_status.get());
                 m_controller_inputs_window = std::make_unique<Controller_inputs_window     >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context);
                 m_lightmap_window        = std::make_unique<Lightmap_window                 >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context);
                 m_lightmap_texture_window = std::make_unique<Lightmap_texture_window        >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context, *m_app_message_bus.get());
@@ -3689,7 +3738,7 @@ public:
                     m_app_context,                            //App_context&                       app_context
                     m_app_settings,                           //App_settings&                      app_settings
                     *m_mesh_memory.get(),                     //erhe::scene_renderer::Mesh_memory& mesh_memory
-                    *m_executor.get()                         //tf::Executor&                      executor
+                    *m_background_executor.get()              //tf::Executor&                      brush_geometry_executor
                 );
                 // The scene_root is assigned to Scene_builder later, by
                 // create_default_scene() (the scene.create startup command).
@@ -3748,7 +3797,7 @@ public:
                 m_scale_tool  = std::make_unique<Scale_tool >(m_app_context, *m_icon_set.get(), *m_tools.get());
                 m_transform_tool = std::make_unique<Transform_tool>(
                     m_editor_settings.transform_tool,
-                    *m_executor.get(),
+                    *m_foreground_executor.get(),
                     *m_commands.get(),
                     *m_imgui_renderer.get(),
                     *m_imgui_windows.get(),
@@ -4438,31 +4487,49 @@ public:
         m_asset_fetch.reset();
 
         // Wait for all async tasks to complete, then clear task handles
-        // and destroy the executor while m_mesh_memory is still alive.
+        // and destroy the executors while m_mesh_memory is still alive.
         // Without this, implicit member destruction destroys m_mesh_memory
         // (declared after m_item_task_guard) before m_item_task_guard, and clearing
         // the task handles cascades through shared_ptr drops to
         // Free_list_allocator::free() on the already-destroyed allocator.
+        // Owners of pending background work stop taking requests first.
         // Queued shader stats jobs would otherwise all run before wait_for_all() returns.
+        if (m_scene_builder) {
+            m_scene_builder->stop_brush_geometry_queue();
+        }
+        // Drops its finished builds here, on the main thread, while mesh memory is alive.
+        if (m_level_kits) {
+            m_level_kits->get_thumbnails().stop();
+        }
 #if defined(ERHE_SPIRV)
         if (m_shader_session_programs) {
             m_shader_session_programs->stop();
         }
 #endif
-        if (m_executor) {
-            m_executor->wait_for_all();
+        // Foreground first: its tasks may spawn background work, never the reverse.
+        if (m_foreground_executor) {
+            m_foreground_executor->wait_for_all();
+        }
+        if (m_background_executor) {
+            m_background_executor->wait_for_all();
         }
         // wait_for_all() has run every closed scene's payload release task;
         // a scene root destroyed during the rest of the teardown releases its
         // payload on this thread.
         m_scene_payload_release.wait_idle();
-        m_scene_payload_release.set_executor(nullptr);
+        m_scene_payload_release.detach();
         m_item_task_guard.clear();
         // Commits the drained workers left behind own scene roots / shapes;
         // drop them now, while mesh memory and scenes are still alive.
         m_scene_commit_queue.clear();
         erhe::raytrace::set_task_spawner({});
-        m_executor.reset();
+        m_app_context.executor_status     = nullptr;
+        m_app_context.executors           = nullptr;
+        m_app_context.background_executor = nullptr;
+        m_app_context.foreground_executor = nullptr;
+        m_executors.reset();
+        m_background_executor.reset();
+        m_foreground_executor.reset();
 
         if (m_mcp_server) {
             m_mcp_server->stop();
@@ -4484,10 +4551,14 @@ public:
     {
         ERHE_PROFILE_FUNCTION();
 
-        m_app_context.executor                 = m_executor.get();
+        m_app_context.foreground_executor      = m_foreground_executor.get();
+        m_app_context.background_executor      = m_background_executor.get();
+        m_app_context.executors                = m_executors.get();
+        m_app_context.executor_status          = m_executor_status.get();
+        m_app_context.background_apply_meter   = m_background_apply_meter.get();
         m_app_context.scene_commit_queue       = &m_scene_commit_queue;
         m_app_context.scene_payload_release    = &m_scene_payload_release;
-        m_scene_payload_release.set_executor(m_executor.get());
+        m_scene_payload_release.attach(*m_background_executor.get(), *m_executor_status.get());
 
         m_app_context.commands                 = m_commands              .get();
         m_app_context.graphics_device          = m_graphics_device       .get();
@@ -4615,6 +4686,7 @@ public:
         m_app_context.texture_file_loader      = m_texture_file_loader   .get();
         m_app_context.thumbnails               = m_thumbnails            .get();
         m_app_context.time                     = m_time                  .get();
+        m_app_context.frame_tick_history       = m_frame_tick_history    .get();
         m_app_context.animation_player         = m_animation_player      .get();
         m_app_context.animation_window         = m_animation_window      .get();
         m_app_context.tools                    = m_tools                 .get();
@@ -4889,10 +4961,19 @@ public:
 
         const bool is_tools_scene = m_tools_attached_to_scene && (m_tools_scene_root.lock() == scene_root);
 
-        // First, before anything unregisters the scene's content: the draw
-        // lists drop the PVS database, so entries leaving with the scene do
-        // not mark it stale (doc/plans/pvs.md D4).
-        scene_root->detach_pvs_consumer();
+        // Out of the set first; the viewports let go of the scene below, in this
+        // same handler, before any frame renders without the scene's snapshot.
+        scene_root->unregister_from_editor_scenes(*m_app_scenes);
+        {
+            // Waits for a task inside the scene's locked section; every later one
+            // finds the scene closed (doc/editor/coding_rules.md "Scenes and tasks").
+            const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> scene_lock{scene_root->item_host_mutex};
+            scene_root->set_closed();
+            // Before anything unregisters the scene's content: the draw lists
+            // drop the PVS database, so entries leaving with the scene do not
+            // mark it stale (doc/plans/pvs.md D4).
+            scene_root->detach_pvs_consumer();
+        }
 
         // Drop selected items hosted by this scene (including the Scene item,
         // whose host is also this scene_root) so the selection does not keep
@@ -4980,7 +5061,6 @@ public:
         // until another scene binds into them.
         m_viewport_scene_views->unbind_views_from_scene(scene_root);
         scene_root->remove_browser_window();
-        scene_root->unregister_from_editor_scenes(*m_app_scenes);
 
         if (m_default_scene == scene_root) {
             m_default_scene_browser.reset();
@@ -5728,10 +5808,14 @@ public:
     Editor_settings_config&             m_editor_settings{m_app_settings.config()};
     User_state_config&                  m_user_state     {m_app_settings.user_state()};
 
-    std::unique_ptr<tf::Executor>       m_executor;
-    Item_async_task_guard               m_item_task_guard; // destroyed before m_executor
-    Scene_commit_queue                  m_scene_commit_queue; // cleared in shutdown after m_executor->wait_for_all()
-    Scene_payload_release               m_scene_payload_release; // declared before the parts: outlives every Scene_root; executor detached in shutdown
+    std::unique_ptr<tf::Executor>           m_foreground_executor;
+    std::unique_ptr<tf::Executor>           m_background_executor;
+    std::unique_ptr<erhe::task::Executors>  m_executors;
+    std::unique_ptr<Executor_status>        m_executor_status; // outlives the owners of background work, declared after it
+    std::unique_ptr<Background_apply_meter> m_background_apply_meter; // outlives the owners that apply inside its scopes
+    Item_async_task_guard               m_item_task_guard; // destroyed before the executors
+    Scene_commit_queue                  m_scene_commit_queue; // cleared in shutdown after both executors' wait_for_all()
+    Scene_payload_release               m_scene_payload_release; // declared before the parts: outlives every Scene_root; detached in shutdown
 
     App_context                         m_app_context;
 
@@ -5783,6 +5867,7 @@ public:
     std::unique_ptr<App_message_bus               > m_app_message_bus;
     std::unique_ptr<Input_state                   > m_input_state;
     std::unique_ptr<Time                          > m_time;
+    std::unique_ptr<Frame_tick_history            > m_frame_tick_history;
 
     std::unique_ptr<Clipboard                              > m_clipboard;
     std::unique_ptr<erhe::window::Context_window           > m_window;
@@ -6051,6 +6136,7 @@ void run_editor(const std::string& startup_commands_path, const std::string& sta
         erhe::rendergraph::initialize_logging();
         erhe::scene::initialize_logging();
         erhe::scene_renderer::initialize_logging();
+        erhe::task::initialize_logging();
         erhe::window::initialize_logging();
         erhe::ui::initialize_logging();
 #if defined(ERHE_USD_LIBRARY_LIGHTUSD)

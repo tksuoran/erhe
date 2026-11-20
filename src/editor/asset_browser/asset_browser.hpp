@@ -1,6 +1,7 @@
 #pragma once
 
 #include "app_message.hpp"
+#include "background_work.hpp"
 #include "editor_item_bits.hpp"
 
 #include "windows/item_tree_window.hpp"
@@ -109,14 +110,9 @@ public:
     std::shared_ptr<Gltf_scan_request> scan_request;
 };
 
-// Lazily populate contents + bounding_box, by scanning on a WORKER: the first
-// call spawns the scan and returns immediately with is_scanned still false;
-// a later call picks the result up. No-op once scanned. Shared by the asset
-// browser tooltip / context menu and the viewport drop target.
-void ensure_scanned(App_context& context, Asset_file_gltf& gltf);
-
-// Blocking variant, for the few callers that genuinely cannot proceed without
-// the scan (a drag-and-drop drop that must decide right now).
+// Scans on the calling thread, for the few callers that genuinely cannot
+// proceed without the scan (a drag-and-drop drop that must decide right now);
+// a background scan still in flight is not waited for (W4.4).
 void ensure_scanned_blocking(Asset_file_gltf& gltf);
 
 class Asset_file_geogram : public erhe::Item<erhe::Item_base, Asset_node, Asset_file_geogram>
@@ -291,6 +287,12 @@ public:
 
     [[nodiscard]] auto is_scan_in_flight() const -> bool { return static_cast<bool>(m_scan_request); }
 
+    // Lazily populates contents + bounding_box by scanning in a background
+    // task: the first call spawns the scan and returns immediately with
+    // is_scanned still false; a later call picks the result up. No-op once
+    // scanned. Main thread (the tooltip and the context menu).
+    void ensure_scanned(Asset_file_gltf& gltf);
+
 private:
     // Change-driven refresh for one written file (#256): the freshly saved
     // scene file must appear in the browser without a manual Scan, and a full
@@ -385,6 +387,9 @@ private:
     std::vector<std::filesystem::path> m_pending_refresh_paths;
 
     erhe::message_bus::Subscription<Scene_saved_message> m_scene_saved_subscription;
+
+    std::shared_ptr<Background_task_counter> m_scan_task_counts; // shared with the scan tasks; nothing counts as ready
+    Background_work_owner                    m_background_work;  // last: reads m_scan_task_counts
 };
 
 }

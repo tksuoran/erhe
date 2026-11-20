@@ -132,7 +132,10 @@ void deferred_finalize_mesh_items(
         // (doc/erhe/meshoptimizer_integration.md "Level of detail").
         std::vector<bool>                                           keep_stored_lod;
         {
-            std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> scene_lock{scene_root->item_host_mutex};
+            const Scene_task_lock scene_lock{*scene_root};
+            if (!scene_lock.is_scene_open()) {
+                return;
+            }
             mesh_primitives = scene_mesh->get_primitives();
             force_optimized_rebuild.assign(mesh_primitives.size(), false);
             lod_settings.assign(mesh_primitives.size(), std::optional<erhe::primitive::Lod_settings>{});

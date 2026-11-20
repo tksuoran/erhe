@@ -13,6 +13,16 @@ Flagged forms (the scheduling vocabulary):
 tf::Taskflow::emplace is deliberately NOT flagged: graph construction
 schedules nothing; run() is the schedule point and is flagged.
 
+A tf::Executor is constructed only by erhe::task::make_executor, which names
+and prioritizes its workers (D2.7 of doc/plans/worker_executors.md). Flagged
+construction forms:
+  - tf::Executor name; / name(...) / name{...} / name = ...   object or member
+  - tf::Executor(...) / tf::Executor{...}                     temporary
+  - make_unique<tf::Executor> / make_shared<tf::Executor>
+  - new tf::Executor
+References, pointers, std::unique_ptr<tf::Executor> and forward declarations
+are not flagged.
+
 Scanned: src/editor and src/erhe (the trees that share a graphics device).
 Exempt: src/erhe/task (the wrapper itself) and test directories (tests run
 their own executors with no shared graphics device). geogram_soak and the
@@ -32,10 +42,18 @@ PATTERNS = (
     re.compile(r"\bsubflow\s*(\.|->)\s*emplace\s*\("),
 )
 
+EXECUTOR_PATTERNS = (
+    re.compile(r"\btf::Executor\s+[A-Za-z_]\w*\s*[;({=]"),
+    re.compile(r"\btf::Executor\s*[({]"),
+    re.compile(r"\bmake_(unique|shared)\s*<\s*tf::Executor\s*>"),
+    re.compile(r"\bnew\s+tf::Executor\b"),
+)
+
 
 def main() -> int:
     repo_root = Path(__file__).resolve().parent.parent
     violations = []
+    executor_violations = []
     for scan_root in SCAN_ROOTS:
         for path in sorted((repo_root / scan_root).rglob("*")):
             if path.suffix not in (".cpp", ".hpp", ".h", ".inl"):
@@ -68,14 +86,25 @@ def main() -> int:
                 for pattern in PATTERNS:
                     if pattern.search(code):
                         violations.append(f"{relative}:{line_number}: {line.strip()}")
+                for pattern in EXECUTOR_PATTERNS:
+                    if pattern.search(code):
+                        executor_violations.append(f"{relative}:{line_number}: {line.strip()}")
+                        break
     if violations:
         print("Task scheduling outside the erhe::task spawn wrappers (proposal A of")
         print("doc/erhe/gl_worker_context_enforcement.md). Use erhe::task::spawn /")
         print("spawn_dependent / run / emplace instead:")
         for violation in violations:
             print(f"  {violation}")
+    if executor_violations:
+        print("tf::Executor constructed outside erhe::task::make_executor (D2.7 of")
+        print("doc/plans/worker_executors.md):")
+        for violation in executor_violations:
+            print(f"  {violation}")
+    if violations or executor_violations:
         return 1
     print("check_task_spawns: all task scheduling goes through erhe::task wrappers")
+    print("check_task_spawns: every tf::Executor is made by erhe::task::make_executor")
     return 0
 
 

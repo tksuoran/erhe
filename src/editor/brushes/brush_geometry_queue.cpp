@@ -8,14 +8,15 @@
 
 #include <taskflow/taskflow.hpp>
 
+#include <algorithm>
+
 namespace editor {
 
 Brush_geometry_queue_state::Brush_geometry_queue_state(tf::Executor& executor)
     : m_executor{executor}
 {
-    // One worker is left for the rest of the editor's task work (doc/editor/brushes.md G5).
-    const std::size_t worker_count = static_cast<std::size_t>(executor.num_workers());
-    m_max_in_flight = (worker_count > 1) ? (worker_count - 1) : std::size_t{1};
+    // The background executor runs nothing the user waits for, so the queue may fill it (doc/editor/brushes.md G5).
+    m_max_in_flight = std::max(static_cast<std::size_t>(executor.num_workers()), std::size_t{1});
 }
 
 void Brush_geometry_queue_state::request(const std::shared_ptr<Brush>& brush, const std::string& name)
@@ -120,8 +121,12 @@ auto Brush_geometry_queue_state::get_max_in_flight() const -> std::size_t
     return m_max_in_flight;
 }
 
-Brush_geometry_queue::Brush_geometry_queue(tf::Executor& executor)
-    : m_state{std::make_shared<Brush_geometry_queue_state>(executor)}
+Brush_geometry_queue::Brush_geometry_queue(tf::Executor& executor, Executor_status& executor_status)
+    : m_state          {std::make_shared<Brush_geometry_queue_state>(executor)}
+    , m_background_work{
+        executor_status, "brush_geometry",
+        [this]() { return Background_work_counts{.queued = m_state->get_pending_count(), .running = m_state->get_in_flight_count()}; }
+    }
 {
     log_brush->trace("Brush geometry queue: up to {} preparation tasks in flight", m_state->get_max_in_flight());
 }

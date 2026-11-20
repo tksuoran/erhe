@@ -1060,6 +1060,32 @@ auto Binary_mesh_operation::make_operations(
     glm::mat4 target_node_from_world = glm::mat4{1};
     erhe::Item_host* item_host = nullptr;
 
+    // The host of the first mesh-carrying content node; the inputs are read under its lock.
+    for (const auto& item : parameters.items) {
+        if (!erhe::utility::test_bit_set(item->get_flag_bits(), erhe::Item_flags::content)) {
+            continue;
+        }
+        const std::shared_ptr<erhe::scene::Node> node = std::dynamic_pointer_cast<erhe::scene::Node>(item);
+        if (node && erhe::scene::get_mesh(node.get())) {
+            item_host = node->get_item_host();
+            break;
+        }
+    }
+    if (item_host == nullptr) {
+        return {};
+    }
+    const Scene_task_lock scene_lock{*item_host};
+    if (!scene_lock.is_scene_open()) {
+        // The compound is refused through this child (Compound_operation::execute).
+        std::shared_ptr<Mesh_operation> refused = std::make_shared<Mesh_operation>(
+            Mesh_operation_parameters{.context = parameters.context, .build_info = parameters.build_info}
+        );
+        refused->set_refused("the scene closed before the operation ran");
+        Compound_operation::Parameters refused_parameters;
+        refused_parameters.operations.push_back(std::move(refused));
+        return refused_parameters;
+    }
+
     for (const auto& item : parameters.items) {
         if (!erhe::utility::test_bit_set(item->get_flag_bits(), erhe::Item_flags::content)) {
             continue;
@@ -1076,7 +1102,7 @@ auto Binary_mesh_operation::make_operations(
 
         // All participating nodes share one host (async_for_nodes_with_mesh
         // verified this), so world transforms compose within one world space
-        // and the single item_host_mutex lock below is correct.
+        // and the single item_host_mutex lock above is correct.
         glm::mat4 target_from_entry_node;
         const bool is_target = !target_node;
         if (is_target) {
@@ -1084,7 +1110,6 @@ auto Binary_mesh_operation::make_operations(
             target_node_from_world = raw_node->node_from_world();
             target_node            = node;
             target_mesh            = mesh;
-            item_host              = raw_node->get_item_host();
         } else {
             target_from_entry_node = target_node_from_world * raw_node->world_from_node();
             tool_nodes.push_back(node);
@@ -1111,14 +1136,10 @@ auto Binary_mesh_operation::make_operations(
         }
     }
 
-    if (item_host == nullptr) {
-        return {};
-    }
     if (lhs_entries.empty() || rhs_entries.empty()) {
         log_operations->info("CSG {}: need a target mesh node plus at least one tool mesh node", operation_name);
         return {};
     }
-    std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> scene_lock{item_host->item_host_mutex};
 
     // Merge inputs into the target's local space and run the boolean. The CSG
     // implementations (and merge) reach Geogram, which must not run

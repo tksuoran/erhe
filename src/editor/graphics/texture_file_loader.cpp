@@ -1,6 +1,7 @@
 #include "graphics/texture_file_loader.hpp"
 
 #include "app_context.hpp"
+#include "background_apply_meter.hpp"
 #include "config/generated/editor_settings_config.hpp"
 #include "editor_log.hpp"
 
@@ -15,6 +16,7 @@
 #include "erhe_imgui/imgui_renderer.hpp"
 #include "erhe_task/task.hpp"
 #include "erhe_profile/profile.hpp"
+#include "erhe_utility/thread_roles.hpp"
 
 #include <taskflow/taskflow.hpp>
 
@@ -90,8 +92,22 @@ public:
 };
 
 Texture_file_loader::Texture_file_loader(App_context& context)
-    : m_context{context}
+    : m_context           {context}
+    , m_decode_task_counts{std::make_shared<Background_task_counter>()}
+    , m_background_work   {*context.executor_status, "texture_file_loader", [this]() { return get_background_work_counts(); }}
 {
+}
+
+auto Texture_file_loader::get_background_work_counts() const -> Background_work_counts
+{
+    erhe::utility::Thread_roles::assert_main_thread();
+    Background_work_counts counts = m_decode_task_counts->get_counts();
+    for (const std::shared_ptr<Request>& request : m_pending) {
+        if (request->finished.load(std::memory_order_acquire)) {
+            ++counts.ready;
+        }
+    }
+    return counts;
 }
 
 Texture_file_loader::~Texture_file_loader() noexcept = default;
@@ -157,8 +173,17 @@ auto Texture_file_loader::start_request(const std::filesystem::path& path, const
         request->finished.store(true, std::memory_order_release);
     };
 
-    if (m_context.executor != nullptr) {
-        erhe::task::spawn(*m_context.executor, decode);
+    tf::Executor* const executor = m_context.get_streaming_executor();
+    if (executor != nullptr) {
+        m_decode_task_counts->on_spawned();
+        erhe::task::spawn(
+            *executor,
+            [decode, counts = m_decode_task_counts]() {
+                counts->on_started();
+                decode();
+                counts->on_finished();
+            }
+        );
     } else {
         decode();
     }
@@ -320,7 +345,10 @@ void Texture_file_loader::tick(erhe::graphics::Command_buffer& command_buffer)
         // A finished decode that finds no budget left publishes next frame;
         // publish() leaves it untouched in that case.
         const bool was_pixels_pending = request->ok && !request->pixels.empty();
-        publish(*request, command_buffer, remaining_budget_bytes);
+        {
+            const Background_apply_meter::Scope apply_scope{*m_context.background_apply_meter, "texture_file_loader"};
+            publish(*request, command_buffer, remaining_budget_bytes);
+        }
         if (was_pixels_pending && !request->pixels.empty()) {
             break; // out of upload budget this frame
         }

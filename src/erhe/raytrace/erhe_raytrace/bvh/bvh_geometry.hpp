@@ -30,6 +30,9 @@ class Bvh_scene;
 class Ray;
 class Hit;
 
+// Constructs the build thread pool (every BVH build of the process shares it) if it does not exist yet.
+void start_bvh_thread_pool();
+
 class Bvh_geometry : public IGeometry
 {
 public:

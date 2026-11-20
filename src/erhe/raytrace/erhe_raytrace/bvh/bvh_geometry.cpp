@@ -128,6 +128,11 @@ private:
     bvh::v2::ParallelExecutor m_executor;
 };
 
+void start_bvh_thread_pool()
+{
+    static_cast<void>(Executor_resources::get_instance());
+}
+
 void Bvh_geometry::commit()
 {
     ERHE_PROFILE_FUNCTION();

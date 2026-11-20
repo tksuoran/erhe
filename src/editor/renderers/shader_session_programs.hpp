@@ -1,5 +1,6 @@
 #pragma once
 
+#include "background_work.hpp"
 #include "renderers/offline_compiler.hpp"
 
 #include "erhe_graphics/device.hpp"
@@ -70,7 +71,7 @@ public:
 class Shader_session_programs
 {
 public:
-    explicit Shader_session_programs(erhe::graphics::Device& device);
+    Shader_session_programs(erhe::graphics::Device& device, Executor_status& executor_status);
     ~Shader_session_programs() noexcept;
     Shader_session_programs(const Shader_session_programs&) = delete;
     auto operator=(const Shader_session_programs&) -> Shader_session_programs& = delete;
@@ -139,6 +140,7 @@ private:
     bool                                                 m_stopping{false};
     std::condition_variable                              m_idle;
     std::string                                          m_spirv_tools_version;
+    Background_work_owner                                m_background_work; // last: reads the members above
 };
 
 } // namespace editor

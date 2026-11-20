@@ -3,6 +3,7 @@
 #include "mcp/mcp_server.hpp"
 #include "mcp/mcp_server_shared.hpp"
 #include "app_context.hpp"
+#include "app_scenes.hpp"
 #include "editor_log.hpp"
 #include "config/generated/editor_settings_config.hpp"
 #include "brushes/brush.hpp"
@@ -586,11 +587,35 @@ constexpr std::array<std::pair<const char*, std::optional<Kit_layout_direction>>
 // The Level Kit window's shape thumbnails (doc/editor/level_tools.md "Shape thumbnails").
 auto Mcp_server::query_level_kit_thumbnails(const json& args) -> std::string
 {
-    const std::string unrecognized = unrecognized_keys(args, {});
+    const std::string unrecognized = unrecognized_keys(args, {"request_all", "scene_name"});
     if (!unrecognized.empty()) {
-        return make_error_content("level_get_kit_thumbnails: unrecognized argument(s): " + unrecognized + " (accepts none)");
+        return make_error_content("level_get_kit_thumbnails: unrecognized argument(s): " + unrecognized + " (accepted: request_all, scene_name)");
     }
-    const Kit_thumbnails&                    thumbnails = m_context.level_kits->get_thumbnails();
+    const bool request_all = args.value("request_all", false);
+    if (args.contains("scene_name") && !request_all) {
+        return make_error_content("level_get_kit_thumbnails: scene_name is read with request_all only");
+    }
+    Kit_thumbnails& thumbnails      = m_context.level_kits->get_thumbnails();
+    std::size_t     requested_count = 0;
+    if (request_all) {
+        if (args.contains("scene_name")) {
+            const std::string scene_name = args.value("scene_name", "");
+            std::shared_ptr<Scene_root> scene_root{};
+            for (const std::shared_ptr<Scene_root>& candidate : m_context.app_scenes->get_scene_roots()) {
+                if (candidate->get_name() == scene_name) {
+                    scene_root = candidate;
+                    break;
+                }
+            }
+            if (!scene_root) {
+                return make_error_content("level_get_kit_thumbnails: scene not found: " + scene_name);
+            }
+            thumbnails.follow_scene(scene_root);
+        } else if (!thumbnails.get_lengths().has_value()) {
+            return make_error_content("level_get_kit_thumbnails: request_all needs scene_name until the Level Kit window has drawn its shape rows");
+        }
+        requested_count = thumbnails.request_all();
+    }
     const std::vector<Kit_shape_definition>& shapes     = m_context.level_kits->get_library().get_shapes();
     const std::vector<Kit_thumbnail>&        entries    = thumbnails.get_thumbnails();
     std::array<std::size_t, c_kit_thumbnail_state_count> state_counts{};
@@ -613,9 +638,11 @@ auto Mcp_server::query_level_kit_thumbnails(const json& args) -> std::string
         {"shape_count",   entries.size()},
         {"none_count",    state_counts[static_cast<std::size_t>(Kit_thumbnail_state::none)]},
         {"queued_count",  state_counts[static_cast<std::size_t>(Kit_thumbnail_state::queued)]},
+        {"building_count", state_counts[static_cast<std::size_t>(Kit_thumbnail_state::building)]},
         {"current_count", state_counts[static_cast<std::size_t>(Kit_thumbnail_state::current)]},
         {"failed_count",  state_counts[static_cast<std::size_t>(Kit_thumbnail_state::failed)]},
         {"render_count",  thumbnails.get_render_count()},
+        {"requested_count", requested_count},
         {"shapes",        shape_entries}
     }).dump();
 }

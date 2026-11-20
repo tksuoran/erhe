@@ -2,6 +2,7 @@
 
 #include "app_context.hpp"
 #include "app_settings.hpp"
+#include "background_apply_meter.hpp"
 #include "config/generated/editor_settings_config.hpp"
 #include "editor_log.hpp"
 #include "renderers/lightmap_baker.hpp"
@@ -32,9 +33,21 @@
 namespace editor {
 
 Lightmap_streamer::Lightmap_streamer(erhe::graphics::Device& graphics_device, App_context& context)
-    : m_graphics_device{graphics_device}
-    , m_context        {context}
+    : m_graphics_device {graphics_device}
+    , m_context         {context}
+    , m_load_task_counts{std::make_shared<Background_task_counter>()}
+    , m_background_work {*context.executor_status, "lightmap_streamer", [this]() { return get_background_work_counts(); }}
 {
+}
+
+auto Lightmap_streamer::get_background_work_counts() const -> Background_work_counts
+{
+    erhe::utility::Thread_roles::assert_main_thread();
+    Background_work_counts counts = m_load_task_counts->get_counts();
+    if (m_pending && m_pending->ready.load(std::memory_order_acquire)) {
+        counts.ready = 1;
+    }
+    return counts;
 }
 
 Lightmap_streamer::~Lightmap_streamer() noexcept = default;
@@ -304,8 +317,17 @@ void Lightmap_streamer::start_load(const int tile, const int slot)
         }
         pending->ready.store(true, std::memory_order_release);
     };
-    if (m_context.executor != nullptr) {
-        erhe::task::spawn(*m_context.executor, load);
+    tf::Executor* const executor = m_context.get_streaming_executor();
+    if (executor != nullptr) {
+        m_load_task_counts->on_spawned();
+        erhe::task::spawn(
+            *executor,
+            [load, counts = m_load_task_counts]() {
+                counts->on_started();
+                load();
+                counts->on_finished();
+            }
+        );
     } else {
         load();
     }
@@ -317,6 +339,7 @@ void Lightmap_streamer::upload_pending(Scene_root& scene_root)
     if (!m_pending || !m_pending->ready.load(std::memory_order_acquire)) {
         return;
     }
+    const Background_apply_meter::Scope apply_scope{*m_context.background_apply_meter, "lightmap_streamer"};
     const std::shared_ptr<Pending_load> pending = std::move(m_pending);
     const int tile = pending->tile;
     if ((tile < 0) || (tile >= static_cast<int>(m_tiles.size()))) {

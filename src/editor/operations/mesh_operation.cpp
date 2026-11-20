@@ -55,6 +55,10 @@ void Mesh_operation::execute(App_context& context)
 {
     log_operations->trace("Op Execute Wait {}", describe());
 
+    if (is_refused()) {
+        return;
+    }
+
     if (m_entries.empty()) {
         set_error("No mesh entries - selection may not contain meshes with geometry");
         log_operations->warn("Op Execute {} failed: {}", describe(), get_error());
@@ -73,7 +77,12 @@ void Mesh_operation::execute(App_context& context)
         log_operations->warn("Op Execute {} failed: {}", describe(), get_error());
         return;
     }
-    std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> scene_lock{item_host->item_host_mutex};
+    const Scene_task_lock scene_lock{*item_host};
+    // Queued by a task that finished after the scene closed.
+    if (!scene_lock.is_scene_open()) {
+        set_refused("the scene closed before the operation applied");
+        return;
+    }
 
     log_operations->trace("Op Execute Begin {}", describe());
 
@@ -349,7 +358,11 @@ void Mesh_operation::make_entries(
 
     erhe::Item_host* item_host = first_node->get_item_host();
     ERHE_VERIFY(item_host != nullptr);
-    std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> scene_lock{item_host->item_host_mutex};
+    const Scene_task_lock scene_lock{*item_host};
+    if (!scene_lock.is_scene_open()) {
+        set_refused("the scene closed before the operation ran");
+        return;
+    }
 
     auto* const first_node_raw = first_node ? first_node.get() : first_mesh.get();
     if (first_node_raw == nullptr) {

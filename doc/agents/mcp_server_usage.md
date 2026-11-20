@@ -1393,10 +1393,59 @@ curl -X POST http://127.0.0.1:3743/mcp \
   -d '{"jsonrpc":"2.0","id":"1","method":"tools/call","params":{"name":"get_async_status","arguments":{}}}'
 ```
 
-Returns: `{pending, running, queued_operations, pending_scene_commits, asset_loads, failed_loads, lightmap_prepare?}`.
+Returns: `{pending, running, queued_operations, pending_scene_commits, asset_loads, idle, failed_loads, lightmap_prepare?, background, background_idle}`.
 `failed_loads` lists the most recent failed asset loads as `{path, error}`
 (`doc/editor/async_asset_loading.md` "Failed loads"); `reset_editor_state`
-clears it.
+clears it. `background` reports each owner of background work
+(`brush_geometry`, `scene_payload_release`, `asset_browser`,
+`kit_thumbnails`, `texture_file_loader`, `lightmap_streamer`,
+`pvs_page_streamer`, and `shader_analytics` and `shader_session_programs` when
+the session analyzes shaders) as `{queued, running, ready}`, `ready`
+being results waiting to be applied on the main thread;
+`background_idle` is true when every owner reports 0 for all three.
+Background work is not part of `idle`: a script that needs it finished
+waits for `background_idle` too (`doc/editor/editor.md` "Worker executors").
+
+### get_executor_status
+
+The editor's two executors and the owners of background work
+(`doc/editor/editor.md` "Worker executors"); the Frame Pacing window's
+"Workers" section shows the same. `executors` holds one object per
+executor: `role` (`foreground`, `background`), `name` (the worker thread
+name prefix), `worker_count`, `configured_thread_count` (the
+`threading.thread_count` or `threading.background_thread_count` setting the
+executor was made with; 0 or less is one worker per hardware thread),
+`requested_priority` (`normal`, `lowered`), `priority_applied_workers` (the
+workers on which the requested priority is in effect),
+`read_back_priorities` (the distinct values read back on the workers: nice
+on Linux and Android, `qos_class_t` on macOS, `GetThreadPriority()` on
+Windows), `busy_workers` (workers not parked, read now) and `topologies`
+(task graphs running). `background` and `background_idle` are those of
+`get_async_status`. No arguments.
+
+### get_frame_ticks
+
+The main loop's recent ticks, for wall-clock frame time measurements
+(`scripts/worker_executors_bench.py`). The editor records every tick in a
+ring of the newest 8192 (`Frame_tick_history`, written at the end of
+`frame()` with no allocation): its sequence number (1 for the first
+main-loop tick), its end in seconds since the editor process started, its
+duration in milliseconds (`start_frame()` begin to `frame()` end, the loop
+period of the "Phase timing" line's `full tick`) and whether
+`App_context::is_scene_load_in_flight()`, the predicate of
+`get_async_status` `idle`, read idle at its end. Arguments: `after_tick`
+(default 0: from the oldest tick in the ring) and `max_count` (default
+2000, at most 8192). A client that passes the previous reply's
+`latest_tick` as `after_tick` collects a gap-free series; one call a frame
+keeps up with any frame rate.
+
+Returns: `{oldest_tick, latest_tick, now_s, scene_idle, columns, ticks}`,
+`columns` being `["tick", "end_s", "duration_ms", "scene_idle"]` and each
+entry of `ticks` an array in that order (`scene_idle` 1 or 0). An
+`oldest_tick` above `after_tick + 1` means ticks in between were
+overwritten. The ticks measure wall time only on the wall clock: under
+`ERHE_DETERMINISTIC_CLOCK=1` the durations are still wall time, but the
+editor's time-dependent work no longer follows them.
 
 ### generate_lods / get_lod_info
 

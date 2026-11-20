@@ -1305,7 +1305,7 @@ auto make_import_gltf_operation(
 {
     ERHE_VERIFY(scene_root);
     erhe::graphics::Device& graphics_device = *context.graphics_device;
-    tf::Executor&           executor        = *context.executor;
+    tf::Executor&           executor        = *context.foreground_executor;
 
     // R5.7 record adoption (plan resolution 3): when registering scene_root
     // adopted a loaded container record for this path (the scene-open flow:
@@ -2050,7 +2050,7 @@ auto begin_scene_save_gltf(
     export_arguments.prepared_mesh_data = (kind == Gltf_scene_save_kind::scene_item)
         ? erhe::gltf::Prepared_mesh_data::write
         : erhe::gltf::Prepared_mesh_data::none;
-    export_arguments.executor            = context.executor;
+    export_arguments.executor            = context.foreground_executor;
     export_arguments.prepared_statistics = &impl.prepared_statistics;
     export_arguments.texture_export      = texture_export;
     export_arguments.texture_statistics  = &impl.texture_statistics;
@@ -2663,7 +2663,7 @@ auto open_scene_gltf(
 
         erhe::gltf::Image_transfer image_transfer{*context.graphics_device};
         erhe::gltf::Gltf_parse_arguments parse_arguments{
-            .executor        = *context.executor,
+            .executor        = *context.foreground_executor,
             .device_options  = make_gltf_device_options(context, *context.graphics_device),
             .root_node       = container_node,
             .mesh_layer_id   = Mesh_layer_id::content,

@@ -18,7 +18,7 @@ The editor is the main application built on the erhe C++ graphics engine. It pro
 
 - **`Editor` constructor**:
   1. Loads per-library configs from `config/` directory (e.g. `config/erhe_graphics.json`).
-  2. Creates a `tf::Executor` for task parallelism.
+  2. Creates the foreground and the background executor ("Worker executors").
   3. Creates no-dependency subsystems: `Commands`, `App_message_bus`, `App_settings`, `Input_state`, `Time`.
   4. Creates the OS window and `erhe::graphics::Device`.
   5. Optionally creates OpenXR headset.
@@ -772,7 +772,9 @@ the part of R that overlapped the main thread); `handoff`, the kick and join
 latencies; and `full tick`, from the start of the frame start
 (`frame_start_wait`) through `run()`'s `poll_events` wait to the end of
 `frame()` (the kick, or M3 after it with the ImGui overlap): the main loop
-period. With pipelining the R terms of a line belong to the frames joined
+period; and `workers fg` / `bg`, the busy workers of the foreground and the
+background executor ("Worker executors"), sampled once per tick at its end
+and averaged. With pipelining the R terms of a line belong to the frames joined
 in that interval, one frame behind the main thread's terms. The
 `poll_events` wait is in no term but the full tick.
 
@@ -969,9 +971,155 @@ Input handling uses `erhe::commands::Commands`. Tools register `Command` objects
 
 ### Async Operations
 
-Geometry operations can run asynchronously via `tf::Executor`. `async_for_nodes_with_mesh()` in `items.cpp` manages a global map of per-item async tasks, chaining dependent operations. `App_context::pending_async_ops` and `running_async_ops` are atomic counters displayed in the status bar.
+Geometry operations can run asynchronously on the foreground executor. `async_for_nodes_with_mesh()` in `items.cpp` manages a global map of per-item async tasks, chaining dependent operations. `App_context::pending_async_ops` and `running_async_ops` are atomic counters displayed in the status bar.
 
 The status bar (`Window_imgui_host::set_status_bar_callback`, a child of the root window under the dockspace) insets its content horizontally by one bar height, because the bottom corners of a macOS window are rounded and clip glyphs at the edges. Its frame time is `Time::get_frame_time_average_ms`, an exponential moving average of the host frame duration whose weight follows the elapsed time (`1 - exp(-dt / 0.25 s)`), so it settles within about a second at any frame rate.
+
+### Worker executors
+
+The `Editor` constructor makes two Taskflow executors with
+`erhe::task::make_executor()` (`doc/erhe/task.md`):
+
+| Executor | Thread name | Priority | Width (read at startup) |
+|---|---|---|---|
+| foreground | `Worker <i>` | normal | `threading.thread_count` (default 8) |
+| background | `Bg worker <i>` | lowered (nice 10 on Linux) | `threading.background_thread_count` (default 4) |
+
+A width of 0 or less is one worker per hardware thread. The foreground
+executor runs the work the user waits for and the work of startup; the
+background executor runs work nobody waits for. `App_context` publishes them
+as `foreground_executor`, `background_executor` and `executors` (an
+`erhe::task::Executors`); there is no member named `executor`, so every use
+site names the executor it spawns onto, and a class that holds a
+`tf::Executor&` is given its executor by the code that constructs it. These
+run on the background executor, each given it by `Editor`:
+
+| Site | Work |
+|---|---|
+| `Brush_geometry_queue` | tier 2 brush geometry preparation (`doc/editor/brushes.md` G5) |
+| `Scene_payload_release` | freeing a closed scene's mesh payload (`doc/editor/scene.md`) |
+| `Shader_analytics_service`, `Shader_session_programs` | offline compiler analysis and SPIR-V module statistics (`doc/editor/shader_analytics.md`) |
+| `Asset_browser` | the directory walk and the glTF content peek (`doc/editor/asset_browser_scan.md`) |
+| `Kit_thumbnails` | the Level Kit window's shape thumbnail builds (`doc/editor/level_tools.md` "Shape thumbnails") |
+
+The streaming sites choose at each spawn: `App_context::get_streaming_executor()`
+(main thread, asserted) returns the foreground executor while
+`is_scene_load_in_flight()` and the background executor otherwise, so
+streaming requested while a scene loads runs with the load and later
+streaming runs lowered:
+
+| Site | Work |
+|---|---|
+| `Texture_file_loader` | image file decode for previews and imports (`doc/editor/content_library.md`) |
+| `Lightmap_streamer` | lightmap tile file reads (`doc/editor/lightmap_baking.md` "Streaming") |
+| `erhe::scene_renderer::Pvs_page_streamer` | PVS page reads; `make_draw_list_scene_dependencies()` hands each `Draw_list_scene` a function that returns `get_streaming_executor()` (`doc/erhe/draw_list_renderer.md` Q6) |
+
+None of the three spawns from inside a task: the PVS read task drains its
+queue and never re-spawns, so no background worker spawns onto the
+foreground executor.
+
+Every other site runs on the foreground executor
+(`doc/plans/worker_executors.md` "Executor assignment" lists the sites that
+are still to move). None of the background sites changes scene state. The
+`erhe::raytrace` task spawner spawns onto `executors->get_inherited()`, the
+executor of the work that requests the build.
+
+A background worker that spawns onto the foreground executor aborts (the
+check of `Worker_priority::lowered` executors, `doc/erhe/task.md` "Two executors"). The
+Debug GL context task guard (`task_guard.hpp`) observes both executors.
+
+`Executor_status` (`executor_status.{hpp,cpp}`, owned by `Editor`, published
+as `App_context::executor_status`) reports the executors and the owners of
+background work, read when asked: MCP `get_executor_status` and
+`get_async_status` `background` / `background_idle`
+(`doc/agents/mcp_server_usage.md`), and the "Workers" section at the top of
+the Frame Pacing window. Per executor it reports the worker count, the
+requested priority, the workers on which it was applied and the distinct
+priorities read back (`erhe::task::get_worker_priority_report()`, read
+once at startup), the busy workers (`num_workers() - num_waiters()`) and
+the running task graphs. An owner of background work registers for its
+lifetime with one member, a `Background_work_owner`
+(`background_work.hpp`) that names it and returns its `{queued, running,
+ready}` counts; `background_idle` is true when every owner reports 0 for
+all three. The owners are `brush_geometry` (`Brush_geometry_queue`: its
+pending requests and its tasks in flight), `scene_payload_release`,
+`shader_analytics`, `shader_session_programs`, `asset_browser` (each
+described in the document of the site above), `kit_thumbnails`
+(`Kit_thumbnails`: the shape builds pending, the build tasks in flight and
+the finished builds not yet rendered), `texture_file_loader`
+(decode tasks queued and running, finished decodes not yet published),
+`lightmap_streamer` (the tile read queued or running, a finished read not
+yet uploaded) and `pvs_page_streamer` (registered by `App_scenes`: the page
+streamers of the open scenes summed, from
+`Draw_list_scene::get_pvs_page_streamer_counts()`). The queued and running
+counts of a task-spawning owner come from a shared
+`Background_task_counter` (`background_work.hpp`). An owner describes its
+own work whichever executor or thread runs it. Background work stays out of
+`idle` and `App_context::is_scene_load_in_flight()`.
+
+Shutdown stops the owners of pending background work (the shader analytics
+service, which waits for its running jobs; `Brush_geometry_queue`;
+`Kit_thumbnails`, which drops its finished builds on the main thread; the
+shader session programs), waits for the foreground executor and then the background
+executor (a foreground task may spawn background work, never the reverse),
+waits for `Scene_payload_release`, clears `Item_async_task_guard` and
+`Scene_commit_queue` and destroys both executors.
+
+### Background apply meter
+
+`Background_apply_meter` (`background_apply_meter.{hpp,cpp}`, owned by
+`Editor`, published as `App_context::background_apply_meter`; main thread
+only) measures the main-thread time a frame spends applying the results of
+background work. An owner applies its ready items inside a
+`Background_apply_meter::Scope` that names it; the scope adds its
+`steady_clock` duration to the frame's total and to the owner's entry (a
+fixed array of eight entries, so a frame allocates nothing). The scopes are
+the texture file loader's publish of a finished decode (texture creation and
+upload recording), the lightmap streamer's upload of a finished tile read
+(staging copy, submit and wait) and `Kit_thumbnails::update()`'s taking and
+rendering of finished thumbnail builds.
+
+`end_frame()` runs once per tick at its end, beside the "Phase timing"
+accumulation: when the frame's total exceeds
+`threading.background_apply_soft_limit_ms` (default 2.0, read at each
+`end_frame()`, so an edit takes effect at once) it logs a `log_frame`
+warning with the total, the limit and each owner's milliseconds, at most
+once per second of wall time; then the next frame's total starts at zero.
+The limit is soft: the meter defers nothing, and an owner applies every
+ready item on the frame it finds it.
+
+### Outside thread pools
+
+Libraries the editor calls keep thread pools of their own, outside the
+executors, which the executors' priorities do not reach. On Linux and
+Android a new thread inherits the nice value and the name of the thread
+that creates it, and an unprivileged thread cannot raise its priority
+again, so a pool whose threads outlive the call that creates them is
+started from the main thread: `start_outside_thread_pools()`
+(`thread_pools.{hpp,cpp}`) runs in the `Editor` constructor before the
+executors are made, before any background task. It starts:
+
+- the raytrace build pool (`erhe::raytrace::start_thread_pool()`,
+  `doc/erhe/raytrace.md` "Build thread pool"), shared by every BVH build of
+  the process;
+- every oneTBB worker, in builds that have oneTBB (Linux, and OpenVDB
+  builds): oneTBB launches a worker on demand from the thread that asks for
+  it and keeps it for the process, and its pool serves every caller
+  (libstdc++ parallel algorithms in geogram, OpenVDB). One task per thread,
+  each held until all have arrived, launches them all; the log names the
+  count ("Thread pools: N oneTBB workers started").
+
+Their threads therefore run at normal priority, also when background work
+uses them. The other pools are safe as they are:
+
+| Pool | Created by | Lifetime | Priority |
+|---|---|---|---|
+| geogram `parallel_for` on Linux: OpenMP (libgomp) | the calling thread, at its first parallel region | per calling thread: reused only by that thread's later regions | the caller's, which is the priority of the work |
+| Jolt `JobSystemThreadPool` (named `Worker <i>` by Jolt) | the thread that constructs a `Scene_root` (its physics world) | the scene's | the constructing thread's: a `Scene_root` is constructed on the main thread or a foreground worker, never by background work |
+| cpp-httplib (MCP server) | the MCP server thread, started from the main thread | the session | normal |
+| Tracy, the Vulkan driver | the main thread, at startup | the session | normal |
+
+On Windows a new thread starts at normal priority whatever its creator's.
 
 ### Clock
 

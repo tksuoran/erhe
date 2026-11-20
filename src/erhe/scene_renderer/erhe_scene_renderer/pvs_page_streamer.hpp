@@ -3,6 +3,7 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <mutex>
 #include <span>
@@ -17,6 +18,18 @@ namespace erhe::scene {
 
 namespace erhe::scene_renderer {
 
+// What the read task of a Pvs_page_streamer is doing, as counts.
+class Pvs_page_streamer_counts
+{
+public:
+    std::size_t queued {0}; // requests not read yet
+    std::size_t running{0}; // the read in progress, 0 or 1
+    std::size_t ready  {0}; // finished reads not taken yet
+};
+
+// Called at each spawn of the read task; a null result reads inline.
+using Pvs_page_read_executor = std::function<tf::Executor*()>;
+
 // One page read of the PVS page streamer: the words of a stored page of
 // the database (Pvs_database::read_page_words()), or ok = false.
 class Pvs_page_read
@@ -29,8 +42,9 @@ public:
 };
 
 // The page reads of the PVS page streaming (doc/plans/pvs.md "Residency
-// and streaming"; the Lightmap_streamer pattern): a read task on the task
-// executor (erhe::task::spawn(); one task at a time, which drains the
+// and streaming"; the Lightmap_streamer pattern): a read task on the
+// executor the read executor function returns at its spawn
+// (erhe::task::spawn(); one task at a time, which drains the
 // queued requests) reads requested pages by range from the database's bits
 // source (or from its in-memory copy after a bake) and hands the words back
 // through a mutex-protected queue. The task touches no scene or GPU state;
@@ -41,8 +55,8 @@ public:
 class Pvs_page_streamer
 {
 public:
-    // executor null: each request is read inline.
-    explicit Pvs_page_streamer(tf::Executor* executor);
+    // read_executor empty: each request is read inline.
+    explicit Pvs_page_streamer(Pvs_page_read_executor read_executor);
     ~Pvs_page_streamer() noexcept;
     Pvs_page_streamer(const Pvs_page_streamer&)            = delete;
     Pvs_page_streamer& operator=(const Pvs_page_streamer&) = delete;
@@ -55,6 +69,7 @@ public:
     // Drops the queued requests and finished reads (a read in progress
     // still finishes; its generation tells the owner to drop it).
     void cancel();
+    [[nodiscard]] auto get_counts() const -> Pvs_page_streamer_counts;
 
 private:
     class Request
@@ -71,6 +86,7 @@ private:
     public:
         std::mutex                         mutex;
         bool                               task_running{false};
+        bool                               reading     {false};
         bool                               stopped     {false};
         std::vector<Request>               requests;
         std::vector<Pvs_page_read>         results;
@@ -80,7 +96,7 @@ private:
     // The read task's body: reads until the queue is empty.
     static void drain(const std::shared_ptr<Shared_state>& state);
 
-    tf::Executor*                 m_executor{nullptr};
+    Pvs_page_read_executor        m_read_executor;
     std::shared_ptr<Shared_state> m_state;
 };
 

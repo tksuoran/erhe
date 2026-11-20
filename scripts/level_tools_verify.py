@@ -8927,7 +8927,21 @@ def thumbnails(editor):
 
 
 def thumbnails_settled(reply):
-    return (reply["queued_count"] == 0) and (reply["none_count"] == 0)
+    return (reply["queued_count"] == 0) and (reply["building_count"] == 0) and (reply["none_count"] == 0)
+
+
+# The thumbnails build on the background executor, so a wait for them is bounded by wall time, not by a frame count.
+THUMBNAILS_TIMEOUT_S = 600.0
+
+
+def wait_thumbnails(editor, predicate):
+    """True once predicate() holds, read again after each editor frame, for at most THUMBNAILS_TIMEOUT_S."""
+    deadline = time.monotonic() + THUMBNAILS_TIMEOUT_S
+    while time.monotonic() < deadline:
+        if predicate():
+            return True
+        editor.wait_frames()
+    return predicate()
 
 
 def check_window_thumbnails(editor, scene, image_path):
@@ -8937,9 +8951,7 @@ def check_window_thumbnails(editor, scene, image_path):
     catalog = editor.call("level_get_kits", {"scene_name": scene})
     level = catalog["level"]
     shape_count = len(catalog["shapes"])
-    # c_renders_per_frame (2) a frame once the window draws every row.
-    frames = shape_count + 120
-    wait_until(editor, lambda: thumbnails_settled(thumbnails(editor)), frames)
+    wait_thumbnails(editor, lambda: thumbnails_settled(thumbnails(editor)))
     reply = thumbnails(editor)
     missing = [t["id"] for t in reply["shapes"] if (t["state"] != "current") or not t["has_image"]]
     check(f"every shape of the window has a current thumbnail ({shape_count} shapes, {reply['size_pixels']} px)",
@@ -8967,8 +8979,8 @@ def check_window_thumbnails(editor, scene, image_path):
         start = thumbnails(editor)
         apply()
         editor.wait_idle()
-        wait_until(editor, lambda: thumbnails_settled(thumbnails(editor)) and
-                   close([thumbnails(editor)["lengths"]["module"], thumbnails(editor)["lengths"]["wall_height"]], expected_lengths), frames)
+        wait_thumbnails(editor, lambda: thumbnails_settled(thumbnails(editor)) and
+                        close([thumbnails(editor)["lengths"]["module"], thumbnails(editor)["lengths"]["wall_height"]], expected_lengths))
         end = thumbnails(editor)
         start_by_id = {t["id"]: t for t in start["shapes"]}
         changed = [t["id"] for t in end["shapes"] if t["mesh_key"] != start_by_id[t["id"]]["mesh_key"]]
@@ -8999,8 +9011,8 @@ def check_window_thumbnails(editor, scene, image_path):
     def preset_renders(label, arguments):
         start = thumbnails(editor)
         editor.call("set_graphics_preset", arguments)
-        wait_until(editor, lambda: (thumbnails(editor)["render_count"] >= start["render_count"] + shape_count) and
-                   thumbnails_settled(thumbnails(editor)), frames)
+        wait_thumbnails(editor, lambda: (thumbnails(editor)["render_count"] >= start["render_count"] + shape_count) and
+                        thumbnails_settled(thumbnails(editor)))
         end = thumbnails(editor)
         start_by_id = {t["id"]: t for t in start["shapes"]}
         not_once = [t["id"] for t in end["shapes"] if t["render_count"] != start_by_id[t["id"]]["render_count"] + 1]
@@ -18946,7 +18958,13 @@ def main():
     parser.add_argument("--only-machine-kit", action="store_true", help="run the machine kit checks of U53 alone (cap nut, gear boundary connectors, pillow block bolts, helical thread)")
     parser.add_argument("--layout-drag-image", default=DEFAULT_LAYOUT_DRAG_IMAGE, help="mid-drag layout screenshot PNG (relative to the repository root or absolute)")
     parser.add_argument("--timings", action="store_true", help="print where the run's time went: per group, per wait, per MCP tool (scripts/verify_timings.py)")
+    parser.add_argument("--cwd", default=None, help="working directory of the editor: its config/, res/ and logs/ (default: the repository root)")
     args = parser.parse_args()
+    if args.cwd is not None:
+        # The editor reads config/ and res/ and writes logs/ under its working directory.
+        args.editor = args.editor if os.path.isabs(args.editor) else os.path.join(pav.REPO_ROOT, args.editor)
+        pav.REPO_ROOT = os.path.abspath(args.cwd)
+        pav.LOG_PATH  = os.path.join(pav.REPO_ROOT, "logs", "log.txt")
     if args.timings:
         import verify_timings
         verify_timings.install([sys.modules[__name__]])

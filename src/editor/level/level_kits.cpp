@@ -89,16 +89,6 @@ namespace {
 // Smooth shapes keep their base rims hard: an edge sharper than this is a crease.
 constexpr float c_smooth_crease_angle_degrees = 80.0f;
 
-[[nodiscard]] auto to_normal_style(const Kit_normal_style style) -> erhe::primitive::Normal_style
-{
-    switch (style) {
-        case Kit_normal_style::smooth:
-        case Kit_normal_style::smooth_with_hard_edges: return erhe::primitive::Normal_style::corner_normals;
-        case Kit_normal_style::faceted:
-        default:                                       return erhe::primitive::Normal_style::polygon_normals;
-    }
-}
-
 // Corner normals averaged over the facets around each vertex within the crease angle of the corner's facet.
 void set_crease_corner_normals(erhe::geometry::Geometry& geometry, const float crease_angle_degrees)
 {
@@ -145,8 +135,20 @@ void process_kit_geometry(const Kit_shape_definition& shape, erhe::geometry::Geo
     }
 }
 
-// The whole mesh of the values, every slot; the brush's geometry, hull and triangle mesh collision shape.
-[[nodiscard]] auto make_kit_geometry(const Kit_parameter_values& values) -> std::shared_ptr<erhe::geometry::Geometry>
+} // anonymous namespace
+
+auto get_kit_normal_style(const Kit_shape_definition& shape) -> erhe::primitive::Normal_style
+{
+    switch (shape.normal_style) {
+        case Kit_normal_style::smooth:
+        case Kit_normal_style::smooth_with_hard_edges: return erhe::primitive::Normal_style::corner_normals;
+        case Kit_normal_style::faceted:
+        default:                                       return erhe::primitive::Normal_style::polygon_normals;
+    }
+}
+
+// The brush's geometry, hull and triangle mesh collision shape; a thumbnail's one part.
+auto make_kit_geometry(const Kit_parameter_values& values) -> std::shared_ptr<erhe::geometry::Geometry>
 {
     const Kit_shape_definition& shape = *values.get_shape();
     std::shared_ptr<erhe::geometry::Geometry> geometry = std::make_shared<erhe::geometry::Geometry>(shape.display_name);
@@ -160,8 +162,7 @@ void process_kit_geometry(const Kit_shape_definition& shape, erhe::geometry::Geo
     return geometry;
 }
 
-// One geometry per material slot of the shape (D2.1); returns the problem, empty when every slot has facets.
-[[nodiscard]] auto make_kit_part_geometries(
+auto make_kit_part_geometries(
     const Kit_parameter_values&                             values,
     std::vector<std::shared_ptr<erhe::geometry::Geometry>>& out_parts
 ) -> std::string
@@ -190,6 +191,8 @@ void process_kit_geometry(const Kit_shape_definition& shape, erhe::geometry::Geo
     }
     return {};
 }
+
+namespace {
 
 [[nodiscard]] auto find_material_by_name(
     const std::shared_ptr<Content_library>& library,
@@ -359,9 +362,9 @@ private:
 
 } // anonymous namespace
 
-Level_kits::Level_kits(App_context& context, App_message_bus& app_message_bus)
+Level_kits::Level_kits(App_context& context, App_message_bus& app_message_bus, erhe::graphics::Device& graphics_device, tf::Executor& background_executor)
     : m_context             {context}
-    , m_thumbnails          {std::make_unique<Kit_thumbnails>(*this, context, app_message_bus)}
+    , m_thumbnails          {std::make_unique<Kit_thumbnails>(*this, context, app_message_bus, graphics_device, background_executor)}
     , m_connector_indicators{*this}
     , m_layout_indicators   {*this}
 {
@@ -1001,10 +1004,9 @@ auto Level_kits::snap_to_module(const glm::vec3& position, const float module) -
     };
 }
 
-auto Level_kits::make_brush(const Kit_parameter_values& values, const Kit_brush_use use) -> std::shared_ptr<Brush>
+auto Level_kits::make_brush(const Kit_parameter_values& values) -> std::shared_ptr<Brush>
 {
-    const Kit_shape_definition& shape     = *values.get_shape();
-    const bool                  all_types = (use == Kit_brush_use::placement);
+    const Kit_shape_definition& shape = *values.get_shape();
     Brush_data brush_data{
         .context      = m_context,
         .app_settings = *m_context.app_settings,
@@ -1012,14 +1014,14 @@ auto Level_kits::make_brush(const Kit_parameter_values& values, const Kit_brush_
         .build_info   = erhe::primitive::Build_info{
             .primitive_types = {
                 .fill_triangles          = true,
-                .fill_triangles_expanded = all_types,
-                .edge_lines              = all_types,
-                .corner_points           = all_types,
-                .centroid_points         = all_types
+                .fill_triangles_expanded = true,
+                .edge_lines              = true,
+                .corner_points           = true,
+                .centroid_points         = true
             },
             .buffer_info     = m_context.mesh_memory->make_primitive_buffer_info()
         },
-        .normal_style       = to_normal_style(shape.normal_style),
+        .normal_style       = get_kit_normal_style(shape),
         .geometry_generator = [values]() -> std::shared_ptr<erhe::geometry::Geometry> {
             return make_kit_geometry(values);
         },
@@ -1035,7 +1037,7 @@ auto Level_kits::make_brush(const Kit_parameter_values& values, const Kit_brush_
     }
     // A convex shape takes the brush's convex hull (Brush::late_initialize); the others their own triangles (D2.3)
     // or their bounds (U54); a shape without a body has none (P5).
-    const Kit_collision collision = (use == Kit_brush_use::thumbnail) ? Kit_collision::none : get_kit_collision(values);
+    const Kit_collision collision = get_kit_collision(values);
     if (collision == Kit_collision::none) {
         brush_data.body = Brush_body::none;
     }
@@ -1182,7 +1184,7 @@ auto Level_kits::get_brush(const Kit_parameter_values& values) -> std::shared_pt
             return cached;
         }
     }
-    std::shared_ptr<Brush> brush = make_brush(values, Kit_brush_use::placement);
+    std::shared_ptr<Brush> brush = make_brush(values);
     if (!brush) {
         return {};
     }

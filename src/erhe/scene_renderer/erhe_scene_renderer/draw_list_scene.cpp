@@ -357,7 +357,7 @@ Draw_list_scene::Draw_list_scene(const Draw_list_scene_create_info& create_info)
     , m_exclude_unlit_from_shadows{create_info.exclude_unlit_from_shadows}
     , m_gpu_cull_classifier    {create_info.gpu_cull_classifier}
     , m_cull_frame_registry    {*create_info.cull_frame_registry}
-    , m_executor               {create_info.executor}
+    , m_pvs_read_executor      {create_info.pvs_read_executor}
 {
     ERHE_VERIFY(create_info.cull_frame_registry  != nullptr);
     ERHE_VERIFY(create_info.mesh_memory          != nullptr);

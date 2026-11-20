@@ -86,12 +86,12 @@ Scene_builder::Scene_builder(
     App_context&                       context,
     App_settings&                      app_settings,
     erhe::scene_renderer::Mesh_memory& mesh_memory,
-    tf::Executor&                      executor
+    tf::Executor&                      brush_geometry_executor
 )
     : m_context                {context}
     , m_scene_config           {scene_config}
     , m_enable_post_processing{enable_post_processing}
-    , m_brush_geometry_queue   {std::make_unique<Brush_geometry_queue>(executor)}
+    , m_brush_geometry_queue   {std::make_unique<Brush_geometry_queue>(brush_geometry_executor, *context.executor_status)}
 {
     ERHE_PROFILE_FUNCTION();
     // The scene_root is assigned later via set_scene_root() (the scene.create
@@ -1720,6 +1720,13 @@ auto Scene_builder::is_brush_geometry_idle() const -> bool
     }
     const std::shared_ptr<Brush_geometry_queue_state>& state = m_brush_geometry_queue->get_state();
     return !state || ((state->get_pending_count() == 0) && (state->get_in_flight_count() == 0));
+}
+
+void Scene_builder::stop_brush_geometry_queue()
+{
+    if (m_brush_geometry_queue) {
+        m_brush_geometry_queue->get_state()->stop();
+    }
 }
 
 auto Scene_builder::floor_brushes_size() const -> std::size_t

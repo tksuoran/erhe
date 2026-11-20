@@ -36,7 +36,8 @@ void s_rtc_error_function(
 Embree_device::Embree_device()
 {
     log_embree->trace("rtcNewDevice(nullptr)");
-    m_device = rtcNewDevice("verbose=0");
+    // start_threads: the build threads start here, on the creating thread (doc/erhe/raytrace.md "Build thread pool").
+    m_device = rtcNewDevice("verbose=0,start_threads=1");
     if (m_device == nullptr)
     {
         log_scene->error("rtcNewDevice() failed");

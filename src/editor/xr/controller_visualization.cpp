@@ -212,7 +212,7 @@ void Controller_visualization::load_render_model(App_context& context, erhe::xr:
     if (hand.has_render_model) {
         return;
     }
-    if ((context.graphics_device == nullptr) || (context.current_command_buffer == nullptr) || (context.executor == nullptr)) {
+    if ((context.graphics_device == nullptr) || (context.current_command_buffer == nullptr) || (context.foreground_executor == nullptr)) {
         return;
     }
 
@@ -230,7 +230,7 @@ void Controller_visualization::load_render_model(App_context& context, erhe::xr:
 
     erhe::gltf::Image_transfer image_transfer{*context.graphics_device};
     const erhe::gltf::Gltf_parse_arguments parse_arguments{
-        .executor        = *context.executor,
+        .executor        = *context.foreground_executor,
         .device_options  = erhe::gltf::query_gltf_device_options(*context.graphics_device),
         .root_node       = model_root,
         .mesh_layer_id   = m_content_layer_id,

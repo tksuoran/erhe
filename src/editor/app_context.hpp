@@ -44,6 +44,7 @@ namespace erhe::commands { class Commands; }
 namespace erhe::property { class Dependency_property; }
 namespace erhe::frame_pacing { class Frame_pacing_observer; }
 namespace erhe::window { class Context_window; }
+namespace erhe::task { class Executors; }
 
 namespace tf {
     class Executor;
@@ -68,6 +69,7 @@ class Animation_player;
 class Animation_window;
 class Asset_fetch;
 class Asset_manager;
+class Background_apply_meter;
 class Brdf_slice;
 class Brush_preview;
 class Brush_tool;
@@ -152,6 +154,8 @@ class Texture_graph_window;
 class Texture_file_loader;
 class Thumbnails;
 class Time;
+class Frame_tick_history;
+class Executor_status;
 class Scene_save_service;
 class Editor_asset_registry;
 class Tools;
@@ -200,7 +204,12 @@ public:
     // (renderers/render_settings_access.hpp).
     Render_settings_access  render_settings      {};
 
-    tf::Executor*                           executor              {nullptr};
+    // doc/editor/editor.md "Worker executors": every use site names its executor.
+    tf::Executor*                           foreground_executor   {nullptr};
+    tf::Executor*                           background_executor   {nullptr};
+    const erhe::task::Executors*            executors             {nullptr};
+    Executor_status*                        executor_status       {nullptr}; // executors and owners of background work, as reported
+    Background_apply_meter*                 background_apply_meter{nullptr}; // main-thread time applying background results
     std::atomic_int                         pending_async_ops     {};
     std::atomic_int                         running_async_ops     {};
     // Worker-produced scene mutations waiting for the main thread; applied
@@ -227,6 +236,10 @@ public:
     // are part of it for the same reason - a load publishes its meshes into
     // the scene while it runs, not only when it finishes.
     [[nodiscard]] auto is_scene_load_in_flight() const -> bool;
+
+    // Main thread, at a streaming site's spawn (doc/editor/editor.md "Worker executors"): the foreground executor
+    // while is_scene_load_in_flight(), the background executor otherwise.
+    [[nodiscard]] auto get_streaming_executor() const -> tf::Executor*;
 
     // The one place that maps a property's consequence flags
     // (erhe::property::Property_flags, doc/erhe/property_system.md D11) to
@@ -425,6 +438,7 @@ public:
     Texture_file_loader*               texture_file_loader  {nullptr};
     Thumbnails*                        thumbnails           {nullptr};
     Time*                              time                 {nullptr};
+    Frame_tick_history*                frame_tick_history   {nullptr};
     Tools*                             tools                {nullptr};
     Transform_tool*                    transform_tool       {nullptr};
     Scene_views*                       scene_views          {nullptr};

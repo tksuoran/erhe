@@ -45,8 +45,25 @@
 namespace editor {
 
 App_scenes::App_scenes(App_context& context)
-    : m_context{context}
+    : m_context               {context}
+    , m_pvs_page_streamer_work{*context.executor_status, "pvs_page_streamer", [this]() { return get_pvs_page_streamer_counts(); }}
 {
+}
+
+auto App_scenes::get_pvs_page_streamer_counts() -> Background_work_counts
+{
+    Background_work_counts counts{};
+    for (const std::shared_ptr<Scene_root>& scene_root : get_scene_roots()) {
+        const erhe::scene_renderer::Draw_list_scene* const draw_list_scene = scene_root->get_draw_list_scene();
+        if (draw_list_scene == nullptr) {
+            continue;
+        }
+        const erhe::scene_renderer::Pvs_page_streamer_counts streamer_counts = draw_list_scene->get_pvs_page_streamer_counts();
+        counts.queued  += streamer_counts.queued;
+        counts.running += streamer_counts.running;
+        counts.ready   += streamer_counts.ready;
+    }
+    return counts;
 }
 
 App_scenes::~App_scenes() noexcept
@@ -73,6 +90,7 @@ auto App_scenes::get_scene_payload_release() const -> Scene_payload_release*
 
 void App_scenes::register_scene_root(const std::shared_ptr<Scene_root>& scene_root)
 {
+    erhe::utility::Thread_roles::assert_main_thread();
     {
         const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_mutex};
 
@@ -103,6 +121,7 @@ void App_scenes::register_scene_root(const std::shared_ptr<Scene_root>& scene_ro
 
 void App_scenes::unregister_scene_root(Scene_root* scene_root)
 {
+    erhe::utility::Thread_roles::assert_main_thread();
     {
         const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_mutex};
 
@@ -296,10 +315,10 @@ void App_scenes::flush_curve_changes()
 auto App_scenes::can_defer_display_color_rebuild() const -> bool
 {
     return
-        (m_context.mesh_memory        != nullptr) &&
-        (m_context.executor           != nullptr) &&
-        (m_context.scene_commit_queue != nullptr) &&
-        (m_context.graphics_device    != nullptr) &&
+        (m_context.mesh_memory         != nullptr) &&
+        (m_context.foreground_executor != nullptr) &&
+        (m_context.scene_commit_queue  != nullptr) &&
+        (m_context.graphics_device     != nullptr) &&
         m_context.graphics_device->supports_worker_contexts();
 }
 
@@ -827,7 +846,15 @@ void App_scenes::after_physics_simulation_steps()
 
 auto App_scenes::get_scene_roots() -> const std::vector<std::shared_ptr<Scene_root>>&
 {
+    erhe::utility::Thread_roles::assert_main_thread();
     return m_scene_roots;
+}
+
+void App_scenes::copy_scene_roots(std::vector<std::shared_ptr<Scene_root>>& out_scene_roots)
+{
+    const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_mutex};
+    out_scene_roots.clear();
+    out_scene_roots.insert(out_scene_roots.end(), m_scene_roots.begin(), m_scene_roots.end());
 }
 
 auto App_scenes::is_host_registered(const erhe::Item_host* item_host) -> bool

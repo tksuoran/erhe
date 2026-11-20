@@ -1,5 +1,7 @@
 #include "windows/frame_pacing_window.hpp"
 
+#include "executor_status.hpp"
+
 #include "erhe_frame_pacing/frame_pacing_observer.hpp"
 
 #include <imgui/imgui.h>
@@ -120,8 +122,13 @@ void Frame_pacing_window::Frame_history::clear()
     m_count          = 0;
 }
 
-Frame_pacing_window::Frame_pacing_window(erhe::imgui::Imgui_renderer& imgui_renderer, erhe::imgui::Imgui_windows& imgui_windows)
+Frame_pacing_window::Frame_pacing_window(
+    erhe::imgui::Imgui_renderer& imgui_renderer,
+    erhe::imgui::Imgui_windows&  imgui_windows,
+    Executor_status&             executor_status
+)
     : erhe::imgui::Imgui_window{imgui_renderer, imgui_windows, "Frame Pacing", "frame_pacing"}
+    , m_executor_status        {executor_status}
 {
     set_min_size(480.0f, 320.0f);
 }
@@ -747,6 +754,7 @@ void Frame_pacing_window::draw_display_timeline(const Region& region)
 
 void Frame_pacing_window::imgui()
 {
+    m_executor_status.imgui();
     workload_ui();
     ImGui::Separator();
 

@@ -214,6 +214,23 @@ public:
     std::weak_ptr<erhe::scene::Mesh> weak_mesh;
 };
 
+// The locked section of a task in a scene (doc/editor/coding_rules.md "Scenes and tasks"):
+// locks the scene's item_host_mutex, then reads whether the scene is closed.
+class Scene_task_lock
+{
+public:
+    explicit Scene_task_lock(Scene_root& scene_root);
+    explicit Scene_task_lock(erhe::Item_host& item_host); // a Scene_root
+    Scene_task_lock(const Scene_task_lock&) = delete;
+    auto operator=(const Scene_task_lock&) -> Scene_task_lock& = delete;
+
+    [[nodiscard]] auto is_scene_open() const -> bool;
+
+private:
+    std::unique_lock<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> m_lock;
+    bool                                                    m_scene_open{false};
+};
+
 class Scene_root
     : public std::enable_shared_from_this<Scene_root>
     , public erhe::scene::Scene_host
@@ -268,6 +285,10 @@ public:
     // scene has already been unregistered.
     [[nodiscard]] auto request_close(App_message_bus& app_message_bus) -> bool;
     [[nodiscard]] auto is_close_requested() const -> bool { return m_close_requested; }
+    // Editor::on_close_scene() sets it, holding item_host_mutex; a closed scene never registers again.
+    void set_closed();
+    // Read under item_host_mutex (Scene_task_lock), or on the main thread.
+    [[nodiscard]] auto is_closed() const -> bool { return m_closed; }
     // Set by Scene_save_service while a save reads this scene; a close is refused meanwhile.
     void set_save_in_progress(const bool value) { m_save_in_progress = value; }
     [[nodiscard]] auto is_save_in_progress() const -> bool { return m_save_in_progress; }
@@ -795,6 +816,7 @@ private:
     Usd_time_code_record                            m_usd_time_codes;
     bool                                            m_is_registered{false};
     bool                                            m_close_requested{false};
+    bool                                            m_closed{false}; // guarded by item_host_mutex
     bool                                            m_save_in_progress{false};
 
     // Applies wind forces to wind-receptive dynamic bodies; called once per

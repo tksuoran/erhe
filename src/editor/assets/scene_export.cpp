@@ -751,7 +751,7 @@ auto begin_scene_export(
     }
     impl.prepared_asset_path = prepared_asset_path.empty() ? get_default_prepared_asset_path(impl.source_path, target) : prepared_asset_path;
     impl.editor_asset        = std::move(editor_asset);
-    impl.executor            = context.executor;
+    impl.executor            = context.foreground_executor;
     impl.editor_asset_registry = context.editor_asset_registry;
     impl.files.push_back(Export_file{.source_path = impl.source_path, .role = Export_file_role::scene, .depth = 0, .editor_asset = impl.editor_asset});
     impl.file_indices.emplace(impl.source_path, 0);

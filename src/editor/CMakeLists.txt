@@ -249,6 +249,15 @@ erhe_target_sources_grouped(
     experiments/network_window.hpp
     experiments/sheet_window.cpp
     experiments/sheet_window.hpp
+    background_apply_meter.cpp
+    background_apply_meter.hpp
+    background_work.hpp
+    executor_status.cpp
+    executor_status.hpp
+    frame_tick_history.cpp
+    frame_tick_history.hpp
+    thread_pools.cpp
+    thread_pools.hpp
     GenerateIconFontCppHeaders.py
     init_status_display.cpp
     init_status_display.hpp
@@ -1099,6 +1108,12 @@ if (${ERHE_VOXEL_LIBRARY} STREQUAL "openvdb")
         geometry_graph/nodes/sdf_nodes.hpp
     )
     target_link_libraries(${_target} PRIVATE erhe::voxel)
+endif ()
+
+# oneTBB is linked whenever the build has it (Linux, and OpenVDB builds): its workers start at startup (thread_pools.cpp).
+if (TARGET TBB::tbb)
+    target_link_libraries(${_target} PRIVATE TBB::tbb)
+    target_compile_definitions(${_target} PRIVATE ERHE_TBB)
 endif ()
 
 if (${ERHE_USD_LIBRARY} STREQUAL "lightusd")

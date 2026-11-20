@@ -1,5 +1,7 @@
 #pragma once
 
+#include "background_work.hpp"
+
 #include <condition_variable>
 #include <cstddef>
 #include <memory>
@@ -29,9 +31,13 @@ namespace editor {
 // elsewhere (undo history, a shared brush, an in-flight deferred finalize
 // task) is not destroyed by the task, only released by it.
 //
+// The task runs on the background executor and reports itself as the
+// background work owner `scene_payload_release` (doc/editor/editor.md
+// "Worker executors").
+//
 // Lifetime: the Editor waits for the pending releases and detaches the
-// executor (set_executor(nullptr)) before it destroys the executor and the
-// mesh memory; a release requested after that runs on the calling thread.
+// executor (detach()) before it destroys the executor and the mesh memory; a
+// release requested after that runs on the calling thread.
 class Scene_payload_release
 {
 public:
@@ -41,8 +47,10 @@ public:
     Scene_payload_release(const Scene_payload_release&) = delete;
     Scene_payload_release& operator=(const Scene_payload_release&) = delete;
 
-    // Main thread. Null: release() destroys on the calling thread.
-    void set_executor(tf::Executor* executor);
+    // Main thread: release() spawns its task onto executor from now on and reports to executor_status.
+    void attach(tf::Executor& executor, Executor_status& executor_status);
+    // Main thread, after wait_idle(): release() destroys on the calling thread from now on.
+    void detach();
 
     // Any thread (a Scene_root's last reference may drop on a worker that
     // owned it through a commit or an async load). Takes the references; the
@@ -54,12 +62,16 @@ public:
     void wait_idle();
 
 private:
+    void on_task_started ();
     void on_task_finished();
+    [[nodiscard]] auto get_background_work_counts() -> Background_work_counts;
 
     tf::Executor*                                m_executor{nullptr};
     std::mutex                                   m_mutex;
     std::condition_variable                      m_idle_condition;
-    std::size_t                                  m_pending_count{0};
+    std::size_t                                  m_pending_count{0}; // spawned, not finished
+    std::size_t                                  m_running_count{0}; // started, not finished
+    std::unique_ptr<Background_work_owner>       m_background_work;  // while attached
 };
 
 } // namespace editor

@@ -18,9 +18,18 @@
 
 namespace editor {
 
-Shader_session_programs::Shader_session_programs(erhe::graphics::Device& device)
+Shader_session_programs::Shader_session_programs(erhe::graphics::Device& device, Executor_status& executor_status)
     : m_device             {device}
     , m_spirv_tools_version{erhe::graphics::get_spirv_tools_version()}
+    , m_background_work    {
+        executor_status, "shader_session_programs",
+        [this]() {
+            // Analysis jobs wait for the compilers before they count (kick() starts none without them).
+            const std::lock_guard<std::mutex> lock{m_mutex};
+            const std::size_t analysis_jobs = m_tools.has_value() ? m_analysis_jobs.size() : 0;
+            return Background_work_counts{.queued = m_stats_jobs.size() + analysis_jobs, .running = m_running};
+        }
+    }
 {
     m_device.set_shader_program_observer(
         [this](const erhe::graphics::Shader_stages_create_info& create_info, const std::span<const erhe::graphics::Shader_program_module> modules) {

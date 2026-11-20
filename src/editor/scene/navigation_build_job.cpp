@@ -456,7 +456,7 @@ auto make_navigation_build_job(
     std::string&                       out_refusal
 ) -> std::shared_ptr<Scene_service_job>
 {
-    std::shared_ptr<Navigation_build_job> job = std::make_shared<Navigation_build_job>(scene_root, purpose, context.executor);
+    std::shared_ptr<Navigation_build_job> job = std::make_shared<Navigation_build_job>(scene_root, purpose, context.foreground_executor);
     out_refusal = job->begin(*scene_root);
     if (!out_refusal.empty()) {
         return {};

@@ -1249,7 +1249,7 @@ auto Asset_manager::get_or_load_container(const std::filesystem::path& path, std
     }
 
     ERHE_VERIFY(m_context.graphics_device != nullptr);
-    ERHE_VERIFY(m_context.executor != nullptr);
+    ERHE_VERIFY(m_context.foreground_executor != nullptr);
     ERHE_VERIFY(m_context.current_command_buffer != nullptr);
 
     std::shared_ptr<Asset_container_record> record = std::make_shared<Asset_container_record>();
@@ -1262,7 +1262,7 @@ auto Asset_manager::get_or_load_container(const std::filesystem::path& path, std
 
     erhe::gltf::Image_transfer image_transfer{*m_context.graphics_device};
     erhe::gltf::Gltf_parse_arguments parse_arguments{
-        .executor        = *m_context.executor,
+        .executor        = *m_context.foreground_executor,
         .device_options  = make_gltf_device_options(m_context, *m_context.graphics_device),
         .root_node       = record->root_node,
         .mesh_layer_id   = 0,

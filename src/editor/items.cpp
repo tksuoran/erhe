@@ -133,6 +133,10 @@ void async_for_nodes_with_mesh(
         return;
     }
     Scene_root* scene_root = static_cast<Scene_root*>(item_host);
+    // Held by the task, so the scene and the host pointers its op reads outlive it; the op's own
+    // locked sections check that the scene is still open (Scene_task_lock).
+    std::shared_ptr<Scene_root> shared_scene_root = std::dynamic_pointer_cast<Scene_root>(scene_root->shared_from_this());
+    ERHE_VERIFY(shared_scene_root);
 
     std::unique_lock<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> scene_lock{scene_root->item_host_mutex};
 
@@ -183,7 +187,7 @@ void async_for_nodes_with_mesh(
 
     ++context.pending_async_ops;
     auto run_operation =
-        [&context, op, op_builds_gpu_meshes, items, selected_facets = std::move(selected_facets), component_selection = std::move(component_selection)]()
+        [&context, op, op_builds_gpu_meshes, shared_scene_root, items, selected_facets = std::move(selected_facets), component_selection = std::move(component_selection)]()
         {
             ++context.running_async_ops;
             // Geometry operations call into Geogram, whose assertion mechanism
@@ -255,7 +259,7 @@ void async_for_nodes_with_mesh(
         return;
     }
 
-    tf::AsyncTask task = erhe::task::spawn_dependent(*context.executor, std::move(run_operation), item_tasks.begin(), item_tasks.end());
+    tf::AsyncTask task = erhe::task::spawn_dependent(*context.foreground_executor, std::move(run_operation), item_tasks.begin(), item_tasks.end());
 
     for (const std::shared_ptr<erhe::Item_base>& item : items) {
         s_item_tasks.insert_or_assign(item->get_id(), task);

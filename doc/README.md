@@ -529,6 +529,7 @@ flowchart TD
 - [plans/texture_graph.md](plans/texture_graph.md) (proposed): Texture graph backlog
 - [plans/texture_memory.md](plans/texture_memory.md) (proposed): Per-scene texture memory cost
 - [plans/timeline_editor.md](plans/timeline_editor.md) (in progress): Animation window remaining work: dope sheet, tangent handles, interpolation editing
+- [plans/worker_executors.md](plans/worker_executors.md) (in progress): Worker executors: a foreground and a lowered-priority background Taskflow executor; built on desktop, the Quest measurement remains
 - [plans/usd_compatibility.md](plans/usd_compatibility.md) (proposed): USD compatibility: remaining work
 - [plans/uv_editor.md](plans/uv_editor.md) (proposed): UV editor modeled on Blender's
 - [plans/virtualcity_vanishing_meshes.md](plans/virtualcity_vanishing_meshes.md) (proposed): Open defect: overlapping meshes vanish on first hover
@@ -562,3 +563,4 @@ flowchart TD
 - [reference/render_thread_audit_2026_10_09.md](reference/render_thread_audit_2026_10_09.md): Render phase audit at commit c06738609 (2026-10-09): what R read and wrote outside its own state before the ImGui overlap and frame pipelining; every site since resolved
 - [reference/render_thread_measurements_2026_10.md](reference/render_thread_measurements_2026_10.md): Render thread frame-time measurements (2026-10): display-paced, unpaced serial and pipelined runs on an Intel iGPU, an NVIDIA dGPU and an Apple M4 Pro (Metal, MoltenVK, KosmicKrisp; CPU-bound Debug runs confirming R3), Tracy phase picture
 - [reference/shadow_robustness_review_2026_09_29.md](reference/shadow_robustness_review_2026_09_29.md): Shadow robustness series change summary, correctness analysis, potential issues and improvements (2026-09-29)
+- [reference/worker_executors_bench.md](reference/worker_executors_bench.md): Kit thumbnail burst frame times on the main thread (2026-11-20), the baseline of the worker executors plan: rest, burst and after-burst tick medians, 99th percentiles and maxima, burst duration and startup time

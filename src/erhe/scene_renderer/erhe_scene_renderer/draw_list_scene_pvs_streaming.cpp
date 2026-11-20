@@ -101,6 +101,11 @@ void Draw_list_scene::register_pvs_view(const uint64_t view_key, const uint64_t 
     static_cast<void>(m_pvs_residency->set_view(view_key, pages, frame_index));
 }
 
+auto Draw_list_scene::get_pvs_page_streamer_counts() const -> Pvs_page_streamer_counts
+{
+    return m_pvs_page_streamer ? m_pvs_page_streamer->get_counts() : Pvs_page_streamer_counts{};
+}
+
 void Draw_list_scene::publish_pvs_residency(Draw_list_slot& slot, const uint64_t frame_index, const std::size_t frames_in_flight)
 {
     ERHE_PROFILE_FUNCTION();
@@ -162,7 +167,7 @@ void Draw_list_scene::publish_pvs_residency(Draw_list_slot& slot, const uint64_t
         const uint32_t page = residency.take_request(frame_index);
         if (page != Pvs_residency::no_page) {
             if (!m_pvs_page_streamer) {
-                m_pvs_page_streamer = std::make_unique<Pvs_page_streamer>(m_executor);
+                m_pvs_page_streamer = std::make_unique<Pvs_page_streamer>(m_pvs_read_executor);
             }
             m_pvs_page_streamer->request(m_pvs_database, generation, page);
             m_pvs_read_page = page;

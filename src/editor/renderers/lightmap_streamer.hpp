@@ -1,5 +1,6 @@
 #pragma once
 
+#include "background_work.hpp"
 #include "renderers/lightmap_tile_io.hpp"
 
 #include <glm/glm.hpp>
@@ -28,7 +29,8 @@ class Scene_root;
 // no shader or renderer changes are needed. Streaming a tile in remaps its
 // regions' Mesh_primitive::lightmap_uv_scale_offset from tile-local to the
 // slot's atlas rect; evicting zeroes them (the renderer's no-lightmap
-// gate). File reads run on a worker thread; the GPU upload is a standalone
+// gate). File reads run on App_context::get_streaming_executor() (owner
+// lightmap_streamer, doc/editor/editor.md "Worker executors"); the GPU upload is a standalone
 // staging-buffer submit on the main thread, at most one tile per frame.
 //
 // Memory is bounded by budget * tile_size^2 * 8 bytes regardless of world
@@ -103,6 +105,7 @@ private:
     void apply_tile_regions(Scene_root& scene_root, int tile);
     void upload_pending(Scene_root& scene_root);
     void start_load(int tile, int slot);
+    [[nodiscard]] auto get_background_work_counts() const -> Background_work_counts;
 
     erhe::graphics::Device&                  m_graphics_device;
     App_context&                             m_context;
@@ -130,6 +133,8 @@ private:
     int                                      m_slot_grid{1};
     std::shared_ptr<erhe::graphics::Texture> m_texture;
     std::shared_ptr<Pending_load>            m_pending;
+    std::shared_ptr<Background_task_counter> m_load_task_counts; // shared with the load tasks
+    Background_work_owner                    m_background_work;  // last: reads the members above
 };
 
 }

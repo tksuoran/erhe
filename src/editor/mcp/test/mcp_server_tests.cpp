@@ -531,6 +531,67 @@ TEST_F(Mcp_test, fast_failing_load_reports_its_reason_in_failed_loads)
     std::filesystem::remove(bad_magic, ignored);
 }
 
+// get_executor_status reports both executors at the worker counts of their
+// settings, the background one at lowered priority, and the owners of
+// background work (doc/editor/editor.md "Worker executors").
+TEST_F(Mcp_test, get_executor_status_reports_both_executors)
+{
+    Mcp_client& client = Mcp_env::get().client();
+    Mcp_client::Tool_result status = client.call_tool("get_executor_status", json::object());
+    ASSERT_FALSE(status.is_error) << status.text;
+    ASSERT_TRUE(status.payload.contains("executors") && status.payload["executors"].is_array()) << status.text;
+    const json& executors = status.payload["executors"];
+    ASSERT_EQ(executors.size(), 2u) << status.text;
+
+    const std::array<const char*, 2> roles     {"foreground", "background"};
+    const std::array<const char*, 2> priorities{"normal",     "lowered"};
+    for (std::size_t i = 0; i < 2; ++i) {
+        const json& executor = executors[i];
+        EXPECT_EQ(executor.value("role", ""), roles[i]) << status.text;
+        EXPECT_EQ(executor.value("requested_priority", ""), priorities[i]) << status.text;
+        const int configured = executor.value("configured_thread_count", 0);
+        const std::size_t expected_workers = (configured > 0)
+            ? static_cast<std::size_t>(configured)
+            : std::max<std::size_t>(std::thread::hardware_concurrency(), 1);
+        EXPECT_EQ(executor.value("worker_count", std::size_t{0}), expected_workers) << status.text;
+        EXPECT_LE(executor.value("busy_workers", std::size_t{0}), expected_workers) << status.text;
+        EXPECT_LE(executor.value("priority_applied_workers", std::size_t{0}), expected_workers) << status.text;
+        EXPECT_TRUE(executor.contains("read_back_priorities") && executor["read_back_priorities"].is_array()) << status.text;
+        EXPECT_TRUE(executor.contains("topologies")) << status.text;
+    }
+    ASSERT_TRUE(status.payload.contains("background") && status.payload["background"].is_object()) << status.text;
+    for (const char* owner : {"brush_geometry", "scene_payload_release", "asset_browser", "kit_thumbnails", "texture_file_loader", "pvs_page_streamer"}) {
+        EXPECT_TRUE(status.payload["background"].contains(owner)) << owner << ": " << status.text;
+    }
+    EXPECT_TRUE(status.payload.contains("background_idle")) << status.text;
+}
+
+// get_async_status reports background work per owner with a verdict of its
+// own, which reads true once the editor is at rest.
+TEST_F(Mcp_test, get_async_status_reports_background_work)
+{
+    Mcp_client& client = Mcp_env::get().client();
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{60};
+    Mcp_client::Tool_result status;
+    bool background_idle = false;
+    while (!background_idle && (std::chrono::steady_clock::now() < deadline)) {
+        advance_frames(client, 2);
+        status = client.call_tool("get_async_status", json::object());
+        ASSERT_FALSE(status.is_error) << status.text;
+        background_idle = status.payload.value("background_idle", false);
+    }
+    EXPECT_TRUE(background_idle) << status.text;
+    ASSERT_TRUE(status.payload.contains("background") && status.payload["background"].is_object()) << status.text;
+    for (const char* owner : {"brush_geometry", "scene_payload_release", "asset_browser", "kit_thumbnails", "texture_file_loader", "pvs_page_streamer"}) {
+        ASSERT_TRUE(status.payload["background"].contains(owner)) << owner << ": " << status.text;
+        const json& counts = status.payload["background"][owner];
+        EXPECT_EQ(counts.value("queued",  std::size_t{1}), 0u) << owner << ": " << status.text;
+        EXPECT_EQ(counts.value("running", std::size_t{1}), 0u) << owner << ": " << status.text;
+        EXPECT_EQ(counts.value("ready",   std::size_t{1}), 0u) << owner << ": " << status.text;
+    }
+    EXPECT_TRUE(status.payload.value("idle", false)) << status.text;
+}
+
 // get_node_details addresses a prim by its id as readily as by its name: the
 // ids get_scene_nodes hands out are what a caller holds after a walk of the
 // tree, and a name may repeat between subtrees.
@@ -979,6 +1040,164 @@ TEST_F(Mcp_test, close_scene_with_hidden_viewport_releases_the_scene)
     }
     EXPECT_EQ(log_tail.find(leak_line), std::string::npos) << "the closed scene's Scene_root outlived the close (" << log_path.string() << ")";
     EXPECT_NE(log_tail.find(released_line), std::string::npos) << "no scene-close check line for '" << scene << "' in " << log_path.string();
+}
+
+// Scene close and reset_editor_state while async mesh operations on the
+// scene's meshes and a glTF import into it are in flight
+// (doc/editor/coding_rules.md "Scenes and tasks"): the close waits for a task
+// inside the scene, a task finishing later leaves the closed scene alone, and
+// nothing it queued is recorded into the history the close cleared.
+TEST_F(Mcp_test, scene_close_and_reset_with_mesh_operations_and_import_in_flight)
+{
+    Mcp_env&    env    = Mcp_env::get();
+    Mcp_client& client = env.client();
+
+    const std::filesystem::path log_path = std::filesystem::path{ERHE_MCP_TEST_REPO_ROOT} / "logs" / "log.txt";
+    std::error_code size_error;
+    const std::uintmax_t log_offset = std::filesystem::file_size(log_path, size_error);
+    ASSERT_FALSE(size_error) << "cannot read " << log_path.string();
+
+    constexpr int cycle_count = 8;
+    constexpr int box_count   = 8;
+    std::vector<std::string> closed_scenes;
+    for (int cycle = 0; cycle < cycle_count; ++cycle) {
+        std::string scene = env.scene_name();
+        if (cycle > 0) {
+            const std::vector<std::string> before = scene_names(client);
+            client.call_tool("create_scene", json::object());
+            advance_frames(client, 6);
+            scene.clear();
+            for (const std::string& name : scene_names(client)) {
+                if (std::find(before.begin(), before.end(), name) == before.end()) {
+                    scene = name;
+                }
+            }
+            ASSERT_FALSE(scene.empty()) << "cycle " << cycle << ": create_scene made no scene";
+        }
+
+        const std::string prefix = "in flight box " + std::to_string(cycle) + " ";
+        for (int i = 0; i < box_count; ++i) {
+            Mcp_client::Tool_result shape = client.call_tool("create_shape", json{
+                {"scene_name",  scene},
+                {"shape",       "box"},
+                {"name",        prefix + std::to_string(i)},
+                {"motion_mode", "none"}
+            });
+            ASSERT_FALSE(shape.is_error) << shape.text;
+        }
+        ASSERT_TRUE(wait_until_idle(client, 30000));
+        json box_ids = json::array();
+        Mcp_client::Tool_result nodes = client.call_tool("get_scene_nodes", json{{"scene_name", scene}});
+        ASSERT_FALSE(nodes.is_error) << nodes.text;
+        for (const json& node : nodes.payload.at("nodes")) {
+            if (node.value("name", "").starts_with(prefix)) {
+                box_ids.push_back(node.at("id"));
+            }
+        }
+        ASSERT_EQ(box_ids.size(), static_cast<std::size_t>(box_count)) << nodes.text;
+
+        // Four chained subdivisions (each task depends on the previous one of
+        // the same meshes) and an import into the scene. Half of the cycles
+        // close while the import is still loading; the other half wait for
+        // it to publish first, so its deferred finalize tasks run on workers
+        // when the close comes.
+        const bool wait_for_publish = (((cycle / 2) % 2) == 1);
+        const auto subdivide_boxes = [&client, &scene, &box_ids]() {
+            for (int i = 0; i < 4; ++i) {
+                Mcp_client::Tool_result subdivide = client.call_tool("catmull_clark", json{{"scene_name", scene}, {"node_ids", box_ids}});
+                ASSERT_FALSE(subdivide.is_error) << subdivide.text;
+            }
+        };
+        if (!wait_for_publish) {
+            subdivide_boxes();
+        }
+        Mcp_client::Tool_result import = client.call_tool("import_gltf", json{{"scene_name", scene}, {"path", c_textured_gltf}});
+        ASSERT_FALSE(import.is_error) << import.text;
+        if (wait_for_publish) {
+            bool published = false;
+            for (int frame = 0; (frame < 600) && !published; ++frame) {
+                Mcp_client::Tool_result listing = client.call_tool("get_scene_nodes", json{{"scene_name", scene}});
+                ASSERT_FALSE(listing.is_error) << listing.text;
+                for (const json& node : listing.payload.at("nodes")) {
+                    if (node.value("name", "") == "SM_Deccer_Cubes_Textured.glb") {
+                        published = true;
+                    }
+                }
+            }
+            ASSERT_TRUE(published) << "cycle " << cycle << ": the import did not publish";
+            subdivide_boxes();
+        }
+
+        const bool use_reset = ((cycle % 2) == 1);
+        if (use_reset) {
+            Mcp_client::Tool_result reset = client.call_tool("reset_editor_state", json::object());
+            ASSERT_FALSE(reset.is_error) << reset.text;
+            EXPECT_TRUE(scene_names(client).empty()) << "cycle " << cycle << ": reset left scenes open";
+        } else {
+            Mcp_client::Tool_result close = client.call_tool("close_scene", json{{"scene_name", scene}});
+            ASSERT_FALSE(close.is_error) << close.text;
+        }
+        closed_scenes.push_back(scene);
+
+        ASSERT_TRUE(wait_until_idle(client, 60000)) << "cycle " << cycle << ": work did not settle after the close";
+        const std::vector<std::string> names = scene_names(client);
+        EXPECT_EQ(std::find(names.begin(), names.end(), scene), names.end()) << "cycle " << cycle << ": '" << scene << "' is still open";
+        Mcp_client::Tool_result history = client.call_tool("get_undo_redo_stack", json::object());
+        ASSERT_FALSE(history.is_error) << history.text;
+        EXPECT_FALSE(history.payload.value("can_undo", true))
+            << "cycle " << cycle << ": an operation was recorded into the closed scene: " << history.text;
+    }
+
+    // The editor is alive and consistent: a new scene can be created and edited.
+    const std::vector<std::string> before = scene_names(client);
+    client.call_tool("create_scene", json::object());
+    advance_frames(client, 6);
+    std::string scene;
+    for (const std::string& name : scene_names(client)) {
+        if (std::find(before.begin(), before.end(), name) == before.end()) {
+            scene = name;
+        }
+    }
+    ASSERT_FALSE(scene.empty()) << "create_scene after the cycles made no scene";
+    Mcp_client::Tool_result shape = client.call_tool("create_shape", json{
+        {"scene_name",  scene},
+        {"shape",       "box"},
+        {"name",        "after the cycles box"},
+        {"motion_mode", "none"}
+    });
+    ASSERT_FALSE(shape.is_error) << shape.text;
+    ASSERT_TRUE(wait_until_idle(client, 30000));
+    const auto facet_count = [&client, &scene]() -> int {
+        Mcp_client::Tool_result details = client.call_tool("get_node_details", json{{"scene_name", scene}, {"node_name", "after the cycles box"}});
+        EXPECT_FALSE(details.is_error) << details.text;
+        const json mesh = details.payload.value("mesh", json{});
+        return mesh.is_object() ? mesh.value("facet_count", -1) : -1;
+    };
+    const int facets_before = facet_count();
+    Mcp_client::Tool_result subdivide = client.call_tool("catmull_clark", json{{"scene_name", scene}, {"node_name", "after the cycles box"}});
+    ASSERT_FALSE(subdivide.is_error) << subdivide.text;
+    ASSERT_TRUE(wait_until_idle(client, 30000));
+    EXPECT_GT(facets_before, 0);
+    EXPECT_EQ(facet_count(), 4 * facets_before) << "the subdivision of a box in the new scene did not apply";
+
+    // Every closed scene is released once its in-flight tasks are done (the watchdog checks 60 frames after a close).
+    std::string log_tail;
+    for (int attempt = 0; attempt < 400; ++attempt) {
+        advance_frames(client, 1);
+        std::ifstream log_file{log_path, std::ios::binary};
+        log_file.seekg(static_cast<std::streamoff>(log_offset));
+        log_tail.assign(std::istreambuf_iterator<char>{log_file}, std::istreambuf_iterator<char>{});
+        bool all_checked = true;
+        for (const std::string& closed : closed_scenes) {
+            const bool released = log_tail.find("tracked items of closed scene '" + closed + "' released") != std::string::npos;
+            const bool leaked   = log_tail.find("scene-close leak: Scene_root '" + closed + "'") != std::string::npos;
+            all_checked = all_checked && (released || leaked);
+        }
+        if (all_checked) {
+            break;
+        }
+    }
+    EXPECT_EQ(log_tail.find("scene-close leak:"), std::string::npos) << "a closed scene outlived its close (" << log_path.string() << ")";
 }
 
 // The active item (doc/editor/active_item.md): the last item a select_items

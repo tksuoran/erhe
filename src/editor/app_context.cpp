@@ -136,5 +136,11 @@ auto App_context::is_scene_load_in_flight() const -> bool
     return get_async_in_flight_count() != 0;
 }
 
+auto App_context::get_streaming_executor() const -> tf::Executor*
+{
+    erhe::utility::Thread_roles::assert_main_thread();
+    return is_scene_load_in_flight() ? foreground_executor : background_executor;
+}
+
 }
 

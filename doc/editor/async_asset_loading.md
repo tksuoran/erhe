@@ -26,8 +26,8 @@ interactive and keeps presenting while a scene streams in.
 | Asset browser Load, MCP `open_scene` | parse handed to `Scene_open_operation`, an erhe-authored scene included (`Erhe_scene_open::as_foreign_gltf`) |
 | Asset browser Import, MCP `import_gltf` | import into an existing scene |
 | Viewport drop, hierarchy drop, asset browser Instantiate, MCP `instantiate_prefab` | prefab template load |
-| Asset browser tooltip / context menu | `scan_gltf` on a worker |
-| Asset browser directory walk (startup and the Scan button) | the walk of `res/editor/assets` and `res/editor/scenes` runs on a worker and publishes batches the main thread attaches (doc/editor/asset_browser_scan.md) |
+| Asset browser tooltip / context menu | `scan_gltf` on a background worker |
+| Asset browser directory walk (startup and the Scan button) | the walk of `res/editor/assets` and `res/editor/scenes` runs on a background worker and publishes batches the main thread attaches (doc/editor/asset_browser_scan.md) |
 
 Every new-scene glTF open goes through `queue_open_scene_gltf`
 (`src/editor/operations/scene_open_operation.hpp`).

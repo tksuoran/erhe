@@ -70,9 +70,13 @@ Each stage's module sizes before and after the optimizer are
 `Spirv_cache_module_stats` (`<key>.stats.json` beside the cache entry,
 valid for the SPIRV-Tools version that computed them): read when the
 program is reported, else computed from the record in background tasks
-(at most `shader_analytics.max_jobs`, spawned from the main thread's commit
-queue after `start()`) and stored, so a later session reads them at once.
-Editor shutdown calls `stop()` before it drains the task executor: the
+(at most `shader_analytics.max_jobs`, spawned onto the background executor
+from the main thread's commit queue after `start()`) and stored, so a later
+session reads them at once. The list reports itself as the background work
+owner `shader_session_programs` (`doc/editor/editor.md` "Worker executors"):
+queued statistics jobs, and queued analysis jobs once the compilers are
+selected, as `queued`; tasks in flight as `running`.
+Editor shutdown calls `stop()` before it drains the executors: the
 queued statistics and analysis jobs are dropped (the next session computes
 them) and only the running ones complete, so the exit does not wait for
 every program's optimizer run after a SPIRV-Tools version change.
@@ -118,11 +122,15 @@ defines]` the cost modes and `fragments.js` match by.
 
 The observer only queues a job. A kick posted to the main thread's
 `Scene_commit_queue` spawns up to `shader_analytics.max_jobs` (default 2)
-Taskflow tasks; a task runs jobs until the queue is empty. Analysis therefore
-starts with the main loop's first commit-queue flush, after startup, and
-holds at most `max_jobs` worker threads (each waiting on one compiler
-process) while scenes load. The first task selects the compilers
-("Enabling" above).
+tasks onto the background executor (lowered priority, `doc/editor/editor.md`
+"Worker executors"); a task runs jobs until the queue is empty. Analysis
+therefore starts with the main loop's first commit-queue flush, after
+startup, and holds at most `max_jobs` background workers (each waiting on
+one compiler process, which on Linux inherits the worker's nice value) while scenes
+load. The first task selects the compilers ("Enabling" above). The service
+reports itself as the background work owner `shader_analytics`: queued
+jobs, tasks in flight, and results waiting for the next commit-queue flush
+to add them to the cost modes as `ready`.
 
 Per job (`analyze_program()`, `src/editor/renderers/offline_compiler.*`):
 

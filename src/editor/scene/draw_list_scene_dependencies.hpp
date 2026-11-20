@@ -1,13 +1,11 @@
 #pragma once
 
 #include "erhe_scene_renderer/material_set.hpp"
+#include "erhe_scene_renderer/pvs_page_streamer.hpp"
 
 #include <cstdint>
 #include <vector>
 
-namespace tf {
-    class Executor;
-}
 namespace erhe::graphics {
     class Device;
 }
@@ -53,8 +51,8 @@ public:
     // null: the scene's draw lists classify on the CPU only.
     erhe::scene_renderer::Gpu_cull_classifier*  gpu_cull_classifier{nullptr};
     erhe::scene_renderer::Cull_frame_registry*  cull_frame_registry{nullptr};
-    // The task executor the PVS page reads run on (null: inline).
-    tf::Executor*                               executor           {nullptr};
+    // Returns the executor of each PVS page read task (App_context::get_streaming_executor()).
+    erhe::scene_renderer::Pvs_page_read_executor pvs_read_executor {};
 
     [[nodiscard]] auto is_valid() const -> bool
     {

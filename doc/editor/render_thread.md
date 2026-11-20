@@ -413,8 +413,8 @@ Every 60 frames `editor.frame` logs the per-frame averages of M1 (with
 sub-terms), M3, R, `swapchain`, `draw_data_wait`, `join_wait` (the main
 thread blocked on the previous frame's R: in `join()` at the end of M1, or
 right before the kick with pipelining; R minus `join_wait` is the
-overlapped part of R), the kick and join handoff latencies, and the full
-tick. With
+overlapped part of R), the kick and join handoff latencies, the full
+tick and the busy workers of each executor. With
 pipelining the R terms of a line belong to the frames joined in that
 interval. The terms are defined in `doc/editor/editor.md` "Phase timing".
 

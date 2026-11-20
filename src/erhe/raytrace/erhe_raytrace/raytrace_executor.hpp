@@ -20,4 +20,8 @@ void set_task_spawner(Task_spawner spawner);
 
 [[nodiscard]] auto get_task_spawner() -> const Task_spawner&;
 
+// Starts the backend's build thread pool on the calling thread, whose priority its threads inherit; a no-op
+// without one (doc/erhe/raytrace.md "Build thread pool").
+void start_thread_pool();
+
 } // namespace erhe::raytrace

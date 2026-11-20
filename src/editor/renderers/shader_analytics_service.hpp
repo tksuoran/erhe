@@ -1,5 +1,6 @@
 #pragma once
 
+#include "background_work.hpp"
 #include "renderers/offline_compiler.hpp"
 #include "renderers/shader_analytics.hpp"
 
@@ -36,6 +37,7 @@ public:
         const Shader_analytics_config& config,
         Shader_session_programs&       session_programs,
         tf::Executor&                  executor,
+        Executor_status&               executor_status,
         Shader_analytics&              shader_analytics
     );
     ~Shader_analytics_service() noexcept;
@@ -102,6 +104,7 @@ private:
     bool                            m_land_posted{false};
     bool                            m_stopping{false};
     bool                            m_versions_queried{false};
+    Background_work_owner           m_background_work; // last: reads the members above
 };
 
 } // namespace editor

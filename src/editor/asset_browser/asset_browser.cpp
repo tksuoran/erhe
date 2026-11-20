@@ -32,6 +32,7 @@
 #include "erhe_primitive/material.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_task/task.hpp"
+#include "erhe_verify/verify.hpp"
 
 #include <fmt/format.h>
 #include <imgui/imgui.h>
@@ -383,8 +384,13 @@ Asset_browser::Asset_browser(
     App_message_bus&             app_message_bus,
     tf::Executor&                executor
 )
-    : m_context {context}
-    , m_executor{executor}
+    : m_context         {context}
+    , m_executor        {executor}
+    , m_scan_task_counts{std::make_shared<Background_task_counter>()}
+    , m_background_work {
+        *context.executor_status, "asset_browser",
+        [this]() { return m_scan_task_counts->get_counts(); }
+    }
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -438,7 +444,7 @@ Asset_browser::Asset_browser(
                 // phase 4): an erhe-authored scene file (ERHE_scene in
                 // extensionsUsed) loads as a full scene; any other glTF keeps
                 // the import-as-asset flow (Load = foreign glTF as new scene).
-                ensure_scanned(m_context, *gltf);
+                ensure_scanned(*gltf);
                 if (!gltf->is_scanned) {
                     // Scan still on a worker; the open-vs-import branch below
                     // needs its result, so offer nothing this frame rather
@@ -486,12 +492,15 @@ void Asset_browser::scan()
     }
     std::shared_ptr<Asset_scan_request> request = std::make_shared<Asset_scan_request>();
     m_scan_request = request;
+    m_scan_task_counts->on_spawned();
     erhe::task::spawn(
         m_executor,
-        [request]() {
+        [request, counts = m_scan_task_counts]() {
+            counts->on_started();
             Asset_walk walk{*request};
             walk.run();
             request->finished.store(true, std::memory_order_release);
+            counts->on_finished();
         }
     );
 }
@@ -657,7 +666,7 @@ void ensure_scanned_blocking(Asset_file_gltf& gltf)
     gltf.scan_request.reset();
 }
 
-void ensure_scanned(App_context& context, Asset_file_gltf& gltf)
+void Asset_browser::ensure_scanned(Asset_file_gltf& gltf)
 {
     if (gltf.is_scanned) {
         return;
@@ -682,16 +691,14 @@ void ensure_scanned(App_context& context, Asset_file_gltf& gltf)
     if (source_path == nullptr) {
         return;
     }
-    if (context.executor == nullptr) {
-        ensure_scanned_blocking(gltf);
-        return;
-    }
     auto request = std::make_shared<Gltf_scan_request>();
     gltf.scan_request = request;
     const std::filesystem::path path = *source_path;
+    m_scan_task_counts->on_spawned();
     erhe::task::spawn(
-        *context.executor,
-        [request, path]() {
+        m_executor,
+        [request, path, counts = m_scan_task_counts]() {
+            counts->on_started();
             Gltf_scan_summary summary = scan_gltf(path);
             request->contents        = std::move(summary.contents);
             request->extensions_used = std::move(summary.extensions_used);
@@ -699,6 +706,7 @@ void ensure_scanned(App_context& context, Asset_file_gltf& gltf)
             request->material_names  = std::move(summary.material_names);
             request->material_uids   = std::move(summary.material_uids);
             request->finished.store(true, std::memory_order_release);
+            counts->on_finished();
         }
     );
 }
@@ -1011,7 +1019,7 @@ auto Asset_browser::item_callback(const std::shared_ptr<erhe::Item_base>& item) 
         // Only scan what the user actually hovers, and only from here on -
         // the scan runs on a worker, so the first hovered frame shows the
         // placeholder and the contents appear a frame or two later.
-        ensure_scanned(m_context, *gltf);
+        ensure_scanned(*gltf);
         ImGui::BeginTooltip();
         if (!gltf->is_scanned) {
             ImGui::TextUnformatted("Scanning...");

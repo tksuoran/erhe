@@ -564,7 +564,7 @@ auto Prefab_library::load_template(Prefab& prefab) -> bool
     }
 
     ERHE_VERIFY(m_context.graphics_device != nullptr);
-    ERHE_VERIFY(m_context.executor != nullptr);
+    ERHE_VERIFY(m_context.foreground_executor != nullptr);
     ERHE_VERIFY(m_context.current_command_buffer != nullptr);
 
     auto template_root = std::make_shared<erhe::scene::Xform>(prefab.name);
@@ -572,7 +572,7 @@ auto Prefab_library::load_template(Prefab& prefab) -> bool
 
     erhe::gltf::Image_transfer image_transfer{*m_context.graphics_device};
     erhe::gltf::Gltf_parse_arguments parse_arguments{
-        .executor        = *m_context.executor,
+        .executor        = *m_context.foreground_executor,
         .device_options  = make_gltf_device_options(m_context, *m_context.graphics_device),
         .root_node       = template_root,
         .mesh_layer_id   = 0, // instances are retargeted to the destination scene's content layer

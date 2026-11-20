@@ -1,18 +1,41 @@
 from erhe_codegen import *
 
 struct("Threading_config",
-    version=4,
+    version=6,
     short_desc="",
     long_desc="",
     developer=False,
     fields=[
+        # doc/editor/editor.md "Worker executors"
         field(
             "thread_count",
             Int,
             added_in=1,
             default="8",
-            short_desc="",
-            long_desc="",
+            short_desc="Foreground Thread Count",
+            long_desc="Worker threads of the foreground executor, which runs the work the user waits for and the work of editor startup. Read at startup; 0 or less is one worker per hardware thread.",
+            visible=True,
+            developer=False
+        ),
+        # doc/editor/editor.md "Worker executors"
+        field(
+            "background_thread_count",
+            Int,
+            added_in=5,
+            default="4",
+            short_desc="Background Thread Count",
+            long_desc="Worker threads of the background executor, which runs the work nobody waits for; its workers run at lowered priority. Read at startup; 0 or less is one worker per hardware thread.",
+            visible=True,
+            developer=False
+        ),
+        # doc/editor/editor.md "Background apply meter"
+        field(
+            "background_apply_soft_limit_ms",
+            Float,
+            added_in=6,
+            default="2.0f",
+            short_desc="Background Apply Soft Limit",
+            long_desc="Main-thread milliseconds per frame for applying the results of background work (texture file previews, lightmap tiles, kit thumbnails). A frame over it logs a warning naming each owner and its time, at most once per second; no result is held back. Takes effect at once.",
             visible=True,
             developer=False
         ),

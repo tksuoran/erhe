@@ -763,7 +763,7 @@ void Geometry_graph_window::launch_evaluation(const std::shared_ptr<Graph_mesh>&
         run->condition.notify_all();
     };
     if (context.graphics_device->supports_worker_contexts()) {
-        erhe::task::spawn(*context.executor, evaluate);
+        erhe::task::spawn(*context.foreground_executor, evaluate);
     } else {
         // No worker contexts (GL, headless / null window): evaluate on the
         // main thread, synchronously - the pre-async behavior for a

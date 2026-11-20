@@ -67,9 +67,18 @@ ask the user which to pick. Item 14 starts with writing its plan. Items 15,
 18. Kit layout composition (GitHub issue 301): the user's rulings on the
     open questions of `doc/plans/kit_layout_composition.md`, then its build
     order.
+19. Worker executors: built and measured on desktop
+    (`doc/plans/worker_executors.md` "State" and "Remaining"); the Quest
+    measurement waits for the headset.
+    Curve hover gizmo (U62 - U65) waits for the
+    user's windowed review; its last commit (the miniature scale) is not
+    built.
 
 ## Quest session follow-ups
 
+- Worker executors: the acceptance runs of `doc/plans/worker_executors.md`
+  W8 on the Quest (needs the headset and the executors built), to set the
+  device's background thread count default.
 - `origin/lod` is stale after its rebase onto `main`: force-push or delete
   (user decision).
 - Re-pose `config/editor/benchmark_bistro.json` for the upright Bistro (the
@@ -155,6 +164,16 @@ Plans: `doc/plans/prepared_assets_design.md` (D8 per-step "Open" notes),
 
 ## Editor defects found in passing
 
+- `Mesh_operation::make_entries()` holds the scene's `item_host_mutex` for
+  the whole geometry computation of an async mesh operation, so the main
+  thread stalls in `flush_draw_lists` while it runs (five chained
+  Catmull-Clark steps on eight boxes time out an MCP request in a headless
+  Release run). The lock should cover the reads of the scene only
+  (`doc/plans/worker_executors.md` D5.5). Found at worker executors step 3.
+- Scene close under running tasks has had no thread sanitizer run: the
+  sanitizer tree is not built on the Linux machine (disk), and its editor is
+  windowed. The scenario is the `mcp_server_tests` case
+  `scene_close_and_reset_with_mesh_operations_and_import_in_flight`.
 - Kit pieces refresh over frames after a load (`doc/editor/level_tools.md`
   "Persistence"); three edges of that window remain. A parameter edit made
   and undone before the piece's turn leaves the piece without its brush
@@ -412,6 +431,18 @@ Plans: `doc/plans/culling.md`, `doc/plans/occlusion_culling.md`.
 
 ## Verify scripts
 
+- `level_tools_verify.py` depends on which windows the tracked
+  `config/editor/desktop_windows.json` shows: with `"operations": false`
+  twelve Brush tool hover / click placement checks fail (`--only-brush-normal`),
+  and with `"asset_browser": false` one Create > Level Kit node-row click
+  fails (`--only-create-menu`); four `ctest -L editor` cases
+  (`imgui_click_focuses_a_text_field...`, `imgui_hover_and_scroll...`,
+  `imgui_scroll_to_item...`, `capture_screenshot_annotates_imgui_items`)
+  fail the same way. `ERHE_DEFAULT_LAYOUT=1` covers the dock layout only.
+  To look at: why a hidden window changes viewport hover and clicks, and
+  whether scripted runs should take their window set from the run and not
+  from the file. `level_tools_verify.py --cwd <dir>` runs against a copy of
+  the committed config until then.
 - Linux headless Release tree, 2026-11-20, with locally modified
   `config/editor/desktop_windows.json` and `editor_settings.json` in the
   working tree: `level_tools_verify.py --only-brush-normal` fails 11 of 51

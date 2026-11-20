@@ -22,12 +22,20 @@ Shader_analytics_service::Shader_analytics_service(
     const Shader_analytics_config& config,
     Shader_session_programs&       session_programs,
     tf::Executor&                  executor,
+    Executor_status&               executor_status,
     Shader_analytics&              shader_analytics
 )
     : m_session_programs{session_programs}
     , m_executor        {executor}
     , m_shader_analytics{shader_analytics}
     , m_max_jobs        {static_cast<std::size_t>(std::max(config.max_jobs, 1))}
+    , m_background_work {
+        executor_status, "shader_analytics",
+        [this]() {
+            const std::lock_guard<std::mutex> lock{m_mutex};
+            return Background_work_counts{.queued = m_jobs.size(), .running = m_running, .ready = m_results.size()};
+        }
+    }
 {
     const Offline_compiler_candidates malioc  = find_offline_compiler_candidates(config.malioc_search_paths,  "ERHE_MALIOC",  "malioc");
     const Offline_compiler_candidates powervr = find_offline_compiler_candidates(config.powervr_search_paths, "ERHE_POWERVR", c_powervr_executable);

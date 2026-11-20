@@ -3659,13 +3659,58 @@ A row shows its thumbnail as an image button three text lines high, an empty
 button until its first render; the button shows hover and press feedback and
 a click on it chooses the shape as the row does.
 
-- A row drawn for the first time queues its shape. `update()`, run in the
-  prepare phase beside `Thumbnails::update()`, renders at most two queued
-  shapes per frame: a brush of the defaults made outside the brush cache
-  with `Level_kits::make_brush()` and `Kit_brush_use::thumbnail` (no
-  collision shape, fill triangles only), its part primitives drawn by
-  `Brush_preview::render_parts_preview()` into the shape's layer, then the
-  brush is released. A thumbnail is rendered once and kept.
+- A row drawn for the first time queues its shape: `queue()` captures the
+  build input by value on the main thread (the default
+  `Kit_parameter_values`, their mesh key, a `Build_info` of fill triangles
+  only with the interactive `Mesh_memory` buffer info, the shape's normal
+  style) and hands it to `Kit_thumbnail_builds`, the pending list (most
+  recently requested first; a shape queued again replaces its pending
+  request) shared by `Kit_thumbnails` and the build tasks in flight
+  (`shared_ptr`, as `Brush_geometry_queue_state`). Each request starts a
+  task on the background executor while fewer than its `num_workers()` are
+  in flight; a task takes requests until the list is empty.
+- A build task makes the part geometries (`make_kit_part_geometries()`, or
+  `make_kit_geometry()` for a one-slot shape) and one
+  `erhe::primitive::Primitive` per part with its renderable mesh, holding a
+  `Scoped_worker_context` around the renderable mesh build only. It makes
+  no brush, no collision shape and no ray-trace BVH, takes no scene lock and
+  reads nothing but its input and the kit library, which is fixed for the
+  session. It spawns nothing. Taking a request it posts a start notice
+  (shape, mesh key); finishing it posts the result (shape, mesh key, part
+  primitives or the problem).
+- `update()`, run in the prepare phase beside `Thumbnails::update()` on
+  rendered frames, takes the notices and the results under the list's mutex
+  (swapped into scratch vectors, so a frame with nothing finished allocates
+  nothing). A notice turns a `queued` shape whose latest request has its
+  mesh key into `building`. Each result is applied inside the
+  `kit_thumbnails` `Background_apply_meter` scope: a result whose shape is
+  `queued` or `building` with that latest mesh key is rendered by
+  `Brush_preview::render_parts_preview()` into the shape's layer, in the
+  slots' materials resolved here on the main thread; any other result (its
+  lengths superseded, or a second build of an image already rendered) is
+  released unrendered. Every result taken is applied on that frame and its
+  primitives released there. A thumbnail is rendered once and kept.
+- Upload before draw: the task's renderable mesh build enqueues its vertex
+  and index uploads on the interactive `Mesh_memory` queue before it posts
+  the result, and `Brush_preview::render_primitives()` calls
+  `Mesh_memory::flush()` into the same command buffer before it records the
+  draw, so the uploads are recorded ahead of the draw on the frame that
+  renders it. `update()` runs before the frame's own flush and
+  `begin_draw_prepare()`, so the main-thread build of a device without
+  worker contexts is not a late upload either.
+- Only the main thread writes the per-shape state (`Kit_thumbnail` and the
+  latest requested mesh key); the tasks write only the list's pending,
+  notice and result vectors and its counts, under its mutex.
+- On a device without worker contexts (OpenGL without a window) no task is
+  started: `update()` builds the most recent pending request on the main
+  thread, one shape per frame, as `Geometry_graph_window` falls back.
+- The `kit_thumbnails` owner of `get_async_status` `background` reports the
+  pending requests (`queued`), the tasks in flight (`running`) and the
+  results not yet taken (`ready`).
+- Shutdown calls `stop()` before the executors drain: further requests are
+  refused and the pending requests, the notices and the finished results
+  are dropped on the main thread; a task in flight releases the result it
+  finishes on its worker, before the drain returns.
 - The thumbnails' materials are their own palette materials
   (`make_palette_material()`), listed in the preview scene's content library
   (`Brush_preview::add_material()`).
@@ -3676,10 +3721,14 @@ a click on it chooses the shape as the row does.
   lengths differ from those of the thumbnails, each rendered shape whose
   default mesh key (`Level_kits::get_mesh_key()`) the new lengths change is
   queued again and shows its former image until its new one renders; the
-  others keep theirs.
+  others keep theirs. A `queued` or `building` shape whose latest request
+  has other lengths is requested again, and the build of the older request
+  is released unrendered when it arrives.
 - A graphics preset change (`Graphics_settings_message`) whose preset key
   differs (`make_thumbnail_preset_key()`, the preset without its LOD fields,
-  as `Thumbnails` compares it) queues every rendered shape again.
+  as `Thumbnails` compares it) queues every rendered (`current` or `failed`)
+  shape again. A `queued` or `building` shape is not requested again: its
+  build is rendered after the change, with the new preset.
 - A shape whose defaults make no geometry is `failed` (a warning names it)
   and shows the empty button.
 
@@ -3789,14 +3838,24 @@ surface placement.
   `collision_by_values` (the shape states `get_collision`), `seeded` (the generator draws
   from the seed) and `mirror_planes` ("Groups"); the scene's level lengths and the `palette` (`name`,
   `base_color`, `roughness`, `metallic`, `emissive`).
-- `level_get_kit_thumbnails {}`: the Level Kit window's shape thumbnails
-  ("Shape thumbnails"): `lengths` (`module`, `wall_height`; null before the
-  window first drew its rows), `size_pixels`, `shape_count`, the counts per
-  state (`none_count`, `queued_count`, `current_count`, `failed_count`), the
-  total `render_count`, and per shape in library order `id`, `state` (`none`:
-  its row not drawn yet, `queued`, `current`: rendered at `lengths`,
-  `failed`), `has_image`, `render_count` and `mesh_key` (of the defaults its
-  image shows).
+- `level_get_kit_thumbnails {request_all, scene_name}`: the Level Kit
+  window's shape thumbnails ("Shape thumbnails"). `request_all: true` queues
+  every shape in state `none`, as if the window drew every row
+  (`Kit_thumbnails::request_all()`); until the window has drawn its shape
+  rows the thumbnails have no lengths, so the call names a scene with
+  `scene_name`, whose lengths the thumbnails then follow (`follow_scene()`)
+  until the window draws with another scene. Returns `lengths` (`module`,
+  `wall_height`; null before the window first drew its rows or a
+  `request_all` named a scene), `size_pixels`, `shape_count`, the counts per
+  state (`none_count`, `queued_count`, `building_count`, `current_count`,
+  `failed_count`), the
+  total `render_count`, `requested_count` (the shapes `request_all` queued,
+  0 without it), and per shape in library order `id`, `state` (`none`:
+  its row not drawn yet, `queued`: waiting for a build task, `building`: a
+  task has taken it or its result waits for `update()`, `current`: rendered
+  at `lengths`, `failed`), `has_image`, `render_count` and `mesh_key` (of
+  the defaults its image shows). A script waits for the thumbnails by
+  reading this until no shape is `none`, `queued` or `building`.
 - `level_place_pieces {scene_name, snap, surface_snap, surface_orient,
   surface_direction, surface_max_distance, pieces: [{shape, parameters, position, rotation_xyzw,
   name, materials, parent_id, parent_index, surface_snap, surface_orient}]}`:

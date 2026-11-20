@@ -31,6 +31,10 @@ namespace erhe::task {
 // Release, like the ERHE_VERIFY_GL_THREAD_* guards.
 void verify_thread_may_spawn(const std::source_location& location);
 
+// Aborts when a worker of a Worker_priority::lowered executor made by
+// make_executor() spawns onto another executor. Active in Release.
+void verify_executor_may_spawn(const tf::Executor& target, const std::source_location& location);
+
 // executor.silent_async: schedules immediately.
 template <typename F>
 void spawn(
@@ -40,6 +44,7 @@ void spawn(
 )
 {
     verify_thread_may_spawn(location);
+    verify_executor_may_spawn(executor, location);
     executor.silent_async(std::forward<F>(f));
 }
 
@@ -55,6 +60,7 @@ template <typename F, typename I>
 ) -> tf::AsyncTask
 {
     verify_thread_may_spawn(location);
+    verify_executor_may_spawn(executor, location);
     return executor.silent_dependent_async(std::forward<F>(f), first, last);
 }
 
@@ -66,6 +72,7 @@ template <typename F, typename I>
 ) -> tf::Future<void>
 {
     verify_thread_may_spawn(location);
+    verify_executor_may_spawn(executor, location);
     return executor.run(taskflow);
 }
 
@@ -78,6 +85,7 @@ auto emplace(
 ) -> tf::Task
 {
     verify_thread_may_spawn(location);
+    verify_executor_may_spawn(subflow.executor(), location);
     return subflow.emplace(std::forward<F>(f));
 }
 

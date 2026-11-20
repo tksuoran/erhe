@@ -1,5 +1,7 @@
 #pragma once
 
+#include "background_work.hpp"
+
 #include "erhe_primitive/build_info.hpp"
 #include "erhe_primitive/enums.hpp"
 #include "erhe_profile/profile.hpp"
@@ -90,7 +92,10 @@ public:
     // writes covers every slot a record can name this frame.
     void update_material_sets                (erhe::graphics::Command_buffer& command_buffer);
 
+    // Main thread only, the one writer of the set (doc/editor/coding_rules.md "Scenes and tasks").
     [[nodiscard]] auto get_scene_roots() -> const std::vector<std::shared_ptr<Scene_root>>&;
+    // Any thread: clears out_scene_roots and fills it with the open scenes, read under the set mutex.
+    void copy_scene_roots(std::vector<std::shared_ptr<Scene_root>>& out_scene_roots);
 
     // M2, before the kick: every scene root resolves the per-scene settings
     // the render phase reads and captures the frame's joint poses
@@ -143,6 +148,8 @@ public:
 
 private:
     [[nodiscard]] auto is_saving(const Scene_root& scene_root) const -> bool;
+    // The PVS page streamers of the open scenes, summed (owner pvs_page_streamer).
+    [[nodiscard]] auto get_pvs_page_streamer_counts() -> Background_work_counts;
 
     // One mesh's slot in a display-color build: the primitive at this index of
     // this mesh's list is the one the built Primitive replaces.
@@ -207,6 +214,7 @@ private:
     std::vector<std::shared_ptr<erhe::Item_base>>     m_display_color_items;
     // Scratch of rebuild_draw_mode_proxies(); cleared after use, capacity kept.
     std::vector<std::shared_ptr<Scene_root>>          m_draw_mode_roots;
+    Background_work_owner                             m_pvs_page_streamer_work; // last: reads m_scene_roots
 };
 
 }
