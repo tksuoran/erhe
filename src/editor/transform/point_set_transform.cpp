@@ -30,16 +30,21 @@ auto Point_set_transform::update_anchor(IPoint_set& point_set, Transform_tool_sh
     glm::vec3   centroid{0.0f};
     std::size_t count = 0;
     point_set.get_point_world_positions(m_positions);
-    for (std::size_t i = 0, end = m_positions.size(); i < end; ++i) {
-        if (m_positions[i].has_value() && point_set.is_point_selected(i)) {
-            centroid += m_positions[i].value();
-            ++count;
+    const std::optional<std::size_t> hot = point_set.get_hot_point();
+    if (hot.has_value() && (hot.value() < m_positions.size()) && m_positions[hot.value()].has_value()) {
+        centroid = m_positions[hot.value()].value();
+    } else {
+        for (std::size_t i = 0, end = m_positions.size(); i < end; ++i) {
+            if (m_positions[i].has_value() && point_set.is_point_selected(i)) {
+                centroid += m_positions[i].value();
+                ++count;
+            }
         }
+        if (count == 0) {
+            return false;
+        }
+        centroid /= static_cast<float>(count);
     }
-    if (count == 0) {
-        return false;
-    }
-    centroid /= static_cast<float>(count);
     shared.world_from_anchor_initial_state.set_trs(centroid, point_set.get_point_frame_rotation(), glm::vec3{1.0f});
     shared.entries.clear();
     shared.component_mode = true;
@@ -47,8 +52,17 @@ auto Point_set_transform::update_anchor(IPoint_set& point_set, Transform_tool_sh
     return true;
 }
 
-void Point_set_transform::begin(IPoint_set& point_set)
+void Point_set_transform::begin(IPoint_set& point_set, Transform_tool_shared& shared, const Component_edit_origin origin)
 {
+    m_pointer_drag = (origin == Component_edit_origin::pointer_drag);
+    m_moved        = false;
+    if (m_pointer_drag) {
+        point_set.begin_pointer_drag();
+    } else if (point_set.get_hot_point().has_value()) {
+        // A value edit acts on the selection about its centroid.
+        point_set.clear_hot_point();
+        static_cast<void>(update_anchor(point_set, shared));
+    }
     m_point_set = point_set.begin_point_edit() ? &point_set : nullptr;
 }
 
@@ -59,7 +73,9 @@ void Point_set_transform::apply(Transform_tool_shared& shared, const glm::mat4& 
     }
     const glm::mat4 world_delta = updated_world_from_anchor * shared.world_from_anchor_initial_state.get_inverse_matrix();
     // A click without motion restores the snapshot exactly instead of round-tripping it through the delta.
-    m_point_set->apply_point_edit(is_nontrivial_delta(world_delta) ? std::optional<glm::mat4>{world_delta} : std::nullopt);
+    const bool nontrivial = is_nontrivial_delta(world_delta);
+    m_moved = m_moved || nontrivial;
+    m_point_set->apply_point_edit(nontrivial ? std::optional<glm::mat4>{world_delta} : std::nullopt);
 }
 
 void Point_set_transform::commit()
@@ -70,6 +86,9 @@ void Point_set_transform::commit()
     IPoint_set* const point_set = m_point_set;
     m_point_set = nullptr;
     point_set->commit_point_edit();
+    if (m_pointer_drag) {
+        point_set->end_pointer_drag(m_moved ? Point_drag_result::moved : Point_drag_result::unmoved);
+    }
 }
 
 void Point_set_transform::cancel()

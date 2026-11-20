@@ -13542,7 +13542,7 @@
     "name": "curve_remove_points"
   },
   {
-    "description": "Read the curve tool's point selection (doc/editor/curves.md 'Viewport editing'): the target curve (id, name, scene_name; null when no curve is the only selected item) and its selected points, each with index (the control point), part ('point', 'in' or 'out': the point itself or its in / out handle end) and world_position. gizmo_on_points tells whether the Transform gizmo is anchored at the selection (it is from the next idle viewport frame after a selection), so transform_selection, get_transform_handles and gizmo mouse drags then move the selected points.",
+    "description": "Read the curve tool's point selection (doc/editor/curves.md 'Viewport editing'): the target curve (id, name, scene_name; null when no curve is the only selected item) and its selected points, each with index (the control point), part ('point', 'in' or 'out': the point itself or its in / out handle end) and world_position. gizmo_on_points tells whether the Transform gizmo is anchored at the selection (it is from the next idle viewport frame after a selection), so transform_selection, get_transform_handles and gizmo mouse drags then move the selected points. hover_point is the point the pointer brought the gizmo to without a click (index and part, or segment for a segment handle, and world_position; null when none): a gizmo mouse drag then selects and moves that point.",
     "inputSchema": {
       "properties": {},
       "type": "object"

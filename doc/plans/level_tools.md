@@ -611,6 +611,43 @@ The user's rulings (2026-11-15):
   the Connector Snap Orientation setting as built (step 81); the user's
   rotation does nothing while the snapped connector stays within the snap
   distance, and holding the suspend key (Shift) rotates freely away from it.
+- U62 (2026-11-20), path control point handles. The user: "Level kit path
+  control points shall be rendered the same as translate gizmo handles,
+  except they shall appear smaller - the size of current handle - until
+  pointer hovers near them. When pointer hovers close to a control point
+  handle(s), the nearest control point handle is rendered as translate gizmo
+  handle in same size as true translate gizmo would be rendered. No click is
+  needed to select the handle - dragging any handle of the full size handle
+  will immediately transform the handle." Built as
+  `doc/editor/point_set_editing.md` "Hover gizmo". Choices made while
+  building, for the user's review: it holds for every curve the curve tool
+  edits and for all its points (control points, handle ends, segment
+  handles); the miniature's arrow tips reach two handle quad widths (at one
+  width the arrows are 2 - 3 px); "near" is 24 px; the drag selects the
+  point it moves; the hovered point's gizmo shows translate handles alone
+  under the Rotate and Scale tools too; the curve tool's target loses its
+  cross markers.
+- U63 (2026-11-20). The user: "The control point handles axis handles shall
+  be immediately next to the translate handles, making the hovered total
+  area smaller". The arrows of a point's gizmo start right outside its plane
+  sectors, on the miniature and on the full-size hovered gizmo.
+- U64 (2026-11-20). The user: "The control point when rendered as bigger
+  size should revert back to smaller size as soon as pointer is outside the
+  screen space bounding box of the handles". Orchestrator choices: the box
+  is 4 px wider on each side and the 12 px pick circle of the point counts
+  as inside (the point sits at the box's edge from some views); a handle
+  under the pointer keeps the gizmo.
+- U65 (2026-11-20). The user: "Only show one axis translate handle based on
+  visible octant - the other handle might be behind plane handle(s). Have
+  dedicated size settings for control point handles - separate from the main
+  transform gizmo handle size settings - we want the control point handle
+  translate size to be 60% of what it currently is". Built:
+  `point_gizmo_scale` (default 0.6, 60% of the stored `gizmo_scale` 1) for
+  the hovered point's gizmo. The user, on whether the 60% is for both
+  sizes: "apply both so smaller is scaled version of bigger size - in all
+  aspects. I'll fine tune rest": the miniature is the hovered gizmo times
+  `point_gizmo_miniature_scale` (default 0.3, the ratio the two had), line
+  widths included.
 - U52 reading (orchestrator choice, 2026-11-18, for the user's review):
   `center_fallback` rests on the nearest surface under the base center along
   the search direction, with no fit test, when the nearest five-line place

@@ -34,11 +34,19 @@ enum class Point_select : unsigned int
     toggle
 };
 
+// How a pointer drag of the hovered point's gizmo ended.
+enum class Point_drag_result : unsigned int
+{
+    moved = 0,
+    unmoved // a click
+};
+
 // Which points the shared drawing draws as handles.
 enum class Point_drawing : unsigned int
 {
-    all = 0,         // every point, the selected and hovered ones highlighted
-    highlighted_only // only the selected and hovered points (another drawing shows the rest)
+    all = 0,          // every point, the selected and hovered ones highlighted
+    highlighted_only, // only the selected and hovered points (another drawing shows the rest)
+    gizmos            // as all, and the pointer brings the transform gizmo to the nearest point, in place of its handle
 };
 
 // The editable points of one target, in world space, with a selection and a
@@ -62,6 +70,15 @@ public:
     // The gizmo's frame orientation: the target's world rotation.
     [[nodiscard]] virtual auto get_point_frame_rotation   () const -> glm::quat = 0;
     [[nodiscard]] virtual auto get_point_drawing          () const -> Point_drawing = 0;
+
+    // The point the pointer brought the gizmo to (Point_drawing::gizmos), re-decided each idle frame by update_hot_point().
+    virtual void update_hot_point() = 0;
+    [[nodiscard]] virtual auto get_hot_point() const -> std::optional<std::size_t> = 0;
+    virtual void clear_hot_point() = 0;
+    // A pointer drag of the gizmo, around the gesture below: the press selects the hovered point,
+    // an unmoved release is a click on it (doc/editor/point_set_editing.md "Hover gizmo").
+    virtual void begin_pointer_drag() = 0;
+    virtual void end_pointer_drag  (Point_drag_result result) = 0;
 
     // One gesture of the selected points: begin snapshots, apply writes the
     // snapshot moved by world_delta (nullopt: no motion, the snapshot exactly),
@@ -103,6 +120,8 @@ class Point_set_tool : public Tool, public IPoint_set
 public:
     static constexpr int   c_priority    {4};
     static constexpr float c_pick_radius {12.0f}; // pixels
+    static constexpr float c_hover_radius{24.0f}; // pixels: the pointer this near a point brings the gizmo to it
+    static constexpr float c_gizmo_bounds_margin{4.0f}; // pixels around the hovered gizmo's handles that still keep it
 
     Point_set_tool(
         erhe::commands::Commands& commands,
@@ -115,6 +134,13 @@ public:
 
     // Implements Tool
     void tool_render(const Render_context& context) override;
+
+    // Implements IPoint_set
+    void update_hot_point() override;
+    [[nodiscard]] auto get_hot_point() const -> std::optional<std::size_t> override;
+    void clear_hot_point() override;
+    void begin_pointer_drag() override;
+    void end_pointer_drag  (Point_drag_result result) override;
 
     // The point within the pick radius of pointer nearest to the camera.
     [[nodiscard]] static auto pick_point(
@@ -138,18 +164,26 @@ protected:
     [[nodiscard]] auto is_view_of_target_scene(const Scene_view& scene_view) const -> bool;
 
 private:
-    void append_point_quad(const glm::vec3& position_in_world, const glm::vec3& camera_right, const glm::vec3& camera_up, float half_size);
 
     erhe::message_bus::Subscription<Hover_scene_view_message> m_hover_scene_view_subscription;
     Point_set_select_command  m_select_command;
     Point_set_cancel_command  m_cancel_command;
     std::optional<std::size_t> m_pick_point; // armed by try_ready_select(), consumed by on_select()
     bool                      m_pick_miss{false};
+    std::optional<std::size_t> m_hot_point;
 
-    // Scratch of the point positions and the billboard quads (cleared per use, capacity kept)
+    // The hovered point a pointer drag was pressed on.
+    class Press
+    {
+    public:
+        std::size_t point       {0};
+        bool        toggle      {false}; // Ctrl or Shift held, the pointer on the point itself
+        bool        was_selected{false};
+    };
+    std::optional<Press> m_press;
+
+    // Scratch of the point positions (cleared per use, capacity kept)
     std::vector<std::optional<glm::vec3>> m_scratch_world;
-    std::vector<glm::vec3> m_scratch_positions;
-    std::vector<uint32_t>  m_scratch_indices;
 };
 
 }

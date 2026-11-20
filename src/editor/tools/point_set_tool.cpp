@@ -10,11 +10,20 @@
 #include "scene/viewport_scene_view.hpp"
 #include "tools/selection_tool.hpp"
 #include "tools/tools.hpp"
+#include "transform/handle_visualizations.hpp"
 #include "transform/transform_tool.hpp"
 
 #include "erhe_commands/commands.hpp"
 #include "erhe_renderer/primitive_renderer.hpp"
+#include "erhe_scene/camera.hpp"
 #include "erhe_scene/node.hpp"
+
+#include <glm/gtc/constants.hpp>
+
+#include <algorithm>
+#include <array>
+#include <cmath>
+#include <limits>
 
 namespace editor {
 
@@ -190,6 +199,144 @@ auto Point_set_tool::on_cancel_edit() -> bool
     return m_context.transform_tool->cancel_component_edit();
 }
 
+auto Point_set_tool::get_hot_point() const -> std::optional<std::size_t>
+{
+    return m_hot_point;
+}
+
+void Point_set_tool::clear_hot_point()
+{
+    m_hot_point.reset();
+}
+
+void Point_set_tool::begin_pointer_drag()
+{
+    m_press.reset();
+    if (!m_hot_point.has_value()) {
+        return;
+    }
+    Press press{.point = m_hot_point.value(), .toggle = false, .was_selected = is_point_selected(m_hot_point.value())};
+    // Ctrl / Shift toggle only on the point itself; on an arrow they are the drag's snap modifiers.
+    const Input_state* const input_state = m_context.input_state;
+    Scene_view* const        scene_view  = get_hover_scene_view();
+    Viewport_scene_view* const viewport_scene_view = (scene_view != nullptr) ? scene_view->as_viewport_scene_view() : nullptr;
+    if ((input_state != nullptr) && (input_state->control || input_state->shift) && (viewport_scene_view != nullptr)) {
+        const std::optional<glm::vec2> pointer = viewport_scene_view->get_position_in_viewport();
+        get_point_world_positions(m_scratch_world);
+        if (pointer.has_value() && (press.point < m_scratch_world.size()) && m_scratch_world[press.point].has_value()) {
+            const std::optional<glm::vec3> projected = viewport_scene_view->project_to_viewport(m_scratch_world[press.point].value());
+            press.toggle = projected.has_value() && (glm::distance(glm::vec2{projected.value()}, pointer.value()) <= c_pick_radius);
+        }
+    }
+    if (!press.was_selected) {
+        select_point(press.point, press.toggle ? Point_select::toggle : Point_select::replace);
+    }
+    m_press = press;
+}
+
+void Point_set_tool::end_pointer_drag(const Point_drag_result result)
+{
+    if (!m_press.has_value()) {
+        return;
+    }
+    const Press press = m_press.value();
+    m_press.reset();
+    // A click on a point that was selected at the press: the click selection rule, applied at the release.
+    if ((result == Point_drag_result::unmoved) && press.was_selected) {
+        select_point(press.point, press.toggle ? Point_select::toggle : Point_select::replace);
+    }
+}
+
+// The pointer reports no change; runs from Transform_tool::update_for_view() while no gesture is active.
+void Point_set_tool::update_hot_point()
+{
+    const std::optional<std::size_t> previous = m_hot_point;
+    m_hot_point.reset();
+    if ((get_point_drawing() != Point_drawing::gizmos) || !has_point_set_target()) {
+        return;
+    }
+    Scene_view* const scene_view = get_hover_scene_view();
+    if ((scene_view == nullptr) || !is_view_of_target_scene(*scene_view)) {
+        return;
+    }
+    Viewport_scene_view* const viewport_scene_view = scene_view->as_viewport_scene_view();
+    if ((viewport_scene_view == nullptr) || !viewport_scene_view->is_scene_view_hovered()) {
+        return;
+    }
+    // The pointer as the control ray has it: the handle test below uses the ray, and both must be of one sample.
+    const std::optional<glm::vec3> ray_origin    = scene_view->get_control_ray_origin_in_world();
+    const std::optional<glm::vec3> ray_direction = scene_view->get_control_ray_direction_in_world();
+    if (!ray_origin.has_value() || !ray_direction.has_value()) {
+        return;
+    }
+    const std::optional<glm::vec3> pointer_projected = viewport_scene_view->project_to_viewport(ray_origin.value() + ray_direction.value());
+    if (!pointer_projected.has_value()) {
+        return;
+    }
+    const std::optional<glm::vec2> pointer = glm::vec2{pointer_projected.value()};
+    get_point_world_positions(m_scratch_world);
+    const auto screen_distance = [&](const glm::vec3& world) -> std::optional<float> {
+        const std::optional<glm::vec3> projected = viewport_scene_view->project_to_viewport(world);
+        return projected.has_value() ? std::optional<float>{glm::distance(glm::vec2{projected.value()}, pointer.value())} : std::nullopt;
+    };
+    const bool previous_valid = previous.has_value() && (previous.value() < m_scratch_world.size()) && m_scratch_world[previous.value()].has_value();
+    Transform_tool* const transform_tool = m_context.transform_tool;
+    // A gizmo handle under the pointer keeps the gizmo where it is.
+    if ((transform_tool != nullptr) && transform_tool->is_pointer_on_handle(*scene_view)) {
+        if (previous_valid) {
+            m_hot_point = previous;
+        }
+        return;
+    }
+    const Handle_visualizations* const visualizations = (transform_tool != nullptr) ? transform_tool->shared.get_visualizations() : nullptr;
+    const glm::mat3 basis = ((transform_tool != nullptr) && transform_tool->shared.settings.use_anchor_orientation())
+        ? glm::mat3_cast(get_point_frame_rotation())
+        : glm::mat3{1.0f};
+    // The pointer is on the point or inside the screen-space bounding box of the handles its full-size gizmo shows.
+    const auto is_within_gizmo = [&](const std::size_t index, const float distance) -> bool {
+        if (distance <= c_pick_radius) {
+            return true;
+        }
+        if (visualizations == nullptr) {
+            return false;
+        }
+        const Handle_visualizations::Point_gizmo_extent extent = visualizations->get_point_gizmo_extent(*scene_view, m_scratch_world[index].value(), basis);
+        glm::vec2 box_min{std::numeric_limits<float>::max()};
+        glm::vec2 box_max{std::numeric_limits<float>::lowest()};
+        for (std::size_t i = 0; i < extent.count; ++i) {
+            const std::optional<glm::vec3> projected = viewport_scene_view->project_to_viewport(extent.points[i]);
+            if (!projected.has_value()) {
+                return false;
+            }
+            box_min = glm::min(box_min, glm::vec2{projected.value()});
+            box_max = glm::max(box_max, glm::vec2{projected.value()});
+        }
+        const glm::vec2 margin{c_gizmo_bounds_margin};
+        return
+            (extent.count > 0) &&
+            glm::all(glm::greaterThanEqual(pointer.value(), box_min - margin)) &&
+            glm::all(glm::lessThanEqual   (pointer.value(), box_max + margin));
+    };
+    // The hovered point keeps the gizmo while the pointer is within it; another point then takes it only from within the pick radius.
+    const std::optional<float> previous_distance = previous_valid ? screen_distance(m_scratch_world[previous.value()].value()) : std::nullopt;
+    const bool keep_previous = previous_distance.has_value() && is_within_gizmo(previous.value(), previous_distance.value());
+    std::optional<std::size_t> nearest;
+    float                      nearest_distance{keep_previous ? c_pick_radius : c_hover_radius};
+    for (std::size_t i = 0, end = m_scratch_world.size(); i < end; ++i) {
+        if (!m_scratch_world[i].has_value()) {
+            continue;
+        }
+        const std::optional<float> distance = screen_distance(m_scratch_world[i].value());
+        // Strictly nearer: of coincident points the first wins (a control point over its zero-length handle).
+        // Only where its gizmo would keep it, so the gizmo does not come and go as the pointer rests.
+        if (distance.has_value() && (distance.value() < nearest_distance) && is_within_gizmo(i, distance.value())) {
+            nearest          = i;
+            nearest_distance = distance.value();
+        }
+    }
+    m_hot_point = (nearest.has_value() || !keep_previous) ? nearest : previous;
+}
+
 auto Point_set_tool::try_ready_miss(Viewport_scene_view&, const glm::vec2&) -> bool
 {
     return false;
@@ -204,33 +351,9 @@ void Point_set_tool::render_extras(const Render_context&, std::optional<std::siz
 {
 }
 
-void Point_set_tool::append_point_quad(
-    const glm::vec3& position_in_world,
-    const glm::vec3& camera_right,
-    const glm::vec3& camera_up,
-    const float      half_size
-)
-{
-    const glm::vec3 r    = half_size * camera_right;
-    const glm::vec3 u    = half_size * camera_up;
-    const uint32_t  base = static_cast<uint32_t>(m_scratch_positions.size());
-    m_scratch_positions.push_back(position_in_world - r - u);
-    m_scratch_positions.push_back(position_in_world + r - u);
-    m_scratch_positions.push_back(position_in_world + r + u);
-    m_scratch_positions.push_back(position_in_world - r + u);
-    m_scratch_indices.push_back(base + 0);
-    m_scratch_indices.push_back(base + 1);
-    m_scratch_indices.push_back(base + 2);
-    m_scratch_indices.push_back(base + 0);
-    m_scratch_indices.push_back(base + 2);
-    m_scratch_indices.push_back(base + 3);
-}
-
 void Point_set_tool::tool_render(const Render_context& context)
 {
-    // Desktop viewport only: the billboard quads go through Debug_renderer's
-    // direct triangle path, which is single-view only (see the equivalent
-    // gate in Mesh_component_selection_tool::tool_render).
+    // Desktop viewport only: the hovered point comes from the viewport's pointer.
     if (context.viewport_scene_view == nullptr) {
         return;
     }
@@ -257,34 +380,77 @@ void Point_set_tool::tool_render(const Render_context& context)
     }
     render_extras(context, hovered);
 
-    // stencil_reference must be non-zero (function=greater against a zero-cleared stencil buffer); 2 matches the other debug tools.
-    erhe::renderer::Primitive_renderer triangle_renderer = context.get({erhe::graphics::Primitive_type::triangle, 2, true, false});
+    // Stencil reference 3: over the curve lines and the gizmo rings (2), under the gizmo arrows (4).
+    erhe::renderer::Primitive_renderer visible_renderer = context.get(
+        {
+            .primitive_type    = erhe::graphics::Primitive_type::line,
+            .stencil_reference = 3,
+            .draw_visible      = true,
+            .draw_hidden       = false
+        }
+    );
+    // The x-ray hidden pass draws at full strength, so the alpha carries the hidden strength.
+    erhe::renderer::Primitive_renderer hidden_renderer = context.get(
+        {
+            .primitive_type    = erhe::graphics::Primitive_type::line,
+            .stencil_reference = 3,
+            .draw_visible      = false,
+            .draw_hidden       = true,
+            .xray              = true
+        }
+    );
+    constexpr std::size_t segment_count = 24;
+    static const std::array<glm::vec2, segment_count> rim = []() {
+        std::array<glm::vec2, segment_count> result;
+        for (std::size_t i = 0; i < segment_count; ++i) {
+            const float angle = glm::two_pi<float>() * static_cast<float>(i) / static_cast<float>(segment_count);
+            result[i] = glm::vec2{std::cos(angle), std::sin(angle)};
+        }
+        return result;
+    }();
+    const Debug_visualizations_style& style = context.app_context.editor_settings->debug_visualizations_style;
+    const float hidden_strength = std::clamp(style.point_hidden_strength, 0.0f, 1.0f);
+    const float width           = style.point_circle_width;
     const auto draw_points = [&](const glm::vec4& color, const float size_factor, const auto& predicate) {
-        m_scratch_positions.clear();
-        m_scratch_indices.clear();
+        const glm::vec4 hidden_color{color.r, color.g, color.b, hidden_strength * color.a};
         for (std::size_t i = 0, end = m_scratch_world.size(); i < end; ++i) {
             if (!m_scratch_world[i].has_value() || !predicate(i)) {
                 continue;
             }
-            const glm::vec3 world     = m_scratch_world[i].value();
-            const float     half_size = size_factor * glm::distance(camera_position, world);
-            append_point_quad(world, camera_right, camera_up, half_size);
-        }
-        if (!m_scratch_indices.empty()) {
-            triangle_renderer.add_triangles(glm::mat4{1.0f}, color, m_scratch_positions, m_scratch_indices);
+            const glm::vec3 world  = m_scratch_world[i].value();
+            const float     radius = size_factor * glm::distance(camera_position, world);
+            const glm::vec3 r      = radius * camera_right;
+            const glm::vec3 u      = radius * camera_up;
+            glm::vec3 a = world + (rim[segment_count - 1].x * r) + (rim[segment_count - 1].y * u);
+            for (std::size_t k = 0; k < segment_count; ++k) {
+                const glm::vec3 b = world + (rim[k].x * r) + (rim[k].y * u);
+                visible_renderer.add_line(color, width, a, color, width, b);
+                if (hidden_strength > 0.0f) {
+                    hidden_renderer.add_line(hidden_color, width, a, hidden_color, width, b);
+                }
+                a = b;
+            }
         }
     };
-    const Debug_visualizations_style& style = context.app_context.editor_settings->debug_visualizations_style;
-    const bool is_hovered_unselected = hovered.has_value() && !is_point_selected(hovered.value());
-    if (get_point_drawing() == Point_drawing::all) {
+    // The transform gizmo stands in for the circle of the point it sits on.
+    std::optional<std::size_t> gizmo_point;
+    if (get_point_drawing() == Point_drawing::gizmos) {
+        const Transform_tool* const transform_tool = context.app_context.transform_tool;
+        if ((transform_tool != nullptr) && (transform_tool->get_gizmo_point_set() == static_cast<const IPoint_set*>(this))) {
+            gizmo_point = m_hot_point;
+        }
+    }
+    const auto has_gizmo = [&](const std::size_t i) { return gizmo_point.has_value() && (i == gizmo_point.value()); };
+    const bool is_hovered_unselected = hovered.has_value() && !is_point_selected(hovered.value()) && !has_gizmo(hovered.value());
+    if (get_point_drawing() != Point_drawing::highlighted_only) {
         draw_points(style.point_handle_color, style.point_handle_size, [&](const std::size_t i) {
-            return !is_point_selected(i) && (!hovered.has_value() || (i != hovered.value()));
+            return !is_point_selected(i) && !has_gizmo(i) && (!hovered.has_value() || (i != hovered.value()));
         });
     }
     if (is_hovered_unselected) {
         draw_points(style.point_hover_color, style.point_hover_size, [&](const std::size_t i) { return i == hovered.value(); });
     }
-    draw_points(style.point_selected_color, style.point_selected_size, [&](const std::size_t i) { return is_point_selected(i); });
+    draw_points(style.point_selected_color, style.point_selected_size, [&](const std::size_t i) { return is_point_selected(i) && !has_gizmo(i); });
 }
 
 }

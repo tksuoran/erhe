@@ -39,6 +39,22 @@ static constexpr const char* c_transform_reference_mode_strings[] = {
     "BBox"
 };
 
+// The handle families the gizmo shows now (Transform_tool::get_shown_handle_tools()).
+class Shown_handle_tools
+{
+public:
+    bool translate{false};
+    bool rotate   {false};
+    bool scale    {false};
+};
+
+// Who begins a component edit: a pointer drag of a gizmo handle, or a value edit (numeric field, MCP).
+enum class Component_edit_origin : unsigned int
+{
+    pointer_drag = 0,
+    value
+};
+
 class Transform_tool_settings
 {
 public:

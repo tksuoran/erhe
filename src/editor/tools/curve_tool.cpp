@@ -640,8 +640,10 @@ auto Curve_tool::get_point_frame_rotation() const -> glm::quat
     }
     const glm::quat node_rotation = curve->world_from_node_transform().get_rotation();
     // A segment handle's Local frame: x along the segment's normal, the one axis its drag moves along.
+    const std::optional<std::size_t> hot     = get_hot_point();
+    const std::optional<std::size_t> segment = hot.has_value() ? get_segment_of(hot.value()) : m_selected_segment;
     glm::vec3 normal{0.0f};
-    if (m_selected_segment.has_value() && get_segment_normal(curve->get_path(), m_selected_segment.value(), normal).empty()) {
+    if (segment.has_value() && get_segment_normal(curve->get_path(), segment.value(), normal).empty()) {
         return node_rotation * segment_frame_rotation(normal);
     }
     return node_rotation;
@@ -649,8 +651,8 @@ auto Curve_tool::get_point_frame_rotation() const -> glm::quat
 
 auto Curve_tool::get_point_drawing() const -> Point_drawing
 {
-    // Every point and handle end is a handle to grab; curves_visualization() draws the curve and the handle lines.
-    return Point_drawing::all;
+    // Every point and handle end is a gizmo to drag; curves_visualization() draws the curve and the handle lines.
+    return Point_drawing::gizmos;
 }
 
 auto Curve_tool::begin_point_edit() -> bool
@@ -796,18 +798,26 @@ void Curve_tool::render_extras(const Render_context& context, const std::optiona
     if (!hovered_segment.has_value() && !m_selected_segment.has_value()) {
         return;
     }
-    // The hovered and the selected segment's chord, thicker, in the point handles' colors; x-ray as the curves are.
-    erhe::renderer::Primitive_renderer line_renderer = context.get(
+    // The hovered and the selected segment's chord, thicker, in the point handles' colors; dimmed where hidden as the curves are.
+    erhe::renderer::Primitive_renderer visible_renderer = context.get(
         {
             .primitive_type    = erhe::graphics::Primitive_type::line,
             .stencil_reference = 2,
             .draw_visible      = true,
+            .draw_hidden       = false
+        }
+    );
+    erhe::renderer::Primitive_renderer hidden_renderer = context.get(
+        {
+            .primitive_type    = erhe::graphics::Primitive_type::line,
+            .stencil_reference = 2,
+            .draw_visible      = false,
             .draw_hidden       = true,
-            .thin_lines        = false,
             .xray              = true
         }
     );
     const Debug_visualizations_style& style = context.app_context.editor_settings->debug_visualizations_style;
+    const float      hidden_strength = std::clamp(style.curve_hidden_strength, 0.0f, 1.0f);
     const float      width           = 2.0f * style.curve_selected_width;
     const Curve_path& path           = curve->get_path();
     const glm::mat4  world_from_node = curve->world_from_node();
@@ -817,7 +827,11 @@ void Curve_tool::render_extras(const Render_context& context, const std::optiona
         }
         const glm::vec3 a{world_from_node * glm::vec4{path.points[segment].position, 1.0f}};
         const glm::vec3 b{world_from_node * glm::vec4{path.points[(segment + 1) % path.points.size()].position, 1.0f}};
-        line_renderer.add_line(color, width, a, color, width, b);
+        visible_renderer.add_line(color, width, a, color, width, b);
+        if (hidden_strength > 0.0f) {
+            const glm::vec4 hidden_color{color.r, color.g, color.b, hidden_strength * color.a};
+            hidden_renderer.add_line(hidden_color, width, a, hidden_color, width, b);
+        }
     };
     if (hovered_segment.has_value() && (hovered_segment != m_selected_segment)) {
         draw_chord(hovered_segment.value(), style.point_hover_color);

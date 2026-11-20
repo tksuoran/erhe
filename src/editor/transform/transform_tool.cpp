@@ -1941,7 +1941,7 @@ void Transform_tool::apply_translation_edit(const glm::vec3 translation, const b
 {
     if (shared.component_mode) {
         if (!is_component_edit_active()) {
-            begin_component_edit();
+            begin_component_edit(Component_edit_origin::value);
         }
         Trs_transform updated_world_from_anchor = shared.world_from_anchor_initial_state;
         updated_world_from_anchor.set_translation(translation);
@@ -1978,7 +1978,7 @@ void Transform_tool::apply_rotation_edit(const glm::quat rotation, const bool lo
 {
     if (shared.component_mode) {
         if (!is_component_edit_active()) {
-            begin_component_edit();
+            begin_component_edit(Component_edit_origin::value);
         }
         Trs_transform updated_world_from_anchor = shared.world_from_anchor_initial_state;
         updated_world_from_anchor.set_rotation(rotation);
@@ -2032,7 +2032,7 @@ void Transform_tool::apply_scale_edit(const glm::vec3 scale, const bool local)
 {
     if (shared.component_mode) {
         if (!is_component_edit_active()) {
-            begin_component_edit();
+            begin_component_edit(Component_edit_origin::value);
         }
         Trs_transform updated_world_from_anchor = shared.world_from_anchor_initial_state;
         updated_world_from_anchor.set_scale(scale);
@@ -2075,7 +2075,7 @@ void Transform_tool::apply_skew_edit(const glm::vec3 skew, const bool local)
 {
     if (shared.component_mode) {
         if (!is_component_edit_active()) {
-            begin_component_edit();
+            begin_component_edit(Component_edit_origin::value);
         }
         Trs_transform updated_world_from_anchor = shared.world_from_anchor_initial_state;
         updated_world_from_anchor.set_skew(skew);
@@ -2253,7 +2253,7 @@ void Transform_tool::update_hover(Scene_view& scene_view, const glm::vec3 ray_or
 auto Transform_tool::update_box_face_hover(Scene_view* scene_view) -> bool
 {
     if (
-        !shared.settings.show_scale ||
+        !get_shown_handle_tools().scale ||
         (shared.settings.scale_gizmo_mode != Scale_gizmo_mode::bounding_box)
     ) {
         return false;
@@ -2452,7 +2452,7 @@ auto Transform_tool::on_drag_ready() -> bool
         begin_connector_snap((m_context.level_kits != nullptr) ? m_context.level_kits->get_connector_snap_distance() : 0.0f, orientation);
     }
     if (started && shared.component_mode) {
-        begin_component_edit();
+        begin_component_edit(Component_edit_origin::pointer_drag);
     }
     return started;
 }
@@ -3414,7 +3414,11 @@ void Transform_tool::update_for_view(Scene_view* scene_view)
             // (as a Houdini display flag would); then the selected points of
             // the selected curve, then the selected scatter region handle.
             for (IPoint_set* candidate : {static_cast<IPoint_set*>(m_context.lattice_tool), static_cast<IPoint_set*>(m_context.curve_tool), static_cast<IPoint_set*>(m_context.kit_layout_region_tool)}) {
-                if ((candidate != nullptr) && candidate->update_point_set() && m_point_set_transform.update_anchor(*candidate, shared)) {
+                if ((candidate == nullptr) || !candidate->update_point_set()) {
+                    continue;
+                }
+                candidate->update_hot_point();
+                if (m_point_set_transform.update_anchor(*candidate, shared)) {
                     point_set = candidate;
                     break;
                 }
@@ -3505,11 +3509,12 @@ void Transform_tool::apply_component_transform(const glm::mat4& updated_world_fr
     update_transforms();
 }
 
-void Transform_tool::begin_component_edit()
+void Transform_tool::begin_component_edit(const Component_edit_origin origin)
 {
     if (m_component_source == Component_source::point_set) {
         if (m_point_set != nullptr) {
-            m_point_set_transform.begin(*m_point_set);
+            m_point_set_transform.begin(*m_point_set, shared, origin);
+            update_transforms();
         }
     } else {
         m_component_transform.begin(m_context);
@@ -3529,6 +3534,40 @@ void Transform_tool::commit_component_edit()
 auto Transform_tool::is_component_edit_active() const -> bool
 {
     return m_component_transform.is_active() || m_point_set_transform.is_active();
+}
+
+auto Transform_tool::is_pointer_on_handle(Scene_view& scene_view) -> bool
+{
+    Handle_visualizations* const visualizations = shared.get_visualizations();
+    const std::optional<glm::vec3> ray_origin    = scene_view.get_control_ray_origin_in_world();
+    const std::optional<glm::vec3> ray_direction = scene_view.get_control_ray_direction_in_world();
+    if ((visualizations == nullptr) || !ray_origin.has_value() || !ray_direction.has_value() || !is_scene_view_of_active_scene(&scene_view)) {
+        return false;
+    }
+    evaluate_handles_for(scene_view);
+    const std::shared_ptr<erhe::scene::Camera> camera = scene_view.get_camera();
+    const glm::vec3 eye_position = camera ? visualizations->get_eye(*camera.get()) : ray_origin.value();
+    return visualizations->pick(eye_position, ray_origin.value(), ray_direction.value()).has_value();
+}
+
+auto Transform_tool::get_gizmo_point_set() const -> const IPoint_set*
+{
+    return (m_component_source == Component_source::point_set) ? m_point_set : nullptr;
+}
+
+auto Transform_tool::is_point_gizmo() const -> bool
+{
+    const IPoint_set* const point_set = get_gizmo_point_set();
+    return (point_set != nullptr) && (point_set->get_point_drawing() == Point_drawing::gizmos);
+}
+
+auto Transform_tool::get_shown_handle_tools() const -> Shown_handle_tools
+{
+    if (is_point_gizmo()) {
+        // Only on the hovered point; the selection away from the pointer shows no gizmo.
+        return Shown_handle_tools{.translate = m_point_set->get_hot_point().has_value(), .rotate = false, .scale = false};
+    }
+    return Shown_handle_tools{.translate = shared.settings.show_translate, .rotate = shared.settings.show_rotate, .scale = shared.settings.show_scale};
 }
 
 auto Transform_tool::get_point_set_edit() const -> const IPoint_set*

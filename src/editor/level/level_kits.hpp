@@ -1039,8 +1039,8 @@ public:
     // The corner edits of the floors connected to the floor by floor connectors: each corner that shared a moved corner's
     // place moves with it (not executed; each edit's own follow-ups carry it on through the connected floors).
     void append_shared_corner_moves(Scene_root& scene_root, const erhe::scene::Curve& curve, const erhe::math::Curve_path& before, std::vector<std::shared_ptr<Operation>>& out_operations);
-    // C8.4: the renames of the floor's edge connections an outline edit's renumbering needs (not executed).
-    void append_floor_edge_renames(Scene_root& scene_root, const erhe::scene::Curve& curve, std::vector<std::shared_ptr<Operation>>& out_operations);
+    // C8.4: the renames of the floor's edge connections an edit adding or removing corners needs (not executed).
+    void append_floor_edge_renames(Scene_root& scene_root, const erhe::scene::Curve& curve, const erhe::math::Curve_path& before, std::vector<std::shared_ptr<Operation>>& out_operations);
 
     // The live layout preview of a drag (doc/editor/level_tools.md "Live layout preview"): begin with the layouts,
     // step at each change of the drag, end before the gesture's commit, which then records one entry.

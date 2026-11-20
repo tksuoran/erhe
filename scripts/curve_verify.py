@@ -910,8 +910,16 @@ def check_curve_viewport(editor, image_path):
     click_world(editor, viewport, [3.0, 0.0, -1.0], ["ctrl"])
     two = selection_of(editor)
     check("curve tool: a click and a Ctrl+click select points 0 and 2", [(p["index"], p["part"]) for p in two["points"]] == [(0, "point"), (2, "point")], json.dumps(two))
-    check("curve tool: the gizmo sits at the centroid of the selected points", close(anchor(editor), [1.5, 0.0, -0.5], 1e-5), f"{anchor(editor)}")
+    check("curve tool: the gizmo sits on the hovered point 2 while the pointer rests there", close(anchor(editor), [3.0, 0.0, -1.0], 1e-5), f"{anchor(editor)}")
+    ltv.hover(editor, viewport, [1.0, 0.0, 1.2])
+    settle(editor)
+    away = editor.call("get_transform_handles", {"viewport": viewport["title"]}).get("handles", [])
+    check("curve tool: with the pointer away the anchor is the centroid of the selected points and no gizmo handle shows",
+          close(anchor(editor), [1.5, 0.0, -0.5], 1e-5) and (away == []), f"{anchor(editor)} handles {json.dumps(away)[:300]}")
     depth = undo_depth(editor)
+    # The gizmo of a selected point under the pointer drags the whole selection.
+    ltv.hover(editor, viewport, [3.0, 0.0, -1.0])
+    settle(editor)
     px_per_metre = gizmo_drag(editor, viewport, ltv.TRANSLATE_Y, [0.0, 0.5, 0.0])
     both = local_points(get_curve(editor, scene, curve_id))
     rise = both[0]["position"][1]
@@ -1125,6 +1133,107 @@ def check_curve_viewport(editor, image_path):
     editor.wait_idle()
     check("curve tool: selecting the restored curve starts with no points selected", selection_of(editor)["points"] == [], json.dumps(selection_of(editor)))
     editor.call("close_scene", {"scene_name": scene})
+    editor.wait_idle()
+
+
+HOVER_IMAGE = os.path.join("logs", "curve_hover_gizmo.png")
+
+
+def check_hover_gizmo(editor):
+    """The pointer brings the gizmo to the nearest point without a click (doc/editor/point_set_editing.md "Hover gizmo")."""
+    scene = create_scene(editor)
+    editor.call("set_active_scene", {"scene_name": scene})
+    given = [point((0.0, 0.0, 0.0)), point((2.0, 0.0, 0.0)), point((3.0, 0.0, -1.0))]
+    curve_id = editor.call("create_curve", {"scene_name": scene, "name": "hover curve", "points": given})["id"]
+    editor.wait_idle()
+    viewport = frame_camera(editor, scene, [1.5, 3.5, 4.5], [1.5, 0.0, -0.3], [g["position"] for g in given], limit=0.6, min_px_per_metre=150.0)
+    # The Rotate tool: a hovered point still offers the translate handles alone.
+    x = viewport["x"] + 0.5 * viewport["width"]
+    y = viewport["y"] + 0.95 * viewport["height"]
+    editor.call("mouse_wheel", {"x": x, "y": y, "dy": 0.0})
+    editor.call("key_press", {"key": ltv.binding_input(editor, "Hotbar.activate_slot_2", "key")})
+    editor.wait_idle()
+    editor.call("select_items", {"scene_name": scene, "ids": [curve_id]})
+    editor.wait_idle()
+    settle(editor)
+    rest = selection_of(editor)
+    check("hover gizmo: with the pointer away from the points no point is hovered and the gizmo is on the node",
+          (rest["hover_point"] is None) and not editor.call("get_transform_state")["component_mode"], json.dumps(rest))
+
+    hover(editor, viewport, [2.0, 0.0, 0.0])
+    settle(editor)
+    hovered = selection_of(editor)
+    state = editor.call("get_transform_state")
+    check("hover gizmo: the pointer on point 1 makes it the hovered point with nothing selected, the gizmo anchored on it",
+          (hovered["hover_point"] is not None) and (hovered["hover_point"].get("index") == 1) and (hovered["hover_point"].get("part") == "point")
+          and (hovered["points"] == []) and state["component_mode"] and close(state["anchor_frame"]["translation"], [2.0, 0.0, 0.0], 1e-5),
+          f"{json.dumps(hovered)} anchor {state['anchor_frame']['translation']}")
+    handles = editor.call("get_transform_handles", {"viewport": viewport["title"]}).get("handles", [])
+    values = sorted({h["handle_value"] for h in handles})
+    check("hover gizmo: the hovered point's gizmo shows translate handles only (Rotate tool active)", (len(values) > 0) and all(1 <= v <= 9 for v in values), json.dumps(values))
+    absolute = os.path.join(pav.REPO_ROOT, HOVER_IMAGE)
+    os.makedirs(os.path.dirname(absolute), exist_ok=True)
+    editor.call("capture_screenshot", {"path": absolute})
+    print(f"hover gizmo image: {absolute}", flush=True)
+
+    # The handles face the camera (towards -X here); 0.25 m to the +X side is outside their screen bounding box.
+    hover(editor, viewport, [2.25, 0.0, 0.0])
+    settle(editor)
+    left = selection_of(editor)
+    check("hover gizmo: the pointer outside the bounding box of the hovered gizmo's handles gives the gizmo back (no hovered point, the gizmo on the node)",
+          (left["hover_point"] is None) and not editor.call("get_transform_state")["component_mode"], json.dumps(left))
+    hover(editor, viewport, [2.0, 0.0, 0.0])
+    settle(editor)
+
+    # A drag of a handle of that gizmo, without a click on the point, selects and moves it.
+    depth = undo_depth(editor)
+    before = local_points(get_curve(editor, scene, curve_id))
+    px_per_metre = gizmo_drag(editor, viewport, ltv.TRANSLATE_X, [0.5, 0.0, 0.0])
+    settle(editor)
+    after = local_points(get_curve(editor, scene, curve_id))
+    dragged = selection_of(editor)
+    check("hover gizmo: an X handle drag without a click moves point 1 along X only, selects it, one undo entry",
+          close(after[1]["position"], [2.5, 0.0, 0.0], drag_tolerance(px_per_metre)) and (after[0] == before[0]) and (after[2] == before[2])
+          and ([(p["index"], p["part"]) for p in dragged["points"]] == [(1, "point")]) and (undo_depth(editor) == depth + 1),
+          f"{json.dumps(after[1])} selection {json.dumps(dragged['points'])} undo {depth} -> {undo_depth(editor)}")
+
+    # Another point takes the gizmo by hover alone; its drag replaces the selection.
+    hover(editor, viewport, [3.0, 0.0, -1.0])
+    settle(editor)
+    other = selection_of(editor)
+    state = editor.call("get_transform_state")
+    check("hover gizmo: the pointer on point 2 moves the gizmo there while point 1 stays selected",
+          (other["hover_point"] is not None) and (other["hover_point"].get("index") == 2)
+          and ([(p["index"], p["part"]) for p in other["points"]] == [(1, "point")]) and close(state["anchor_frame"]["translation"], [3.0, 0.0, -1.0], 1e-5),
+          f"{json.dumps(other)} anchor {state['anchor_frame']['translation']}")
+    gizmo_drag(editor, viewport, ltv.TRANSLATE_X, [-0.4, 0.0, 0.0])
+    settle(editor)
+    moved = local_points(get_curve(editor, scene, curve_id))
+    replaced = selection_of(editor)
+    check("hover gizmo: its X drag moves point 2 alone and replaces the selection, a second undo entry",
+          (moved[2]["position"][0] < 2.8) and (moved[1] == after[1]) and (moved[0] == after[0])
+          and ([(p["index"], p["part"]) for p in replaced["points"]] == [(2, "point")]) and (undo_depth(editor) == depth + 2),
+          f"{json.dumps(moved[2])} selection {json.dumps(replaced['points'])}")
+    editor.call("undo")
+    editor.call("undo")
+    editor.wait_idle()
+    check("hover gizmo: undo of the two drags restores the curve exactly", local_points(get_curve(editor, scene, curve_id)) == before)
+
+    # A value edit acts on the selection, whatever the pointer hovers.
+    hover(editor, viewport, [0.0, 0.0, 0.0])
+    settle(editor)
+    resting = selection_of(editor)
+    editor.call("transform_selection", {"translation": [3.0, 0.5, -1.0]})
+    editor.wait_idle()
+    typed = local_points(get_curve(editor, scene, curve_id))
+    check("hover gizmo: transform_selection moves the selected point 2, not the hovered point 0",
+          (resting["hover_point"] is not None) and (resting["hover_point"].get("index") == 0)
+          and close(typed[2]["position"], [3.0, 0.5, -1.0], 1e-5) and (typed[0] == before[0]),
+          f"hover {json.dumps(resting['hover_point'])} points {json.dumps([t['position'] for t in typed])}")
+    editor.call("undo")
+    editor.wait_idle()
+    choose_move_tool(editor, viewport)
+    editor.call("select_items", {"scene_name": scene, "ids": []})
     editor.wait_idle()
 
 
@@ -1497,6 +1606,8 @@ def run(editor, work, image_path, sections):
         check_lattice_viewport(editor)
     if "viewport" in sections:
         check_curve_viewport(editor, POINTS_IMAGE)
+    if "hover" in sections:
+        check_hover_gizmo(editor)
     if "base" in sections:
         run_base(editor, work, image_path)
     if "level" in sections:
@@ -1525,7 +1636,7 @@ def main():
     parser.add_argument("--editor", default=default_editor(), help="editor binary (relative to the repository root or absolute)")
     parser.add_argument("--image", default=DEFAULT_IMAGE, help="where the selected-curve screenshot is written")
     parser.add_argument("--keep", action="store_true", help="keep the work directory")
-    parser.add_argument("--sections", default="base,lattice,viewport,level", help="comma-separated sections to run (base, lattice, viewport, level)")
+    parser.add_argument("--sections", default="base,lattice,viewport,hover,level", help="comma-separated sections to run (base, lattice, viewport, hover, level)")
     parser.add_argument("--timings", action="store_true", help="print where the run's time went: per group, per wait, per MCP tool (scripts/verify_timings.py)")
     args = parser.parse_args()
     if args.timings:

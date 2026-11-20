@@ -206,6 +206,28 @@ auto get_plane_shell_layout(
     return out;
 }
 
+// Where the translate arrows start on a point's gizmo (doc/editor/point_set_editing.md "Hover gizmo"):
+// right outside the plane sectors, the gizmo having no rotate ring to clear.
+auto get_point_arrow_start(const Gizmo_sizes& gz) -> float
+{
+    return get_plane_shell_layout(gz, false, true, false).translate_outer + gz.plane_sector_gap;
+}
+
+// The gizmo on a hovered point has its own size setting.
+auto get_gizmo_scale(const App_context& context) -> float
+{
+    const Transform_tool_config& config = context.editor_settings->transform_tool;
+    return context.transform_tool->is_point_gizmo() ? config.point_gizmo_scale : config.gizmo_scale;
+}
+
+auto get_arrow_start(const App_context& context, const Gizmo_sizes& gz) -> float
+{
+    if (context.transform_tool->is_point_gizmo()) {
+        return get_point_arrow_start(gz);
+    }
+    return context.rotate_tool->is_active() ? context.editor_settings->transform_tool.rotate_ring_size : gz.arrow_start;
+}
+
 constexpr int  ring_arc_sample_count = 128;
 // Below this |cos| between the view direction and a plane's normal, the plane's sector counts as edge-on.
 constexpr float c_grab_plane_edge_on_cosine = 0.25f;
@@ -453,8 +475,12 @@ void draw_cone_fill(
     const float  base_rgb_scale
 )
 {
-    std::vector<vec3> positions;
-    positions.reserve(cone_side_count + 2);
+    // Scratch of this leaf function (capacity kept).
+    static thread_local std::vector<vec3>     positions;
+    static thread_local std::vector<uint32_t> indices;
+    static thread_local std::vector<uint32_t> base_indices;
+    positions.clear();
+    indices.clear();
     for (int k = 0; k < cone_side_count; ++k) {
         const float theta = glm::two_pi<float>() * static_cast<float>(k) / static_cast<float>(cone_side_count);
         positions.push_back(base_center + radius * (std::cos(theta) * side1 + std::sin(theta) * side2));
@@ -465,8 +491,6 @@ void draw_cone_fill(
     positions.push_back(base_center);
 
     // Lateral surface (eye-facing triangles only, see above).
-    std::vector<uint32_t> indices;
-    indices.reserve(cone_side_count * 3);
     for (uint32_t k = 0; k < static_cast<uint32_t>(cone_side_count); ++k) {
         const uint32_t k2 = (k + 1) % cone_side_count;
         const vec3& p0 = positions[k];
@@ -495,8 +519,7 @@ void draw_cone_fill(
 
     // Base disc: visible only from the underside (normal = -direction).
     if (dot(direction, eye - base_center) < 0.0f) {
-        std::vector<uint32_t> base_indices;
-        base_indices.reserve(cone_side_count * 3);
+        base_indices.clear();
         for (uint32_t k = 0; k < static_cast<uint32_t>(cone_side_count); ++k) {
             const uint32_t k2 = (k + 1) % cone_side_count;
             base_indices.insert(base_indices.end(), {k2, k, base_index});
@@ -528,12 +551,13 @@ void draw_annular_sector(
 {
     const int   segment_count = full_annulus ? 96 : 24;
     const float span          = full_annulus ? glm::two_pi<float>() : glm::half_pi<float>();
-    std::vector<vec3> positions;
-    positions.reserve(2 * (segment_count + 1));
-    std::vector<uint32_t> indices;
-    indices.reserve(6 * static_cast<size_t>(segment_count));
-    std::vector<erhe::renderer::Line> outline;
-    outline.reserve(2 * static_cast<size_t>(segment_count) + 2);
+    // Scratch of this leaf function (capacity kept).
+    static thread_local std::vector<vec3>                 positions;
+    static thread_local std::vector<uint32_t>             indices;
+    static thread_local std::vector<erhe::renderer::Line> outline;
+    positions.clear();
+    indices.clear();
+    outline.clear();
     for (int i = 0; i <= segment_count; ++i) {
         const float theta = span * static_cast<float>(i) / static_cast<float>(segment_count);
         const vec3  dir   = std::cos(theta) * su + std::sin(theta) * sv;
@@ -706,7 +730,7 @@ void Handle_visualizations::update_transforms()
         return;
     }
 
-    const float gizmo_scale      = m_context.editor_settings->transform_tool.gizmo_scale / 100.0f;
+    const float gizmo_scale      = get_gizmo_scale(m_context) / 100.0f;
     const float projection_scale = m_scene_view->get_projection_scale(m_view_distance);
     const float scalar_scale     = gizmo_scale * projection_scale;
     if (!std::isfinite(scalar_scale)) {
@@ -743,11 +767,12 @@ auto Handle_visualizations::is_handle_shown(const Handle handle) const -> bool
     Transform_tool*                transform_tool = m_context.transform_tool;
     const Transform_tool_settings& settings       = transform_tool->shared.settings;
 
+    const Shown_handle_tools shown = transform_tool->get_shown_handle_tools();
     const Handle_tool tool = get_handle_tool(handle);
     switch (tool) {
-        case Handle_tool::e_handle_tool_translate: if (!settings.show_translate) { return false; } break;
-        case Handle_tool::e_handle_tool_rotate:    if (!settings.show_rotate)    { return false; } break;
-        case Handle_tool::e_handle_tool_scale:     if (!settings.show_scale)     { return false; } break;
+        case Handle_tool::e_handle_tool_translate: if (!shown.translate) { return false; } break;
+        case Handle_tool::e_handle_tool_rotate:    if (!shown.rotate)    { return false; } break;
+        case Handle_tool::e_handle_tool_scale:     if (!shown.scale)     { return false; } break;
         default: return false;
     }
 
@@ -896,6 +921,42 @@ void Handle_visualizations::render_origin_indicator(const Render_context& contex
     );
 }
 
+auto Handle_visualizations::get_point_gizmo_extent(const Scene_view& scene_view, const vec3& center, const mat3& basis) const -> Point_gizmo_extent
+{
+    Point_gizmo_extent extent{};
+    const std::shared_ptr<erhe::scene::Camera> camera = scene_view.get_camera();
+    if (!camera) {
+        return extent;
+    }
+    const Transform_tool_config& tt_config = m_context.editor_settings->transform_tool;
+    const Gizmo_sizes gz  = get_gizmo_sizes(tt_config);
+    const vec3        eye = get_eye(*camera);
+    // The scale update_transforms() gives a gizmo anchored at center.
+    const float s = (tt_config.point_gizmo_scale / 100.0f) * scene_view.get_projection_scale(glm::distance(vec3{camera->position_in_world()}, center));
+    if (!std::isfinite(s) || !(s > 0.0f)) {
+        return extent;
+    }
+    const float tip           = s * (get_point_arrow_start(gz) + gz.arrow_shaft_length + gz.translate_cone_length);
+    const float outer         = s * get_plane_shell_layout(gz, false, true, false).translate_outer;
+    const auto add = [&extent](const vec3& point) {
+        ERHE_VERIFY(extent.count < extent.points.size());
+        extent.points[extent.count++] = point;
+    };
+    vec3 toward_eye[3];
+    add(center);
+    for (int axis = 0; axis < 3; ++axis) {
+        toward_eye[axis] = (dot(basis[axis], eye - center) >= 0.0f) ? basis[axis] : -basis[axis];
+        add(center + (tip * toward_eye[axis]));
+    }
+    // The corner of the square around each sector: the arc lies inside it.
+    for (int perp = 0; perp < 3; ++perp) {
+        const vec3 u = outer * toward_eye[(perp + 1) % 3];
+        const vec3 v = outer * toward_eye[(perp + 2) % 3];
+        add(center + u + v);
+    }
+    return extent;
+}
+
 void Handle_visualizations::render(const Render_context& context, const Handle hover_handle, const Handle active_handle)
 {
     ERHE_PROFILE_FUNCTION();
@@ -961,6 +1022,10 @@ void Handle_visualizations::render(const Render_context& context, const Handle h
                     if ((mask & hover_mask) == mask) {
                         return 1.0f;
                     }
+                    // A point's gizmo has three arrows only: the perpendicular one dims, as the other sectors do.
+                    if (m_context.transform_tool->is_point_gizmo()) {
+                        break;
+                    }
                     return 0.0f;
                 }
                 if (type == Handle_type::e_handle_type_scale_axis) {
@@ -1014,14 +1079,17 @@ void Handle_visualizations::render(const Render_context& context, const Handle h
     };
 
     const Transform_tool_settings& settings = m_context.transform_tool->shared.settings;
-    const bool positive_only = !m_context.editor_settings->transform_tool.translate_negative_handles;
+    const Shown_handle_tools shown = m_context.transform_tool->get_shown_handle_tools();
+    // A point's gizmo shows one arrow per axis, the one towards the eye: the other could hide behind a plane sector.
+    const bool point_gizmo   = m_context.transform_tool->is_point_gizmo();
+    const bool positive_only = point_gizmo || !m_context.editor_settings->transform_tool.translate_negative_handles;
     // Frozen at drag-start values while a drag is active.
     const std::array<bool, 3> octant_signs = get_octant_signs(eye, c, basis);
 
     // Radial shell layout for the plane handles, reflowed from the tools'
     // visibility toggles (hidden shells donate their space).
     const bool box_mode = settings.scale_gizmo_mode == Scale_gizmo_mode::bounding_box;
-    const Plane_shell_layout shells = get_plane_shell_layout(gz, settings.show_scale, settings.show_translate, settings.show_scale && !box_mode);
+    const Plane_shell_layout shells = get_plane_shell_layout(gz, shown.scale, shown.translate, shown.scale && !box_mode);
 
     // Sector outlines draw ONLY on the hovered / active sector handle - at
     // rest the sector stack is fill-only, keeping it visually quiet. The
@@ -1231,15 +1299,14 @@ void Handle_visualizations::render(const Render_context& context, const Handle h
         // The hovered handle itself is also always exempt from the single-
         // arrow filter, so hover can rest on an opposite arrow it brought up.
         const bool plane_hover_here =
+            !point_gizmo &&
             (active_handle == Handle::e_handle_none) &&
             (hover_handle != Handle::e_handle_none) &&
             (get_handle_type(hover_handle) == Handle_type::e_handle_type_translate_plane) &&
             ((axis_mask & get_axis_mask(hover_handle)) == axis_mask);
         // During a rotate drag the surviving in-plane arrows start at the
         // protractor ring radius, expanding outward from the ring.
-        const float start = m_context.rotate_tool->is_active()
-            ? m_context.editor_settings->transform_tool.rotate_ring_size
-            : gz.arrow_start;
+        const float start = get_arrow_start(m_context, gz);
         for (int sign = 0; sign < 2; ++sign) {
             if (
                 positive_only && !axis_drag_here && !plane_hover_here &&
@@ -1304,9 +1371,7 @@ void Handle_visualizations::render(const Render_context& context, const Handle h
             (get_handle_type(hover_handle) == Handle_type::e_handle_type_scale_plane) &&
             ((get_axis_mask(handle) & get_axis_mask(hover_handle)) == get_axis_mask(handle));
         // Same base start as the translate arrows so the two layouts agree.
-        const float translate_start = m_context.rotate_tool->is_active()
-            ? m_context.editor_settings->transform_tool.rotate_ring_size
-            : gz.arrow_start;
+        const float translate_start = get_arrow_start(m_context, gz);
         for (int sign = 0; sign < 2; ++sign) {
             if (
                 positive_only && !axis_drag_here && !plane_hover_here &&
@@ -1314,10 +1379,10 @@ void Handle_visualizations::render(const Render_context& context, const Handle h
             ) {
                 continue;
             }
-            const float start = settings.show_translate
+            const float start = shown.translate
                 ? translate_start + gz.arrow_shaft_length + gz.translate_cone_length + gz.scale_handle_gap
                 : translate_start;
-            const float shaft = settings.show_translate ? gz.scale_shaft_length : gz.arrow_shaft_length;
+            const float shaft = shown.translate ? gz.scale_shaft_length : gz.arrow_shaft_length;
             const vec3  dir   = (sign == 0) ? d : -d;
             const bool  hot   = is_hot(handle) && ((sign == 0) == positive_towards_eye);
             const vec4  color = hot ? hot_color : resting_color;
@@ -1396,7 +1461,7 @@ void Handle_visualizations::render(const Render_context& context, const Handle h
     // Bounding-box scale: box outline plus a cone on each face center. The
     // outline is not tied to a single handle so it stays up during a drag.
     if (
-        settings.show_scale &&
+        shown.scale &&
         (settings.scale_gizmo_mode == Scale_gizmo_mode::bounding_box) &&
         m_box_valid
     ) {
@@ -1480,7 +1545,10 @@ auto Handle_visualizations::pick(const glm::vec3& eye_position, const glm::vec3&
     };
 
     const Transform_tool_settings& settings = m_context.transform_tool->shared.settings;
-    const bool positive_only = !m_context.editor_settings->transform_tool.translate_negative_handles;
+    const Shown_handle_tools shown = m_context.transform_tool->get_shown_handle_tools();
+    // A point's gizmo shows one arrow per axis, the one towards the eye: the other could hide behind a plane sector.
+    const bool point_gizmo   = m_context.transform_tool->is_point_gizmo();
+    const bool positive_only = point_gizmo || !m_context.editor_settings->transform_tool.translate_negative_handles;
     // Mirrors render(): frozen at drag-start values while a drag is active.
     const std::array<bool, 3> octant_signs = get_octant_signs(eye_position, c, basis);
 
@@ -1507,15 +1575,14 @@ auto Handle_visualizations::pick(const glm::vec3& eye_position, const glm::vec3&
         // Mirrors render(): both plane-axis arrows while the plane-translate
         // sector is hovered; the hovered handle itself is always exempt.
         const bool plane_hover_here =
+            !point_gizmo &&
             (active_handle == Handle::e_handle_none) &&
             (hover_handle != Handle::e_handle_none) &&
             (get_handle_type(hover_handle) == Handle_type::e_handle_type_translate_plane) &&
             ((axis_mask & get_axis_mask(hover_handle)) == axis_mask);
         // Mirrors render(): in-plane arrows sit at the protractor ring
         // during a rotate drag.
-        const float start = m_context.rotate_tool->is_active()
-            ? m_context.editor_settings->transform_tool.rotate_ring_size
-            : gz.arrow_start;
+        const float start = get_arrow_start(m_context, gz);
         for (int sign = 0; sign < 2; ++sign) {
             if (
                 positive_only && !axis_drag_here && !plane_hover_here &&
@@ -1603,7 +1670,7 @@ auto Handle_visualizations::pick(const glm::vec3& eye_position, const glm::vec3&
     };
     // Mirrors render()'s shell layout, reflowed from the visibility toggles.
     const bool box_mode = settings.scale_gizmo_mode == Scale_gizmo_mode::bounding_box;
-    const Plane_shell_layout shells = get_plane_shell_layout(gz, settings.show_scale, settings.show_translate, settings.show_scale && !box_mode);
+    const Plane_shell_layout shells = get_plane_shell_layout(gz, shown.scale, shown.translate, shown.scale && !box_mode);
     for (int perp = 0; perp < 3; ++perp) {
         pick_sector(translate_plane_handles[perp], perp, shells.translate_inner, shells.translate_outer);
     }
@@ -1634,9 +1701,7 @@ auto Handle_visualizations::pick(const glm::vec3& eye_position, const glm::vec3&
             (hover_handle != Handle::e_handle_none) &&
             (get_handle_type(hover_handle) == Handle_type::e_handle_type_scale_plane) &&
             ((get_axis_mask(handle) & get_axis_mask(hover_handle)) == get_axis_mask(handle));
-        const float translate_start = m_context.rotate_tool->is_active()
-            ? m_context.editor_settings->transform_tool.rotate_ring_size
-            : gz.arrow_start;
+        const float translate_start = get_arrow_start(m_context, gz);
         for (int sign = 0; sign < 2; ++sign) {
             if (
                 positive_only && !axis_drag_here && !plane_hover_here &&
@@ -1644,10 +1709,10 @@ auto Handle_visualizations::pick(const glm::vec3& eye_position, const glm::vec3&
             ) {
                 continue;
             }
-            const float start = settings.show_translate
+            const float start = shown.translate
                 ? translate_start + gz.arrow_shaft_length + gz.translate_cone_length + gz.scale_handle_gap
                 : translate_start;
-            const float shaft = settings.show_translate ? gz.scale_shaft_length : gz.arrow_shaft_length;
+            const float shaft = shown.translate ? gz.scale_shaft_length : gz.arrow_shaft_length;
             const vec3 dir = ((sign == 0) ? 1.0f : -1.0f) * basis[axis];
             float t{0.0f};
             vec3  q{0.0f};
@@ -1662,7 +1727,7 @@ auto Handle_visualizations::pick(const glm::vec3& eye_position, const glm::vec3&
             // combined mode the whole (short) handle is covered at head
             // radius - the shaft span there is no longer shadowed by the
             // translate head capsule, which is capped at the gap.
-            const float head_pick_start = settings.show_translate ? start : (start + shaft);
+            const float head_pick_start = shown.translate ? start : (start + shaft);
             if (
                 ray_segment_distance(ray_origin, d, c + (s * head_pick_start) * dir, c + (s * (start + shaft + 3.0f * gz.scale_cube_half_length)) * dir, t, q, dist) &&
                 (dist <= s * gz.arrow_head_pick_radius)
@@ -1789,11 +1854,10 @@ void Handle_visualizations::get_grab_candidates(const glm::vec3& eye_position, s
     const mat3                     basis         = get_basis();
     const Gizmo_sizes              gz            = get_gizmo_sizes(m_context.editor_settings->transform_tool);
     const Transform_tool_settings& settings      = m_context.transform_tool->shared.settings;
-    const bool                     positive_only = !m_context.editor_settings->transform_tool.translate_negative_handles;
+    const Shown_handle_tools shown = m_context.transform_tool->get_shown_handle_tools();
+    const bool                     positive_only = m_context.transform_tool->is_point_gizmo() || !m_context.editor_settings->transform_tool.translate_negative_handles;
     const std::array<bool, 3>      octant_signs  = get_octant_signs(eye_position, c, basis);
-    const float                    start         = m_context.rotate_tool->is_active()
-        ? m_context.editor_settings->transform_tool.rotate_ring_size
-        : gz.arrow_start;
+    const float                    start         = get_arrow_start(m_context, gz);
 
     const auto add = [this, &out](const Handle handle, const vec3& position, const Grab_candidate_expectation expectation) {
         if (is_handle_shown(handle)) {
@@ -1817,10 +1881,10 @@ void Handle_visualizations::get_grab_candidates(const glm::vec3& eye_position, s
 
     // Basic-scale axis handles: the tip cube's center, then the shaft.
     for (int axis = 0; axis < 3; ++axis) {
-        const float scale_start = settings.show_translate
+        const float scale_start = shown.translate
             ? (start + gz.arrow_shaft_length + gz.translate_cone_length + gz.scale_handle_gap)
             : start;
-        const float shaft = settings.show_translate ? gz.scale_shaft_length : gz.arrow_shaft_length;
+        const float shaft = shown.translate ? gz.scale_shaft_length : gz.arrow_shaft_length;
         for (int sign = 0; sign < 2; ++sign) {
             const vec3 dir = ((sign == 0) ? 1.0f : -1.0f) * basis[axis];
             add(scale_axis_handles[axis], c + (s * (scale_start + shaft + gz.scale_cube_half_length)) * dir, side_expectation(axis, sign));
@@ -1831,7 +1895,7 @@ void Handle_visualizations::get_grab_candidates(const glm::vec3& eye_position, s
     // Plane sectors and the uniform-scale wedges: the middle of the drawn (camera-facing) quadrant. A
     // plane seen nearly edge-on is a sliver no press can aim at reliably, so it is optional there.
     const bool               box_mode = settings.scale_gizmo_mode == Scale_gizmo_mode::bounding_box;
-    const Plane_shell_layout shells   = get_plane_shell_layout(gz, settings.show_scale, settings.show_translate, settings.show_scale && !box_mode);
+    const Plane_shell_layout shells   = get_plane_shell_layout(gz, shown.scale, shown.translate, shown.scale && !box_mode);
     const vec3               to_eye   = normalize(eye_position - c);
     for (int perp = 0; perp < 3; ++perp) {
         const vec3 su       = octant_signs[(perp + 1) % 3] ? basis[(perp + 1) % 3] : -basis[(perp + 1) % 3];

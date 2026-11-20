@@ -8,7 +8,7 @@ from erhe_codegen import *
 # read live by tools/debug_visualizations.cpp. Negative line widths are in
 # pixels and do not scale by distance.
 struct("Debug_visualizations_style",
-    version=13,
+    version=15,
     short_desc="Debug Visualizations Style",
     long_desc="Editor-global colors and line widths for the debug visualizations",
     developer=False,
@@ -87,13 +87,16 @@ struct("Debug_visualizations_style",
         field("curve_handle_marker_color",         Vec4,  added_in=10, default="1.0f, 0.35f, 0.8f, 1.0f", short_desc="Curve Handle Marker Color", long_desc="Axis cross at a handle end"),
         field("curve_marker_size",                 Float, added_in=10, default="0.012f",                  short_desc="Curve Marker Size",        long_desc="Half size of the axis crosses per metre of distance to the camera"),
         field("curve_marker_width",                Float, added_in=10, default="-2.0f",                   short_desc="Curve Marker Width",       long_desc="Line width of the axis crosses; negative is pixels"),
-        # Point handles of the curve and lattice tools (doc/editor/point_set_editing.md): camera-facing quads.
-        field("point_handle_color",                Vec4,  added_in=10, default="1.0f, 0.6f, 0.1f, 1.0f",  short_desc="Point Handle Color",       long_desc="Quad of a point that can be grabbed"),
-        field("point_handle_size",                 Float, added_in=10, default="0.006f",                  short_desc="Point Handle Size",        long_desc="Half size of a point handle quad per metre of distance to the camera"),
-        field("point_hover_color",                 Vec4,  added_in=10, default="1.0f, 1.0f, 1.0f, 1.0f",  short_desc="Point Hover Color",        long_desc="Quad of the point under the pointer"),
-        field("point_hover_size",                  Float, added_in=10, default="0.008f",                  short_desc="Point Hover Size",         long_desc="Half size of the hovered point quad per metre of distance to the camera"),
-        field("point_selected_color",              Vec4,  added_in=10, default="1.0f, 1.0f, 0.0f, 1.0f",  short_desc="Point Selected Color",     long_desc="Quad of a selected point"),
-        field("point_selected_size",               Float, added_in=10, default="0.009f",                  short_desc="Point Selected Size",      long_desc="Half size of a selected point quad per metre of distance to the camera"),
+        field("curve_hidden_strength",             Float, added_in=15, default="0.5f",                    short_desc="Curve Hidden Strength",    long_desc="Strength of the curve lines where geometry hides them; 1 is undimmed, 0 hides them"),
+        # Point handles of the curve and lattice tools (doc/editor/point_set_editing.md): camera-facing circles.
+        field("point_handle_color",                Vec4,  added_in=10, default="1.0f, 0.6f, 0.1f, 1.0f",  short_desc="Point Handle Color",       long_desc="Circle of a point that can be grabbed"),
+        field("point_handle_size",                 Float, added_in=10, default="0.006f",                  short_desc="Point Handle Size",        long_desc="Radius of a point handle circle per metre of distance to the camera"),
+        field("point_hover_color",                 Vec4,  added_in=10, default="1.0f, 1.0f, 1.0f, 1.0f",  short_desc="Point Hover Color",        long_desc="Circle of the point under the pointer"),
+        field("point_hover_size",                  Float, added_in=10, default="0.008f",                  short_desc="Point Hover Size",         long_desc="Radius of the hovered point circle per metre of distance to the camera"),
+        field("point_selected_color",              Vec4,  added_in=10, default="1.0f, 1.0f, 0.0f, 1.0f",  short_desc="Point Selected Color",     long_desc="Circle of a selected point"),
+        field("point_selected_size",               Float, added_in=10, default="0.009f",                  short_desc="Point Selected Size",      long_desc="Radius of a selected point circle per metre of distance to the camera"),
+        field("point_hidden_strength",             Float, added_in=14, default="0.5f",                    short_desc="Point Hidden Strength",    long_desc="Strength of a point circle where geometry hides it; 1 is undimmed, 0 hides it"),
+        field("point_circle_width",                Float, added_in=15, default="-2.0f",                   short_desc="Point Circle Width",       long_desc="Line width of the point circles; negative is pixels"),
 
         # Connector indicators of kit pieces (doc/editor/level_tools.md "Connector indicators").
         field("connector_color",                   Vec4,  added_in=11, default="0.4f, 0.9f, 0.4f, 1.0f",  short_desc="Connector Color",          long_desc="Connector of a shown kit piece"),

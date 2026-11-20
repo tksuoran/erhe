@@ -1,4 +1,5 @@
 #include "tools/debug_visualizations.hpp"
+#include "tools/curve_tool.hpp"
 #include "editor_item_bits.hpp"
 
 #include "config/generated/debug_visualizations_settings.hpp"
@@ -1713,23 +1714,38 @@ void Debug_visualizations::curves_visualization(const Render_context& context, c
     const erhe::scene::Node* const camera_node = context.get_camera_node();
     const glm::vec3 camera_position = (camera_node != nullptr) ? glm::vec3{camera_node->world_from_node()[3]} : glm::vec3{0.0f};
 
-    // X-ray: a curve lying on a surface (a path on the ground) stays at full strength.
-    erhe::renderer::Primitive_renderer line_renderer = context.get(
+    erhe::renderer::Primitive_renderer visible_renderer = context.get(
         {
             .primitive_type    = erhe::graphics::Primitive_type::line,
             .stencil_reference = 2,
             .draw_visible      = true,
+            .draw_hidden       = false
+        }
+    );
+    // The x-ray hidden pass draws at full strength, so the alpha carries the hidden strength.
+    erhe::renderer::Primitive_renderer hidden_renderer = context.get(
+        {
+            .primitive_type    = erhe::graphics::Primitive_type::line,
+            .stencil_reference = 2,
+            .draw_visible      = false,
             .draw_hidden       = true,
-            .thin_lines        = false,
             .xray              = true
         }
     );
+    const float hidden_strength = std::clamp(style.curve_hidden_strength, 0.0f, 1.0f);
+    const auto add_line = [&](const glm::vec4& color, const float width, const glm::vec3& a, const glm::vec3& b) {
+        visible_renderer.add_line(color, width, a, color, width, b);
+        if (hidden_strength > 0.0f) {
+            const glm::vec4 hidden_color{color.r, color.g, color.b, hidden_strength * color.a};
+            hidden_renderer.add_line(hidden_color, width, a, hidden_color, width, b);
+        }
+    };
     const float marker_width = style.curve_marker_width;
     const auto add_marker = [&](const glm::vec3& p, const glm::vec4& color) {
         const float h = style.curve_marker_size * std::max(glm::distance(camera_position, p), 0.1f);
-        line_renderer.add_line(color, marker_width, p - glm::vec3{h, 0.0f, 0.0f}, color, marker_width, p + glm::vec3{h, 0.0f, 0.0f});
-        line_renderer.add_line(color, marker_width, p - glm::vec3{0.0f, h, 0.0f}, color, marker_width, p + glm::vec3{0.0f, h, 0.0f});
-        line_renderer.add_line(color, marker_width, p - glm::vec3{0.0f, 0.0f, h}, color, marker_width, p + glm::vec3{0.0f, 0.0f, h});
+        add_line(color, marker_width, p - glm::vec3{h, 0.0f, 0.0f}, p + glm::vec3{h, 0.0f, 0.0f});
+        add_line(color, marker_width, p - glm::vec3{0.0f, h, 0.0f}, p + glm::vec3{0.0f, h, 0.0f});
+        add_line(color, marker_width, p - glm::vec3{0.0f, 0.0f, h}, p + glm::vec3{0.0f, 0.0f, h});
     };
     for (const std::shared_ptr<erhe::scene::Curve>& curve : m_curves) {
         if (!should_visualize(m_settings.curves, static_cast<const erhe::Item_base*>(curve.get()))) {
@@ -1743,21 +1759,27 @@ void Debug_visualizations::curves_visualization(const Render_context& context, c
         for (std::size_t i = 1, end = draw_points.size(); i < end; ++i) {
             const glm::vec3 a{world_from_node * glm::vec4{draw_points[i - 1], 1.0f}};
             const glm::vec3 b{world_from_node * glm::vec4{draw_points[i], 1.0f}};
-            line_renderer.add_line(line_color, line_width, a, line_color, line_width, b);
+            add_line(line_color, line_width, a, b);
         }
         if (!selected) {
             continue;
         }
+        // The curve tool draws a gizmo on every point of its target; the markers are for the other curves.
+        const bool markers = (context.app_context.curve_tool == nullptr) || (context.app_context.curve_tool->get_target_curve() != curve);
         for (const erhe::math::Curve_point& point : curve->get_path().points) {
             const glm::vec3 p{world_from_node * glm::vec4{point.position, 1.0f}};
-            add_marker(p, (point.kind == erhe::math::Curve_point_kind::corner) ? style.curve_corner_marker_color : style.curve_point_marker_color);
+            if (markers) {
+                add_marker(p, (point.kind == erhe::math::Curve_point_kind::corner) ? style.curve_corner_marker_color : style.curve_point_marker_color);
+            }
             if (point.kind == erhe::math::Curve_point_kind::corner) {
                 continue;
             }
             for (const glm::vec3& handle : {point.in_handle, point.out_handle}) {
                 const glm::vec3 h{world_from_node * glm::vec4{point.position + handle, 1.0f}};
-                line_renderer.add_line(style.curve_handle_line_color, style.curve_handle_line_width, p, style.curve_handle_line_color, style.curve_handle_line_width, h);
-                add_marker(h, style.curve_handle_marker_color);
+                add_line(style.curve_handle_line_color, style.curve_handle_line_width, p, h);
+                if (markers) {
+                    add_marker(h, style.curve_handle_marker_color);
+                }
             }
         }
     }
@@ -2913,9 +2935,10 @@ void Debug_visualizations::style_imgui(Property_editor& p, App_context& context,
         }
     });
     p.add_entry(Property_row_id::debug_curve_marker_size, "Marker Size", [&style](){ ImGui::SetNextItemWidth(80.0f); ImGui::DragFloat("##", &style.curve_marker_size, 0.0005f, 0.0f, 0.1f, "%.4f"); });
+    p.add_entry(Property_row_id::debug_curve_hidden, "Hidden Strength", [&style](){ ImGui::SetNextItemWidth(80.0f); ImGui::SliderFloat("##", &style.curve_hidden_strength, 0.0f, 1.0f, "%.2f"); });
     p.pop_group();
 
-    // The camera-facing point quads of the curve and lattice tools (doc/editor/point_set_editing.md).
+    // The camera-facing point circles of the curve and lattice tools (doc/editor/point_set_editing.md).
     p.push_group(Property_row_id::debug_point_handles_style, "Point Handles", ImGuiTreeNodeFlags_None);
     const auto point_row = [](glm::vec4* color, float* size) {
         ImGui::ColorEdit4("##c", &color->x, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_Float);
@@ -2926,6 +2949,8 @@ void Debug_visualizations::style_imgui(Property_editor& p, App_context& context,
     p.add_entry(Property_row_id::debug_point_handle,   "Handle",   [point_row, &style](){ point_row(&style.point_handle_color,   &style.point_handle_size); });
     p.add_entry(Property_row_id::debug_point_hover,    "Hovered",  [point_row, &style](){ point_row(&style.point_hover_color,    &style.point_hover_size); });
     p.add_entry(Property_row_id::debug_point_selected, "Selected", [point_row, &style](){ point_row(&style.point_selected_color, &style.point_selected_size); });
+    p.add_entry(Property_row_id::debug_point_hidden,   "Hidden Strength", [&style](){ ImGui::SetNextItemWidth(80.0f); ImGui::SliderFloat("##", &style.point_hidden_strength, 0.0f, 1.0f, "%.2f"); });
+    p.add_entry(Property_row_id::debug_point_circle_width, "Line Width", [&style](){ ImGui::SetNextItemWidth(80.0f); ImGui::DragFloat("##", &style.point_circle_width, 0.1f, -100.0f, 100.0f, "%.1f"); });
     p.pop_group();
 
     // Kit piece connector indicators (doc/editor/level_tools.md "Connector indicators").

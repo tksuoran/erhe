@@ -412,6 +412,14 @@ Plans: `doc/plans/culling.md`, `doc/plans/occlusion_culling.md`.
 
 ## Verify scripts
 
+- Linux headless Release tree, 2026-11-20, with locally modified
+  `config/editor/desktop_windows.json` and `editor_settings.json` in the
+  working tree: `level_tools_verify.py --only-brush-normal` fails 11 of 51
+  (the pointer over the slab hovers the origin, clicks place nothing),
+  `--only-create-menu` 1 of 48 (Create > Level Kit > Basic > Block on a node
+  row), and `ctest -L editor` 4 `Mcp_test.imgui_*` / `capture_screenshot_annotates_imgui_items`
+  tests ("No item labelled 'Merge'"). Cause not looked into; first check
+  whether they pass with the committed config files.
 - Deterministic clock and no time-based sleeps (AGENTS.md "Waiting for the
   editor: no time-based sleeps"; `doc/testing.md` "Verify scripts"). The
   scripts that launch the editor through `prepared_asset_verify.Editor` and

@@ -2582,6 +2582,9 @@ def check_path_layouts(editor, directory, image_path):
     # With no point selected the gizmo moves the node: its pieces ride with it, nothing is laid out again.
     editor.call("select_curve_points", {"scene_name": scene, "curve_id": upright["id"], "points": []})
     editor.wait_idle()
+    # The pointer away from every point, or the hovered point's gizmo would take the drag.
+    hover(editor, viewport, [10.0, 0.0, 2.0])
+    editor.wait_idle()
     cv.settle(editor)
     depth = undo_depth(editor)
     px_per_metre = cv.gizmo_drag(editor, viewport, TRANSLATE_X, [1.0, 0.0, 0.0])
@@ -4322,6 +4325,23 @@ def check_fix_floor_floor_renames(editor):
     editor.close(scene)
 
 
+def check_corner_move_keeps_edges(editor):
+    """A corner moved so far that a wall's old place is nearer the next edge keeps every wall on its own edge."""
+    scene = create_scene(editor)
+    editor.call("set_active_scene", {"scene_name": scene})
+    room, walls = make_room(editor, scene, "ck")
+    points = curve_points(editor, scene, room["id"])
+    a, c = points[0], points[2]
+    # Corner 1 pulled next to corner 0: wall 0 stood at the old edge's middle, now nearer edge 1 than its own shortened edge.
+    points[1] = [a[0] + (0.15 * (points[1][0] - a[0])) + (0.02 * (c[0] - a[0])), 0.0, a[2] + (0.15 * (points[1][2] - a[2])) + (0.02 * (c[2] - a[2]))]
+    editor.call("set_curve", {"scene_name": scene, "curve_id": room["id"], "closed": True, "points": [{"position": p} for p in points]})
+    editor.wait_idle()
+    bases = [[c for c in connection_pairs(editor, scene, w["id"]) if c[0] == "base"] for w in walls]
+    check("a corner move keeps each wall's base on its own edge",
+          all(base == [("base", "ck floor", f"edge_{k}")] for k, base in enumerate(bases)), json.dumps(bases))
+    editor.close(scene)
+
+
 def check_fix_two_walls_fit(editor):
     """Finding 2 (C3.15, K5.3): two adjacent walls moved out in one edit make one floor fit solving both edges and their corner."""
     scene = create_scene(editor)
@@ -4750,6 +4770,7 @@ def check_fix_floor_rows_after_delete(editor):
 
 CONNECTION_FIX_GROUPS = [
     ("fix floor-floor renames", check_fix_floor_floor_renames),
+    ("corner move keeps edges", check_corner_move_keeps_edges),
     ("fix two walls fit", check_fix_two_walls_fit),
     ("fix wall-floor either end", check_fix_wall_floor_either_end),
     ("fix reflow keeps edit", check_fix_reflow_keeps_edit),
@@ -5514,7 +5535,11 @@ def check_segment_handles(editor, image_path):
     check("segment handles: a Ctrl+click on wall 3's midpoint selects it in place of wall 2 (one segment at a time)", handles_state()["selected"] == 3, "")
 
     # A held gizmo plane drag of wall 0: the pointer's component along the chord is ignored; the pieces follow live.
+    # The pointer rests off every handle, so the gizmo is on the selection and not on a hovered point (U62).
+    rest = [sum(c[i] for c in corners) / len(corners) for i in range(3)]
+
     def held_plane_drag(delta):
+        hover(editor, viewport, rest)
         editor.call("level_select_segment_handle", {"scene_name": scene, "layout_id": room["id"], "index": 0})
         editor.wait_idle()
         cv.settle(editor)
@@ -5557,6 +5582,7 @@ def check_segment_handles(editor, image_path):
           (moved_mid[0][2] < -0.5) and (state_of(room["id"]) == before), f"mid {fmt3(moved_mid[0])}")
 
     # The point handles still select and drag on the same node.
+    hover(editor, viewport, rest)
     editor.call("select_curve_points", {"scene_name": scene, "curve_id": room["id"], "points": [{"index": 2}]})
     editor.wait_idle()
     cv.settle(editor)
@@ -10091,8 +10117,19 @@ def click_site(editor, label, site):
 
 def gizmo_handle(editor, viewport, values):
     """The first shown gizmo handle of the viewport whose handle_value is in values."""
-    handles = editor.call("get_transform_handles", {"viewport": viewport["title"]})
-    return next((h for h in handles.get("handles", []) if (h.get("handle_value") in values) and ("world" in h)), None)
+    def find():
+        handles = editor.call("get_transform_handles", {"viewport": viewport["title"]})
+        return next((h for h in handles.get("handles", []) if (h.get("handle_value") in values) and ("world" in h)), None)
+
+    handle = find()
+    if handle is None:
+        # A curve's points show their gizmo only with the pointer near: bring it to the anchor (the selected point).
+        state = editor.call("get_transform_state")
+        if state.get("component_mode"):
+            hover(editor, viewport, state["anchor_frame"]["translation"])
+            editor.wait_idle()
+            handle = find()
+    return handle
 
 
 def gizmo_grab(editor, viewport, values):

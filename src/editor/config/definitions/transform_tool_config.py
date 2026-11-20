@@ -2,7 +2,7 @@ from erhe_codegen import *
 
 struct("Transform_tool_config",
     reflect=True,
-    version=3,
+    version=4,
     short_desc="Transform Tool",
     long_desc="",
     developer=False,
@@ -14,6 +14,18 @@ struct("Transform_tool_config",
             default="4.5f",
             short_desc="Gizmo Scale",
             long_desc="Scale factor for the transform gizmo handles (moved here from the Viewport group in Editor Settings).",
+            visible=True,
+            developer=False
+        ),
+        field(
+            "point_gizmo_scale",
+            Float,
+            added_in=4,
+            default="0.6f",
+            ui_min="0.1f",
+            ui_max="10.0f",
+            short_desc="Point Gizmo Scale",
+            long_desc="Scale factor for the translate gizmo on a hovered control point (curve points); its own setting, in the units of Gizmo Scale.",
             visible=True,
             developer=False
         ),

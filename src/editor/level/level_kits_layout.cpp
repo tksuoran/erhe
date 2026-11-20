@@ -1727,8 +1727,17 @@ void Level_kits::append_shared_corner_moves(
     }
 }
 
-void Level_kits::append_floor_edge_renames(Scene_root& scene_root, const erhe::scene::Curve& curve, std::vector<std::shared_ptr<Operation>>& out_operations)
+void Level_kits::append_floor_edge_renames(
+    Scene_root&                              scene_root,
+    const erhe::scene::Curve&                curve,
+    const erhe::math::Curve_path&            before,
+    std::vector<std::shared_ptr<Operation>>& out_operations
+)
 {
+    // An edit that keeps the corner count keeps each edge's number: its connections stay on their edges.
+    if (before.points.size() == curve.get_path().points.size()) {
+        return;
+    }
     // C8.4, K3.8: an edit that adds or removes corners renumbers the edges. The other ends have not moved yet, so each
     // connection naming one of the floor's connectors goes to the edge nearest the other end's connector when its own edge
     // is gone or clearly farther. The two families rename apart: edge_<i> (walls) and floor_<i> (floors, L25), each one
@@ -1855,7 +1864,7 @@ void Level_kits::append_curve_follow_ups(const erhe::scene::Curve& curve, const 
     append_layout_regenerations(*scene_root, layouts, "after the curve edit", out_operations);
     // C3.6: a floor's outline edit moves its edge connectors: its walls follow and take their new lengths.
     if (is_floor_layout(curve)) {
-        append_floor_edge_renames(*scene_root, curve, out_operations);
+        append_floor_edge_renames(*scene_root, curve, before, out_operations);
         append_shared_corner_moves(*scene_root, curve, before, out_operations);
         std::shared_ptr<Operation> follow = make_attachment_follow_operation(*scene_root, {}, layouts);
         if (follow) {
@@ -2119,8 +2128,8 @@ auto Level_kits::step_layout_preview_entries(const erhe::scene::Node* const valu
         if (entry.built && (data.pattern.kind == Repeat_pattern_kind::floor)) {
             const erhe::scene::Curve* const curve = dynamic_cast<const erhe::scene::Curve*>(entry.node.get());
             if (curve != nullptr) {
-                append_floor_edge_renames(*scene_root, *curve, entry.generation);
                 if (entry.curve_before.has_value()) {
+                    append_floor_edge_renames(*scene_root, *curve, entry.curve_before.value(), entry.generation);
                     append_shared_corner_moves(*scene_root, *curve, entry.curve_before.value(), entry.generation);
                 }
             }

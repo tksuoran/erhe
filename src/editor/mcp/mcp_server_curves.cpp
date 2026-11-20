@@ -273,6 +273,20 @@ enum class Curve_reply_points : unsigned int
         points.push_back(json{{"index", ref.point}, {"part", c_str(ref.part)}, {"world_position", to_json(world)}});
     }
     reply["points"] = std::move(points);
+    // The point the pointer brought the gizmo to (doc/editor/point_set_editing.md "Hover gizmo").
+    reply["hover_point"] = nullptr;
+    const std::optional<std::size_t> hot = curve_tool.get_hot_point();
+    glm::vec3 hot_world{0.0f};
+    if (hot.has_value() && curve_tool.get_point_world_position(hot.value(), hot_world)) {
+        const std::size_t segment_first = curve_tool.get_segment_point_index(0);
+        reply["hover_point"] = (hot.value() >= segment_first)
+            ? json{{"segment", hot.value() - segment_first}, {"world_position", to_json(hot_world)}}
+            : json{
+                {"index", hot.value() / Curve_tool::parts_per_point},
+                {"part", c_str(static_cast<Curve_point_part>(hot.value() % Curve_tool::parts_per_point))},
+                {"world_position", to_json(hot_world)}
+            };
+    }
     // Whether the selection anchors the gizmo (it does from the next idle frame of a viewport).
     reply["gizmo_on_points"] = (transform_tool != nullptr) && transform_tool->is_component_mode() && !refs.empty();
     return reply;

@@ -109,6 +109,15 @@ public:
     // Draws all handles visible in the view being rendered. hover / active
     // brighten and thicken the corresponding handle.
     void render(const Render_context& context, Handle hover_handle, Handle active_handle);
+    // World points whose screen-space bounding box holds the handles a full-size point gizmo at center would show in the view.
+    static constexpr std::size_t c_point_gizmo_extent_capacity = 7;
+    class Point_gizmo_extent
+    {
+    public:
+        std::array<glm::vec3, c_point_gizmo_extent_capacity> points{};
+        std::size_t                                          count{0};
+    };
+    [[nodiscard]] auto get_point_gizmo_extent(const Scene_view& scene_view, const glm::vec3& center, const glm::mat3& basis) const -> Point_gizmo_extent;
     // The node origin when the gizmo sits elsewhere: axes at the origin and a
     // cone beside the gizmo pointing at it. Drawn only, never picked.
     void render_origin_indicator(const Render_context& context, const erhe::scene::Trs_transform& world_from_origin);

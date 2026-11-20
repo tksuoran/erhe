@@ -457,7 +457,7 @@ public:
     // Mesh component editing (vertex/edge/face). Begins a component edit gesture (drag
     // or numeric edit), commits the queued operation, and reports whether a gesture is
     // in progress. Exposed for Edit_state (numeric fields).
-    void begin_component_edit  ();
+    void begin_component_edit  (Component_edit_origin origin);
     void commit_component_edit ();
     [[nodiscard]] auto is_component_mode      () const -> bool { return shared.component_mode; }
     [[nodiscard]] auto is_component_edit_active() const -> bool;
@@ -482,6 +482,14 @@ public:
     // scalar drag, or the edit of a gizmo drag - restoring its start state
     // and queueing no operation. False when no such edit is active.
     auto cancel_component_edit    () -> bool;
+    // The gizmo is anchored on a hovered or selected point of a set drawn as gizmos (doc/editor/point_set_editing.md "Hover gizmo").
+    [[nodiscard]] auto is_point_gizmo        () const -> bool;
+    // The view's control ray picks a gizmo handle now (not the hover state of the last hover update).
+    [[nodiscard]] auto is_pointer_on_handle  (Scene_view& scene_view) -> bool;
+    // The point set whose selected or hovered point anchors the gizmo; null when another producer does.
+    [[nodiscard]] auto get_gizmo_point_set   () const -> const IPoint_set*;
+    // The tool toggles; on a point gizmo the translate handles alone, and only while a point is hovered.
+    [[nodiscard]] auto get_shown_handle_tools() const -> Shown_handle_tools;
     // The point set whose gesture is in progress; null outside one.
     [[nodiscard]] auto get_point_set_edit() const -> const IPoint_set*;
     // A scalar edit the caller drives itself (the inset mode of

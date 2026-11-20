@@ -126,7 +126,8 @@ The Hierarchy shows a curve with its own icon (`Icon_set::get_item_icon`).
 scene from the scene's curve list with the line renderer: a selected (or
 hovered) curve as its draw points, a marker on each control point (yellow;
 orange for a corner) and, for a smooth or free point, a line to each handle end
-with a marker there (magenta). The Debug Visualizations window's `Curves` mode
+with a marker there (magenta); the curve tool's target gets no markers, the
+tool's point handles stand on its points. The Debug Visualizations window's `Curves` mode
 picks which curves draw: `Off`, `Selected` (the default) or `All`, where an
 unselected curve is a thinner dim line. The colors (with alpha), line widths
 and marker size are the `curve_*` fields of `Debug_visualizations_style`
@@ -135,12 +136,12 @@ and marker size are the `curve_*` fields of `Debug_visualizations_style`
 shows on the next frame. The defaults: a selected curve 4 px bright cyan, an
 unselected one 2 px dim cyan, handle lines and markers 2 px. The drawing transforms the cached draw
 points by the prim's world transform and allocates nothing in the steady
-state. The lines are drawn in the line renderer's x-ray mode, so a curve
-lying on a surface (a path on the ground) or behind geometry keeps its full
-strength. The curve tool draws a handle quad on every control point and handle
-end of its curve (orange; white hovered, yellow selected; the Point Handles
-style shared with the lattice tool, `doc/editor/point_set_editing.md`) on top
-of it ("Viewport editing").
+state. Where geometry hides the lines they draw dimmed, at the
+Hidden Strength of the Curves style (`curve_hidden_strength`, default 0.5),
+so a curve behind geometry stays readable. The curve tool draws a circle on every control point and handle
+end of its curve (yellow on a selected one; the pointer near one
+brings the Transform gizmo's translate handles to it in place of the circle, `doc/editor/point_set_editing.md` "Hover
+gizmo") on top of it ("Viewport editing").
 
 ## Viewport editing
 
@@ -155,14 +156,17 @@ curve is the activation, as a lattice designation is for the lattice tool.
   and cleared is `doc/editor/point_set_editing.md` "Point selection". A
   curve that is a segments kit layout has one more entry per segment, its
   segment handle (`doc/editor/level_tools.md` "Segment handles").
+- The pointer near a point or a handle end brings the Transform gizmo's
+  translate handles to it; dragging one of them moves that point and selects
+  it, no click needed (`doc/editor/point_set_editing.md` "Hover gizmo").
 - A click on a point or a handle end selects it; Ctrl or Shift toggles it. A
   plain click off the points clears the point selection first, so the next
   click reaches the object selection. Ctrl+click on the curve (within 12 px of
   its drawn line, away from a point) inserts a point there, as Ctrl+click near
   a curve inserts a key in the animation window, and selects it.
-- With a point selected the Transform gizmo sits at the selection's centroid
-  and moves it (the curve prim's rotation is the gizmo's Local frame); with
-  none it moves the curve prim. Moving a control point carries its handles
+- With a point selected, and no point near the pointer, no gizmo shows; a value edit (the Transform
+  window, MCP `transform_selection`) acts on the selection about its centroid (the curve prim's rotation
+  is the Local frame). With no point selected or hovered the gizmo moves the curve prim. Moving a control point carries its handles
   (offsets; a rotate or scale turns and scales them with the point). Moving a
   handle end goes through `erhe::math::set_curve_handle()`: on a smooth point
   the other handle turns opposite, keeping its length; holding Alt during the

@@ -1153,7 +1153,7 @@ outline in the viewport, and a drag of one sets the values it stands for
   drawn (values the generation refuses, a world scale other than 1) shows
   none; a path, segments or stairs layout has none here (a segments layout
   has its own, "Segment handles"). They are drawn and picked as every point
-  set's: camera-facing quads of the Point Handles style, orange, white
+  set's: camera-facing circles of the Point Handles style, orange, white
   hovered, yellow selected, picked within 12 px.
 - Selection: a click on a handle selects it; one handle is selected at a
   time (two handles of one value would pull it two ways), and Ctrl or Shift
@@ -1250,10 +1250,12 @@ its target changes and at each `Kit_layout_changed_message` of it).
 
 - Which handles: segment i runs from control point i to i + 1, the last
   segment of a closed curve to point 0; its handle sits at the chord's
-  midpoint. It is drawn and picked as a point handle (orange, white
-  hovered, yellow selected, within 12 px), and the hovered and the selected
+  midpoint. It is drawn and picked as every point of the curve tool (a small
+  translate gizmo the pointer brings the Transform gizmo to,
+  `doc/editor/point_set_editing.md` "Hover gizmo"; a click within 12 px
+  selects it), and the hovered and the selected
   segment's chord is drawn over the curve twice the selected curve width,
-  in those colors.
+  in the Point Handles hover and selected colors.
 - Selection: a click on a segment handle selects it, one segment at a time;
   Ctrl or Shift on the selected one deselects it, on another selects that
   one. Selecting a segment clears the point selection and selecting a point
@@ -1646,7 +1648,9 @@ staircase (`Level_kits::build_floor_generation()`,
   sliding along its neighbouring edge's line; the walls and the corners
   connected floors share follow live as for a corner drag, and the release is
   one curve edit that moves them the same (the shared corners above).
-- An outline edit that adds or removes corners renumbers the edges; the
+- An outline edit that keeps the corner count (a corner or edge drag) keeps
+  every connection on its edge: the walls follow their edges wherever the
+  corners go. An outline edit that adds or removes corners renumbers the edges; the
   same edit moves each connection naming one of the floor's connectors to
   the edge nearest the other end's connector when its recorded edge is gone
   or clearly farther, before the other ends follow
