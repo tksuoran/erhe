@@ -64,7 +64,9 @@ ask the user which to pick. Item 14 starts with writing its plan. Items 15,
     ("User test (windowed, pending)") and rulings ("For the user to rule
     on") of `doc/plans/level_kit_connections_implementation.md`, and the
     review of design K0. Riders (`doc/plans/level_kit_connections.md` C10, design
-    K13) are built: the user's windowed test and review of ruling L26.
+    K13) are built and the user verified them windowed; open is the
+    review of the choices of ruling L26, and the full verify scripts and
+    `ctest` before the push.
 18. Kit layout composition (GitHub issue 301): the user's rulings on the
     open questions of `doc/plans/kit_layout_composition.md`, then its build
     order.

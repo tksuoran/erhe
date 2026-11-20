@@ -411,7 +411,7 @@ void Kit_connector_drag_snap::collect_indicators(const float reach_factor, std::
             // C1.9: only a moved connector it is compatible with makes a target a candidate.
             for (std::size_t m = moved_begin; !in_reach && (m < moved_end); ++m) {
                 const glm::vec3 d = out_indicators[m].frame.position - position;
-                in_reach = (glm::dot(d, d) <= reach_squared) && out_indicators[m].frame.types.intersects(point.types);
+                in_reach = (glm::dot(d, d) <= reach_squared) && is_compatible(out_indicators[m].frame.types, point.types);
             }
             if (!in_reach) {
                 continue;

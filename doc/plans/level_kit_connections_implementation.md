@@ -10,7 +10,8 @@ from this list, and what it built is described in
 "Attachments", and the new "Connections", "Property flow" and "Polygon
 floor"), `doc/editor/level_kit_shapes.md` and `doc/editor/curves.md`.
 
-Every step runs these gates in the headless tree:
+The final pass of the series runs these gates in the headless tree (a step
+runs its own checks only, `AGENTS.md` "When to run the slow test suites"):
 - `editor_level_tests`;
 - `scripts/level_tools_verify.py` (its new groups, and the full run at
   steps 5 and 9);

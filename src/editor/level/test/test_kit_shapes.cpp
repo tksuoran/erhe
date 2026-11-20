@@ -1165,7 +1165,7 @@ TEST_P(Kit_shape_random_values, pass_the_checks)
         SCOPED_TRACE(fmt::format("{} {}", shape.id, values.to_canonical_text()));
         const Kit_mesh_report report = editor::check_kit_shape(values);
         EXPECT_TRUE(report.is_valid()) << describe(report);
-        EXPECT_LE(report.triangle_count, get_library().find_kit(shape.kit)->triangle_ceiling);
+        EXPECT_LE(report.triangle_count, get_library().get_triangle_ceiling(values));
         if (shape.randomness != editor::Kit_randomness::seeded) {
             // Kit_randomness::none over the swept values: another seed gives the same mesh.
             Kit_parameter_values other_seed = values;

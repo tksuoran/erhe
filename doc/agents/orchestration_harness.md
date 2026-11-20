@@ -100,7 +100,9 @@ git worktree:
    with the doc path so the agent can read the surrounding sections.
 2. Scope: the closed list of what the commit changes (subsystems, files
    or symbols to start from) and what is left to a later commit.
-3. Verification recipe: the build script and target, the test binary, and
+3. Verification recipe: the build script and target, the test cases and
+   verify script group of this change (not the whole suites, `AGENTS.md`
+   "When to run the slow test suites"), and
    the headless MCP steps when the step names them (`erhe-headless-verify`
    skill). The agent runs all of it and reports outcomes verbatim from
    the tool output.

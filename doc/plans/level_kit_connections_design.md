@@ -478,9 +478,11 @@ and outlines), cleared and not reallocated in the steady state.
 As built for C10 (L26):
 
 - K13.1 `Kit_connector_type::rail` (`rail`, flow mask bit 16, a type added
-  later starts on), and `Kit_connector::rail_end` (`Kit_rail_end::rider` by
-  default, `host`), carried by every connector transform.
+  later starts on), and `Kit_connector_types::rail_end` (`Kit_rail_end::rider`
+  by default, `host`), carried wherever the type set is.
   `is_rail_host_of(own, other)`: both accept `rail`, own hosts, other rides.
+  `get_join_types()` drops `rail` between two connectors of the same end, and
+  `is_join_twist_allowed()` keeps a host and rider pair to twists 0 and 2.
 - K13.2 Hosts: `type_wall_run_connectors()` gives a wall run shape's `top`
   `rail` and `generic`, as a host; `set_wall_run_flow()` supplies over `top`
   `child.length` (the `length` parameter) and `wall.thickness` at priority 1.

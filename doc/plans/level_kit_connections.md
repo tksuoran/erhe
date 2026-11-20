@@ -102,8 +102,8 @@ The user's rulings (2026-11-19):
 
 - L26 (2026-11-20, the user: "the shapes which adapt to length parameter,
   like fences, we want to be attach them to on tops of walls and floors";
-  "You choose initial rulings"; orchestrator choices, for the user's review
-  after a windowed test): shapes that run along X with a `length` are
+  "You choose initial rulings"; orchestrator choices, verified by the user in
+  the windowed editor 2026-11-20): shapes that run along X with a `length` are
   riders (C10). A rider stands on a `rail` connector, a new connector type
   of its own (not `wall-floor`, so walls do not start stacking and an edge
   can hold a wall and a rider). A wall run shape's `top` and every floor
@@ -111,7 +111,10 @@ The user's rulings (2026-11-19):
   `rail_inset`. A moved rider goes back onto its edge, as a wall does on a
   floor; Detach frees it. A host never fits to its rider. A rider whose
   shape repeats along its run (the railing's bays) keeps the repeat's
-  spacing when its length changes: the count follows the length.
+  spacing when its length changes: the count follows the length, and a
+  longer run may take more triangles (the user: "We allow more triangles
+  for longer repeats"). Rail joins a host and a rider only, along the
+  host's run.
 
 Readings the orchestrator made to fit the rulings together are marked
 "(reading)" where they appear; L12 accepted them.
@@ -442,7 +445,9 @@ a floor's edge or a wall's top, a battlement on a wall.
 - C10.4 `[must]` Spacing. A rider that repeats along its run states the
   repeat as a spacing, so a flowed length changes the count and not the
   stretch of each repeat: the railing has `bay_length` in place of `bays`,
-  and its bay count is the count whose bays are nearest to it.
+  and its bay count is the count whose bays are nearest to it, up to 32
+  bays; a run of more than six bays may take as many more triangles than
+  its kit's ceiling as it has more bays.
 - C10.5 `[must]` Response. A rider follows its host over `rail` (a rigid
   move that re-joins); a rider the author moved goes back onto its edge at
   the end of the change, at the join's pose (K5.5); a live drag shows it
@@ -459,6 +464,9 @@ a floor's edge or a wall's top, a battlement on a wall.
   wall's top take their lengths, a floor corner drag and a wall length edit
   change them, a moved rider goes back, Detach frees it, undo and redo, save
   and load.
+- C10.9 `[must]` `rail` joins a host and a rider only (two hosts do not
+  join over it), and only along the host's run: at no twist or a half turn,
+  on every join path; an explicit join at a quarter twist is refused.
 
 ## Later
 

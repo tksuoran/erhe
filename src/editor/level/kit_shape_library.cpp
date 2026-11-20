@@ -293,6 +293,17 @@ auto Kit_shape_library::find_kit(const std::string_view name) const -> const Kit
     return nullptr;
 }
 
+auto Kit_shape_library::get_triangle_ceiling(const Kit_parameter_values& values) const -> unsigned int
+{
+    const Kit_shape_definition* const shape = values.get_shape();
+    const Kit_definition* const       kit   = (shape != nullptr) ? find_kit(shape->kit) : nullptr;
+    if (kit == nullptr) {
+        return 0;
+    }
+    const float scale = shape->get_ceiling_scale ? std::max(shape->get_ceiling_scale(values), 1.0f) : 1.0f;
+    return static_cast<unsigned int>(static_cast<float>(kit->triangle_ceiling) * scale);
+}
+
 auto Kit_shape_library::get_palette() const -> const std::vector<Kit_palette_material>&
 {
     return m_palette;

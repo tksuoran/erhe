@@ -222,7 +222,8 @@ void generate_timber_bay(const Kit_parameter_values& values, GEO::Mesh& mesh)
 // Railing: half posts at the ends and a post between the bays, each under a pyramid; rails run through the posts.
 //
 
-constexpr int railing_bay_max    = 6;
+constexpr int railing_bay_max    = 32;
+constexpr int railing_ceiling_bays = 6; // the bays the kit's triangle ceiling covers; a longer run takes as much more
 constexpr int railing_infill_max = 8;
 
 enum class Railing_style : unsigned int { rail = 0, picket, balustrade, lattice };
@@ -1381,7 +1382,7 @@ void add_build_17_20_shapes(std::vector<Kit_shape_definition>& shapes)
         shape.kit             = "architecture";
         shape.display_name    = "Railing";
         shape.description     =
-            "Railing or fence run along X in equal bays, as many as make each bay nearest the bay length (1 to 6): half "
+            "Railing or fence run along X in equal bays, as many as make each bay nearest the bay length (1 to 32): half "
             "posts at its ends (two runs joined make a whole post) and a post between two bays, each under a pyramid. "
             "Between the posts: level rails, pointed pickets on two stringers, turned balusters between a plinth and a "
             "handrail, or crossed slats between two rails. A rider: its base stands on a wall's top or a floor edge's "
@@ -1410,6 +1411,9 @@ void add_build_17_20_shapes(std::vector<Kit_shape_definition>& shapes)
             type_rider_base_connector(out_connectors);
         };
         shape.property_mappings = {Kit_property_mapping{.property = Kit_standard_property::child_length, .target = "length"}};
+        shape.get_ceiling_scale = [](const Kit_parameter_values& values) -> float {
+            return static_cast<float>(get_railing_bay_count(values)) / static_cast<float>(railing_ceiling_bays);
+        };
         shapes.push_back(std::move(shape));
     }
     {

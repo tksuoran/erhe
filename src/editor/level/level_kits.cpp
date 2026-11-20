@@ -2055,6 +2055,12 @@ auto Level_kits::resolve_connect(
             connect.target_connector, connector_types_text(target_connector->types), connect.target->get_name()
         );
     }
+    if (!is_join_twist_allowed(piece_connector->types, target_connector->types, connect.twist_steps)) {
+        return fmt::format(
+            "connector '{}' of {} and connector '{}' of target '{}' are a rider and its host: twist_steps {} would turn the rider across the host's run (use 0 or 2)",
+            connect.connector, shape->id, connect.target_connector, connect.target->get_name(), connect.twist_steps
+        );
+    }
     const std::optional<Kit_join_pose> motion = join_motion(*piece_connector, world_from_node, *target_connector, connect.twist_steps, connect.gap);
     if (!motion.has_value()) {
         return fmt::format("{} connector '{}' degenerates under a zero scale axis", shape->id, connect.connector);
@@ -4359,7 +4365,7 @@ void Level_kits::build_auto_connections(
                     continue;
                 }
                 // Only typed connectors (wall, wall-floor, floor, rail) auto-connect: touching generic pieces (tiles) do not chain.
-                const Kit_connector_types shared{.bits = own.local.types.bits & other.local.types.bits & ~Kit_connector_types::of(Kit_connector_type::generic).bits};
+                const Kit_connector_types shared{.bits = get_join_types(own.local.types, other.local.types).bits & ~Kit_connector_types::of(Kit_connector_type::generic).bits};
                 if (shared.is_empty()) {
                     continue;
                 }
@@ -4376,6 +4382,9 @@ void Level_kits::build_auto_connections(
                 // The quarter twist nearest the up axes' turn about the target's outward axis (followed rigidly where rigid).
                 const float angle = std::atan2(glm::dot(glm::cross(other.world.up, own.world.up), other.world.outward), glm::dot(other.world.up, own.world.up));
                 const int   twist = ((static_cast<int>(std::lround(angle / glm::half_pi<float>())) % 4) + 4) % 4;
+                if (!is_join_twist_allowed(own.local.types, other.local.types, twist)) {
+                    continue; // K13: a rider across its host's run is no join
+                }
                 const Kit_attachment made{
                     .owner            = piece->get_gltf_uid(),
                     .target           = other.node->get_gltf_uid(),

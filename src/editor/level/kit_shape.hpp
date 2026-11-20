@@ -252,6 +252,7 @@ using Kit_seam_sides_function = std::function<std::vector<Kit_side>(const Kit_pa
 using Kit_connectors_function = std::function<void(const Kit_parameter_values& values, std::vector<Kit_connector>& out_connectors)>;
 using Kit_light_frames_function = std::function<void(const Kit_parameter_values& values, std::vector<Kit_light_frame>& out_frames)>;
 using Kit_collision_function    = std::function<Kit_collision(const Kit_parameter_values& values)>;
+using Kit_ceiling_scale_function = std::function<float(const Kit_parameter_values& values)>;
 using Kit_supply_function       = std::function<void(const Kit_piece_view& piece, std::string_view connector_name, Kit_supply_list& out_supply)>;
 
 class Kit_shape_definition
@@ -268,6 +269,7 @@ public:
     Kit_normal_style           normal_style           {Kit_normal_style::faceted};
     float                      hard_edge_angle_degrees{0.0f};
     unsigned int               triangle_budget        {0}; // at default parameters (R2.6)
+    Kit_ceiling_scale_function get_ceiling_scale;      // optional: the multiple (>= 1) of its kit's triangle ceiling a long run of repeats may take
     Kit_collision              collision              {Kit_collision::convex_hull};
     Kit_collision_function     get_collision;          // optional: the kind at the values, box or collision (U54)
     Kit_mesh_kind              mesh_kind              {Kit_mesh_kind::solid};

@@ -52,6 +52,8 @@ public:
     // The shape of the id or of a former id (Kit_shape_definition::former_ids); null for an unknown id.
     [[nodiscard]] auto find      (std::string_view id) const -> const Kit_shape_definition*;
     [[nodiscard]] auto find_kit  (std::string_view name) const -> const Kit_definition*;
+    // The most triangles the shape may have at the values: its kit's ceiling times the shape's scale (a long run of repeats).
+    [[nodiscard]] auto get_triangle_ceiling(const Kit_parameter_values& values) const -> unsigned int;
     [[nodiscard]] auto get_palette          () const -> const std::vector<Kit_palette_material>&;
     [[nodiscard]] auto find_palette_material(std::string_view name) const -> const Kit_palette_material*;
     [[nodiscard]] auto get_slot_palettes    () const -> const std::vector<Kit_slot_palette>&;

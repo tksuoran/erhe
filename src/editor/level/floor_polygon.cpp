@@ -421,8 +421,7 @@ void get_floor_connectors(const std::span<const glm::vec2> outline, const Floor_
                 .position = glm::vec3{mid.x, values.thickness, mid.y},
                 .outward  = glm::vec3{0.0f, 1.0f, 0.0f},
                 .up       = glm::vec3{inward.x, 0.0f, inward.y},
-                .types    = Kit_connector_types::of(Kit_connector_type::rail),
-                .rail_end = Kit_rail_end::host
+                .types    = Kit_connector_types{.bits = Kit_connector_types::of(Kit_connector_type::rail).bits, .rail_end = Kit_rail_end::host}
             }
         );
     }

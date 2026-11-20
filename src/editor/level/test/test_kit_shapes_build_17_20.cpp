@@ -39,18 +39,24 @@ using namespace editor::kit_test;
     return glm::vec3{p.x, p.y, p.z};
 }
 
-// The mesh checks pass within the kit's ceiling and every slot has facets.
-void expect_valid_with_every_slot(const Kit_parameter_values& values)
+// The mesh checks pass within the ceiling and every slot has facets.
+void expect_valid_with_every_slot_within(const Kit_parameter_values& values, const unsigned int triangle_ceiling)
 {
     SCOPED_TRACE(values.to_canonical_text());
     const Kit_mesh_report report = editor::check_kit_shape(values);
     EXPECT_TRUE(report.is_valid()) << describe(report);
-    EXPECT_LE(report.triangle_count, get_library().find_kit(values.get_shape()->kit)->triangle_ceiling);
+    EXPECT_LE(report.triangle_count, triangle_ceiling);
     const std::unique_ptr<GEO::Mesh> mesh = generate(values);
     std::vector<uint32_t> facet_slots;
     editor::read_kit_facet_slots(*mesh, facet_slots);
     const std::set<uint32_t> used{facet_slots.begin(), facet_slots.end()};
     EXPECT_EQ(used.size(), values.get_shape()->material_slots.size());
+}
+
+// Within the shape's ceiling at the values.
+void expect_valid_with_every_slot(const Kit_parameter_values& values)
+{
+    expect_valid_with_every_slot_within(values, get_library().get_triangle_ceiling(values));
 }
 
 // Every combination of the named parameters' range ends on the values, the others as given.
@@ -257,7 +263,7 @@ TEST(Kit_railing, every_style_passes_at_the_corners)
     }
 }
 
-// C10.4: the bay count is the count whose bays are nearest bay_length, 1 to 6; a longer run of the same bay length has
+// C10.4: the bay count is the count whose bays are nearest bay_length, 1 to 32; a longer run of the same bay length has
 // more bays, each about as long.
 TEST(Kit_railing, bay_count_follows_the_length_at_the_bay_length)
 {
@@ -276,7 +282,7 @@ TEST(Kit_railing, bay_count_follows_the_length_at_the_bay_length)
         ASSERT_TRUE(values.set_float("bay_length", 1.0f));
         ASSERT_TRUE(values.set_enum("style", "rail"));
         ASSERT_TRUE(values.set_int("infill", 2));
-        const unsigned int bays = static_cast<unsigned int>(editor::get_kit_repeat_count(length, 1.0f, 6));
+        const unsigned int bays = static_cast<unsigned int>(editor::get_kit_repeat_count(length, 1.0f, 32));
         const Kit_mesh_report report = editor::check_kit_shape(values);
         ASSERT_TRUE(report.is_valid()) << describe(report);
         EXPECT_EQ(report.component_count, bays + 1 + 1) << length; // the posts and one rail
@@ -291,7 +297,7 @@ TEST(Kit_railing, parts_and_bounds_follow_the_values)
     for (const int seed : derive_seeds()) {
         const Kit_parameter_values values = all_derived(railing, seed);
         SCOPED_TRACE(values.to_canonical_text());
-        const unsigned int bays   = static_cast<unsigned int>(editor::get_kit_repeat_count(values.get_float("length"), values.get_float("bay_length"), 6));
+        const unsigned int bays   = static_cast<unsigned int>(editor::get_kit_repeat_count(values.get_float("length"), values.get_float("bay_length"), 32));
         const unsigned int infill = static_cast<unsigned int>(values.get_int("infill"));
         const std::string  style{values.get_enum("style")};
         const Kit_mesh_report report = editor::check_kit_shape(values);

@@ -529,6 +529,9 @@ auto Level_kits::find_snap_attachment(const Kit_snap_pair& snap) const -> std::o
     }
     // Only where the poses being recorded are a join of the pair: a translation-only snap leaves the frames unaligned.
     for (int twist = 0; twist < 4; ++twist) {
+        if (!is_join_twist_allowed(own->types, target_local->types, twist)) {
+            continue;
+        }
         const std::optional<Kit_join_pose> motion = attachment_motion(*snap.piece, *own, *snap.target, *target_local, twist, 0.0f);
         if (motion.has_value() && is_identity_motion(motion.value())) {
             const Kit_attachment attachment{

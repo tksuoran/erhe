@@ -1142,7 +1142,11 @@ void Brush_tool::update_kit_join(Scene_root& scene_root)
     }
     // The quarter twist nearest the rotation steps' yaw angle.
     const float yaw_degrees = static_cast<float>(m_kit_yaw_steps) * level_kits.get_placement_settings().rotation_step_degrees;
-    const int   twist_steps = static_cast<int>(std::lround(yaw_degrees / 90.0f)) % 4;
+    // K13: a rider runs along its host, so a host and rider pair takes the half turn nearest the yaw.
+    const bool  rail_pair   = is_rail_host_of(target_local, *moved) || is_rail_host_of(*moved, target_local);
+    const int   twist_steps = rail_pair
+        ? ((static_cast<int>(std::lround(yaw_degrees / 180.0f)) * 2) % 4)
+        : (static_cast<int>(std::lround(yaw_degrees / 90.0f)) % 4);
     // K9.2: the new piece joins at the values the target supplies, as the placement's flow gives them.
     const Kit_connector& joined = get_kit_join_moved_connector(*piece, target_local.name, *moved);
     static_cast<void>(apply_kit_join(scene_root, piece, target_local.name, m_kit_target_connectors[nearest.value()], joined, twist_steps, nearest_distance));

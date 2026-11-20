@@ -245,8 +245,10 @@ void type_wall_run_connectors(std::vector<Kit_connector>& out_connectors)
             connector.types = Kit_connector_types::of(Kit_connector_type::wall_floor);
         } else if (name == "top") {
             // C10.2: riders stand on a wall's top; generic too, so a wall top still takes what it took before.
-            connector.types    = Kit_connector_types{.bits = Kit_connector_types::of(Kit_connector_type::rail).bits | Kit_connector_types::of(Kit_connector_type::generic).bits};
-            connector.rail_end = Kit_rail_end::host;
+            connector.types = Kit_connector_types{
+                .bits     = Kit_connector_types::of(Kit_connector_type::rail).bits | Kit_connector_types::of(Kit_connector_type::generic).bits,
+                .rail_end = Kit_rail_end::host
+            };
         }
     }
 }
@@ -255,8 +257,7 @@ void type_rider_base_connector(std::vector<Kit_connector>& out_connectors)
 {
     for (Kit_connector& connector : out_connectors) {
         if (std::string_view{connector.name} == "base") {
-            connector.types    = Kit_connector_types{.bits = Kit_connector_types::of(Kit_connector_type::rail).bits | Kit_connector_types::of(Kit_connector_type::generic).bits};
-            connector.rail_end = Kit_rail_end::rider;
+            connector.types = Kit_connector_types{.bits = Kit_connector_types::of(Kit_connector_type::rail).bits | Kit_connector_types::of(Kit_connector_type::generic).bits};
         }
     }
 }

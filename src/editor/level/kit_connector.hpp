@@ -31,10 +31,18 @@ inline constexpr std::size_t c_connector_type_count = 5;
 [[nodiscard]] auto parse_connector_type(std::string_view name) -> std::optional<Kit_connector_type>;
 
 // The set of types a connector accepts (K1.2).
+// C10, design K13: which end of a rail join a connector is; the join's record goes on the rider.
+enum class Kit_rail_end : unsigned int
+{
+    rider = 0,
+    host       // a wall run's top, a floor layout's rail_<i>: it supplies the run and never responds to its rider
+};
+
 class Kit_connector_types
 {
 public:
     std::uint32_t bits{1u}; // generic
+    Kit_rail_end  rail_end{Kit_rail_end::rider}; // read only where bits has rail
 
     [[nodiscard]] static constexpr auto of(Kit_connector_type type) -> Kit_connector_types
     {
@@ -53,13 +61,6 @@ public:
 // "generic", "wall, wall-floor", ...; allocates (messages and reports only).
 [[nodiscard]] auto connector_types_text(Kit_connector_types types) -> std::string;
 
-// C10, design K13: which end of a rail join a connector is; the join's record goes on the rider.
-enum class Kit_rail_end : unsigned int
-{
-    rider = 0,
-    host       // a wall run's top, a floor layout's rail_<i>: it supplies the run and never responds to its rider
-};
-
 // A named frame on a shape where another shape attaches (R5.3, D1.12): unit outward and up axes, up normal to outward.
 // The name is a literal (static storage), so filling and copying connectors allocates nothing.
 class Kit_connector
@@ -70,20 +71,41 @@ public:
     glm::vec3   outward {0.0f, 0.0f, 1.0f};
     glm::vec3   up      {0.0f, 1.0f, 0.0f};
     Kit_connector_types types{};
-    Kit_rail_end        rail_end{Kit_rail_end::rider};
 };
 
+// K1.4, K13: the types a join of the two sets can be made over: the ones both accept, rail only between a host and a rider.
+[[nodiscard]] constexpr auto get_join_types(const Kit_connector_types a, const Kit_connector_types b) -> Kit_connector_types
+{
+    const std::uint32_t shared = a.bits & b.bits;
+    const std::uint32_t rail   = Kit_connector_types::of(Kit_connector_type::rail).bits;
+    return Kit_connector_types{.bits = (a.rail_end == b.rail_end) ? (shared & ~rail) : shared};
+}
+
 // K1.4: the one compatibility test of every join path.
+[[nodiscard]] constexpr auto is_compatible(const Kit_connector_types a, const Kit_connector_types b) -> bool
+{
+    return !get_join_types(a, b).is_empty();
+}
 [[nodiscard]] inline auto is_compatible(const Kit_connector& a, const Kit_connector& b) -> bool
 {
-    return a.types.intersects(b.types);
+    return is_compatible(a.types, b.types);
 }
 
 // K13: own is the host of a rail join with other (both accept rail, own hosts, other rides).
+[[nodiscard]] constexpr auto is_rail_host_of(const Kit_connector_types own, const Kit_connector_types other) -> bool
+{
+    return own.contains(Kit_connector_type::rail) && other.contains(Kit_connector_type::rail) &&
+           (own.rail_end == Kit_rail_end::host) && (other.rail_end == Kit_rail_end::rider);
+}
 [[nodiscard]] inline auto is_rail_host_of(const Kit_connector& own, const Kit_connector& other) -> bool
 {
-    return own.types.contains(Kit_connector_type::rail) && other.types.contains(Kit_connector_type::rail) &&
-           (own.rail_end == Kit_rail_end::host) && (other.rail_end == Kit_rail_end::rider);
+    return is_rail_host_of(own.types, other.types);
+}
+
+// K13: a rider runs along its host, so a host and a rider join at twist 0 or 2; any other pair at every quarter twist.
+[[nodiscard]] constexpr auto is_join_twist_allowed(const Kit_connector_types a, const Kit_connector_types b, const int twist_steps) -> bool
+{
+    return ((twist_steps % 2) == 0) || (!is_rail_host_of(a, b) && !is_rail_host_of(b, a));
 }
 
 // A connector switch's state (U33).

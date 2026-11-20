@@ -793,10 +793,13 @@ Parameters `length` (2 modules, 0.5 - 16 m), `height` (the posts' height, 1 m,
 `seed`; slot `trim`; connectors start, end and base; a triangle mesh body;
 mirror planes x and z; tags `railing`, `fence` and `tiles`.
 
-- The bay count is the count (1 - 6) whose bays, `length` / count, are nearest
+- The bay count is the count (1 - 32) whose bays, `length` / count, are nearest
   to `bay_length`, the smaller count on a tie (`get_kit_repeat_count()`), so a
   run that takes another length keeps its bays about `bay_length` long. The
   posts stand `length` / count apart.
+- A run of more than six bays may take as many more triangles than its kit's
+  ceiling as it has more bays (`Kit_shape_definition::get_ceiling_scale`,
+  `Kit_shape_library::get_triangle_ceiling()`).
 - It is a rider (`doc/editor/level_tools.md` "Riders"): its base accepts
   `rail` and `generic`, and it maps `child.length` to `length`, so on a
   floor's rail or a wall's top it takes the host's length.

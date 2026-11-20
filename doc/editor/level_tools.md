@@ -1866,8 +1866,8 @@ accept `wall` and `generic` (a wall still meets a tower's or a pillar's side),
 its `base` accepts `wall-floor` only, so a wall stands on nothing but a
 floor's wall connector, and its `top` accepts `rail` and `generic` as a rail
 host; a rider's `base` accepts `rail` and `generic` ("Riders"). The types and
-the rail end (`Kit_connector::rail_end`, `rider` or `host`) ride every local,
-world and in-root frame of the connector.
+the rail end (`Kit_connector_types::rail_end`, `rider` or `host`) ride every
+local, world and in-root frame of the connector.
 
 - A join the author names (`resolve_connect()`: `connect_piece()`, the Level
   Kit window's Connect rows, `level_connect_pieces`, a placement with
@@ -2331,6 +2331,13 @@ the host's length: `architecture.railing`, `architecture.battlement` and
   floor layout's `rail_<i>` (`rail`), marked `Kit_rail_end::host`. A rider
   joined with no twist runs along the host's X: a wall's run, a floor edge,
   its front toward the floor's inside.
+- `rail` joins a host and a rider only (`get_join_types()`, the test behind
+  `is_compatible()`): two hosts (a wall's top and a floor's rail) share no
+  type over it. A host and a rider join at twist 0 or 2 only
+  (`is_join_twist_allowed()`), so the rider runs along the host: the
+  connector snap's orientation, the Brush tool's join preview (the half turn
+  nearest its yaw), Auto-connect and the snapped release's record choose
+  among those two, and an explicit join at a quarter twist is refused.
 - Values: the rider maps `child.length` to `length` (the battlement
   `wall.thickness` to `thickness` too). A wall's top supplies its length
   and thickness at priority 1; a floor's `rail_<i>` the length of the edge's

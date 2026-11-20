@@ -53,8 +53,8 @@ TEST(FloorPolygon, RectangleConnectorsSitInsetOnEachEdge)
     EXPECT_NEAR(connectors[8].position.z, 0.0f, 1.0e-6f);
     EXPECT_NEAR(connectors[8].outward.y, 1.0f, 1.0e-6f);
     EXPECT_NEAR(connectors[8].up.x, 1.0f, 1.0e-6f);
-    EXPECT_TRUE(connectors[8].types == editor::Kit_connector_types::of(editor::Kit_connector_type::rail));
-    EXPECT_EQ(connectors[8].rail_end, editor::Kit_rail_end::host);
+    EXPECT_TRUE(connectors[8].types.bits == editor::Kit_connector_types::of(editor::Kit_connector_type::rail).bits);
+    EXPECT_EQ(connectors[8].types.rail_end, editor::Kit_rail_end::host);
     connectors.resize(4);
     for (const editor::Kit_connector& connector : connectors) {
         // Every wall-floor connector is half a wall thickness inside the rectangle's edge.
@@ -232,7 +232,7 @@ TEST(FloorPolygon, RidersMapTheirLengthAndRideByTheirBase)
         const editor::Kit_connector* const base = editor::find_connector(connectors, "base");
         ASSERT_NE(base, nullptr) << id;
         EXPECT_TRUE(base->types.contains(editor::Kit_connector_type::rail) && base->types.contains(editor::Kit_connector_type::generic)) << id;
-        EXPECT_EQ(base->rail_end, editor::Kit_rail_end::rider) << id;
+        EXPECT_EQ(base->types.rail_end, editor::Kit_rail_end::rider) << id;
     }
     // The battlement takes the wall's thickness too.
     const editor::Kit_shape_definition* const battlement = library.find("architecture.battlement");
@@ -255,7 +255,7 @@ TEST(FloorPolygon, RiderOnAWallTopRunsAlongTheWall)
     const editor::Kit_connector* const base = editor::find_connector(railing_connectors, "base");
     ASSERT_TRUE((top != nullptr) && (base != nullptr));
     EXPECT_TRUE(top->types.contains(editor::Kit_connector_type::rail) && top->types.contains(editor::Kit_connector_type::generic));
-    EXPECT_EQ(top->rail_end, editor::Kit_rail_end::host);
+    EXPECT_EQ(top->types.rail_end, editor::Kit_rail_end::host);
     EXPECT_TRUE(editor::is_rail_host_of(*top, *base));
     EXPECT_FALSE(editor::is_rail_host_of(*base, *top));
     const editor::Kit_join_pose pose = editor::join_connectors(*base, *top, 0, 0.0f);
@@ -344,4 +344,41 @@ TEST(FloorPolygon, RailSupplyDispatchesByConnectorName)
     EXPECT_EQ(rail->edge, 3u);
     EXPECT_EQ(editor::parse_floor_connector_name("rail_4", 4)->edge, 4u);
     EXPECT_FALSE(editor::parse_floor_connector_name("top", 4).has_value());
+}
+
+// K13: rail joins a host and a rider only, along the host's run: two hosts never join over it, and a rider turned a
+// quarter is no join, also when the frames ask for one.
+TEST(FloorPolygon, RailJoinsAHostAndARiderAlongTheRun)
+{
+    const editor::Kit_shape_library   library;
+    const editor::Kit_shape_definition* const wall    = library.find("architecture.wall");
+    const editor::Kit_shape_definition* const railing = library.find("architecture.railing");
+    ASSERT_NE(wall, nullptr);
+    ASSERT_NE(railing, nullptr);
+    std::vector<editor::Kit_connector> wall_connectors;
+    std::vector<editor::Kit_connector> railing_connectors;
+    std::vector<editor::Kit_connector> floor_connectors;
+    editor::get_shape_connectors(editor::make_default_values(*wall, 1.0f, 3.0f), wall_connectors);
+    editor::get_shape_connectors(editor::make_default_values(*railing, 1.0f, 3.0f), railing_connectors);
+    std::vector<glm::vec2> outline;
+    editor::make_floor_rectangle(4.0f, 4.0f, outline);
+    editor::get_floor_connectors(outline, editor::Floor_values{}, floor_connectors);
+    const editor::Kit_connector top  = *editor::find_connector(wall_connectors, "top");
+    const editor::Kit_connector base = *editor::find_connector(railing_connectors, "base");
+    const editor::Kit_connector rail = *editor::find_connector(floor_connectors, "rail_0");
+    EXPECT_FALSE(editor::is_compatible(top, rail)); // two hosts
+    EXPECT_TRUE(editor::is_compatible(base, rail));
+    EXPECT_TRUE(editor::is_compatible(base, top));
+    EXPECT_TRUE(editor::is_compatible(top, top));   // over generic, as before riders
+    EXPECT_FALSE(editor::get_join_types(top.types, top.types).contains(editor::Kit_connector_type::rail));
+    for (const int twist : {0, 1, 2, 3}) {
+        EXPECT_EQ(editor::is_join_twist_allowed(base.types, top.types, twist), (twist % 2) == 0) << twist;
+        EXPECT_EQ(editor::is_join_twist_allowed(rail.types, base.types, twist), (twist % 2) == 0) << twist;
+        EXPECT_TRUE(editor::is_join_twist_allowed(top.types, top.types, twist)) << twist;
+    }
+    // A railing lying a quarter turn off the wall's run: the nearest allowed twist is a half step, never the quarter.
+    editor::Kit_connector turned = base;
+    turned.up = glm::vec3{1.0f, 0.0f, 0.0f};
+    EXPECT_EQ(editor::closest_join_twist(turned, top) % 2, 0);
+    EXPECT_EQ(editor::choose_twist_about_axis(turned, top, glm::vec3{0.0f, 1.0f, 0.0f}) % 2, 0);
 }

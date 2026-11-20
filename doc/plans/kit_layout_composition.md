@@ -176,10 +176,10 @@ Shared behavior:
 
 ## Build order
 
-One step is one commit; each runs `editor_level_tests`,
-`scripts/level_tools_verify.py` (its new group, the full run at the last
-step), `scripts/curve_verify.py` and `ctest -C Debug -L editor -j1` in the
-headless tree.
+One step is one commit and runs its own checks (`AGENTS.md` "When to run
+the slow test suites"); the final step runs `editor_level_tests`, the full
+`scripts/level_tools_verify.py`, `scripts/curve_verify.py` and
+`ctest -C Debug -L editor -j1` in the headless tree.
 
 1. Roles in the values and the resolution (N1 - N4): `Kit_layout_item`
    role, canonical text, pass 1 for path and segments, span lengths less

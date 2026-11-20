@@ -4848,6 +4848,33 @@ def check_riders(editor, directory):
           (connections(free_r["id"]) == [("base", "rider free w", "top", True, True)]) and (abs(length_of(free_r["id"]) - 5.0) < 1.0e-4) and
           (undo_depth(editor) == depth + 1), json.dumps(connections(free_r["id"])) + f" length {length_of(free_r['id'])}")
 
+    # K13: two hosts never join over rail, and a rider is never joined across its host's run.
+    host_w = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [{"shape": "architecture.wall", "name": "rider host w", "position": [30.0, 0.0, 0.0]}]})["pieces"][0]
+    cross_r = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [{"shape": "architecture.railing", "name": "rider cross r", "position": [30.0, 0.0, 8.0]}]})["pieces"][0]
+    editor.wait_idle()
+    depth = undo_depth(editor)
+    refused = call_error(editor, "level_connect_pieces", {"scene_name": scene, "node_id": host_w["id"], "connector": "top", "to_piece_id": floor["id"], "to_connector": "rail_3"})
+    check("a wall's top is not joined onto a floor's rail (two hosts share no connector type), nothing recorded",
+          (refused is not None) and ("share no connector type" in refused) and (undo_depth(editor) == depth), str(refused))
+    refused = call_error(editor, "level_connect_pieces", {"scene_name": scene, "node_id": cross_r["id"], "connector": "base", "to_piece_id": host_w["id"],
+                                                          "to_connector": "top", "twist_steps": 1})
+    check("a railing is not joined onto a wall's top at a quarter twist (across the wall's run), nothing recorded",
+          (refused is not None) and ("across the host's run" in refused) and (undo_depth(editor) == depth), str(refused))
+    editor.call("level_connect_pieces", {"scene_name": scene, "node_id": cross_r["id"], "connector": "base", "to_piece_id": host_w["id"], "to_connector": "top", "twist_steps": 2})
+    editor.wait_idle()
+    check("the same join at a half twist is made: the railing runs along the wall, turned end for end",
+          connections(cross_r["id"]) == [("base", "rider host w", "top", True, True)], json.dumps(connections(cross_r["id"])))
+    # C10.4: a long railing keeps adding bays (26 of them on 26 m at 1 m bays), each end and middle post a part of the mesh.
+    long_r = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [{"shape": "architecture.railing", "name": "rider long r", "position": [40.0, 0.0, 0.0],
+                         "parameters": {"length": 26.0, "bay_length": 1.0, "style": "rail"}}]})["pieces"][0]
+    short_r = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [{"shape": "architecture.railing", "name": "rider short r", "position": [40.0, 0.0, 8.0],
+                          "parameters": {"length": 6.0, "bay_length": 1.0, "style": "rail"}}]})["pieces"][0]
+    editor.wait_idle()
+    long_triangles = long_r.get("triangle_count")
+    short_triangles = short_r.get("triangle_count")
+    check("a 26 m railing of 1 m bays has more than 2.5 times the triangles of a 6 m one (its bays repeat, not stretch)",
+          (long_triangles is not None) and (short_triangles is not None) and (long_triangles > 2.5 * short_triangles), f"{long_triangles} vs {short_triangles}")
+
     def lengths():
         return [round(length_of(i), 4) for i in (r1["id"], w1["id"], r2["id"], w2["id"], b1["id"])]
 

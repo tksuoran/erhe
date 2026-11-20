@@ -27,6 +27,9 @@ Comments::1-line{2-rare;3-exceptional;¬doc-blocks-above-class/function→doc/<s
 std140/std430::explicit-alignment{UBO/SSBO}
 DiagFloats::hexfloat{%a,bit-exact}
 
+[TEST_RUNS]
+!SlowSuites{whole-unit-test-executables+full-verify-scripts+ctest}::run-only{©User-asks|plan-final-verification|before-push-if-not-yet-run};per-change=own-checks-only{--gtest_filter|--only-<group>|one-MCP-query}{©User-2026-11-20;AGENTS.md"When to run the slow test suites";coder-briefs-state-it}
+
 [GIT_WORKFLOW]
 !¬switch-branch-of-main-checkout{askFirst}→work-current-branch{main}
 WorktreesPreferred{©User-2026-11-16;parallel|isolated-work→git-worktree-add-../<name>-b-local/<name>;local/*-never-pushed;integrate-into-main(cherry-pick|ff);remove-when-done}

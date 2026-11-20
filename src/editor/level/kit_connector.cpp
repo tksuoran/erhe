@@ -161,8 +161,7 @@ auto transform_connector(const Kit_connector& connector, const glm::vec3& positi
         .position = position + (basis * connector.position),
         .outward  = basis * connector.outward,
         .up       = basis * connector.up,
-        .types    = connector.types,
-        .rail_end = connector.rail_end
+        .types    = connector.types
     };
 }
 
@@ -284,8 +283,7 @@ auto connector_in_root(const Kit_connector& connector, const glm::mat4& root_fro
         .position = glm::vec3{root_from_node * glm::vec4{connector.position, 1.0f}},
         .outward  = glm::inverse(glm::transpose(linear)) * connector.outward,
         .up       = linear * connector.up,
-        .types    = connector.types,
-        .rail_end = connector.rail_end
+        .types    = connector.types
     };
 }
 
@@ -311,8 +309,7 @@ auto transform_connector(const Kit_connector& connector, const glm::mat4& world_
         .position = glm::vec3{world_from_node * glm::vec4{connector.position, 1.0f}},
         .outward  = glm::normalize(outward),
         .up       = glm::normalize(up),
-        .types    = connector.types,
-        .rail_end = connector.rail_end
+        .types    = connector.types
     };
 }
 
@@ -363,6 +360,9 @@ auto closest_join_twist(const Kit_connector& piece_connector, const Kit_connecto
     int   best_twist = 0;
     float best_w     = -1.0f;
     for (int twist = 0; twist < 4; ++twist) {
+        if (!is_join_twist_allowed(piece_connector.types, target_connector.types, twist)) {
+            continue;
+        }
         const float w = std::abs(join_connectors(piece_connector, target_connector, twist, 0.0f).rotation.w);
         if (w > (best_w + c_margin)) {
             best_w     = w;
@@ -425,6 +425,9 @@ auto choose_twist_about_axis(const Kit_connector& moved_world, const Kit_connect
     int           best_twist = 0;
     Kit_axis_turn best       = best_turn_about_axis(moved_world, target_world, 0, axis);
     for (int twist = 1; twist < 4; ++twist) {
+        if (!is_join_twist_allowed(moved_world.types, target_world.types, twist)) {
+            continue;
+        }
         const Kit_axis_turn turn = best_turn_about_axis(moved_world, target_world, twist, axis);
         const bool better_score  = (turn.score > (best.score + c_margin));
         const bool equal_score   = (std::abs(turn.score - best.score) <= c_margin);
@@ -543,7 +546,7 @@ auto find_connector_snap(
         const Kit_connector_point& a = moved[i];
         for (std::size_t j = 0, j_end = others.size(); j < j_end; ++j) {
             const Kit_connector_point& b = others[j];
-            if (!a.types.intersects(b.types)) {
+            if (!is_compatible(a.types, b.types)) {
                 continue;
             }
             // Scalar arithmetic: the search runs every drag step, and glm calls are not inlined in Debug builds.
