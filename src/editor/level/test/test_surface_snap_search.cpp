@@ -1,4 +1,7 @@
 #include "level/surface_snap_search.hpp"
+#include "level/kit_layout.hpp"
+
+#include "erhe_property/enum_info.hpp"
 
 #include <gtest/gtest.h>
 
@@ -42,8 +45,10 @@ class Scene
 {
 public:
     std::vector<Line_faces> lines;
-    float                   span        {0.2f};
-    float                   max_distance{c_max_distance};
+    float                   span             {0.2f};
+    float                   forward_distance {c_max_distance};
+    float                   backward_distance{c_max_distance};
+    Surface_support         support          {Surface_support::five_lines}; // line 0 is the base center (U52)
 
     [[nodiscard]] auto snap(const float base) const -> Surface_offset
     {
@@ -61,7 +66,9 @@ public:
         for (const std::vector<Surface_hit_point>& line_hits : hits) {
             search_lines.push_back(Surface_line{.hits = line_hits, .span = span});
         }
-        return editor::find_snap_height(search_lines, max_distance);
+        return editor::find_support_height(
+            search_lines, editor::Surface_search_window{.forward_distance = forward_distance, .backward_distance = backward_distance}, support
+        );
     }
 
     // Snaps from base, then again from the result: the second snap moves by no more than the tolerance, which
@@ -126,7 +133,8 @@ TEST(Surface_snap_search, nothing_within_the_distance_is_no_place)
     // A piece floating 2 m over the ground.
     Scene scene{.lines = {{.boxes = {c_ground}}}};
     EXPECT_FALSE(scene.snap(2.0f).found);
-    scene.max_distance = 2.5f;
+    scene.forward_distance  = 2.5f;
+    scene.backward_distance = 2.5f;
     const std::optional<float> height = scene.snap_twice(2.0f);
     ASSERT_TRUE(height.has_value());
     EXPECT_NEAR(height.value(), -2.0f, 1.0e-5f);
@@ -230,15 +238,198 @@ TEST(Surface_snap_search, a_rested_piece_stays_at_any_search_distance)
 {
     const Scene near_search{.lines = {{.boxes = {c_ground, Box{3.0f, 3.2f}}}}};
     Scene far_search = near_search;
-    far_search.max_distance = 1000.0f;
+    far_search.forward_distance  = 1000.0f;
+    far_search.backward_distance = 1000.0f;
     EXPECT_EQ(near_search.snap(0.0f).height, 0.0f);
     EXPECT_EQ(far_search.snap(0.0f).height, 0.0f);
+}
+
+// U51: the search reaches forward_distance along the direction (down) and backward_distance against it.
+TEST(Surface_snap_search, backward_distance_zero_searches_along_the_direction_only)
+{
+    // Buried 0.3 m in a box 0.5 m tall standing on the ground: its top is 0.2 m up, the ground 0.3 m down.
+    Scene scene{.lines = {{.boxes = {c_ground, Box{0.0f, 0.5f}}}}};
+    scene.span = 0.1f;
+    const Surface_offset either_way = scene.snap(0.3f);
+    ASSERT_TRUE(either_way.found);
+    EXPECT_NEAR(either_way.height, 0.2f, 1.0e-6f);
+    scene.backward_distance = 0.0f;
+    // Not rising, it rests on the ground under the box, inside it (U31: solids are not reconstructed).
+    const Surface_offset forward_only = scene.snap(0.3f);
+    ASSERT_TRUE(forward_only.found);
+    EXPECT_NEAR(forward_only.height, -0.3f, 1.0e-6f);
+    // Neither within 0.25 m down.
+    scene.forward_distance = 0.25f;
+    EXPECT_FALSE(scene.snap(0.3f).found);
+}
+
+TEST(Surface_snap_search, the_two_distances_bound_their_own_side)
+{
+    // The ground 0.6 m down and a box top 0.4 m up (the piece fits on it).
+    Scene scene{.lines = {{.boxes = {c_ground, Box{0.7f, 1.0f}}}}};
+    scene.span              = 0.1f;
+    scene.forward_distance  = 1.0f;
+    scene.backward_distance = 0.3f;
+    // The box top is nearer but beyond the backward distance: the ground is taken.
+    const Surface_offset forward = scene.snap(0.6f);
+    ASSERT_TRUE(forward.found);
+    EXPECT_NEAR(forward.height, -0.6f, 1.0e-6f);
+    scene.backward_distance = 0.5f;
+    const Surface_offset nearest = scene.snap(0.6f);
+    ASSERT_TRUE(nearest.found);
+    EXPECT_NEAR(nearest.height, 0.4f, 1.0e-6f);
+    // Forward 0.5 m alone reaches neither.
+    scene.forward_distance  = 0.5f;
+    scene.backward_distance = 0.0f;
+    EXPECT_FALSE(scene.snap(0.6f).found);
+}
+
+TEST(Surface_snap_search, a_rest_at_the_base_is_found_with_no_backward_distance)
+{
+    Scene scene{.lines = {{.boxes = {c_ground}}}};
+    scene.backward_distance = 0.0f;
+    const Surface_offset rested = scene.snap(0.0f);
+    ASSERT_TRUE(rested.found);
+    EXPECT_EQ(rested.height, 0.0f);
 }
 
 TEST(Surface_snap_search, no_surface_is_no_place)
 {
     const Scene scene{.lines = {{}}};
     EXPECT_FALSE(scene.snap(0.5f).found);
+}
+
+// U52: five base lines, the center first: a table top over the center line, its legs elsewhere.
+[[nodiscard]] auto make_table_scene(const Surface_support support) -> Scene
+{
+    // A 1 m piece under a table whose 0.05 m top is 0.75 m up over the center line only.
+    Scene scene{
+        .lines = {
+            {.boxes = {c_ground, Box{0.75f, 0.8f}}},
+            {.boxes = {c_ground}}, {.boxes = {c_ground}}, {.boxes = {c_ground}}, {.boxes = {c_ground}}
+        },
+        .span = 1.0f
+    };
+    scene.backward_distance = 0.0f;
+    scene.support           = support;
+    return scene;
+}
+
+TEST(Surface_support, a_table_top_over_the_center_refuses_unless_the_center_falls_back)
+{
+    for (const float base : {0.0f, 0.3f}) {
+        EXPECT_FALSE(make_table_scene(Surface_support::five_lines).snap_twice(base).has_value()) << base;
+        EXPECT_FALSE(make_table_scene(Surface_support::center_blocks).snap_twice(base).has_value()) << base;
+        // The fallback rests on the ground under the center, inside the table as it is, and a second snap keeps it.
+        const std::optional<float> fallback = make_table_scene(Surface_support::center_fallback).snap_twice(base);
+        ASSERT_TRUE(fallback.has_value()) << base;
+        EXPECT_NEAR(fallback.value(), -base, 1.0e-6f) << base;
+    }
+    // With a backward distance the table top is a place against the direction; the nearer ground is refused and the
+    // fallback still goes along the direction.
+    Scene reaching = make_table_scene(Surface_support::center_fallback);
+    reaching.backward_distance = 1.0f;
+    const std::optional<float> along = reaching.snap_twice(0.3f);
+    ASSERT_TRUE(along.has_value());
+    EXPECT_NEAR(along.value(), -0.3f, 1.0e-6f);
+}
+
+// A 0.3 m box of clutter under one footprint corner (line 3), the piece 0.5 m tall.
+[[nodiscard]] auto make_clutter_scene(const Surface_support support) -> Scene
+{
+    Scene scene{
+        .lines = {
+            {.boxes = {c_ground}}, {.boxes = {c_ground}}, {.boxes = {c_ground}},
+            {.boxes = {c_ground, Box{0.0f, 0.3f}}}, {.boxes = {c_ground}}
+        },
+        .span = 0.5f
+    };
+    scene.backward_distance = 0.0f;
+    scene.support           = support;
+    return scene;
+}
+
+TEST(Surface_support, clutter_under_a_corner_supports_in_every_mode)
+{
+    // From above, the clutter top is the nearest rest and nothing blocks it.
+    for (const Surface_support support : {Surface_support::five_lines, Surface_support::center_blocks, Surface_support::center_fallback}) {
+        const std::optional<float> height = make_clutter_scene(support).snap_twice(0.6f);
+        ASSERT_TRUE(height.has_value()) << to_string(support);
+        EXPECT_NEAR(height.value(), -0.3f, 1.0e-6f) << to_string(support);
+    }
+}
+
+TEST(Surface_support, clutter_under_a_corner_blocks_five_lines_only)
+{
+    // Inside the clutter's height, it lies inside the piece on the corner line and the search goes along the direction only.
+    for (const float base : {0.0f, 0.1f}) {
+        EXPECT_FALSE(make_clutter_scene(Surface_support::five_lines).snap_twice(base).has_value()) << base;
+        for (const Surface_support support : {Surface_support::center_blocks, Surface_support::center_fallback}) {
+            const std::optional<float> height = make_clutter_scene(support).snap_twice(base);
+            ASSERT_TRUE(height.has_value()) << to_string(support) << " " << base;
+            EXPECT_NEAR(height.value(), -base, 1.0e-6f) << to_string(support) << " " << base;
+        }
+    }
+}
+
+TEST(Surface_support, a_refused_nearest_place_on_a_mezzanine_falls_back_onto_the_mezzanine)
+{
+    // A 0.05 m slab 1 m up with a void under corner 1 and a beam 1.4 m up over corner 2; the floor below; a 0.5 m piece from
+    // 1.2 m up. The beam refuses the slab top, the piece fits under the slab on the floor.
+    Scene scene{
+        .lines = {
+            {.boxes = {c_ground, Box{1.0f, 1.05f}}},
+            {.boxes = {c_ground}},
+            {.boxes = {c_ground, Box{1.0f, 1.05f}, Box{1.4f, 1.5f}}},
+            {.boxes = {c_ground, Box{1.0f, 1.05f}}},
+            {.boxes = {c_ground, Box{1.0f, 1.05f}}}
+        },
+        .span = 0.5f
+    };
+    scene.forward_distance  = 2.0f;
+    scene.backward_distance = 0.0f;
+    const std::optional<float> five_lines = scene.snap_twice(1.2f);
+    ASSERT_TRUE(five_lines.has_value());
+    EXPECT_NEAR(five_lines.value(), -1.2f, 1.0e-6f); // the floor under the slab
+    scene.support = Surface_support::center_blocks;
+    const std::optional<float> center_blocks = scene.snap_twice(1.2f);
+    ASSERT_TRUE(center_blocks.has_value());
+    EXPECT_NEAR(center_blocks.value(), -0.15f, 1.0e-6f);
+    // No farther place is searched: the center rests on the slab, and a second snap from there stays.
+    scene.support = Surface_support::center_fallback;
+    const std::optional<float> center_fallback = scene.snap_twice(1.2f);
+    ASSERT_TRUE(center_fallback.has_value());
+    EXPECT_NEAR(center_fallback.value(), -0.15f, 1.0e-6f);
+}
+
+TEST(Surface_support, center_blocks_still_rests_on_a_corner_surface)
+{
+    // A ledge under one corner only, the center line empty within the window: the corner line supports.
+    Scene scene{
+        .lines = {{}, {.boxes = {Box{-0.5f, -0.4f}}}, {}, {}, {}},
+        .span  = 0.5f
+    };
+    scene.support = Surface_support::center_blocks;
+    const Surface_offset offset = scene.snap(0.0f);
+    ASSERT_TRUE(offset.found);
+    EXPECT_NEAR(offset.height, -0.4f, 1.0e-6f);
+    // The fallback has no surface under the center when the ledge is refused.
+    scene.support = Surface_support::center_fallback;
+    scene.lines[2].sheets.push_back(Sheet{.height = -0.2f, .upward = false});
+    EXPECT_FALSE(scene.snap(0.0f).found);
+}
+
+TEST(Surface_support, the_property_labels_are_the_enum_names)
+{
+    const erhe::property::Enum_info* const info = editor::Kit_layout::surface_support_property.get().get_enum_info();
+    ASSERT_NE(info, nullptr);
+    ASSERT_EQ(info->get_entries().size(), 3u);
+    for (const Surface_support support : {Surface_support::five_lines, Surface_support::center_blocks, Surface_support::center_fallback}) {
+        EXPECT_EQ(info->label_for(static_cast<int32_t>(support)), to_string(support));
+        Surface_support read{Surface_support::five_lines};
+        ASSERT_TRUE(from_string(to_string(support), read));
+        EXPECT_EQ(read, support);
+    }
 }
 
 } // anonymous namespace

@@ -10,7 +10,6 @@ auto get_build_13_16_rows() -> Kit_shape_rows
         "architecture.window_wall", "architecture.pediment", "architecture.stepped_platform", "nature.succulent",
         "nature.grass_tuft", "nature.boulder_cluster", "nature.stepping_stone"
     };
-    rows.recreated_originals = {};
     rows.seeded_shapes       = {"nature.succulent", "nature.grass_tuft", "nature.boulder_cluster", "nature.stepping_stone"};
     rows.enum_shapes         = {"architecture.window_wall", "nature.succulent", "nature.grass_tuft", "nature.boulder_cluster"};
     // The window is its wall, its casing and their bars; the pediment its body and four dentils for each of the count;

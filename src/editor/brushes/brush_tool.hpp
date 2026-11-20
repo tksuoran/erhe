@@ -12,8 +12,10 @@
 #include "erhe_message_bus/message_bus.hpp"
 #include "erhe_profile/profile.hpp"
 
+#include <cstdint>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <span>
 #include <string>
 #include <vector>
@@ -83,6 +85,19 @@ private:
     App_context& m_context;
 };
 
+// Step 40 (R5.3): the kit mode preview joined at an enabled connector of the hovered piece; a click places through
+// Kit_placement::connect (doc/editor/level_tools.md "Placing in the viewport").
+class Kit_brush_join
+{
+public:
+    std::weak_ptr<erhe::scene::Node> target;
+    std::uint64_t                    target_id       {0};
+    const char*                      target_connector{""}; // literal names (Kit_connector::name)
+    const char*                      connector       {""}; // of the new piece
+    int                              twist_steps     {0};
+    float                            distance        {0.0f}; // from the hover point to the target connector
+};
+
 class Brush_tool : public Tool
 {
 public:
@@ -135,7 +150,14 @@ public:
     [[nodiscard]] auto get_kit_yaw_steps   () const -> int;
     // The pose the preview shows and a click places; none while there is no preview.
     [[nodiscard]] auto get_kit_pose        () const -> std::optional<Kit_placement_pose>;
+    // The connector join the preview shows and a click places; none while there is no joined preview.
+    [[nodiscard]] auto get_kit_join        () const -> std::optional<Kit_brush_join>;
+    // Whether the last preview update found the connector snap suspend key held (U27).
+    [[nodiscard]] auto is_kit_join_suspended() const -> bool;
+    // A connector snap suspend key event: the preview follows the key at its edge.
+    void on_connector_snap_suspend_key_edge();
     [[nodiscard]] auto get_hover_world_position() const -> std::optional<glm::vec3>;
+    [[nodiscard]] auto get_hover_world_normal  () const -> std::optional<glm::vec3>;
 
 private:
     void on_hover_scene_view               (Hover_scene_view_message& message);
@@ -158,6 +180,22 @@ private:
     [[nodiscard]] auto try_insert_kit_piece() -> bool;
     void take_next_kit_seed(const Scene_root& scene_root);
     void update_kit_preview_transform(Brush& brush);
+    void update_kit_join(Scene_root& scene_root);
+    [[nodiscard]] auto apply_kit_join(
+        Scene_root&                               scene_root,
+        const std::shared_ptr<erhe::scene::Node>& piece,
+        const char*                               target_connector_name,
+        const Kit_connector&                      target_world,
+        const Kit_connector&                      moved,
+        int                                       twist_steps,
+        float                                     distance
+    ) -> bool;
+    void refresh_kit_join();
+    void clear_kit_join();
+    // Another kit piece's enabled connector sits on the world connector and faces it (a join made already).
+    [[nodiscard]] auto is_kit_connector_joined(const Scene_root& scene_root, const erhe::scene::Node& piece, const Kit_connector& connector) -> bool;
+    // The join's target or a node above it moved, or a piece's connector switches changed: the preview joins again.
+    void on_kit_join_target_changed(const erhe::scene::Node* node);
     void update_preview_mesh               ();
     void do_insert_operation               (Brush& brush);
     void add_preview_mesh                  (Brush& brush);
@@ -181,6 +219,8 @@ private:
     erhe::message_bus::Subscription<Close_scene_message>      m_close_scene_subscription;
     erhe::message_bus::Subscription<Items_removed_message> m_items_removed_subscription;
     erhe::message_bus::Subscription<Selection_message>     m_selection_subscription;
+    erhe::message_bus::Subscription<Node_touched_message>  m_node_touched_subscription;
+    erhe::message_bus::Subscription<Kit_piece_connectors_changed_message> m_kit_piece_connectors_changed_subscription;
     Brush_preview_command                   m_preview_command;
     Brush_insert_command                    m_insert_command;
     Brush_pick_command                      m_pick_command;
@@ -224,6 +264,7 @@ private:
     std::optional<glm::mat4>           m_hover_transform;
     std::optional<glm::mat4>           m_align_transform;
     std::optional<glm::vec3>           m_hover_world_position;
+    std::optional<glm::vec3>           m_hover_world_normal;
 
     // Kit mode: active while m_kit_brush is set.
     Kit_parameter_values                       m_kit_values;
@@ -232,6 +273,10 @@ private:
     std::vector<std::shared_ptr<erhe::primitive::Material>> m_kit_preview_materials; // their preview materials
     int                                        m_kit_yaw_steps{0};
     std::optional<Kit_placement_pose>          m_kit_pose;
+    std::vector<Kit_connector>                 m_kit_connectors;          // the kit shape's at the values
+    std::vector<Kit_connector>                 m_kit_target_connectors;   // hover scratch: the hovered piece's in world space
+    std::optional<Kit_brush_join>              m_kit_join;
+    bool                                       m_kit_join_suspended{false};
     ///std::unique_ptr<Item_tree>         m_brush_item_tree;
 };
 

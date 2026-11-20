@@ -26,6 +26,8 @@ set(_generated_sources
     ${_codegen_out}/demo_renamed.hpp
     ${_codegen_out}/demo_renamed_serialization.hpp
     ${_codegen_out}/demo_renamed.cpp
+    ${_codegen_out}/blend_mode.hpp
+    ${_codegen_out}/blend_mode.cpp
 )
 erhe_codegen_source_settings(${_generated_sources})
 target_sources(${_target} PRIVATE ${_generated_sources})

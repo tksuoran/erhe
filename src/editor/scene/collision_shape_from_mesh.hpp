@@ -3,6 +3,7 @@
 #include <memory>
 
 namespace GEO           { class Mesh; }
+namespace erhe::math    { class Aabb; }
 namespace erhe::physics { class ICollision_shape; }
 namespace erhe::scene   { class Mesh; class Xformable; using Node = Xformable; }
 
@@ -25,6 +26,13 @@ namespace editor {
 [[nodiscard]] auto build_triangle_mesh_shape(
     const GEO::Mesh& geo_mesh,
     float            scale
+) -> std::shared_ptr<erhe::physics::ICollision_shape>;
+
+// A box of the bounds, extents and center times scale, in node space: a compound of the box at the bounds center; the
+// bounds must be valid.
+[[nodiscard]] auto build_box_shape(
+    const erhe::math::Aabb& bounds,
+    float                   scale
 ) -> std::shared_ptr<erhe::physics::ICollision_shape>;
 
 // Convenience wrapper: builds from the Mesh prim of a node.

@@ -189,6 +189,27 @@ public:
 };
 [[nodiscard]] auto align_connector_frames(const Kit_connector& moved_world, const Kit_connector& target_world) -> Kit_connector_alignment;
 
+// U50: the turn about one axis bringing a moved frame nearest to the join frame of a twist; score = sum of the axes' dot products.
+// A turn gaining under 1e-3 over no turn is no turn (both outward axes nearly along the axis).
+class Kit_axis_turn
+{
+public:
+    float angle{0.0f}; // radians, right-handed about the axis
+    float score{0.0f}; // 3 when the turn makes the frames face exactly
+};
+[[nodiscard]] auto best_turn_about_axis(const Kit_connector& moved_world, const Kit_connector& target_world, int twist_steps, const glm::vec3& axis) -> Kit_axis_turn;
+
+// U50: how near the moved frame turned by the rotation faces the join frame of the twist (3 = exactly).
+[[nodiscard]] auto get_facing_score(const Kit_connector& moved_world, const Kit_connector& target_world, int twist_steps, const glm::quat& rotation) -> float;
+
+// U50 Rotate: the twist whose best turn about the axis faces best, then the smaller turn, then the smaller twist.
+[[nodiscard]] auto choose_twist_about_axis(const Kit_connector& moved_world, const Kit_connector& target_world, const glm::vec3& axis) -> int;
+
+// U50 Rotate: as align_connector_frames() but turning only about the unit world axis (the surface normal), at the given
+// twist or at choose_twist_about_axis(); the motion then moves the connector onto the target's position.
+[[nodiscard]] auto align_connector_frames_about_axis(const Kit_connector& moved_world, const Kit_connector& target_world, const glm::vec3& axis, int twist_steps) -> Kit_connector_alignment;
+[[nodiscard]] auto align_connector_frames_about_axis(const Kit_connector& moved_world, const Kit_connector& target_world, const glm::vec3& axis) -> Kit_connector_alignment;
+
 // U44: the parent_from_node of a node moved by the motion (world_from_node before it, parent_from_world of its parent,
 // identity for a root); nullopt when that matrix has shear, which the node's translation, rotation and scale cannot hold.
 [[nodiscard]] auto moved_parent_from_node(const Kit_join_pose& motion, const glm::mat4& world_from_node, const glm::mat4& parent_from_world) -> std::optional<glm::mat4>;

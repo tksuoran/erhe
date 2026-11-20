@@ -1,5 +1,6 @@
 #include "operations/operations_window.hpp"
 #include "level/kit_layout.hpp"
+#include "level/level_kits.hpp"
 #include "editor_item_bits.hpp"
 
 #include "app_context.hpp"
@@ -248,9 +249,22 @@ void gather_components(Mesh_component_selection& selection, const Mesh_component
     );
 }
 
+// Step 41: the attachment follow operation of the nodes moved by the entry's earlier operations, appended last.
+void append_attachment_follow_ups(App_context& context, const std::vector<std::shared_ptr<erhe::scene::Node>>& moved_nodes, std::vector<std::shared_ptr<Operation>>& out_operations)
+{
+    if (context.level_kits != nullptr) {
+        context.level_kits->append_attachment_follow_ups(moved_nodes, out_operations);
+    }
+}
+
 [[nodiscard]] auto queue_align(App_context& context, const std::shared_ptr<erhe::scene::Node>& moved_node, const glm::mat4& world_delta) -> bool
 {
-    context.operation_stack->queue(make_align_operation(moved_node, world_delta));
+    Compound_operation::Parameters compound{};
+    compound.operations.push_back(make_align_operation(moved_node, world_delta));
+    append_attachment_follow_ups(context, {moved_node}, compound.operations);
+    context.operation_stack->queue(
+        (compound.operations.size() == 1) ? compound.operations.front() : std::make_shared<Compound_operation>(std::move(compound))
+    );
     return true;
 }
 
@@ -2329,6 +2343,7 @@ auto Operations::add_joint(const Add_joint_avoidance avoidance) -> bool
             }
         )
     );
+    append_attachment_follow_ups(m_context, {alignment.moved_node}, compound.operations);
 
     m_context.operation_stack->queue(std::make_shared<Compound_operation>(std::move(compound)));
     return true;
@@ -2504,6 +2519,7 @@ void Operations::bake_transform()
             )
         );
     }
+    append_attachment_follow_ups(m_context, nodes, compound_operation_parameters.operations);
     m_context.operation_stack->queue(
         std::make_shared<Compound_operation>(std::move(compound_operation_parameters))
     );
@@ -2536,6 +2552,7 @@ void Operations::reset_transform()
     if (compound_operation_parameters.operations.empty()) {
         return;
     }
+    append_attachment_follow_ups(m_context, get_all<erhe::scene::Node>(items), compound_operation_parameters.operations);
     m_context.operation_stack->queue(
         std::make_shared<Compound_operation>(std::move(compound_operation_parameters))
     );
@@ -2591,6 +2608,7 @@ void Operations::center_transform()
             )
         );
     }
+    append_attachment_follow_ups(m_context, nodes, compound_operation_parameters.operations);
     m_context.operation_stack->queue(
         std::make_shared<Compound_operation>(std::move(compound_operation_parameters))
     );

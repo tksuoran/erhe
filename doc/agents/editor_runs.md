@@ -169,7 +169,7 @@ fall into:
   `capture_screenshot.annotate_imgui_items`.
 - **Input gestures**: `imgui_click`, `imgui_hover`, `imgui_scroll`,
   `mouse_click`, `mouse_drag`, `mouse_release`, `mouse_wheel`, `key_press`,
-  `type_text`, `inject_input_events`, `get_input_state`,
+  `type_text`, `inject_input_events`, `get_input_state`, `set_active_tool`,
   `get_transform_handles` -- real window input events, so menus, docking,
   property rows, gizmo drags and viewport gestures are driven the way a user
   drives them (`doc/agents/mcp_ui_driving.md`).

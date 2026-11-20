@@ -120,21 +120,34 @@ void Kit_layout_indicators::collect(
     if ((mode != Visualization_mode::selected) && (mode != Visualization_mode::all)) {
         return;
     }
-    // The layout nodes at or above a selected node of the scene.
+    // The layout nodes at, above or below a selected node of the scene (below as the Connectors setting walks).
     m_selected_layouts.clear();
     for (const std::shared_ptr<erhe::Item_base>& item : selection.get_selected_items()) {
         const erhe::scene::Node* const selected = dynamic_cast<const erhe::scene::Node*>(item.get());
         if ((selected == nullptr) || (selected->get_item_host() != &scene_root)) {
             continue;
         }
-        if (carries_kit_layout(*selected) && !is_selected_layout(*selected)) {
-            m_selected_layouts.push_back(selected);
-        }
+        bool selected_above = false;
         for (std::shared_ptr<erhe::scene::Node> parent = selected->get_parent_node(); parent; parent = parent->get_parent_node()) {
+            selected_above = selected_above || parent->is_selected();
             if (carries_kit_layout(*parent) && !is_selected_layout(*parent)) {
                 m_selected_layouts.push_back(parent.get());
             }
         }
+        // A selected ancestor's walk covers this subtree.
+        if (selected_above) {
+            continue;
+        }
+        static_cast<void>(
+            selected->for_each_const<erhe::scene::Node>(
+                [this](const erhe::scene::Node& visited) -> bool {
+                    if (carries_kit_layout(visited) && !is_selected_layout(visited)) {
+                        m_selected_layouts.push_back(&visited);
+                    }
+                    return true;
+                }
+            )
+        );
     }
     if (mode == Visualization_mode::selected) {
         for (const erhe::scene::Node* const node : m_selected_layouts) {

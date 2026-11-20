@@ -21,6 +21,18 @@
 
 namespace editor {
 
+auto make_thumbnail_preset_key(const Graphics_preset_entry& graphics_preset) -> std::string
+{
+    Graphics_preset_entry without_lod = graphics_preset;
+    const Graphics_preset_entry defaults{};
+    without_lod.lod_enabled          = defaults.lod_enabled;
+    without_lod.lod_threshold_pixels = defaults.lod_threshold_pixels;
+    without_lod.lod_bias             = defaults.lod_bias;
+    without_lod.lod_hysteresis_band  = defaults.lod_hysteresis_band;
+    without_lod.lod_cpu_selection    = defaults.lod_cpu_selection;
+    return serialize(without_lod);
+}
+
 Thumbnail::Thumbnail() = default;
 Thumbnail::Thumbnail(Thumbnail&&) noexcept = default;
 auto Thumbnail::operator=(Thumbnail&&) noexcept -> Thumbnail& = default;
@@ -134,14 +146,7 @@ Thumbnails::Thumbnails(
 void Thumbnails::on_graphics_settings_changed(const Graphics_preset_entry* graphics_preset)
 {
     if (graphics_preset != nullptr) {
-        Graphics_preset_entry without_lod = *graphics_preset;
-        const Graphics_preset_entry defaults{};
-        without_lod.lod_enabled          = defaults.lod_enabled;
-        without_lod.lod_threshold_pixels = defaults.lod_threshold_pixels;
-        without_lod.lod_bias             = defaults.lod_bias;
-        without_lod.lod_hysteresis_band  = defaults.lod_hysteresis_band;
-        without_lod.lod_cpu_selection    = defaults.lod_cpu_selection;
-        std::string key = serialize(without_lod);
+        std::string key = make_thumbnail_preset_key(*graphics_preset);
         if (key == m_rendered_preset_key) {
             return;
         }

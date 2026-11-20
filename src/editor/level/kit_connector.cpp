@@ -177,7 +177,15 @@ void transform_connectors(
     }
 }
 
-auto join_connectors(const Kit_connector& piece_connector, const Kit_connector& target_connector, const int twist_steps, const float gap) -> Kit_join_pose
+namespace {
+
+[[nodiscard]] auto get_connector_basis(const Kit_connector& connector) -> glm::mat3
+{
+    return glm::mat3{connector.outward, connector.up, glm::cross(connector.outward, connector.up)};
+}
+
+// The basis a joined piece connector takes: outward opposing the target's, up its up after twist_steps quarter turns.
+[[nodiscard]] auto get_join_basis(const Kit_connector& target_connector, const int twist_steps) -> glm::mat3
 {
     // A quarter turn about the target's outward axis maps up to outward x up (both unit and normal to each other).
     const glm::vec3 axis    = target_connector.outward;
@@ -188,15 +196,22 @@ auto join_connectors(const Kit_connector& piece_connector, const Kit_connector& 
         (quarter == 1) ? side :
         (quarter == 2) ? -target_connector.up :
         -side;
-
-    // Both bases are right-handed orthonormal, so the rotation between them is proper.
     const glm::vec3 to_outward = -axis;
-    const glm::mat3 from_basis{piece_connector.outward, piece_connector.up, glm::cross(piece_connector.outward, piece_connector.up)};
-    const glm::mat3 to_basis  {to_outward, up, glm::cross(to_outward, up)};
+    return glm::mat3{to_outward, up, glm::cross(to_outward, up)};
+}
+
+} // anonymous namespace
+
+auto join_connectors(const Kit_connector& piece_connector, const Kit_connector& target_connector, const int twist_steps, const float gap) -> Kit_join_pose
+{
+    // Both bases are right-handed orthonormal, so the rotation between them is proper.
+    const glm::mat3 from_basis      = get_connector_basis(piece_connector);
+    const glm::mat3 to_basis        = get_join_basis(target_connector, twist_steps);
     const glm::mat3 rotation_matrix = to_basis * glm::transpose(from_basis);
     const glm::quat rotation        = glm::normalize(glm::quat_cast(rotation_matrix));
 
     // The translation takes the rotation the node will have, so its connector lands on the target point.
+    const glm::vec3 axis         = target_connector.outward;
     const glm::vec3 target_point = target_connector.position + (gap * axis);
     const glm::vec3 position     = target_point - (glm::mat3_cast(rotation) * piece_connector.position);
     return Kit_join_pose{.position = position, .rotation = rotation};
@@ -358,6 +373,76 @@ auto align_connector_frames(const Kit_connector& moved_world, const Kit_connecto
         .motion      = join_connectors(moved_world, target_world, twist_steps, 0.0f),
         .twist_steps = twist_steps
     };
+}
+
+auto best_turn_about_axis(const Kit_connector& moved_world, const Kit_connector& target_world, const int twist_steps, const glm::vec3& axis) -> Kit_axis_turn
+{
+    // R(angle) about the unit axis maximizes sum_k dot(to_k, R from_k) = cos * c + sin * s + constant (Wahba's problem about one axis).
+    const glm::mat3 from_basis = get_connector_basis(moved_world);
+    const glm::mat3 to_basis   = get_join_basis(target_world, twist_steps);
+    float c        = 0.0f;
+    float s        = 0.0f;
+    float constant = 0.0f;
+    for (int k = 0; k < 3; ++k) {
+        const glm::vec3 a = from_basis[k];
+        const glm::vec3 b = to_basis[k];
+        const float     along = glm::dot(axis, a) * glm::dot(axis, b);
+        c        += glm::dot(a, b) - along;
+        s        += glm::dot(b, glm::cross(axis, a));
+        constant += along;
+    }
+    // Near both outward axes along the axis the gain shrinks as the tilt squared and its angle is noise: no turn there.
+    constexpr float c_min_turn_gain = 1.0e-3f;
+    const float magnitude = std::sqrt((c * c) + (s * s));
+    const float gain      = magnitude - c; // best score minus the score at angle 0
+    if (!(gain > c_min_turn_gain)) {
+        return Kit_axis_turn{.angle = 0.0f, .score = c + constant};
+    }
+    return Kit_axis_turn{.angle = std::atan2(s, c), .score = magnitude + constant};
+}
+
+auto get_facing_score(const Kit_connector& moved_world, const Kit_connector& target_world, const int twist_steps, const glm::quat& rotation) -> float
+{
+    const glm::mat3 from_basis = get_connector_basis(moved_world);
+    const glm::mat3 to_basis   = get_join_basis(target_world, twist_steps);
+    float score = 0.0f;
+    for (int k = 0; k < 3; ++k) {
+        score += glm::dot(to_basis[k], rotation * from_basis[k]);
+    }
+    return score;
+}
+
+auto choose_twist_about_axis(const Kit_connector& moved_world, const Kit_connector& target_world, const glm::vec3& axis) -> int
+{
+    // The twist whose turn leaves the frames nearest to facing; among equal ones the smaller turn, then the smaller twist.
+    constexpr float c_margin = 1.0e-5f;
+    int           best_twist = 0;
+    Kit_axis_turn best       = best_turn_about_axis(moved_world, target_world, 0, axis);
+    for (int twist = 1; twist < 4; ++twist) {
+        const Kit_axis_turn turn = best_turn_about_axis(moved_world, target_world, twist, axis);
+        const bool better_score  = (turn.score > (best.score + c_margin));
+        const bool equal_score   = (std::abs(turn.score - best.score) <= c_margin);
+        const bool smaller_turn  = (std::abs(turn.angle) < (std::abs(best.angle) - c_margin));
+        if (better_score || (equal_score && smaller_turn)) {
+            best       = turn;
+            best_twist = twist;
+        }
+    }
+    return best_twist;
+}
+
+auto align_connector_frames_about_axis(const Kit_connector& moved_world, const Kit_connector& target_world, const glm::vec3& axis, const int twist_steps) -> Kit_connector_alignment
+{
+    const glm::quat rotation = glm::angleAxis(best_turn_about_axis(moved_world, target_world, twist_steps, axis).angle, axis);
+    return Kit_connector_alignment{
+        .motion      = Kit_join_pose{.position = target_world.position - (rotation * moved_world.position), .rotation = rotation},
+        .twist_steps = twist_steps
+    };
+}
+
+auto align_connector_frames_about_axis(const Kit_connector& moved_world, const Kit_connector& target_world, const glm::vec3& axis) -> Kit_connector_alignment
+{
+    return align_connector_frames_about_axis(moved_world, target_world, axis, choose_twist_about_axis(moved_world, target_world, axis));
 }
 
 auto moved_parent_from_node(const Kit_join_pose& motion, const glm::mat4& world_from_node, const glm::mat4& parent_from_world) -> std::optional<glm::mat4>

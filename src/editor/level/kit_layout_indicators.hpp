@@ -23,7 +23,7 @@ class Level_kits;
 class Scene_root;
 class Selection;
 
-// Whether a shown scatter draws its spacing circles: only for a layout that is selected or has a selected node below it.
+// Whether a shown scatter draws its spacing circles: only for a layout at, above or below a selected node.
 enum class Kit_layout_circles : unsigned int
 {
     hidden = 0,

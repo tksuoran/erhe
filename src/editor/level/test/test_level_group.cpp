@@ -219,9 +219,7 @@ TEST(Kit_shape_library, declared_mirror_planes_hold_for_the_generated_meshes)
         if (shape.mirror_planes.empty()) {
             continue;
         }
-        if (shape.recreates.empty()) {
-            ++declaring; // a recreated shape declares its original's planes
-        }
+        ++declaring;
         std::vector<Kit_parameter_values> value_sets{editor::make_default_values(shape, c_module, c_wall_height), second_values(shape)};
         // Every value of an enum parameter, the others at their defaults.
         for (const Kit_parameter& parameter : shape.parameters) {
@@ -246,9 +244,10 @@ TEST(Kit_shape_library, declared_mirror_planes_hold_for_the_generated_meshes)
     // triangulation) and the two stairs with a turn, and the water, declare planes (the roof x alone: a shed rises
     // toward -Z); the seeded nature shapes none. Of the extra shapes the crate, the ladder, the quay wall, the table,
     // the market stall, the cart, the trestle, the tunnel and the garland declare x, the barrel, the lamp post, the
-    // pot, the lighthouse, the tank and the truss z. Of the machine elements the bolt, the nut, the piston, the
-    // follower, the cylinder and the pillow block declare x and z, the rack x, the bearing and the connecting rod z.
-    EXPECT_EQ(declaring, 46u);
+    // pot, the lighthouse, the tank and the truss z. Of the machine elements the nut, the piston, the follower, the
+    // cylinder and the pillow block declare x and z, the rack x, the bearing and the connecting rod z (a helical
+    // bolt has no mirror image).
+    EXPECT_EQ(declaring, 45u);
 }
 
 TEST(Kit_shape_library, seeded_shapes_declare_no_mirror_plane)

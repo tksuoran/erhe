@@ -20,7 +20,7 @@
 #include <string>
 #include <vector>
 
-// Tests of the recreated basic kit (kit_shapes_basic_v2.cpp).
+// Tests of the basic kit (kit_shapes_basic.cpp).
 namespace {
 
 using editor::Kit_parameter_values;
@@ -28,16 +28,40 @@ using editor::Kit_shape_definition;
 using editor::Kit_stairs_layout;
 using namespace editor::kit_test;
 
-// The plain building blocks keep their originals' bounds at every value, so the two tile and stack alike.
-TEST(Kit_recreated, basic_shapes_keep_their_originals_bounds)
+// The plain building blocks' bounds are the boxes their values state, at the defaults, both range corners and derived
+// seeds, so they tile and stack on the module grid.
+TEST(Kit_basic_shapes, bounds_follow_the_values)
 {
-    expect_recreated_keep_original_bounds(get_basic_v2_rows().recreated_originals);
+    for (const Kit_parameter_values& v : bounds_value_sets(get_shape("basic.block"))) {
+        const float w = v.get_float("width");
+        const float d = v.get_float("depth");
+        expect_bounds(v, glm::vec3{-0.5f * w, 0.0f, -0.5f * d}, glm::vec3{0.5f * w, v.get_float("height"), 0.5f * d});
+    }
+    for (const Kit_parameter_values& v : bounds_value_sets(get_shape("basic.wedge"))) {
+        const float w = v.get_float("width");
+        const float r = v.get_float("run");
+        expect_bounds(v, glm::vec3{-0.5f * w, 0.0f, -0.5f * r}, glm::vec3{0.5f * w, v.get_float("rise"), 0.5f * r});
+    }
+    for (const Kit_parameter_values& v : bounds_value_sets(get_shape("basic.cylinder"))) {
+        const std::array<float, 4> e = circle_extent(v.get_int("segments"), v.get_float("radius"));
+        expect_bounds(v, glm::vec3{e[0], 0.0f, e[2]}, glm::vec3{e[1], v.get_float("height"), e[3]});
+    }
+    for (const Kit_parameter_values& v : bounds_value_sets(get_shape("basic.stairs"))) {
+        const float w   = v.get_float("width");
+        const float run = editor::get_stairs_layout(v).run;
+        expect_bounds(v, glm::vec3{-0.5f * w, 0.0f, -0.5f * run}, glm::vec3{0.5f * w, v.get_float("rise"), 0.5f * run});
+    }
+    for (const Kit_parameter_values& v : bounds_value_sets(get_shape("basic.floor_slab"))) {
+        const float w = v.get_float("width");
+        const float d = v.get_float("depth");
+        expect_bounds(v, glm::vec3{-0.5f * w, 0.0f, -0.5f * d}, glm::vec3{0.5f * w, v.get_float("thickness"), 0.5f * d});
+    }
 }
 
-// The recreated stairs' side walls are a column per step: no vertex gathers a fan of facets, at any step count.
-TEST(Kit_recreated, stairs_sides_have_no_fan)
+// The stairs' side walls are a column per step: no vertex gathers a fan of facets, at any step count.
+TEST(Kit_basic_shapes, stairs_sides_have_no_fan)
 {
-    const Kit_shape_definition& stairs = get_shape("basic.stairs.v2");
+    const Kit_shape_definition& stairs = get_shape("basic.stairs");
     for (const float rise : {0.2f, 1.0f, 3.0f, 16.0f}) {
         Kit_parameter_values values = defaults(stairs);
         ASSERT_TRUE(values.set_float("rise", rise));
@@ -58,10 +82,10 @@ TEST(Kit_recreated, stairs_sides_have_no_fan)
     }
 }
 
-// The recreated cylinder's mirror images are equal to the bit: about z = 0 always, about x = 0 at an even segment count.
-TEST(Kit_recreated, cylinder_is_exactly_symmetric)
+// The cylinder's mirror images are equal to the bit: about z = 0 always, about x = 0 at an even segment count.
+TEST(Kit_basic_shapes, cylinder_is_exactly_symmetric)
 {
-    const Kit_shape_definition& cylinder = get_shape("basic.cylinder.v2");
+    const Kit_shape_definition& cylinder = get_shape("basic.cylinder");
     for (const int segments : {3, 4, 5, 6, 7, 12, 16, 33, 64}) {
         Kit_parameter_values values = defaults(cylinder);
         ASSERT_TRUE(values.set_int("segments", segments));

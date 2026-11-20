@@ -176,13 +176,12 @@ public:
 [[nodiscard]] auto find_snap_distance(
     erhe::raytrace::IScene&                         rt_scene,
     const erhe::math::Aabb&                         local_bounds,
-    const Surface_base_rule                         base_rule,
     const Surface_pose&                             start,
     const glm::vec3                                 direction,
     const std::span<const erhe::scene::Mesh* const> excluded
 ) -> Surface_distance
 {
-    const Surface_base_frame frame = get_surface_base_frame(base_rule, start.rotation, start.scale, direction);
+    const Surface_base_frame frame = get_surface_base_frame(start.rotation, start.scale, direction);
     Surface_distance         result{};
     for (const glm::vec3& point : get_base_points(get_footprint_bounds(local_bounds, start.scale, frame), frame)) {
         // Each ray starts at the top face above its base point, so a sunk piece rises.
@@ -261,13 +260,13 @@ private:
     std::vector<Surface_hit_point>&           m_hits;
 };
 
-// The hits on the line through a base point from max_distance below it to max_distance plus span above it (D7.3): one
-// ray from the base each way, so heights near the base keep their precision at any search distance. Cleared and filled.
+// The hits from forward_distance along the direction to backward_distance plus span against it (D7.3), one ray from the
+// base each way so heights near the base keep their precision; cleared and filled.
 void gather_line(
     erhe::raytrace::IScene&                         rt_scene,
     const glm::vec3                                 base,
     const glm::vec3                                 direction,
-    const float                                     max_distance,
+    const Surface_search_window                     window,
     const float                                     span,
     const std::span<const erhe::scene::Mesh* const> excluded,
     std::vector<Surface_hit_point>&                 out_hits
@@ -276,7 +275,7 @@ void gather_line(
     out_hits.clear();
     for (const float sign : {1.0f, -1.0f}) {
         const Hit_point_recorder recorder{direction, sign, excluded, out_hits};
-        const float reach = ((sign > 0.0f) ? (max_distance + span) : max_distance) + c_window_margin;
+        const float reach = ((sign > 0.0f) ? (std::max(0.0f, window.backward_distance) + span) : std::max(0.0f, window.forward_distance)) + c_window_margin;
         erhe::raytrace::Ray ray{
             .origin    = base,
             .t_near    = 0.0f,
@@ -326,19 +325,6 @@ public:
 
 } // anonymous namespace
 
-auto any_surface_option(const Surface_options& options) -> bool
-{
-    return (options.snap == Surface_snap::on) || (options.orient == Surface_orient::on);
-}
-
-auto check_surface_max_distance(const float distance) -> std::string
-{
-    if (!std::isfinite(distance) || (distance < 0.0f)) {
-        return fmt::format("the surface max distance must be a finite number >= 0, not {}", distance);
-    }
-    return {};
-}
-
 auto mesh_local_bounds(const erhe::scene::Mesh& mesh) -> erhe::math::Aabb
 {
     return mesh_local_bounds(std::span<const erhe::scene::Mesh_primitive>{mesh.get_primitives()});
@@ -360,15 +346,9 @@ auto mesh_local_bounds(const std::span<const erhe::scene::Mesh_primitive> primit
     return bounds;
 }
 
-auto get_surface_base_rule(const erhe::scene::Mesh& mesh) -> Surface_base_rule
-{
-    return carries_kit_piece(mesh) ? Surface_base_rule::authored_y_up : Surface_base_rule::from_pose;
-}
-
 auto find_surface_placement(
     Scene_root&                                     scene_root,
     const erhe::math::Aabb&                         local_bounds,
-    const Surface_base_rule                         base_rule,
     const Surface_pose&                             start,
     const Surface_options&                          options,
     const std::span<const erhe::scene::Mesh* const> excluded
@@ -379,13 +359,12 @@ auto find_surface_placement(
     }
     erhe::raytrace::IScene& rt_scene = scene_root.get_raytrace_scene();
     rt_scene.commit();
-    return find_surface_placement(rt_scene, local_bounds, base_rule, start, options, excluded);
+    return find_surface_placement(rt_scene, local_bounds, start, options, excluded);
 }
 
 auto find_surface_placement(
     erhe::raytrace::IScene&                         rt_scene,
     const erhe::math::Aabb&                         local_bounds,
-    const Surface_base_rule                         base_rule,
     const Surface_pose&                             start,
     const Surface_options&                          options,
     const std::span<const erhe::scene::Mesh* const> excluded
@@ -396,48 +375,27 @@ auto find_surface_placement(
         return result;
     }
 
-    ERHE_VERIFY(check_surface_max_distance(options.max_distance).empty());
-    const glm::vec3 direction    = options.direction;
-    const float     max_distance = options.max_distance;
+    ERHE_VERIFY(check_surface_max_distance(options.forward_distance, "surface forward distance").empty() && check_surface_max_distance(options.backward_distance, "surface backward distance").empty());
+    const glm::vec3             direction = options.direction;
+    const Surface_search_window window{.forward_distance = options.forward_distance, .backward_distance = options.backward_distance};
     static thread_local Surface_search_scratch scratch;
-    const Surface_base_frame frame = get_surface_base_frame(base_rule, start.rotation, start.scale, direction);
     if (options.orient == Surface_orient::on) {
-        // Orient implies snapping (D7.3). The line passes through the base center, the pivot of the
-        // turn, so turning moves no line and a rested pose finds its own place.
-        const auto search = [&](const Surface_base_frame& line_frame, glm::vec3& out_normal) -> Surface_offset {
-            const glm::vec3 base_center_local = get_base_center(local_bounds, line_frame);
-            const glm::vec3 base_center       = get_world_point(start, base_center_local);
-            const glm::vec3 top_center        = get_world_point(start, get_top_point(local_bounds, line_frame, base_center_local));
-            const float     span              = std::max(c_min_ray_height, glm::dot(top_center - base_center, -direction));
-            gather_line(rt_scene, base_center, direction, max_distance, span, excluded, scratch.hits[0]);
-            scratch.lines[0] = Surface_line{.hits = scratch.hits[0], .span = span};
-            const Surface_offset line_offset = find_snap_height(std::span<const Surface_line>{scratch.lines.data(), 1}, max_distance);
-            if (line_offset.found) {
-                out_normal = get_snapped_normal(scratch.lines[0], line_offset.height, direction);
-            }
-            return line_offset;
-        };
-        Surface_base_frame orient_frame = frame;
-        glm::vec3          normal{-direction};
-        Surface_offset     offset = search(orient_frame, normal);
+        // Orient implies snapping (D7.3) and rests the -Y face whichever way the start turns it (U51). The line passes
+        // through its center, the pivot of the turn, so turning moves no line and a rested pose finds its own place.
+        const Orient_search      search = get_orient_search(local_bounds, start, direction, window);
+        const Surface_base_frame frame  = search.frame;
+        const float              span   = std::max(c_min_ray_height, search.span);
+        gather_line(rt_scene, search.base_center, direction, search.window, span, excluded, scratch.hits[0]);
+        scratch.lines[0] = Surface_line{.hits = scratch.hits[0], .span = span};
+        const Surface_offset offset = find_snap_height(std::span<const Surface_line>{scratch.lines.data(), 1}, search.window);
         if (!offset.found) {
             return result;
         }
-        // Another face may be the one that turns least onto the surface: one more line through its center (U48).
-        const Surface_base_frame resting_frame = get_orient_frame(base_rule, start.rotation, start.scale, orient_frame, normal);
-        if (!is_same_face(resting_frame, orient_frame)) {
-            glm::vec3            resting_normal{-direction};
-            const Surface_offset resting_offset = search(resting_frame, resting_normal);
-            if (resting_offset.found) {
-                orient_frame = resting_frame;
-                offset       = resting_offset;
-                normal       = resting_normal;
-            }
-        }
-        const glm::vec3 up = glm::normalize(start.rotation * orient_frame.up_local);
+        const glm::vec3 normal = get_snapped_normal(scratch.lines[0], offset.height, direction);
+        const glm::vec3 up     = glm::normalize(start.rotation * frame.up_local);
         result.distance      = -offset.height;
         result.surface_found = true;
-        result.pose          = get_oriented_pose(start, local_bounds, orient_frame, direction, offset.height, normal);
+        result.pose          = get_oriented_pose(start, local_bounds, frame, direction, offset.height, normal);
         // A start pose that already rests is the rest itself, bit for bit.
         if ((std::abs(offset.height) <= c_rise_tolerance) && (glm::dot(up, normal) >= (1.0f - c_turn_tolerance))) {
             result.pose     = start;
@@ -446,16 +404,28 @@ auto find_surface_placement(
         return result;
     }
 
+    if (options.rest == Surface_snap_rest::anchor) {
+        // U60: the pose's origin lands on the surface on one line, with no fit test, as a drag's anchor does.
+        gather_line(rt_scene, start.position, direction, window, 0.0f, excluded, scratch.hits[0]);
+        const Anchor_rest rest = get_anchor_rest(start, direction, Surface_line{.hits = scratch.hits[0], .span = 0.0f}, window);
+        result.pose          = rest.pose;
+        result.distance      = rest.distance;
+        result.surface_found = rest.found;
+        return result;
+    }
+
+    const Surface_base_frame frame = get_surface_base_frame(start.rotation, start.scale, direction);
     const std::array<glm::vec3, 5> base_points = get_base_points(get_footprint_bounds(local_bounds, start.scale, frame), frame);
     for (std::size_t i = 0; i < base_points.size(); ++i) {
         const glm::vec3 point = base_points[i];
         const glm::vec3 base  = get_world_point(start, point);
         const glm::vec3 top   = get_world_point(start, get_top_point(local_bounds, frame, point));
         const float     span  = std::max(c_min_ray_height, glm::dot(top - base, -direction));
-        gather_line(rt_scene, base, direction, max_distance, span, excluded, scratch.hits[i]);
+        gather_line(rt_scene, base, direction, window, span, excluded, scratch.hits[i]);
         scratch.lines[i] = Surface_line{.hits = scratch.hits[i], .span = span};
     }
-    const Surface_offset offset = find_snap_height(scratch.lines, max_distance);
+    // Base point 0 is the base center (U52).
+    const Surface_offset offset = find_support_height(scratch.lines, window, options.support);
     if (!offset.found) {
         return result;
     }
@@ -468,6 +438,31 @@ auto find_surface_placement(
         result.distance = 0.0f;
     }
     return result;
+}
+
+auto find_point_surface(
+    erhe::raytrace::IScene&                         committed_rt_scene,
+    const glm::vec3&                                point,
+    const Surface_options&                          options,
+    const std::span<const erhe::scene::Mesh* const> excluded
+) -> Point_surface
+{
+    ERHE_VERIFY(check_surface_max_distance(options.forward_distance, "surface forward distance").empty() && check_surface_max_distance(options.backward_distance, "surface backward distance").empty());
+    const glm::vec3             direction = options.direction;
+    const Surface_search_window window{.forward_distance = options.forward_distance, .backward_distance = options.backward_distance};
+    static thread_local std::vector<Surface_hit_point> hits;
+    gather_line(committed_rt_scene, point, direction, window, 0.0f, excluded, hits);
+    const Surface_line line{.hits = hits, .span = 0.0f};
+    const Point_rest   rest = find_point_rest(point, direction, line, window);
+    if (!rest.found) {
+        return Point_surface{};
+    }
+    return Point_surface{
+        .found    = true,
+        .position = rest.position,
+        .normal   = get_snapped_normal(line, rest.height, direction),
+        .distance = rest.distance
+    };
 }
 
 void get_kit_piece_meshes(Scene_root& scene_root, std::vector<std::shared_ptr<erhe::scene::Mesh>>& out_meshes)
@@ -572,7 +567,6 @@ void find_support(
             const Surface_distance snap = find_snap_distance(
                 rt_scene,
                 local_bounds,
-                get_surface_base_rule(*mesh),
                 Surface_pose{.position = world.get_translation(), .rotation = world.get_rotation(), .scale = world.get_scale()},
                 down,
                 std::span<const erhe::scene::Mesh* const>{&self, 1}

@@ -3,60 +3,14 @@
 
 #include "erhe_verify/verify.hpp"
 
+#include <fmt/format.h>
+
 #include <algorithm>
+#include <string_view>
 #include <utility>
+#include <vector>
 
 namespace editor {
-
-auto make_recreated_shape(
-    const std::vector<Kit_shape_definition>& shapes,
-    const std::string_view                   original_id,
-    Kit_generator                            generator,
-    const unsigned int                       triangle_budget
-) -> Kit_shape_definition
-{
-    const std::vector<Kit_shape_definition>::const_iterator original = std::find_if(
-        shapes.begin(), shapes.end(), [original_id](const Kit_shape_definition& candidate) { return candidate.id == original_id; }
-    );
-    ERHE_VERIFY(original != shapes.end());
-    ERHE_VERIFY(original->recreates.empty());
-    Kit_shape_definition shape = *original;
-    shape.id              = original->id + c_kit_recreated_id_suffix;
-    shape.recreates       = original->id;
-    shape.display_name    = original->display_name + c_kit_recreated_name_suffix;
-    shape.generator       = std::move(generator);
-    shape.triangle_budget = triangle_budget;
-    return shape;
-}
-
-namespace {
-
-// Each recreated shape directly after its original, the order otherwise kept.
-void place_recreated_after_originals(std::vector<Kit_shape_definition>& shapes)
-{
-    std::vector<std::size_t> order;
-    order.reserve(shapes.size());
-    for (std::size_t i = 0, end = shapes.size(); i < end; ++i) {
-        if (!shapes[i].recreates.empty()) {
-            continue;
-        }
-        order.push_back(i);
-        for (std::size_t j = 0; j < end; ++j) {
-            if (shapes[j].recreates == shapes[i].id) {
-                order.push_back(j);
-            }
-        }
-    }
-    std::vector<Kit_shape_definition> ordered;
-    ordered.reserve(shapes.size());
-    for (const std::size_t i : order) {
-        ordered.push_back(std::move(shapes[i]));
-    }
-    ERHE_VERIFY(ordered.size() == shapes.size());
-    shapes = std::move(ordered);
-}
-
-} // anonymous namespace
 
 auto make_length_parameter(
     const char*             name,
@@ -210,13 +164,14 @@ Kit_shape_library::Kit_shape_library()
     add_extra_33_36_shapes     (m_shapes);
     add_machine_01_08_shapes   (m_shapes);
     add_machine_09_18_shapes   (m_shapes);
-    add_basic_shapes_v2        (m_shapes);
-    add_architecture_shapes_v2 (m_shapes);
-    add_medieval_shapes_v2     (m_shapes);
-    add_nature_shapes_v2       (m_shapes);
-    add_nature_plants_shapes_v2(m_shapes);
-    add_nature_rocks_shapes_v2 (m_shapes);
-    place_recreated_after_originals(m_shapes);
+    // Every id and former id names one shape.
+    std::vector<std::string_view> names;
+    for (const Kit_shape_definition& shape : m_shapes) {
+        names.push_back(shape.id);
+        names.insert(names.end(), shape.former_ids.begin(), shape.former_ids.end());
+    }
+    std::sort(names.begin(), names.end());
+    ERHE_VERIFY(std::adjacent_find(names.begin(), names.end()) == names.end());
     // Base colors are linear.
     m_palette = {
         Kit_palette_material{.name = "Kit Stone",          .base_color = glm::vec3{0.50f, 0.50f, 0.47f}, .roughness = 0.85f},
@@ -300,8 +255,32 @@ auto Kit_shape_library::find(const std::string_view id) const -> const Kit_shape
         if (shape.id == id) {
             return &shape;
         }
+        for (const std::string& former_id : shape.former_ids) {
+            if (former_id == id) {
+                return &shape;
+            }
+        }
     }
     return nullptr;
+}
+
+auto read_kit_piece_record(
+    const Kit_shape_library& library,
+    const std::string_view   shape_id,
+    const std::string_view   parameters,
+    Kit_parameter_values&    out_values
+) -> std::string
+{
+    const Kit_shape_definition* const shape = library.find(shape_id);
+    if (shape == nullptr) {
+        return fmt::format("the kits have no shape '{}'", shape_id);
+    }
+    out_values = Kit_parameter_values{*shape};
+    const std::string parse_error = parse_canonical_text(*shape, parameters, out_values);
+    if (!parse_error.empty()) {
+        return fmt::format("the parameters do not read: {}", parse_error);
+    }
+    return out_values.validate();
 }
 
 auto Kit_shape_library::find_kit(const std::string_view name) const -> const Kit_definition*

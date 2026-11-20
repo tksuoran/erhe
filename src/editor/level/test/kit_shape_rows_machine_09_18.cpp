@@ -10,9 +10,8 @@ auto get_machine_09_18_rows() -> Kit_shape_rows
         "machine.connecting_rod", "machine.crankshaft", "machine.follower", "machine.camshaft", "machine.bevel_gear",
         "machine.worm", "machine.pulley", "machine.washer", "machine.cylinder", "machine.pillow_block"
     };
-    rows.recreated_originals = {};
     rows.seeded_shapes       = {};
-    rows.enum_shapes         = {"machine.crankshaft", "machine.follower", "machine.worm", "machine.pulley", "machine.washer"};
+    rows.enum_shapes         = {"machine.crankshaft", "machine.follower", "machine.worm", "machine.pulley", "machine.washer", "machine.pillow_block"};
     rows.components          = {
         {"machine.connecting_rod", Kit_component_rule::exactly, 7},
         {"machine.crankshaft", Kit_component_rule::exactly, 11},
@@ -38,7 +37,7 @@ auto get_machine_09_18_rows() -> Kit_shape_rows
         {"machine.pulley",       R"({"form":"sprocket","diameter":"0x1.333334p-2","width":"0x1.eb851ep-5","grooves":1,"teeth":32,"bore":"0x1.99999ap-5","seed":0})"},
         {"machine.washer",       R"({"form":"toothed","diameter":"0x1.eb851ep-5","thickness":"0x1.47ae14p-7","teeth":16,"seed":0})"},
         {"machine.cylinder",     R"({"bore":"0x1.333334p-2","height":"0x1p-1","fins":10,"wall":"0x1.eb851ep-6","seed":0})"},
-        {"machine.pillow_block", R"({"bore":"0x1.99999ap-4","height":"0x1.333334p-3","width":"0x1.99999ap-2","depth":"0x1.99999ap-4","bolts":4,"seed":0})"}
+        {"machine.pillow_block", R"({"bore":"0x1.99999ap-4","height":"0x1.333334p-3","width":"0x1.99999ap-2","depth":"0x1.99999ap-4","bolts":"four","seed":0})"}
     };
     rows.pins                = {
         {"machine.connecting_rod 1", 152, 142, 568, 0xe40bbaeb0e74d0cbull, {-0.29500f, 0.00000f, -0.08128f}, {0.31400f, 0.06000f, 0.08128f}, {0.05085f, 0.03000f, 0.00000f}, 0.27296f},

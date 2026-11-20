@@ -222,7 +222,7 @@ auto kit_parameter_rows(Kit_parameter_values& values, const Kit_lengths& lengths
 void kit_stairs_line(const Kit_parameter_values& values)
 {
     const Kit_shape_definition* const shape = values.get_shape();
-    if ((shape == nullptr) || (get_contract_id(*shape) != "basic.stairs")) {
+    if ((shape == nullptr) || (shape->id != "basic.stairs")) {
         return;
     }
     const Kit_stairs_layout layout = get_stairs_layout(values);
@@ -272,6 +272,20 @@ void Kit_piece_editor::update(const std::shared_ptr<erhe::scene::Mesh>& piece)
         m_connectors.clear();
     }
     m_connector_switches = read_piece_connector_switches(*piece);
+    const Kit_attachment_status attachment = m_context.level_kits->get_attachment_status(*piece);
+    if (attachment.state == Kit_attachment_state::none) {
+        m_attachment_text.clear();
+    } else {
+        const Kit_attachment& record = attachment.attachment;
+        m_attachment_text = fmt::format(
+            "'{}' {} to {}{}{}", attachment.target ? attachment.target->get_name() : std::string{"(missing)"}, record.connector, record.target_connector,
+            (record.twist_steps != 0) ? fmt::format(", twist {}", record.twist_steps) : std::string{},
+            (record.gap != 0.0f) ? fmt::format(", gap {:.3f} m", record.gap) : std::string{}
+        );
+        if (attachment.state == Kit_attachment_state::dormant) {
+            m_attachment_text += fmt::format(" - not followed: {}", attachment.reason);
+        }
+    }
 }
 
 void Kit_piece_editor::on_edit(const Kit_row_edit edit)
@@ -356,6 +370,29 @@ void Kit_piece_editor::set_connector(const char* const connector_name, const Kit
     queue_connector_switch_edit(
         m_context, m_piece,
         Kit_connector_switch_edit{.piece = {}, .connectors = {Kit_connector_switch_edit::Connector{.name = connector_name, .state = state}}}
+    );
+}
+
+auto Kit_piece_editor::get_attachment_text() const -> const std::string&
+{
+    return m_attachment_text;
+}
+
+void Kit_piece_editor::detach()
+{
+    m_context.imgui_windows->queue(
+        [this, weak_piece = m_piece]() {
+            const std::shared_ptr<erhe::scene::Mesh> mesh = weak_piece.lock();
+            if (!mesh || !m_context.app_scenes->is_host_registered(mesh->get_item_host())) {
+                return;
+            }
+            // Scene items are hosted by their Scene_root.
+            Scene_root& scene_root = *static_cast<Scene_root*>(mesh->get_item_host());
+            const Kit_detach_result result = m_context.level_kits->detach_piece(scene_root, mesh);
+            if (!result.error.empty()) {
+                log_scene->warn("Kit piece: detach of '{}' failed: {}", mesh->get_name(), result.error);
+            }
+        }
     );
 }
 

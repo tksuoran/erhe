@@ -1800,10 +1800,15 @@ void Debug_visualizations::connectors_visualization(const Render_context& contex
         return;
     }
     const Kit_connector_drag_snap* const drag_snap = (app_context.transform_tool != nullptr) ? &app_context.transform_tool->get_connector_snap() : nullptr;
-    if ((m_settings.connectors == Visualization_mode::off) && ((drag_snap == nullptr) || (drag_snap->get_scene_root() != &scene_root))) {
+    Kit_connector_indicators& indicators = app_context.level_kits->get_connector_indicators();
+    if (
+        (m_settings.connectors == Visualization_mode::off) &&
+        ((drag_snap == nullptr) || (drag_snap->get_scene_root() != &scene_root)) &&
+        !indicators.has_brush_join(scene_root)
+    ) {
         return;
     }
-    app_context.level_kits->get_connector_indicators().collect(scene_root, m_settings.connectors, *app_context.selection, drag_snap, m_connector_indicators);
+    indicators.collect(scene_root, m_settings.connectors, *app_context.selection, drag_snap, m_connector_indicators);
     if (m_connector_indicators.empty()) {
         return;
     }

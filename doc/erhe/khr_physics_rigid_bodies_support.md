@@ -107,9 +107,13 @@ physics fields of `get_node_details`.
   The scene file itself is the canonical physics store
   (`doc/editor/scene_serialization.md`; the erhe-specific remainder rides in the
   `ERHE_node` `properties` map of the body's node).
-- Import folds synthesized children back: a dynamic body through the
-  motion-root compound fold, a static synthesized child as an individual static
-  body, which is physically equivalent.
+- Import folds synthesized children back into the body they came from: a
+  dynamic body through the motion-root compound fold, a static body through
+  its node's `ERHE_node` record, whose `Node_physics.motion_mode` names the
+  node a body (the nearest such self-or-ancestor of a collider is its body
+  root), and the emptied carrier nodes are removed. A static synthesized child
+  without such a record (a file of another tool) is an individual static body,
+  which is physically equivalent.
 
 ## Verifying
 

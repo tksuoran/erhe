@@ -1653,6 +1653,10 @@ void add_build_13_16_shapes(std::vector<Kit_shape_definition>& shapes)
         shape.triangle_budget = 80;
         shape.collision       = Kit_collision::triangle_mesh;
         shape.generator       = generate_stepped_platform;
+        // One tier is a slab (U54); more tiers are steps to climb.
+        shape.get_collision   = [](const Kit_parameter_values& values) {
+            return (values.get_int("tiers") == 1) ? Kit_collision::box : Kit_collision::triangle_mesh;
+        };
         shape.mirror_planes   = std::vector<Kit_mirror_plane>{Kit_mirror_plane::x, Kit_mirror_plane::z};
         shape.get_seam_sides  = [](const Kit_parameter_values&) { return std::vector<Kit_side>{Kit_side::y_neg}; };
         shape.get_connectors  = [](const Kit_parameter_values& values, std::vector<Kit_connector>& out_connectors) {

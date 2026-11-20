@@ -233,6 +233,8 @@ void Property_set_operation::execute(App_context& context)
                     return;
                 }
                 context.level_kits->append_layout_transform_follow_ups(std::span<const std::shared_ptr<erhe::Item_base>>{&m_item, 1}, m_property, m_follow_ups);
+                // Step 41: a raw write of a piece's record moves its connectors; its attachments follow.
+                context.level_kits->append_kit_piece_record_follow_ups(std::span<const std::shared_ptr<erhe::Item_base>>{&m_item, 1}, m_property, m_follow_ups);
             }
         }
     }
@@ -374,6 +376,17 @@ void Property_set_apply_operation::record_follow_ups(App_context& context)
         if (!m_follow_ups.empty()) {
             break;
         }
+    }
+    // Step 41: a pasted piece record moves its connectors; its attachments follow, once for the paste.
+    std::vector<std::shared_ptr<Operation>> record_follow_ups;
+    for (const erhe::property::Property_set::Entry& entry : m_values.entries()) {
+        context.level_kits->append_kit_piece_record_follow_ups(items, *entry.property, record_follow_ups);
+        if (!record_follow_ups.empty()) {
+            break;
+        }
+    }
+    for (std::shared_ptr<Operation>& operation : record_follow_ups) {
+        m_follow_ups.push_back(std::move(operation));
     }
 }
 

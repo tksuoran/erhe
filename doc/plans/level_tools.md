@@ -282,7 +282,7 @@ The user's rulings (2026-11-15):
   (kit, parameters, material slots, connectors, origin rule, collision
   kind, mesh kind, randomness, walkability), so Replace swaps one for the
   other piece for piece; a comparison scene with every pair side by side
-  and an image per pair (`scripts/level_shape_compare.py`); the user rules
+  and an image per pair (`scripts/level_shape_render.py`); the user rules
   per shape which version keeps the canonical id; kit shape coders run on
   the Fable model at medium effort. Built as
   `doc/editor/level_tools.md` "Recreated shapes". The user's refinement of
@@ -587,6 +587,35 @@ The user's rulings (2026-11-15):
   former id of the kept shape.
 - U56 (2026-11-18), `get_input_state` reports the active tool, so the verify
   script restores the tool it found.
+- U57 (2026-11-18), snap without orient. With Snap To Surface on and Orient
+  To Surface off, the face of the piece's bounds that leads along the search
+  direction rests on the surface (an upright block flush against a wall, its
+  top against a ceiling); with orient on the -Y face rests on it (U51).
+- U58 (2026-11-18), no push of the level tools step commits until the user
+  has reviewed them in the windowed editor.
+- U59 (2026-11-18), Transform gizmo drags with Snap To Surface: the anchor
+  point itself lands on the surface whatever Orient To Surface says (U57's
+  leading face applies to the Brush tool and layouts, not to gizmo drags;
+  for a wall, Orient To Surface turns the base against it). In the Reference
+  mode the anchor is the reference node, also when it is far from the
+  selection.
+- U60 (2026-11-18), revisiting U57 and U59. The user: "Add option setting
+  for both behaviors. Both transform and brush use the same setting." One
+  surface setting chooses, for snap with Orient To Surface off, between the
+  anchor point on the surface (U59) and the leading bounds face flush (U57);
+  Transform gizmo drags and the Brush tool both read it. Orchestrator
+  choices for review: the default is the leading face; kit layouts keep the
+  leading face (not named by the user); with Orient To Surface on the
+  setting does not apply.
+- U61 (2026-11-18), rotate drags while a connector is snapped: they honour
+  the Connector Snap Orientation setting as built (step 81); the user's
+  rotation does nothing while the snapped connector stays within the snap
+  distance, and holding the suspend key (Shift) rotates freely away from it.
+- U52 reading (orchestrator choice, 2026-11-18, for the user's review):
+  `center_fallback` rests on the nearest surface under the base center along
+  the search direction, with no fit test, when the nearest five-line place
+  is blocked; it does not search farther for another place that fits (a
+  chair under a table rests on the floor, not on the table top).
 
 ## Terms
 

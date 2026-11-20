@@ -18,14 +18,14 @@ namespace editor {
 
 namespace {
 
-// The region of a scatter layout's values; nullopt for another kind or values that do not read.
-[[nodiscard]] auto read_scatter_region(const erhe::scene::Node& node) -> std::optional<Repeat_scatter_region>
+// What the handle indices of the node's values name; nullopt for values that do not read.
+[[nodiscard]] auto read_handle_set(const erhe::scene::Node& node) -> std::optional<Kit_layout_handle_set>
 {
     Kit_layout_data data;
-    if (!read_kit_layout(node, data).empty() || (data.pattern.kind != Repeat_pattern_kind::scatter)) {
+    if (!read_kit_layout(node, data).empty()) {
         return std::nullopt;
     }
-    return data.pattern.region;
+    return get_layout_handle_set(data.pattern);
 }
 
 } // anonymous namespace
@@ -38,7 +38,7 @@ Kit_layout_region_tool::Kit_layout_region_tool(
 )
     : Point_set_tool{commands, context, app_message_bus, tools, "Kit_layout_region.select", "Kit_layout_region.cancel_edit"}
 {
-    set_description("Kit Layout Region Edit");
+    set_description("Kit Layout Handle Edit");
 
     m_selection_subscription = app_message_bus.selection.subscribe(
         [this](Selection_message&) {
@@ -91,7 +91,7 @@ void Kit_layout_region_tool::set_target(const std::shared_ptr<erhe::scene::Node>
     on_cancel_edit();
     m_target = layout;
     m_selected.reset();
-    m_region = layout ? read_scatter_region(*layout) : std::nullopt;
+    m_handle_set = layout ? read_handle_set(*layout) : std::nullopt;
 }
 
 void Kit_layout_region_tool::on_layout_changed(const uint64_t node_id)
@@ -100,12 +100,12 @@ void Kit_layout_region_tool::on_layout_changed(const uint64_t node_id)
     if (!layout || (static_cast<uint64_t>(layout->get_id()) != node_id) || is_own_edit_active()) {
         return;
     }
-    // The handle indices name other handles once the region or the kind changes.
-    const std::optional<Repeat_scatter_region> region = read_scatter_region(*layout);
-    if (region != m_region) {
+    // The handle indices name other handles once the kind, a line's count mode or a scatter's region changes.
+    const std::optional<Kit_layout_handle_set> handle_set = read_handle_set(*layout);
+    if (handle_set != m_handle_set) {
         m_selected.reset();
     }
-    m_region = region;
+    m_handle_set = handle_set;
 }
 
 auto Kit_layout_region_tool::update_point_set() -> bool
@@ -269,7 +269,7 @@ auto Kit_layout_region_tool::begin_point_edit() -> bool
         return false;
     }
     if (is_instance_structure_protected(*layout)) {
-        log_tools->warn("Kit layout region edit refused: '{}' is inside a reference instance", layout->get_name());
+        log_tools->warn("Kit Layout Handle Edit refused: '{}' is inside a reference instance", layout->get_name());
         return false;
     }
     const Kit_layout_outline* const outline = get_target_outline();
@@ -278,7 +278,7 @@ auto Kit_layout_region_tool::begin_point_edit() -> bool
     }
     const std::string problem = read_kit_layout(*layout, m_edit.before);
     if (!problem.empty()) {
-        log_tools->warn("Kit layout region edit refused: {}", problem);
+        log_tools->warn("Kit Layout Handle Edit refused: {}", problem);
         return false;
     }
     m_edit.node            = layout;
@@ -286,6 +286,7 @@ auto Kit_layout_region_tool::begin_point_edit() -> bool
     m_edit.handle          = outline->region_handles[m_selected.value()];
     m_edit.tried           = m_edit.before;
     m_edit.shown_pattern   = m_edit.before.pattern;
+    m_edit.drag            = begin_layout_handle_drag(m_edit.before.pattern);
     m_edit.world_from_node = layout->world_from_node();
     m_edit.node_from_world = layout->node_from_world();
     m_edit.active          = true;
@@ -308,6 +309,7 @@ void Kit_layout_region_tool::apply_point_edit(const std::optional<glm::mat4>& wo
             m_edit.tried.pattern = m_edit.before.pattern;
             m_edit.shown_pattern = m_edit.before.pattern;
         }
+        m_edit.drag = begin_layout_handle_drag(m_edit.before.pattern);
         return;
     }
     // The handle moved by the gizmo's delta, in the node's frame from the press; the step's values follow from it.
@@ -316,7 +318,7 @@ void Kit_layout_region_tool::apply_point_edit(const std::optional<glm::mat4>& wo
     const glm::vec3 after_local = glm::vec3{m_edit.node_from_world * glm::vec4{after_world, 1.0f}};
     const Kit_layout_pattern previous = m_edit.tried.pattern;
     m_edit.tried.pattern = m_edit.before.pattern;
-    apply_region_handle(m_edit.handle, after_local, m_edit.tried.pattern);
+    apply_region_handle(m_edit.handle, after_local, m_edit.drag, m_edit.tried.pattern);
     // A held drag updates every frame; only a change of the values is a step.
     if (m_edit.tried.pattern == previous) {
         return;
@@ -358,7 +360,7 @@ void Kit_layout_region_tool::commit_point_edit()
     data.pattern = m_edit.shown_pattern;
     const Kit_layout_result result = m_context.level_kits->set_layout(*scene_root, layout, data);
     if (!result.error.empty()) {
-        log_tools->warn("Kit layout region edit of '{}' refused: {}", layout->get_name(), result.error);
+        log_tools->warn("Kit Layout Handle Edit of '{}' refused: {}", layout->get_name(), result.error);
     }
 }
 

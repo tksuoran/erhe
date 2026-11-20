@@ -4,12 +4,12 @@ Stability: experimental
 
 Viewport editing of points that belong to one target - a lattice node's
 control points, a curve prim's control points and handle ends (and a
-segments kit layout's segment handles), a scatter kit layout node's region
-handles - shares one interface and one gizmo path. The
+segments kit layout's segment handles), a line, grid, ring or scatter kit
+layout node's layout handles - shares one interface and one gizmo path. The
 three users are described in
 `doc/editor/lattice_deform_geometry_node.md` "Viewport editing",
 `doc/editor/curves.md` "Viewport editing" and `doc/editor/level_tools.md`
-"Scatter region handles".
+"Layout handles".
 
 ## The interface
 

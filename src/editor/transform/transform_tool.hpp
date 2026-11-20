@@ -11,7 +11,9 @@
 #include "level/kit_connector_snap.hpp"
 #include "config/generated/connector_snap_axis_mode.hpp"
 #include "config/generated/connector_snap_orientation.hpp"
+#include "config/generated/surface_drag_direction.hpp"
 #include "level/level_queries.hpp"
+#include "level/surface_base_frame.hpp"
 #include "scene/analytic_hover_provider.hpp"
 #include "tools/tool.hpp"
 
@@ -368,11 +370,13 @@ public:
     // undoable operation and releases the bodies like a gizmo release.
     // Refused while a pointer drag, a scripted drag or a component selection
     // is active, or when nothing is selected.
-    // A translate drag snaps the moved meshes to the surface with `surface` (D4.6); a drag of any kind snaps to
-    // connectors within connector_snap_distance meters (D3.13, 0 = off); a translate drag's snap with align also turns (U44).
+    // A translate drag snaps the transform anchor to the surface with `surface` (D4.6, U51), along surface.direction or, with
+    // camera_ray, the last viewport camera's ray through the anchor; a drag of any kind snaps to connectors within
+    // connector_snap_distance meters (D3.13, 0 = off), turning by connector_snap_orientation, rotate with surface.orient (U50).
     auto begin_scripted_drag(
         Transform_drag_kind        kind,
         const Surface_options&     surface,
+        Surface_drag_direction     surface_direction_mode,
         float                      connector_snap_distance,
         Connector_snap_orientation connector_snap_orientation
     ) -> bool;
@@ -389,14 +393,19 @@ public:
     // D4.6 (doc/editor/level_tools.md "Transform tool"): snaps each moved mesh of the selection to
     // the surface under it, all moved meshes excluded from the rays; returns how many found one.
     auto snap_to_surface(const Surface_options& options) -> std::size_t;
+    // U51 (translate drag steps): snaps the transform anchor along the options' unit direction and moves the moved set by
+    // its displacement, turned about it with orient; returns how many entries moved with it.
+    auto snap_anchor_to_surface(const Surface_options& options, Orient_half_turn half_turn) -> std::size_t;
 
     // D3.13 once, outside a drag (MCP transform_selection): moves the selection so its connector nearest another
-    // kit piece's connector within distance meets it, with align also turned to face it (U44); true when it snapped.
-    auto snap_to_connectors(float distance, Connector_snap_orientation orientation) -> bool;
+    // kit piece's connector within distance meets it, turned by the orientation (U50, rotate with orient); true when it snapped.
+    auto snap_to_connectors(float distance, Connector_snap_orientation orientation, Surface_orient orient) -> bool;
     // The pair of the last connector snap step (kept after the drag ends) and the counts gathered at its begin.
     [[nodiscard]] auto get_connector_snap() const -> const Kit_connector_drag_snap&;
     // U27: a suspend key event; during a pointer node drag whose held state changed it re-runs the last step.
     void on_connector_snap_suspend_key_edge();
+    // U27: a key of the suspend command is down now (Input_state), with its binding's modifiers.
+    [[nodiscard]] auto is_connector_snap_suspend_held() const -> bool;
     // U27: the step's pointer motion from the press (before the grid snap); the connector snap starts at the first nonzero one.
     void note_translate_drag_motion(const glm::vec3& motion);
     // U27: a rotate or scale step's pointer motion from the press is nonzero (the angle or factor before the angle snap).
@@ -594,6 +603,9 @@ private:
     bool                                m_scripted_drag_active{false};
     // The surface options of the running translate drag (D4.6); off outside one.
     Surface_options                     m_drag_surface{};
+    Surface_drag_direction              m_drag_surface_direction{Surface_drag_direction::explicit_vector};
+    // Orient's half turn of the running drag, decided once from where it started (a camera ray flips sign at eye height).
+    std::optional<Orient_half_turn>     m_drag_orient_half_turn;
     // Scratch of snap_to_surface(): the moved meshes and their descendants, and per entry the move.
     std::vector<const erhe::scene::Mesh*> m_surface_excluded;
     std::vector<glm::vec3>                m_surface_deltas;
@@ -604,7 +616,7 @@ private:
     // U27: read at the drag's begin; the suspend command's effective bindings (refreshed when bindings change);
     // whether the last step was suspended; the pointer has moved since the press; the last step's translation.
     Connector_snap_axis_mode              m_connector_snap_axis_mode{Connector_snap_axis_mode::full_offset};
-    Connector_snap_orientation            m_connector_snap_orientation{Connector_snap_orientation::keep}; // U44: keep for rotate and scale drags
+    Connector_snap_orientation            m_connector_snap_orientation{Connector_snap_orientation::off}; // U50: rotate only with Orient To Surface
     std::vector<erhe::commands::Binding_desc> m_suspend_bindings;
     bool                                  m_connector_snap_step_suspended{false};
     bool                                  m_connector_snap_motion{false};
@@ -674,13 +686,13 @@ private:
     // step's translate, rotation or scale) translates the moved roots by the snap offset of the unsnapped step pose.
     void begin_connector_snap(float distance, Connector_snap_orientation orientation);
     void apply_drag_connector_step();
+    // U50: the turn the step's snap asks for: none, full, or about the lead's up axis (rotate with Orient To Surface).
+    [[nodiscard]] auto get_connector_snap_turn() const -> Kit_connector_snap_turn;
     // U44: why the step's aligned motion cannot move the moved roots (locked channels, shear); aligned when it can.
     [[nodiscard]] auto check_aligned_motion(const Kit_join_pose& motion) const -> Kit_connector_snap_alignment;
     void apply_aligned_motion(const Kit_join_pose& motion);
     // U27: the dragged handle's axis or plane with Connector_snap_axis_mode::stay_on_axis; free otherwise.
     [[nodiscard]] auto get_connector_snap_constraint() const -> Kit_connector_snap_constraint;
-    // U27: a key of the suspend command is down now (Input_state), with its binding's modifiers.
-    [[nodiscard]] auto is_connector_snap_suspend_held() const -> bool;
     // False when a moved root's locked translate channel would hold back part of the offset.
     [[nodiscard]] auto can_translate_moved_roots(const glm::vec3& offset) const -> bool;
     // After the tool wrote a step's node transforms: the moved surface-snapped kit layouts follow live (D3.9).
@@ -690,6 +702,18 @@ private:
     [[nodiscard]] auto has_moved_ancestor_entry(const erhe::scene::Node& node) const -> bool;
     // A pointer drag whose only free axis is the surface direction's axis lifts off the surface.
     [[nodiscard]] auto is_surface_axis_drag(const glm::vec3& direction) const -> bool;
+    // U51 camera ray: the unit direction from the drag's viewport camera (a scripted drag: get_camera_ray_scene_view()'s)
+    // through the anchor; false without a camera or with the anchor at the camera.
+    [[nodiscard]] auto get_camera_ray_through(const glm::vec3& anchor, glm::vec3& out_direction) const -> bool;
+    [[nodiscard]] auto get_camera_ray_scene_view() const -> std::shared_ptr<Viewport_scene_view>;
+    [[nodiscard]] auto get_drag_start_half_turn(const glm::vec3& step_direction) const -> Orient_half_turn;
+    // Not locked against viewport transforms, not spring-driven, no moved ancestor: moves with a surface step.
+    [[nodiscard]] auto is_surface_moved_root(const Transform_entry& entry) const -> bool;
+    [[nodiscard]] auto get_lead_entry() const -> const Transform_entry*;
+    [[nodiscard]] auto find_lead_face_rest(erhe::raytrace::IScene& committed_rt_scene, const glm::vec3& anchor, const Surface_options& options) const -> Point_surface;
+    void clear_surface_found();
+    // The meshes of the entries and below them into m_surface_excluded.
+    void gather_surface_excluded();
     // Ends the IK part of a drag (pointer or scripted), after its operation
     // was recorded.
     void end_ik_drag();

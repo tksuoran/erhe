@@ -1,5 +1,7 @@
 #pragma once
 
+#include "level/surface_snap_search.hpp"
+
 #include "erhe_math/aabb.hpp"
 
 #include <glm/glm.hpp>
@@ -19,12 +21,6 @@ public:
     glm::vec3 scale   {1.0f};
 };
 
-// How a mesh's base face is chosen (U48).
-enum class Surface_base_rule : unsigned int {
-    authored_y_up = 0, // a kit piece, modelled Y-up: of its two Y faces the one the pose turns down (local -Y unless mirrored)
-    from_pose          // any other mesh: the face the pose turns most along the snap direction
-};
-
 enum class Bounds_side : unsigned int {
     min = 0,
     max
@@ -41,29 +37,16 @@ public:
     glm::vec3   up_local{0.0f, 1.0f, 0.0f}; // unit; the start pose takes it to the world up axis of the piece
 };
 
-// from_pose: the face whose outward normal, taken to world space by the rotation and the scale's signs, is most along
-// the direction; exact ties go to local -Y, then +Y, -X, +X, -Z, +Z.
+// Snap without orient (U51): of the six bounds faces the one whose outward normal, taken to world space by the rotation
+// and the scale's signs, is most along the direction; an exact tie keeps -Y (-Y, +Y, -X, +X, -Z, +Z).
 [[nodiscard]] auto get_surface_base_frame(
-    Surface_base_rule rule,
-    const glm::quat&  rotation,
-    const glm::vec3&  scale,
-    const glm::vec3&  direction
+    const glm::quat& rotation,
+    const glm::vec3& scale,
+    const glm::vec3& direction
 ) -> Surface_base_frame;
 
-// Orient's base face once the surface normal under the line's base center is known: a kit piece keeps the line's face,
-// from_pose takes the face whose outward normal is most against the surface normal (the least turn onto it).
-[[nodiscard]] auto get_orient_frame(
-    Surface_base_rule         rule,
-    const glm::quat&          rotation,
-    const glm::vec3&          scale,
-    const Surface_base_frame& line_frame,
-    const glm::vec3&          normal
-) -> Surface_base_frame;
-
-[[nodiscard]] inline auto is_same_face(const Surface_base_frame& lhs, const Surface_base_frame& rhs) -> bool
-{
-    return (lhs.axis == rhs.axis) && (lhs.side == rhs.side);
-}
+// Orient (U51): the local -Y face, whichever way the pose turns it; orient turns it onto the surface.
+[[nodiscard]] auto get_orient_base_frame(const glm::vec3& scale) -> Surface_base_frame;
 
 [[nodiscard]] auto get_base_coordinate(const erhe::math::Aabb& local_bounds, const Surface_base_frame& frame) -> float;
 [[nodiscard]] auto get_top_coordinate (const erhe::math::Aabb& local_bounds, const Surface_base_frame& frame) -> float;
@@ -85,8 +68,8 @@ public:
     return pose.position + (pose.rotation * (pose.scale * local_point));
 }
 
-// Orient's rest: the start pose turned by the shortest rotation taking its up axis to the normal, about the base center,
-// whose rest is `height` above it against the direction.
+// Orient's rest, turned about the base center, whose rest is `height` above it against the direction: the shortest rotation
+// taking the up axis to the normal, after a half turn about the face's u axis when the up axis points along the direction.
 [[nodiscard]] auto get_oriented_pose(
     const Surface_pose&       start,
     const erhe::math::Aabb&   local_bounds,
@@ -97,5 +80,55 @@ public:
 ) -> Surface_pose;
 
 [[nodiscard]] auto shortest_rotation(const glm::vec3 from, const glm::vec3 to) -> glm::quat;
+
+class Anchor_rest
+{
+public:
+    bool         found   {false};
+    Surface_pose pose;           // the start pose itself when nothing was found or the start already rests
+    float        distance{0.0f}; // how far the origin moved along the direction; negative when it rose
+};
+
+// U60 rest anchor without orient: the start pose's origin moved along the direction onto the line's nearest surface,
+// rotation and scale kept; a start within the tolerance of its rest is returned bit for bit.
+[[nodiscard]] auto get_anchor_rest(
+    const Surface_pose&         start,
+    const glm::vec3             direction,
+    const Surface_line&         line,
+    const Surface_search_window window
+) -> Anchor_rest;
+
+enum class Orient_half_turn : unsigned int {
+    off = 0,
+    on      // the up axis points along the search direction (a ceiling): half a turn about the face's u axis first
+};
+
+[[nodiscard]] auto get_orient_half_turn(const glm::quat& rotation, const Surface_base_frame& frame, const glm::vec3 direction) -> Orient_half_turn;
+
+// Orient's turn in world space, applied before the start rotation: the shortest rotation taking the frame's up axis to the
+// normal, after the half turn when it is on.
+[[nodiscard]] auto get_orient_turn(
+    const glm::quat&          rotation,
+    const Surface_base_frame& frame,
+    const Orient_half_turn    half_turn,
+    const glm::vec3           normal
+) -> glm::quat;
+
+// Orient's one line (U51): through the -Y face center, the pivot of the turn.
+class Orient_search
+{
+public:
+    Surface_base_frame    frame;            // the -Y face
+    glm::vec3             base_center{0.0f}; // world
+    float                 span       {0.0f}; // the whole base-to-top extent: the turned piece stands along the normal
+    Surface_search_window window;            // shifted so the distances are measured from the Y face leading along the direction
+};
+
+[[nodiscard]] auto get_orient_search(
+    const erhe::math::Aabb&     local_bounds,
+    const Surface_pose&         start,
+    const glm::vec3             direction,
+    const Surface_search_window window
+) -> Orient_search;
 
 } // namespace editor

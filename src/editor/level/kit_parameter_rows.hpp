@@ -128,6 +128,11 @@ public:
     void set_piece_connectors(Kit_connector_state state);
     void set_connector       (const char* connector_name, Kit_connector_state state);
 
+    // Step 41: the piece's attachment as one line (target, connectors, state), empty when it has none; read with the record.
+    [[nodiscard]] auto get_attachment_text() const -> const std::string&;
+    // Queues Level_kits::detach_piece(): one undo entry.
+    void detach();
+
 private:
     App_context&                     m_context;
     std::weak_ptr<erhe::scene::Mesh> m_piece;
@@ -140,6 +145,7 @@ private:
     std::string                      m_message;
     std::vector<Kit_connector>       m_connectors;
     Kit_connector_switches           m_connector_switches;
+    std::string                      m_attachment_text;
 };
 
 } // namespace editor

@@ -9,6 +9,9 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::codegen`: the enum `value()` option `former_names` - earlier names of a
+  value that the generated `from_string()` reads as it; `to_string()` writes the
+  current name (`doc/erhe/codegen.md` "Enum Value Options").
 - `erhe::scene_renderer`: `mesh_memory.hpp` - `Mesh_memory::begin_draw_prepare()`,
   `end_draw_prepare()` and `get_late_upload_count()`: an interactive upload the
   main thread enqueues between the frame's `flush()` and the end of its draw
@@ -177,6 +180,8 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Changed
 
+- `erhe::physics` (Jolt): a compound shape's `describe()` names its children
+  (`Jolt_compound_shape(Jolt_box_shape)`).
 - `erhe::physics` (Jolt): mass convention - a body without an explicit mass weighs its shape
   volume times the material density, as `IRigid_body_create_info` documents and Box3D does; it
   was 1000 times that through Jolt's default convex density. This changes the mass of imported

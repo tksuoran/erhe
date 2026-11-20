@@ -89,6 +89,7 @@ class Geometry_graph_window;
 class Grid_tool;
 #if defined(ERHE_XR_LIBRARY_OPENXR)
 class Hand_tracker;
+class Headset_travel_tool;
 #endif
 class Headset_view;
 class Hotbar;
@@ -352,6 +353,7 @@ public:
     Grid_tool*                         grid_tool            {nullptr};
 #if defined(ERHE_XR_LIBRARY_OPENXR)
     Hand_tracker*                      hand_tracker         {nullptr};
+    Headset_travel_tool*               headset_travel_tool  {nullptr};
 #endif
     Headset_view*                      headset_view         {nullptr};
     Hotbar*                            hotbar               {nullptr};

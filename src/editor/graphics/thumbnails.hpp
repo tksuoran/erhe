@@ -18,6 +18,7 @@ namespace erhe::graphics {
     class Texture;
 }
 
+struct Graphics_preset_entry;
 struct Thumbnails_config;
 
 namespace editor {
@@ -26,6 +27,9 @@ class App_context;
 class App_message_bus;
 class Programs;
 
+
+// The serialized preset minus its LOD fields: thumbnails always draw level 0, so a LOD-only change keeps them.
+[[nodiscard]] auto make_thumbnail_preset_key(const Graphics_preset_entry& graphics_preset) -> std::string;
 
 class Thumbnail
 {

@@ -21,7 +21,7 @@
 #include <string>
 #include <vector>
 
-// Tests of the recreated architecture shapes (kit_shapes_architecture_v2.cpp).
+// Tests of the door wall, the pillar and the arch (kit_shapes_architecture.cpp).
 namespace {
 
 using editor::Kit_parameter_values;
@@ -29,34 +29,51 @@ using editor::Kit_shape_definition;
 using editor::Kit_mesh_report;
 using namespace editor::kit_test;
 
-// The door wall, the pillar and the arch keep their originals' bounds, so connectors, stacking and runs of walls hold.
-// An arch of an odd segment count is left out: the original's crown is a chord below rise + thickness there.
-TEST(Kit_recreated, architecture_shapes_keep_their_originals_bounds)
+// The door wall's, the pillar's and the arch's bounds are the boxes their values state, at the defaults, both range
+// corners and derived seeds, so connectors, stacking and runs of walls hold; the round pillar's is its segments'
+// circle, over segment counts, widths and heights.
+TEST(Kit_architecture_shapes, bounds_follow_the_values)
 {
-    expect_recreated_keep_original_bounds(get_architecture_v2_rows().recreated_originals);
-    const Kit_shape_definition& pillar   = get_shape("architecture.pillar.v2");
-    const Kit_shape_definition& original = get_shape("architecture.pillar");
+    for (const Kit_parameter_values& v : bounds_value_sets(get_shape("architecture.door_wall"))) {
+        const float l = v.get_float("length");
+        const float t = v.get_float("thickness");
+        expect_bounds(v, glm::vec3{-0.5f * l, 0.0f, -0.5f * t}, glm::vec3{0.5f * l, v.get_float("height"), 0.5f * t});
+    }
+    for (const Kit_parameter_values& v : bounds_value_sets(get_shape("architecture.arch"))) {
+        const float x = (0.5f * v.get_float("span")) + v.get_float("thickness");
+        const float z = 0.5f * v.get_float("depth");
+        expect_bounds(v, glm::vec3{-x, 0.0f, -z}, glm::vec3{x, v.get_float("rise") + v.get_float("thickness"), z});
+    }
+    const Kit_shape_definition& pillar = get_shape("architecture.pillar");
+    const auto expect_pillar_bounds = [](const Kit_parameter_values& v) {
+        const float half = 0.5f * v.get_float("width");
+        const std::array<float, 4> e = (v.get_enum("profile") == "round") ? circle_extent(v.get_int("segments"), half) : std::array<float, 4>{-half, half, -half, half};
+        expect_bounds(v, glm::vec3{e[0], 0.0f, e[2]}, glm::vec3{e[1], v.get_float("height"), e[3]});
+    };
+    for (const std::string& profile : {std::string{"square"}, std::string{"round"}}) {
+        for (Kit_parameter_values v : bounds_value_sets(pillar)) {
+            ASSERT_TRUE(v.set_enum("profile", profile));
+            expect_pillar_bounds(v);
+        }
+    }
     for (const int segments : {3, 4, 7, 12, 16, 64}) {
         for (const float width : {0.05f, 0.5f, 16.0f}) {
             for (const float height : {0.1f, 3.0f, 64.0f}) {
-                Kit_parameter_values values          = defaults(pillar);
-                Kit_parameter_values original_values = defaults(original);
-                for (Kit_parameter_values* const set : {&values, &original_values}) {
-                    ASSERT_TRUE(set->set_enum("profile", "round"));
-                    ASSERT_TRUE(set->set_int("segments", segments));
-                    ASSERT_TRUE(set->set_float("width", width));
-                    ASSERT_TRUE(set->set_float("height", height));
-                }
-                expect_original_bounds(values, original_values);
+                Kit_parameter_values v = defaults(pillar);
+                ASSERT_TRUE(v.set_enum("profile", "round"));
+                ASSERT_TRUE(v.set_int("segments", segments));
+                ASSERT_TRUE(v.set_float("width", width));
+                ASSERT_TRUE(v.set_float("height", height));
+                expect_pillar_bounds(v);
             }
         }
     }
 }
 
-// The recreated door wall leaves its stated opening clear and reaches it: no vertex inside, vertices on its edges.
-TEST(Kit_recreated, door_wall_keeps_its_opening)
+// The door wall leaves its stated opening clear and reaches it: no vertex inside, vertices on its edges.
+TEST(Kit_architecture_shapes, door_wall_keeps_its_opening)
 {
-    const Kit_shape_definition& door_wall = get_shape("architecture.door_wall.v2");
+    const Kit_shape_definition& door_wall = get_shape("architecture.door_wall");
     std::vector<Kit_parameter_values> cases{defaults(door_wall), range_corner(door_wall, Range_end::min), range_corner(door_wall, Range_end::max)};
     for (const int seed : {1, 3, 17}) {
         cases.push_back(all_derived(door_wall, seed));
@@ -84,11 +101,11 @@ TEST(Kit_recreated, door_wall_keeps_its_opening)
     }
 }
 
-// The recreated arch's opening is the half ellipse of the span and the rise: no vertex inside it, the feet at the
+// The arch's opening is the half ellipse of the span and the rise: no vertex inside it, the feet at the
 // span and the crown at the rise; `segments` counts its stones, each stone and the whole a single closed solid.
-TEST(Kit_recreated, arch_keeps_its_opening_at_every_stone_count)
+TEST(Kit_architecture_shapes, arch_keeps_its_opening_at_every_stone_count)
 {
-    const Kit_shape_definition& arch = get_shape("architecture.arch.v2");
+    const Kit_shape_definition& arch = get_shape("architecture.arch");
     for (int segments = 2; segments <= 48; ++segments) {
         for (const std::array<float, 4>& size : {std::array<float, 4>{2.0f, 2.4f, 0.5f, 0.3f}, std::array<float, 4>{0.3f, 32.0f, 16.0f, 0.05f},
                                                  std::array<float, 4>{32.0f, 0.2f, 0.05f, 8.0f}, std::array<float, 4>{5.0f, 2.2f, 0.6f, 0.4f},
@@ -129,9 +146,9 @@ TEST(Kit_recreated, arch_keeps_its_opening_at_every_stone_count)
 }
 
 // The round pillar has a base and a capital inside the cylinder.
-TEST(Kit_recreated, round_pillar_has_a_base_and_a_capital_inside_its_cylinder)
+TEST(Kit_architecture_shapes, round_pillar_has_a_base_and_a_capital_inside_its_cylinder)
 {
-    const Kit_shape_definition& pillar = get_shape("architecture.pillar.v2");
+    const Kit_shape_definition& pillar = get_shape("architecture.pillar");
     Kit_parameter_values values = defaults(pillar);
     ASSERT_TRUE(values.set_enum("profile", "round"));
     const float radius = 0.5f * values.get_float("width");
@@ -156,11 +173,11 @@ TEST(Kit_recreated, round_pillar_has_a_base_and_a_capital_inside_its_cylinder)
     EXPECT_EQ(report.triangle_count, static_cast<unsigned int>((14 * 2 * values.get_int("segments")) + (2 * (values.get_int("segments") - 2))));
 }
 
-// The square pillar is a pier: its plinth and abacus fill the top and bottom of the original's box (the seam sides it
-// states), and the shaft between them is inset on all four sides.
-TEST(Kit_recreated, square_pillar_has_a_plinth_and_an_abacus_around_an_inset_shaft)
+// The square pillar is a pier: its plinth and abacus fill the top and bottom of its width-square box (the seam sides
+// it states), and the shaft between them is inset on all four sides.
+TEST(Kit_architecture_shapes, square_pillar_has_a_plinth_and_an_abacus_around_an_inset_shaft)
 {
-    const Kit_shape_definition& pillar = get_shape("architecture.pillar.v2");
+    const Kit_shape_definition& pillar = get_shape("architecture.pillar");
     for (const float width : {0.05f, 0.5f, 16.0f}) {
         for (const float height : {0.1f, 3.0f, 64.0f}) {
             Kit_parameter_values values = defaults(pillar);
@@ -194,7 +211,7 @@ TEST(Kit_recreated, square_pillar_has_a_plinth_and_an_abacus_around_an_inset_sha
 
 // Both slots of the door wall and of the arch have facets at every value: the frame and the wall; the keystone with the
 // springers, and the voussoirs - an arch of two to four segments has no voussoirs, and its springers are the ring's.
-TEST(Kit_recreated, door_frame_and_arch_stones_have_their_slots)
+TEST(Kit_architecture_shapes, door_frame_and_arch_stones_have_their_slots)
 {
     const auto slot_facets = [](const Kit_parameter_values& values) -> std::vector<unsigned int> {
         const std::unique_ptr<GEO::Mesh> mesh = generate(values);
@@ -206,7 +223,7 @@ TEST(Kit_recreated, door_frame_and_arch_stones_have_their_slots)
         }
         return counts;
     };
-    const Kit_shape_definition& door_wall = get_shape("architecture.door_wall.v2");
+    const Kit_shape_definition& door_wall = get_shape("architecture.door_wall");
     ASSERT_EQ(door_wall.material_slots, (std::vector<std::string>{"wall", "trim"}));
     for (const Kit_parameter_values& values : {defaults(door_wall), range_corner(door_wall, Range_end::min), range_corner(door_wall, Range_end::max)}) {
         const std::vector<unsigned int> counts = slot_facets(values);
@@ -214,7 +231,7 @@ TEST(Kit_recreated, door_frame_and_arch_stones_have_their_slots)
         EXPECT_EQ(counts[1], 131u) << values.to_canonical_text();
         EXPECT_EQ(counts[0] + counts[1], 314u);
     }
-    const Kit_shape_definition& arch = get_shape("architecture.arch.v2");
+    const Kit_shape_definition& arch = get_shape("architecture.arch");
     ASSERT_EQ(arch.material_slots, (std::vector<std::string>{"trim", "stone"}));
     unsigned int accent_at_twelve = 0;
     for (int segments = 2; segments <= 48; ++segments) {

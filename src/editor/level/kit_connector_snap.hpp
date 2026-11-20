@@ -1,7 +1,6 @@
 #pragma once
 
 #include "level/kit_connector.hpp"
-#include "config/generated/connector_snap_orientation.hpp"
 
 #include "erhe_scene/node.hpp"
 
@@ -26,11 +25,24 @@ enum class Kit_connector_snap_skip : unsigned int {
     suspended      // the suspend key is held
 };
 
+// U50: how a snapped step turns the moved set.
+enum class Kit_connector_snap_turn_kind : unsigned int {
+    none = 0,   // Connector_snap_orientation::off: translation only
+    about_axis, // rotate with Orient To Surface: about the moved set's up axis only
+    full        // full, and rotate without Orient To Surface: the frames face as a join makes them
+};
+
+class Kit_connector_snap_turn
+{
+public:
+    Kit_connector_snap_turn_kind kind{Kit_connector_snap_turn_kind::none};
+    glm::vec3                    axis{0.0f, 1.0f, 0.0f}; // about_axis: unit, world space
+};
+
 // U44: whether the last step's snap turned the moved set (aligned) or, asked to, translated it only and why.
 enum class Kit_connector_snap_alignment : unsigned int {
-    off = 0,   // not asked: Connector_snap_orientation::keep, or a rotate or scale drag
+    off = 0,   // not asked: Connector_snap_orientation::off
     aligned,
-    on_axis,   // a stay_on_axis handle drag: the constrained offset only
     locked,    // a moved root's locked translate or rotate channel would hold back the motion
     shear,     // a moved root's resulting local transform would be sheared (a non-uniformly scaled parent, or its own skew)
     degenerate // the pair's frame degenerated since the gather (a target scaled to zero)
@@ -47,8 +59,10 @@ public:
     glm::vec3                        full_offset     {0.0f}; // puts the moved connector on the target's
     glm::vec3                        offset          {0.0f}; // added to the moved set's translation (full_offset constrained)
     Kit_connector_snap_alignment     alignment       {Kit_connector_snap_alignment::off};
+    Kit_connector_snap_turn          turn;                    // asked of the step (U50)
     Kit_join_pose                    motion;                  // aligned: the rigid world motion of the moved set
-    int                              twist_steps     {0};     // aligned: the quarter twist of the join (closest_join_twist())
+    int                              twist_steps     {0};     // aligned: the quarter twist of the join (closest_join_twist(), or latched for rotate)
+    float                            facing_score    {0.0f};  // aligned: get_facing_score() of the turned pair, 3 = facing exactly
     std::weak_ptr<erhe::scene::Node> piece;
     const char*                      connector       {""};
     std::weak_ptr<erhe::scene::Node> target;
@@ -76,8 +90,8 @@ public:
 
     // The offset co-locating the closest pair of the moved roots' current (unsnapped) pose, constrained to the dragged
     // axis or plane (U27); nullopt when none is in reach. A root whose frame degenerates contributes no connector.
-    // With align and a free constraint the state's motion also turns the pair's frames to face (U44).
-    auto step(const Kit_connector_snap_constraint& constraint, Connector_snap_orientation orientation) -> std::optional<glm::vec3>;
+    // With a turn the state's motion also turns the set about the moved connector, then moves it by the offset (U44, U50).
+    auto step(const Kit_connector_snap_constraint& constraint, const Kit_connector_snap_turn& turn) -> std::optional<glm::vec3>;
     // The caller cannot apply the last step's motion: the step snaps by its translation only, for the reason given.
     void drop_alignment(Kit_connector_snap_alignment reason);
     // The caller could not apply the last step's offset: that step reports unsnapped.
@@ -125,8 +139,8 @@ private:
         const char* name{""};
     };
 
-    // U44: the state's motion turning the step's pair to face, unless the constraint is not free.
-    void align_step(const Moved_point& moved, const Target_point& target);
+    // U44, U50: the state's motion turning the step's pair to face (fully or about the turn's axis), then moving by the offset.
+    void align_step(const Moved_point& moved, const Target_point& target, const Kit_connector_snap_turn& turn);
 
     bool                                          m_active      {false};
     const Scene_root*                             m_scene_root  {nullptr};
@@ -145,6 +159,10 @@ private:
     Kit_connector_snap_state                      m_state;
     std::optional<std::size_t>                    m_snapped_moved;  // in m_moved, of the last step's pair
     std::optional<std::size_t>                    m_snapped_target; // in m_target_points
+    // U50 rotate: the twist chosen when a pair first snapped in this drag, kept while that pair snaps, so a varying normal cannot flip it.
+    std::optional<std::size_t>                    m_twist_moved;
+    std::optional<std::size_t>                    m_twist_target;
+    int                                           m_latched_twist{0};
 };
 
 } // namespace editor

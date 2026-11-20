@@ -143,6 +143,16 @@ constexpr std::array<Kit_layout_row, 8> c_scatter_disc_density_rows     {kind, s
 [[nodiscard]] auto to_surface_snap  (const bool on) -> Surface_snap   { return on ? Surface_snap::on : Surface_snap::off; }
 [[nodiscard]] auto to_surface_orient(const bool on) -> Surface_orient { return on ? Surface_orient::on : Surface_orient::off; }
 
+[[nodiscard]] auto get_surface_support_label(const Surface_support support) -> const char*
+{
+    switch (support) {
+        case Surface_support::five_lines:      return "Five Lines";
+        case Surface_support::center_blocks:   return "Center Blocks";
+        case Surface_support::center_fallback: return "Center Fallback";
+    }
+    return "?";
+}
+
 [[nodiscard]] auto get_kinds(const erhe::scene::Node& node) -> Kit_layout_kinds
 {
     return (dynamic_cast<const erhe::scene::Curve*>(&node) != nullptr) ? Kit_layout_kinds::curve : Kit_layout_kinds::xform;
@@ -210,7 +220,10 @@ auto get_layout_setting_name(const Kit_layout_setting_row row) -> const char*
         case Kit_layout_setting_row::surface_orient: return "Surface Orient";
         case Kit_layout_setting_row::per_piece_seed: return "Per Piece Seed";
         case Kit_layout_setting_row::seed:           return "Layout Seed";
-        case Kit_layout_setting_row::surface_max_distance: return "Surface Max Distance";
+        case Kit_layout_setting_row::surface_direction:         return "Surface Direction";
+        case Kit_layout_setting_row::surface_forward_distance:  return "Surface Forward Distance";
+        case Kit_layout_setting_row::surface_backward_distance: return "Surface Backward Distance";
+        case Kit_layout_setting_row::surface_support:           return "Surface Support";
         case Kit_layout_setting_row::hide_all_connectors:            return "Hide All Connectors";
         case Kit_layout_setting_row::hide_plus_tangent_connectors:   return "Hide +Tangent Connectors";
         case Kit_layout_setting_row::hide_minus_tangent_connectors:  return "Hide -Tangent Connectors";
@@ -224,15 +237,16 @@ auto get_layout_setting_name(const Kit_layout_setting_row row) -> const char*
 
 auto get_layout_setting_rows(const Kit_layout_pattern& pattern) -> std::span<const Kit_layout_setting_row>
 {
-    static constexpr std::array<Kit_layout_setting_row, 13> rows{
-        Kit_layout_setting_row::module_snap, Kit_layout_setting_row::surface_snap, Kit_layout_setting_row::surface_max_distance,
+    static constexpr std::array<Kit_layout_setting_row, 16> rows{
+        Kit_layout_setting_row::module_snap, Kit_layout_setting_row::surface_snap, Kit_layout_setting_row::surface_direction,
+        Kit_layout_setting_row::surface_forward_distance, Kit_layout_setting_row::surface_backward_distance, Kit_layout_setting_row::surface_support,
         Kit_layout_setting_row::surface_orient, Kit_layout_setting_row::per_piece_seed, Kit_layout_setting_row::seed,
         Kit_layout_setting_row::hide_all_connectors,
         Kit_layout_setting_row::hide_plus_tangent_connectors,  Kit_layout_setting_row::hide_minus_tangent_connectors,
         Kit_layout_setting_row::hide_plus_normal_connectors,   Kit_layout_setting_row::hide_minus_normal_connectors,
         Kit_layout_setting_row::hide_plus_binormal_connectors, Kit_layout_setting_row::hide_minus_binormal_connectors
     };
-    constexpr std::size_t c_rows_of_every_kind = 6; // the connector switches follow
+    constexpr std::size_t c_rows_of_every_kind = 9; // the connector switches follow
     const std::span<const Kit_layout_setting_row> all{rows};
     // A stairs layout places no piece: nothing snaps, takes a seed or has connectors.
     if (pattern.kind == Repeat_pattern_kind::stairs) {
@@ -320,13 +334,13 @@ auto layout_pattern_row(
             break;
         }
         case Kit_layout_row::step: {
-            const bool changed = ImGui::DragFloat(name, &pattern.step, 0.01f, 0.0f, 1000.0f, "%.3f m");
+            const bool changed = ImGui::DragFloat(name, &pattern.step, 0.01f, 0.0f, c_max_line_step, "%.3f m");
             edit = drag_edit(changed);
             tooltip("Center to center; by default the piece's width along x.");
             break;
         }
         case Kit_layout_row::length: {
-            const bool changed = ImGui::DragFloat(name, &pattern.length, 0.01f, 0.0f, 10000.0f, "%.3f m");
+            const bool changed = ImGui::DragFloat(name, &pattern.length, 0.01f, 0.0f, c_max_line_length, "%.3f m");
             edit = drag_edit(changed);
             tooltip("From the first piece's center to the last one's.");
             break;
@@ -344,24 +358,24 @@ auto layout_pattern_row(
             break;
         }
         case Kit_layout_row::spacing_x: {
-            const bool changed = ImGui::DragFloat(name, &pattern.spacing_x, 0.01f, -1000.0f, 1000.0f, "%.3f m");
+            const bool changed = ImGui::DragFloat(name, &pattern.spacing_x, 0.01f, -c_max_grid_spacing, c_max_grid_spacing, "%.3f m");
             edit = drag_edit(changed);
             tooltip("The step along the node's x axis; by default the piece's extent along it.");
             break;
         }
         case Kit_layout_row::spacing_z: {
-            const bool changed = ImGui::DragFloat(name, &pattern.spacing_z, 0.01f, -1000.0f, 1000.0f, "%.3f m");
+            const bool changed = ImGui::DragFloat(name, &pattern.spacing_z, 0.01f, -c_max_grid_spacing, c_max_grid_spacing, "%.3f m");
             edit = drag_edit(changed);
             tooltip("The step along the node's z axis; by default the piece's extent along it.");
             break;
         }
         case Kit_layout_row::radius: {
-            const bool changed = ImGui::DragFloat(name, &pattern.radius, 0.01f, 0.01f, 1000.0f, "%.3f m", ImGuiSliderFlags_AlwaysClamp);
+            const bool changed = ImGui::DragFloat(name, &pattern.radius, 0.01f, c_min_ring_radius, c_max_ring_radius, "%.3f m", ImGuiSliderFlags_AlwaysClamp);
             edit = drag_edit(changed);
             break;
         }
         case Kit_layout_row::arc: {
-            const bool changed = ImGui::DragFloat(name, &pattern.arc_degrees, 0.5f, 1.0f, 360.0f, "%.1f deg", ImGuiSliderFlags_AlwaysClamp);
+            const bool changed = ImGui::DragFloat(name, &pattern.arc_degrees, 0.5f, c_min_ring_arc, c_max_ring_arc, "%.1f deg", ImGuiSliderFlags_AlwaysClamp);
             edit = drag_edit(changed);
             tooltip("360 is a full ring; a smaller arc has pieces at both of its ends.");
             break;
@@ -539,11 +553,43 @@ auto layout_setting_row(Kit_layout_data& data, const Kit_layout_setting_row row,
             data.surface_orient = to_surface_orient(value);
             return pressed_edit(pressed);
         }
-        case Kit_layout_setting_row::surface_max_distance: {
-            const bool changed = ImGui::DragFloat(name, &data.surface_max_distance, 0.01f, 0.0f, 1000.0f, "%.2f m", ImGuiSliderFlags_AlwaysClamp);
+        case Kit_layout_setting_row::surface_direction: {
+            const bool changed = ImGui::DragFloat3(name, &data.surface_direction.x, 0.01f, -1.0f, 1.0f, "%.2f", ImGuiSliderFlags_AlwaysClamp);
             const Kit_row_edit edit = drag_edit(changed);
-            tooltip("Meters: each piece moves at most this far along the snap direction, up or down, to the nearest place where it rests and fits; beyond, it stays where the pattern puts it.");
+            tooltip("World space: the direction each piece searches along for the surface it snaps to, normalized; (0, -1, 0) is down, (0, 1, 0) a ceiling. Not zero.");
             return edit;
+        }
+        case Kit_layout_setting_row::surface_forward_distance: {
+            const bool changed = ImGui::DragFloat(name, &data.surface_forward_distance, 0.01f, 0.0f, 1000.0f, "%.2f m", ImGuiSliderFlags_AlwaysClamp);
+            const Kit_row_edit edit = drag_edit(changed);
+            tooltip("Meters: each piece moves at most this far along the search direction to the nearest place where it rests and fits; beyond, it stays where the pattern puts it.");
+            return edit;
+        }
+        case Kit_layout_setting_row::surface_backward_distance: {
+            const bool changed = ImGui::DragFloat(name, &data.surface_backward_distance, 0.01f, 0.0f, 1000.0f, "%.2f m", ImGuiSliderFlags_AlwaysClamp);
+            const Kit_row_edit edit = drag_edit(changed);
+            tooltip("Meters: each piece moves at most this far against the search direction; above 0 the nearest place either way is taken, 0 searches along the direction only.");
+            return edit;
+        }
+        case Kit_layout_setting_row::surface_support: {
+            constexpr std::array<Surface_support, 3> c_supports{Surface_support::five_lines, Surface_support::center_blocks, Surface_support::center_fallback};
+            bool pressed = false;
+            if (ImGui::BeginCombo(name, get_surface_support_label(data.surface_support))) {
+                for (const Surface_support support : c_supports) {
+                    if (ImGui::Selectable(get_surface_support_label(support), support == data.surface_support)) {
+                        pressed = (support != data.surface_support);
+                        data.surface_support = support;
+                    }
+                }
+                ImGui::EndCombo();
+            }
+            tooltip(
+                "Which base lines support and block each piece's snap without orient. Five Lines: the base center and the four "
+                "footprint corners rest on a surface, and a face inside the piece on any of them refuses the place. Center Blocks: "
+                "the five lines rest, only a face on the center line refuses. Center Fallback: the nearest place, and when a face "
+                "refuses it, the piece rests on the surface under its base center, along the search direction, without a fit test."
+            );
+            return pressed_edit(pressed);
         }
         case Kit_layout_setting_row::per_piece_seed: {
             bool value = (data.seeds == Kit_layout_seeds::per_element);
@@ -1130,6 +1176,12 @@ Kit_layout_initial_editor::Kit_layout_initial_editor(App_context& context)
 
 void Kit_layout_initial_editor::store()
 {
+    // A zero or non-finite direction is refused as the Properties rows and the MCP tools refuse it; the stored one stays.
+    const std::string direction_error = check_surface_direction(m_values.data.surface_direction);
+    if (!direction_error.empty()) {
+        log_scene->warn("Level Kit window: {}; the initial Surface Direction is kept", direction_error);
+        m_values.data.surface_direction = m_context.level_kits->get_layout_initial_values().data.surface_direction;
+    }
     m_context.level_kits->set_layout_initial_values(m_values);
 }
 

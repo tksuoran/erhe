@@ -69,6 +69,14 @@ git worktree:
 - Editors of different worktrees run at the same time: an editor whose
   MCP port is taken binds the next free one and logs it, and each run
   reads the port from its own `logs/log.txt`.
+- Two Debug editor-driven verify runs at once can exceed the MCP client
+  timeout, so a coder starts a verify script only when the other worktree's
+  editor is not running. The wait loop's pattern carries a bracketed
+  character so that `pgrep -f` cannot match the loop's own shell, for
+  example `while pgrep -f "erhe-lane-[b]/build_xcode_metal_headless/bin/Debug/editor" >/dev/null; do sleep 15; done`;
+  a plain pattern matches its own command line and never ends. Fixture
+  editors of `ctest -L editor` share fixed ports, so ctest runs take a lock
+  directory (`mkdir <main clone>/logs/.ctest_lock` in a loop, `rmdir` after).
 - The units are cut so that their files do not overlap. Shared lists
   that every unit would append to (CMake source lists, test tables,
   script tables) are prepared on the main clone first, in a commit of

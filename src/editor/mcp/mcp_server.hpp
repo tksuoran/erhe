@@ -25,6 +25,7 @@
 #include "erhe_window/window_event_handler.hpp"
 #include "level/level_queries.hpp"
 #include "config/generated/connector_snap_orientation.hpp"
+#include "config/generated/surface_drag_direction.hpp"
 
 #include <optional>
 
@@ -285,6 +286,7 @@ private:
 #endif
     // Level kit tools (mcp_server_level.cpp, doc/editor/level_tools.md "MCP").
     auto query_level_kits                     (const nlohmann::json& args) -> std::string;
+    auto query_level_kit_thumbnails           (const nlohmann::json& args) -> std::string;
     auto action_level_place_pieces            (const nlohmann::json& args) -> std::string;
     auto action_level_group_nodes             (const nlohmann::json& args) -> std::string;
     auto action_level_ungroup                 (const nlohmann::json& args) -> std::string;
@@ -303,6 +305,7 @@ private:
     auto query_level_connectors               (const nlohmann::json& args) -> std::string;
     auto action_level_connect_pieces          (const nlohmann::json& args) -> std::string;
     auto action_level_set_piece_connectors    (const nlohmann::json& args) -> std::string;
+    auto action_level_detach_piece            (const nlohmann::json& args) -> std::string;
     auto action_level_set_connector_visualization(const nlohmann::json& args) -> std::string;
     auto query_level_connector_indicators     (const nlohmann::json& args) -> std::string;
     auto action_level_set_layout_visualization(const nlohmann::json& args) -> std::string;
@@ -596,6 +599,7 @@ private:
     auto action_key_press                     (const nlohmann::json& args) -> std::string;
     auto action_type_text                     (const nlohmann::json& args) -> std::string;
     auto query_input_state                    (const nlohmann::json& args) -> std::string;
+    auto action_set_active_tool               (const nlohmann::json& args) -> std::string;
 
     // Input binding overrides (src/editor/mcp/mcp_server_input_bindings.cpp).
     auto query_input_bindings                 (const nlohmann::json& args) -> std::string;
@@ -835,8 +839,9 @@ private:
         int                   frame          {0};
         bool                  release        {true};
         Surface_options       surface        {}; // translate drags only (D4.6)
+        Surface_drag_direction surface_direction_mode{Surface_drag_direction::explicit_vector}; // U51
         float                 connector_snap_distance{0.0f}; // every kind (D3.13)
-        Connector_snap_orientation connector_snap_orientation{Connector_snap_orientation::keep}; // translate drags (U44)
+        Connector_snap_orientation connector_snap_orientation{Connector_snap_orientation::off}; // every drag kind (U50)
     };
     std::optional<Selection_drag_steps>              m_selection_drag_steps;
     // The deltas of the held drag_selection drag (release=false), which

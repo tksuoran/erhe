@@ -974,7 +974,7 @@ void generate_pillow_block(const Kit_parameter_values& values, GEO::Mesh& mesh)
     const float depth  = values.get_float("depth");
     const float bore   = std::min(0.5f * values.get_float("bore"), 0.5f * height);
     const float outer  = bore + (0.3f * height);
-    const int   pairs  = std::clamp(values.get_int("bolts"), 2, 4) / 2;
+    const int   pairs  = (values.get_enum("bolts") == "four") ? 2 : 1;
     const float foot   = 0.25f * height;
     Kit_mesh_builder builder;
     builder.set_slot(pillow_metal_slot);
@@ -1167,6 +1167,16 @@ void add_machine_09_18_shapes(std::vector<Kit_shape_definition>& shapes)
                 .outward  = glm::vec3{std::cos(bevel.cone), std::sin(bevel.cone), 0.0f},
                 .up       = glm::vec3{-std::sin(bevel.cone), std::cos(bevel.cone), 0.0f}
             });
+            for (int quarter = 1; quarter <= 3; ++quarter) {
+                const glm::vec2 p = get_kit_gear_boundary_direction(quarter, bevel.teeth);
+                const glm::vec3 out{p.x, 0.0f, p.y};
+                out_connectors.push_back(Kit_connector{
+                    .name     = c_kit_gear_boundary_names[static_cast<std::size_t>(quarter - 1)],
+                    .position = (bevel.pitch * out) + glm::vec3{0.0f, bevel.foot, 0.0f},
+                    .outward  = (std::cos(bevel.cone) * out) + glm::vec3{0.0f, std::sin(bevel.cone), 0.0f},
+                    .up       = (-std::sin(bevel.cone) * out) + glm::vec3{0.0f, std::cos(bevel.cone), 0.0f}
+                });
+            }
         };
         shapes.push_back(std::move(shape));
     }
@@ -1201,6 +1211,11 @@ void add_machine_09_18_shapes(std::vector<Kit_shape_definition>& shapes)
             if (worm.wheel) {
                 out_connectors.push_back(Kit_connector{.name = "axis", .position = glm::vec3{0.0f, 1.25f * worm.width, 0.0f}, .outward = y_axis, .up = z_axis});
                 add_side_connector(out_connectors, "mesh", glm::vec3{worm.pitch, 0.5f * worm.width, 0.0f}, x_axis);
+                for (int quarter = 1; quarter <= 3; ++quarter) {
+                    const glm::vec2 p = get_kit_gear_boundary_direction(quarter, worm.teeth);
+                    const glm::vec3 out{p.x, 0.0f, p.y};
+                    add_side_connector(out_connectors, c_kit_gear_boundary_names[static_cast<std::size_t>(quarter - 1)], (worm.pitch * out) + glm::vec3{0.0f, 0.5f * worm.width, 0.0f}, out);
+                }
             } else {
                 out_connectors.push_back(Kit_connector{.name = "axis", .position = glm::vec3{worm.reach, worm.axis_y, 0.0f}, .outward = x_axis, .up = y_axis});
                 // Up across the axis, so that joined to a wheel's mesh connector the worm's axis crosses the wheel's.
@@ -1306,7 +1321,7 @@ void add_machine_09_18_shapes(std::vector<Kit_shape_definition>& shapes)
             derive_float(make_length_parameter("height", "Height of the axis", 0.15f, Kit_default_scale::meters, 0.05f, 2.0f), 0.15f, 0.2f, 0.05f),
             derive_float(make_length_parameter("width",  "Length of the base along X", 0.4f, Kit_default_scale::meters, 0.1f, 4.0f), 0.4f, 0.5f, 0.1f),
             derive_float(make_length_parameter("depth",  "Size along the shaft", 0.1f, Kit_default_scale::meters, 0.03f, 1.0f), 0.08f, 0.12f, 0.02f),
-            derive_int  (make_count_parameter ("bolts",  "Bolts: two, or four", 2, 2, 4), 2, 4),
+            derive_enum (make_enum_parameter  ("bolts",  "Two bolts, or four", {"two", "four"}, 0)),
             make_seed_parameter()
         };
         shape.material_slots  = {"metal", "steel"};

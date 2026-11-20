@@ -1017,6 +1017,12 @@ void add_extra_33_36_shapes(std::vector<Kit_shape_definition>& shapes)
         shape.collision         = Kit_collision::triangle_mesh;
         shape.randomness        = Kit_randomness::seeded;
         shape.generator         = generate_cracked_floor;
+        // Every fragment in place and level, sunk at most half the thickness, is the whole slab (U54).
+        shape.get_collision     = [](const Kit_parameter_values& values) {
+            const bool whole = (values.get_float("missing") == 0.0f) && (values.get_float("tilt") == 0.0f) &&
+                               (values.get_float("thickness") >= (2.0f * cracked_sink));
+            return whole ? Kit_collision::box : Kit_collision::triangle_mesh;
+        };
         shape.check_walkability = [](const Kit_parameter_values& values, const Kit_agent& agent) -> std::string {
             const float step = get_cracked_step(values);
             if (step > agent.max_climb) {

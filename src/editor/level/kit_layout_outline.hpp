@@ -5,6 +5,7 @@
 
 #include <glm/glm.hpp>
 
+#include <cstddef>
 #include <span>
 #include <vector>
 
@@ -40,18 +41,25 @@ public:
     float     spacing_radius  {0.0f};
 };
 
-// The value a scatter region handle edits (doc/editor/level_tools.md "Scatter region handles").
+// The value a layout handle edits (doc/editor/level_tools.md "Layout handles").
 enum class Kit_region_handle_value : unsigned int
 {
-    size_x = 0,   // a rectangle's edge across the x axis
-    size_z,       // a rectangle's edge across the z axis
-    size_x_z,     // a rectangle's corner: both sizes
-    region_radius // a disc's handle
+    size_x = 0,    // a scatter rectangle's edge across the x axis
+    size_z,        // a scatter rectangle's edge across the z axis
+    size_x_z,      // a scatter rectangle's corner: both sizes
+    region_radius, // a scatter disc's handle
+    step,          // a line in count mode: its run's end
+    length,        // a line in gap mode: the end of its length
+    spacing_x,     // a grid's far edge across the x axis
+    spacing_z,     // a grid's far edge across the z axis
+    spacing_x_z,   // a grid's far corner: both spacings
+    radius,        // a ring's handle at the arc's middle
+    arc_degrees    // a ring's handle at the arc's end, inside the ring
 };
 
 [[nodiscard]] auto c_str(Kit_region_handle_value value) -> const char*;
 
-// A handle on a scatter's region outline in the node's frame; side holds the sign of each axis it edits (0 elsewhere).
+// A layout handle in the node's frame; what side holds per value: doc/editor/level_tools.md "Layout handles".
 class Kit_region_handle
 {
 public:
@@ -59,6 +67,35 @@ public:
     glm::vec3               side    {1.0f, 0.0f, 0.0f};
     Kit_region_handle_value value   {Kit_region_handle_value::size_x};
 };
+
+// A ring's arc handle sits this fraction of the radius from the center, so a full ring's stays clear of element 0.
+inline constexpr float c_ring_arc_handle_inset{0.75f};
+
+// A ring's radius handle sits at least this angle around the circle from element 0: at least one radius away from it.
+inline constexpr float c_ring_radius_handle_min_degrees{60.0f};
+
+// What a handle drag carries from step to step: the arc's angle before the clamp, so a held end stays held.
+class Kit_layout_handle_drag
+{
+public:
+    float arc_degrees{0.0f};
+};
+
+[[nodiscard]] auto begin_layout_handle_drag(const Kit_layout_pattern& start) -> Kit_layout_handle_drag;
+
+// What the handle indices of a layout's values name; when it changes they name other handles.
+class Kit_layout_handle_set
+{
+public:
+    Repeat_pattern_kind   kind      {Repeat_pattern_kind::line};
+    Kit_layout_count_mode count_mode{Kit_layout_count_mode::count}; // a line's
+    Repeat_scatter_region region    {Repeat_scatter_region::rectangle}; // a scatter's
+    std::size_t           count     {0};
+
+    [[nodiscard]] auto operator==(const Kit_layout_handle_set& other) const -> bool = default;
+};
+
+[[nodiscard]] auto get_layout_handle_set(const Kit_layout_pattern& pattern) -> Kit_layout_handle_set;
 
 // What a kit layout node draws, in its own frame; a path draws its curve instead, so its outline is empty; segments draw
 // the chords through the curve's points with a tick at each point.
@@ -71,7 +108,7 @@ public:
     std::vector<Kit_layout_arc>            arcs;
     std::vector<Kit_layout_tick>           ticks;
     std::vector<Kit_layout_spacing_circle> circles;
-    std::vector<Kit_region_handle>         region_handles; // a scatter's: a rectangle's 4 corners then 4 edges, a disc's 4
+    std::vector<Kit_region_handle>         region_handles; // "Layout handles": the handles of a line, grid, ring or scatter
 
     void clear();
 };
@@ -87,9 +124,14 @@ void make_layout_outline(
     Kit_layout_outline&                       out_outline
 );
 
-// The region values of the handle moved to point (the node's frame; y is ignored), symmetric about the node's origin
-// and clamped to c_min_scatter_region_size - c_max_scatter_region_size; the other values are kept.
-void apply_region_handle(const Kit_region_handle& handle, const glm::vec3& point, Kit_layout_pattern& in_out_pattern);
+// The values of the handle moved to point (the node's frame), clamped to their ranges, the other values kept; a ring's
+// arc takes the turn nearest the drag's last unclamped arc.
+void apply_region_handle(
+    const Kit_region_handle& handle,
+    const glm::vec3&         point,
+    Kit_layout_handle_drag&  in_out_drag,
+    Kit_layout_pattern&      in_out_pattern
+);
 
 [[nodiscard]] auto get_arc_point(const Kit_layout_arc& arc, float degrees) -> glm::vec3;
 

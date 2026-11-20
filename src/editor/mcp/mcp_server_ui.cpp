@@ -52,6 +52,7 @@
 #include "scene/viewport_scene_view.hpp"
 #include "scene/viewport_scene_views.hpp"
 #include "tools/selection_tool.hpp"
+#include "tools/tools.hpp"
 #include "transform/handle_enums.hpp"
 #include "transform/handle_visualizations.hpp"
 #include "transform/rotate_tool.hpp"
@@ -73,6 +74,7 @@
 
 #include <glm/glm.hpp>
 #include <imgui/imgui_internal.h>
+#include <fmt/format.h>
 #include <nlohmann/json.hpp>
 
 #include <algorithm>
@@ -80,6 +82,7 @@
 #include <cctype>
 #include <cmath>
 #include <cstring>
+#include <optional>
 #include <span>
 #include <string>
 #include <unordered_map>
@@ -1153,6 +1156,55 @@ auto Mcp_server::action_type_text(const nlohmann::json& args) -> std::string
     return commit_input_gesture();
 }
 
+namespace {
+
+// The priority tool's stable name, null when none; a tool without a name reports its description.
+[[nodiscard]] auto get_active_tool_json(const App_context& context) -> nlohmann::json
+{
+    Tool* const active = (context.tools != nullptr) ? context.tools->get_priority_tool() : nullptr;
+    if (active == nullptr) {
+        return nlohmann::json();
+    }
+    const std::string name = get_mcp_tool_name(context, active);
+    return nlohmann::json(name.empty() ? std::string{active->get_description()} : name);
+}
+
+} // anonymous namespace
+
+// set_active_tool - doc/agents/mcp_ui_driving.md.
+auto Mcp_server::action_set_active_tool(const nlohmann::json& args) -> std::string
+{
+    if (m_context.tools == nullptr) {
+        return make_error_content("Tools not available");
+    }
+    if (!args.contains("tool")) {
+        return make_error_content("'tool' is required: a tool name, or null for none");
+    }
+    const nlohmann::json& name_value = args.at("tool");
+    if (name_value.is_null()) {
+        m_context.tools->set_priority_tool(nullptr);
+        return make_json_content({{"active_tool", get_active_tool_json(m_context)}}).dump();
+    }
+    if (!name_value.is_string()) {
+        return make_error_content("'tool' must be a tool name or null");
+    }
+    const std::string             name = name_value.get<std::string>();
+    const std::optional<Mcp_tool> tool = find_mcp_tool(name);
+    if (!tool.has_value()) {
+        std::string names;
+        for (unsigned int i = 0; i < static_cast<unsigned int>(Mcp_tool::count); ++i) {
+            names += fmt::format("{}{}", (i == 0) ? "" : ", ", c_str(static_cast<Mcp_tool>(i)));
+        }
+        return make_error_content("Unknown tool '" + name + "'; one of: " + names + ", or null for none");
+    }
+    Tool* const named_tool = get_mcp_tool(m_context, tool.value());
+    if (named_tool == nullptr) {
+        return make_error_content("Tool '" + name + "' is not available in this build or run");
+    }
+    m_context.tools->set_priority_tool(named_tool);
+    return make_json_content({{"active_tool", get_active_tool_json(m_context)}}).dump();
+}
+
 // get_input_state - doc/agents/mcp_ui_driving.md.
 auto Mcp_server::query_input_state(const nlohmann::json& args) -> std::string
 {
@@ -1168,6 +1220,7 @@ auto Mcp_server::query_input_state(const nlohmann::json& args) -> std::string
     const std::shared_ptr<Scene_root> last_scene_root = last_scene_view ? last_scene_view->get_scene_root() : std::shared_ptr<Scene_root>{};
 
     return make_json_content({
+        {"active_tool",          get_active_tool_json(m_context)},
         {"active_mouse_command", (active_mouse_command != nullptr) ? nlohmann::json(active_mouse_command->get_name()) : nlohmann::json()},
         {"last_hovered_scene",   last_scene_root ? nlohmann::json(last_scene_root->get_name()) : nlohmann::json()},
         {"pointer", {

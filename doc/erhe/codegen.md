@@ -144,6 +144,14 @@ enum("Blend_mode",
 | `ui_min`, `ui_max` | `str` | `None` | UI slider/drag range (numeric only) |
 | `hard_min`, `hard_max` | `str` | `None` | Hard clamp range (numeric only) |
 
+### Enum Value Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `short_desc` | `str` | `None` | Brief label for UI |
+| `long_desc` | `str` | `None` | Tooltip / detailed description |
+| `former_names` | `list[str]` | `None` | Earlier names of the value: the generated `from_string()` reads each as the value, `to_string()` writes the current name, so a document written before a rename loads the renamed value; a former name is no current name and names one value only |
+
 ## C++ Reflection API
 
 ### Field_type enum

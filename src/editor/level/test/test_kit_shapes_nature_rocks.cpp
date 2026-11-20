@@ -17,7 +17,7 @@
 #include <string>
 #include <vector>
 
-// Tests of the shapes of kit_shapes_nature_rocks_v2.cpp.
+// Tests of the rock spire (kit_shapes_nature_rocks.cpp).
 namespace {
 
 using editor::Kit_mesh_report;
@@ -84,9 +84,9 @@ void for_each_corner(const Kit_parameter_values& values, const std::vector<std::
 
 const std::vector<std::string> spire_floats{"height", "radius", "taper", "lean", "roughness"};
 
-TEST(Kit_recreated, rock_spire_forms_pass_at_the_corners_over_seeds)
+TEST(Kit_nature_rocks, rock_spire_forms_pass_at_the_corners_over_seeds)
 {
-    const Kit_shape_definition& spire = get_shape("nature.rock_spire.v2");
+    const Kit_shape_definition& spire = get_shape("nature.rock_spire");
     ASSERT_EQ(spire.material_slots, (std::vector<std::string>{"rock", "grass"}));
     for (const std::string& form : spire.parameters[spire.find_parameter("form").value()].enum_values) {
         Kit_parameter_values first = explicit_values(spire, 0);
@@ -105,10 +105,30 @@ TEST(Kit_recreated, rock_spire_forms_pass_at_the_corners_over_seeds)
     }
 }
 
-// R3.7: the facets, their order and their slots follow from the form, the strata, the segments and the seed alone.
-TEST(Kit_recreated, rock_spire_topology_follows_from_integers_alone)
+// A thin, tall, leaning rock of maximum roughness and a wide low one: every form at every corner of its ranges over
+// seeds passes, the base the lowest point.
+TEST(Kit_nature_rocks, rock_spire_passes_at_every_corner_of_its_ranges_over_seeds)
 {
-    const Kit_shape_definition& spire = get_shape("nature.rock_spire.v2");
+    const Kit_shape_definition& spire = get_shape("nature.rock_spire");
+    int checked = 0;
+    for (const std::string& form : spire.parameters[spire.find_parameter("form").value()].enum_values) {
+        for (const int seed : sweep_seeds(spire)) {
+            Kit_parameter_values values = explicit_values(spire, seed);
+            ASSERT_TRUE(values.set_enum("form", form));
+            for_each_corner(values, {"height", "radius", "taper", "lean", "roughness", "strata", "segments"}, [&checked](const Kit_parameter_values& corner) {
+                expect_valid_with_every_slot(corner);
+                EXPECT_EQ(editor::check_kit_shape(corner).bounds_min.y, 0.0f);
+                ++checked;
+            });
+        }
+    }
+    EXPECT_EQ(checked, static_cast<int>(sweep_seeds(spire).size()) * 4 * 128);
+}
+
+// R3.7: the facets, their order and their slots follow from the form, the strata, the segments and the seed alone.
+TEST(Kit_nature_rocks, rock_spire_topology_follows_from_integers_alone)
+{
+    const Kit_shape_definition& spire = get_shape("nature.rock_spire");
     for (const std::string& form : spire.parameters[spire.find_parameter("form").value()].enum_values) {
         for (const int seed : {1, 3, 17, 4242}) {
             Kit_parameter_values values = explicit_values(spire, seed);
@@ -122,9 +142,9 @@ TEST(Kit_recreated, rock_spire_topology_follows_from_integers_alone)
 }
 
 // Seeds give a family: the ledges' windows, the diagonals and the fallen blocks differ between seeds.
-TEST(Kit_recreated, rock_spire_seeds_give_several_topologies)
+TEST(Kit_nature_rocks, rock_spire_seeds_give_several_topologies)
 {
-    const Kit_shape_definition& spire = get_shape("nature.rock_spire.v2");
+    const Kit_shape_definition& spire = get_shape("nature.rock_spire");
     std::set<std::vector<uint32_t>> topologies;
     std::set<unsigned int>          vertex_counts;
     for (int seed = 0; seed < 30; ++seed) {
@@ -138,9 +158,9 @@ TEST(Kit_recreated, rock_spire_seeds_give_several_topologies)
 
 // The shaft's rows never cross at any value: up every column each vertex lies above the one below, the base ring on
 // the ground about a fan vertex on the origin.
-TEST(Kit_recreated, rock_spire_rows_rise_up_every_column)
+TEST(Kit_nature_rocks, rock_spire_rows_rise_up_every_column)
 {
-    const Kit_shape_definition& spire = get_shape("nature.rock_spire.v2");
+    const Kit_shape_definition& spire = get_shape("nature.rock_spire");
     for (const std::string& form : spire.parameters[spire.find_parameter("form").value()].enum_values) {
         for (const int seed : sweep_seeds(spire)) {
             Kit_parameter_values values = explicit_values(spire, seed);
@@ -171,9 +191,9 @@ TEST(Kit_recreated, rock_spire_rows_rise_up_every_column)
 }
 
 // A mesa's top is flat at the height but its center, which rises a little.
-TEST(Kit_recreated, rock_spire_mesa_top_is_flat_turf)
+TEST(Kit_nature_rocks, rock_spire_mesa_top_is_flat_turf)
 {
-    const Kit_shape_definition& spire = get_shape("nature.rock_spire.v2");
+    const Kit_shape_definition& spire = get_shape("nature.rock_spire");
     for (const int seed : derive_seeds()) {
         Kit_parameter_values values = all_derived(spire, seed);
         ASSERT_TRUE(values.set_enum("form", "mesa"));

@@ -49,6 +49,21 @@ public:
     );
     void clear_connect_choice();
 
+    // The Brush tool's kit mode preview joined at this connector (step 40): drawn as the snapped pair in the scene's views.
+    void set_brush_join(
+        const Scene_root&                         scene_root,
+        const std::shared_ptr<erhe::scene::Node>& piece,
+        const char*                               connector_name,
+        const Kit_connector&                      preview_connector, // the new piece's, in world space
+        std::uint64_t                             preview_id
+    );
+    void clear_brush_join();
+    [[nodiscard]] auto has_brush_join(const Scene_root& scene_root) const -> bool;
+
+    // The cached enabled local frames of a kit piece (U33, U39); parsed again on the first read after a change of its
+    // record, switches or parent.
+    [[nodiscard]] auto get_local_connectors(const erhe::scene::Node& node) -> const std::vector<Kit_connector>&;
+
     // The record or connector switches of the piece may have changed: its enabled local frames are read again when next drawn.
     void forget_piece(const erhe::scene::Node& node);
     // The layout's connector switches, lock, children or curve may have changed (U39): its children are read again.
@@ -58,9 +73,15 @@ public:
     [[nodiscard]] auto get_cached_piece_count() const -> std::size_t;
 
 private:
-    // The cached local frames of a kit piece; parsed once, on the first draw after a change.
-    [[nodiscard]] auto get_local_connectors(const erhe::scene::Node& node) -> const std::vector<Kit_connector>&;
     void add_piece(const erhe::scene::Node& node, std::vector<Kit_connector_indicator>& out_indicators);
+    void collect_pieces(
+        const Scene_root&                     scene_root,
+        Visualization_mode                    mode,
+        const Selection&                      selection,
+        const Kit_connector_drag_snap*        drag_snap,
+        std::vector<Kit_connector_indicator>& out_indicators
+    );
+    void add_brush_join(const Scene_root& scene_root, std::vector<Kit_connector_indicator>& out_indicators);
 
     class Choice
     {
@@ -82,6 +103,16 @@ private:
     std::vector<std::uint64_t>                                   m_removed_parent_ids; // forget_removed() scratch
     Choice                                                       m_target_choice;
     Choice                                                       m_moved_choice;
+    class Brush_join
+    {
+    public:
+        const Scene_root*                scene_root{nullptr}; // compared only, never dereferenced
+        std::weak_ptr<erhe::scene::Node> piece;
+        const char*                      connector {""};      // a shape's literal name
+        Kit_connector                    preview_connector;
+        std::uint64_t                    preview_id{0};
+    };
+    Brush_join                                                   m_brush_join;
 };
 
 // The style color of an indicator of the role.

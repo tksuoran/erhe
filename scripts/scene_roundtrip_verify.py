@@ -1593,6 +1593,64 @@ def section_asset_references():
     check(S, "restored reference scene closed", wait_for_scene_gone(resaved_scene))
 
 
+STATIC_COMPOUND_GLTF = pathlib.Path("res/editor/scenes/phase6_static_compound.gltf")
+STATIC_COMPOUND_RESAVE_GLTF = pathlib.Path("res/editor/scenes/phase6_static_compound_resave.gltf")
+STATIC_COMPOUND_BUFFERS = [path.with_suffix(suffix) for path in (STATIC_COMPOUND_GLTF, STATIC_COMPOUND_RESAVE_GLTF) for suffix in (".bin", ".erhe_editor")]
+
+
+def section_static_compound_fold():
+    """An erhe static body whose compound the save put on synthesized collider child nodes (two offset 1 m boxes)
+    loads back as one body on its node, the carriers folded in and removed, and a re-save writes the same two carriers
+    (doc/erhe/khr_physics_rigid_bodies_support.md)."""
+    S = "static-compound"
+    erhe_node = {"ERHE_node": {"flags": ["show_in_ui", "content", "id", "expand"], "properties": {"Node_physics.motion_mode": "Static"}}}
+    document = {
+        "asset": {"version": "2.0"},
+        "extensionsUsed": ["KHR_implicit_shapes", "KHR_physics_rigid_bodies", "ERHE_node", "ERHE_scene"],
+        "extensions": {"KHR_implicit_shapes": {"shapes": [{"type": "box", "box": {"size": [1.0, 1.0, 1.0]}},
+                                                          {"type": "box", "box": {"size": [1.0, 1.0, 1.0]}}]}},
+        "nodes": [
+            {"name": "Static pair", "children": [1, 2], "extensions": erhe_node},
+            {"name": "Static pair_collider_0", "translation": [-1.0, 0.5, 0.0],
+             "extensions": {"KHR_physics_rigid_bodies": {"collider": {"geometry": {"shape": 0}}}}},
+            {"name": "Static pair_collider_1", "translation": [1.0, 0.5, 0.0],
+             "extensions": {"KHR_physics_rigid_bodies": {"collider": {"geometry": {"shape": 1}}}}},
+        ],
+        "scene": 0,
+        "scenes": [{"nodes": [0], "extensions": {"ERHE_scene": {"enable_physics": True, "properties": {}}}}],
+    }
+    STATIC_COMPOUND_GLTF.write_text(json.dumps(document, indent=2), encoding="utf-8")
+
+    def loaded_state(path):
+        mutate("load_scene", {"path": str(path)})
+        scene = path.stem
+        if not wait_for_scene(scene):
+            return scene, None, None
+        wait_for_async_idle()
+        names = [n.get("name") for n in call("get_scene_nodes", {"scene_name": scene}).get("nodes", [])]
+        details = call("get_node_details", {"scene_name": scene, "node_name": "Static pair"}) if "Static pair" in names else {}
+        return scene, names, details.get("physics") or {}
+
+    scene, names, physics = loaded_state(STATIC_COMPOUND_GLTF)
+    check(S, "a static body of two offset boxes on synthesized carriers loads as one body on its node, the carriers removed",
+          (names is not None) and ("Static pair" in names) and not any("_collider_" in (n or "") for n in names) and
+          (physics.get("motion_mode") == "static") and (abs(physics.get("mass", 0.0) - 2.0) < 1.0e-4),
+          f"nodes {names} physics {json.dumps(physics)[:300]}")
+    saved = wait_for_save(call, mutate("save_scene", {"scene_name": scene, "path": str(STATIC_COMPOUND_RESAVE_GLTF)}))
+    check(S, "save_scene", bool(saved) and saved.get("saved"), str(saved))
+    resaved = read_glb_json(STATIC_COMPOUND_RESAVE_GLTF) if STATIC_COMPOUND_RESAVE_GLTF.is_file() else {}
+    carriers = sorted(n.get("name", "") for n in resaved.get("nodes", []) if "_collider_" in n.get("name", ""))
+    check(S, "the re-save writes the two carriers again, no more", carriers == ["Static pair_collider_0", "Static pair_collider_1"], str(carriers))
+    mutate("close_scene", {"scene_name": scene})
+    check(S, "scene closed", wait_for_scene_gone(scene))
+    scene, names, physics = loaded_state(STATIC_COMPOUND_RESAVE_GLTF)
+    check(S, "the re-saved file loads as one body of mass 2 again, without carriers",
+          (names is not None) and not any("_collider_" in (n or "") for n in names) and (abs(physics.get("mass", 0.0) - 2.0) < 1.0e-4),
+          f"nodes {names} physics {json.dumps(physics)[:300]}")
+    mutate("close_scene", {"scene_name": scene})
+    check(S, "re-saved scene closed", wait_for_scene_gone(scene))
+
+
 # --------------------------------------------------------------------------
 # Section 4: prefab scene round-trip (user scene, skipped when absent)
 # --------------------------------------------------------------------------
@@ -2972,6 +3030,7 @@ def main():
         section_reload_and_diff,
         section_rig_reload,
         section_asset_references,
+        section_static_compound_fold,
         section_prefab_scene,
         lambda: section_foreign_tools(arguments.gltf_validator, arguments.blender),
         lambda: section_usd_round_trip(arguments.usdchecker),
@@ -2994,7 +3053,8 @@ def main():
 
     if not failed and not arguments.keep_files:
         for artifact in [E2E_GLB, E2E_RESAVE_GLB, FOREIGN_GLB, PREFAB_RESAVE_GLB, R6_GLTF, R6_RESAVE_GLTF,
-                         GLTF_VARIANTS_SAVE, AMBIENT_LOCAL_GLB, AMBIENT_STYLE_GLB] + R6_BUFFERS + USD_ARTIFACTS:
+                         GLTF_VARIANTS_SAVE, AMBIENT_LOCAL_GLB, AMBIENT_STYLE_GLB, STATIC_COMPOUND_GLTF,
+                         STATIC_COMPOUND_RESAVE_GLTF] + R6_BUFFERS + STATIC_COMPOUND_BUFFERS + USD_ARTIFACTS:
             artifact.unlink(missing_ok=True)
     elif arguments.keep_files:
         print(f"(kept {E2E_GLB}, {E2E_RESAVE_GLB}, {FOREIGN_GLB}, {PREFAB_RESAVE_GLB}, {R6_GLTF} and {R6_RESAVE_GLTF})")

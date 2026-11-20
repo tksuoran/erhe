@@ -1,649 +1,1103 @@
-#include "level/kit_mesh_builder.hpp"
 #include "level/kit_shapes.hpp"
+#include "level/kit_mesh_builder.hpp"
 
 #include <fmt/format.h>
 
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <cstddef>
+#include <cstdint>
+#include <limits>
 #include <numbers>
 #include <optional>
+#include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 namespace editor {
 
 namespace {
 
-constexpr int battlement_max_bays = 32; // keeps a run within the kit's ceiling at every length
+constexpr uint32_t medieval_wall_slot  = 0;
+constexpr uint32_t medieval_trim_slot  = 1;
+constexpr uint32_t medieval_floor_slot = 2;
 
-// A vertex of the battlement's front elevation, at both faces.
-class Elevation_point
-{
-public:
-    float    x;
-    float    y;
-    uint32_t front;
-    uint32_t back;
-};
+enum class Sweep_path : unsigned int { open = 0, closed };
 
-// The front elevation's vertices, shared by the faces and the outline.
-class Elevation
+// Whether the first and the last cell of an open sweep are triangles: their end stations are no scaled copies of the next.
+enum class Sweep_ends : unsigned int { quads = 0, triangles };
+
+// A profile carried along stations: each station holds the profile's points, counter-clockwise seen along the path.
+// A quad per profile edge between two stations; an open path is closed by a fan from the apex point at each end.
+void add_sweep(
+    Kit_mesh_builder&                          builder,
+    const std::vector<std::vector<glm::vec3>>& stations,
+    const Sweep_path                        path,
+    const Sweep_ends                        ends,
+    const std::size_t                          cap_apex
+)
 {
-public:
-    Elevation(Kit_mesh_builder& builder, const float half_thickness)
-        : m_builder{builder}
-        , m_half_thickness{half_thickness}
-    {
+    const std::size_t count   = stations.size();
+    const std::size_t profile = stations.front().size();
+    std::vector<std::vector<uint32_t>> vertices(count);
+    for (std::size_t j = 0; j < count; ++j) {
+        for (const glm::vec3& point : stations[j]) {
+            vertices[j].push_back(builder.add_vertex(point));
+        }
     }
-
-    auto point(const float x, const float y) -> Elevation_point
-    {
-        for (const Elevation_point& p : m_points) {
-            if ((p.x == x) && (p.y == y)) {
-                return p;
+    const std::size_t cells = (path == Sweep_path::closed) ? count : (count - 1);
+    for (std::size_t j = 0; j < cells; ++j) {
+        const std::vector<uint32_t>& a = vertices[j];
+        const std::vector<uint32_t>& b = vertices[(j + 1) % count];
+        const bool split = (ends == Sweep_ends::triangles) && ((j == 0) || ((j + 1) == cells));
+        for (std::size_t k = 0; k < profile; ++k) {
+            const std::size_t next = (k + 1) % profile;
+            if (split) {
+                builder.add_triangle(a[k], b[k], b[next]);
+                builder.add_triangle(a[k], b[next], a[next]);
+            } else {
+                builder.add_quad(a[k], b[k], b[next], a[next]);
             }
         }
-        m_points.push_back(Elevation_point{
-            .x     = x,
-            .y     = y,
-            .front = m_builder.add_vertex(glm::vec3{x, y,  m_half_thickness}),
-            .back  = m_builder.add_vertex(glm::vec3{x, y, -m_half_thickness})
-        });
-        return m_points.back();
     }
-
-    // A front facet of the corners (counter-clockwise seen from +Z) and its mirror on the back.
-    void add_face(const std::vector<Elevation_point>& corners)
-    {
-        std::vector<uint32_t> front;
-        std::vector<uint32_t> back;
-        for (const Elevation_point& p : corners) {
-            front.push_back(p.front);
-        }
-        for (std::vector<Elevation_point>::const_reverse_iterator it = corners.rbegin(); it != corners.rend(); ++it) {
-            back.push_back(it->back);
-        }
-        m_builder.add_polygon(front);
-        m_builder.add_polygon(back);
+    if (path == Sweep_path::closed) {
+        return;
     }
+    const std::vector<uint32_t>& first = vertices.front();
+    const std::vector<uint32_t>& last  = vertices.back();
+    for (std::size_t k = 1; (k + 1) < profile; ++k) {
+        const std::size_t p = (cap_apex + k) % profile;
+        const std::size_t q = (cap_apex + k + 1) % profile;
+        builder.add_triangle(first[cap_apex], first[p], first[q]);
+        builder.add_triangle(last[cap_apex],  last[q],  last[p]);
+    }
+}
 
-private:
-    Kit_mesh_builder&            m_builder;
-    float                        m_half_thickness;
-    std::vector<Elevation_point> m_points;
-};
+// As add_sweep() for a convex profile on an open path of scaled or parallel stations: each end is one polygon.
+void add_prism(Kit_mesh_builder& builder, const std::vector<std::vector<glm::vec3>>& stations)
+{
+    const std::size_t count   = stations.size();
+    const std::size_t profile = stations.front().size();
+    std::vector<std::vector<uint32_t>> vertices(count);
+    for (std::size_t j = 0; j < count; ++j) {
+        for (const glm::vec3& point : stations[j]) {
+            vertices[j].push_back(builder.add_vertex(point));
+        }
+    }
+    for (std::size_t j = 0; (j + 1) < count; ++j) {
+        for (std::size_t k = 0; k < profile; ++k) {
+            const std::size_t next = (k + 1) % profile;
+            builder.add_quad(vertices[j][k], vertices[j + 1][k], vertices[j + 1][next], vertices[j][next]);
+        }
+    }
+    builder.add_polygon(vertices.front());
+    const std::vector<uint32_t> end(vertices.back().rbegin(), vertices.back().rend());
+    builder.add_polygon(end);
+}
 
-// One merlon of a battlement run: its span and its top's corners from x0 to x1.
-class Merlon
+constexpr int battlement_max_bays = 22; // keeps a run within the kit's ceiling at every length
+
+enum class Merlon_top : unsigned int { square = 0, swallowtail, pointed };
+
+// The sizes of a battlement run; its detail follows the merlon's size where the stated sizes leave little room.
+class Battlement_form
 {
 public:
-    float                  x0;
-    float                  x1;
-    std::vector<glm::vec2> top; // (x, y), left to right
+    explicit Battlement_form(const Kit_parameter_values& values);
+
+    float         half_length   {0.0f};
+    float         half_thickness{0.0f};
+    float         sill          {0.0f}; // the crenels' sill, the top of the sill band
+    float         top           {0.0f}; // the copings' highest line
+    int           bays          {1};
+    float         pitch         {0.0f};
+    float         merlon        {0.0f}; // width
+    Merlon_top style         {Merlon_top::square};
+    float         band          {0.0f}; // height of the sill band
+    float         overhang      {0.0f}; // of the band and the copings beyond the faces
+    float         cap           {0.0f}; // height of a coping
+    float         drop          {0.0f}; // a swallowtail's notch and a pointed merlon's shoulders below its top
+    float         chamfer       {0.0f}; // of a merlon's upright edges
+    float         loop_half     {0.0f}; // half the arrow loop's width
+    float         loop_bottom   {0.0f};
+    float         loop_top      {0.0f};
+    float         splay         {0.0f}; // the loop's reveal on a face
+    float         splay_depth   {0.0f};
 };
+
+Battlement_form::Battlement_form(const Kit_parameter_values& values)
+    : half_length   {0.5f * values.get_float("length")}
+    , half_thickness{0.5f * values.get_float("thickness")}
+    , sill          {values.get_float("height")}
+    , top           {values.get_float("height") + values.get_float("merlon_height")}
+{
+    const float            merlon_height = values.get_float("merlon_height");
+    const float            merlon_width  = values.get_float("merlon_width");
+    const float            crenel_width  = values.get_float("crenel_width");
+    const std::string_view merlon_top    = values.get_enum("merlon");
+    bays   = std::clamp(static_cast<int>(std::lround((2.0f * half_length) / (merlon_width + crenel_width))), 1, battlement_max_bays);
+    pitch  = (2.0f * half_length) / static_cast<float>(bays);
+    merlon = pitch * merlon_width / (merlon_width + crenel_width);
+    style  = (merlon_top == "swallowtail") ? Merlon_top::swallowtail : ((merlon_top == "pointed") ? Merlon_top::pointed : Merlon_top::square);
+    band     = std::min(0.07f, 0.25f * sill);
+    overhang = std::min(0.035f, 0.4f * half_thickness);
+    cap      = std::min(0.12f, 0.25f * merlon_height);
+    drop     = (style == Merlon_top::square) ? 0.0f : (0.3f * merlon_height);
+    const float body = merlon_height - cap - drop; // the merlon's height under its lowest top line
+    chamfer     = std::min(std::min(0.04f, 0.08f * merlon), 0.35f * half_thickness);
+    loop_half   = std::min(0.05f, 0.1f * merlon);
+    splay       = std::min(std::min(0.06f, 0.12f * merlon), 0.12f * body);
+    splay_depth = std::min(splay, 0.5f * half_thickness);
+    loop_bottom = sill + (0.2f * body);
+    loop_top    = loop_bottom + (0.55f * body);
+}
+
+// A vertex of a merlon's face and its mirror image on the other face.
+class Face_pair
+{
+public:
+    uint32_t front{0};
+    uint32_t back {0};
+};
+
+// A facet of the front face (counter-clockwise seen from +Z) and its mirror image on the back.
+void add_face_pair(Kit_mesh_builder& builder, const std::vector<Face_pair>& corners)
+{
+    std::vector<uint32_t> front;
+    std::vector<uint32_t> back;
+    for (const Face_pair& corner : corners) {
+        front.push_back(corner.front);
+    }
+    for (std::vector<Face_pair>::const_reverse_iterator it = corners.rbegin(); it != corners.rend(); ++it) {
+        back.push_back(it->back);
+    }
+    builder.add_polygon(front);
+    builder.add_polygon(back);
+}
+
+// One merlon on the sill band, centered at center_x: chamfered upright edges and an arrow loop splayed on both faces.
+void add_merlon(Kit_mesh_builder& builder, const Battlement_form& form, const float center_x)
+{
+    const float half    = 0.5f * form.merlon;
+    const float x0      = center_x - half;
+    const float x1      = center_x + half;
+    const float z_face  = form.half_thickness;
+    const float z_side  = form.half_thickness - form.chamfer;
+    // The body's top line under the coping: its height at the merlon's sides and at its center.
+    const float y_edge  = (form.style == Merlon_top::pointed) ? (form.top - form.cap - form.drop) : (form.top - form.cap);
+    const float y_mid   = (form.style == Merlon_top::swallowtail) ? (form.top - form.cap - form.drop) : (form.top - form.cap);
+    const float y_inset = y_edge + ((y_mid - y_edge) * (form.chamfer / half)); // at the chamfer's inner line
+
+    // The plan's corners counter-clockwise seen from above, from the front face's left end.
+    const std::array<glm::vec2, 8> plan{
+        glm::vec2{x0 + form.chamfer,  z_face}, glm::vec2{x1 - form.chamfer,  z_face}, glm::vec2{x1,  z_side}, glm::vec2{x1, -z_side},
+        glm::vec2{x1 - form.chamfer, -z_face}, glm::vec2{x0 + form.chamfer, -z_face}, glm::vec2{x0, -z_side}, glm::vec2{x0,  z_side}
+    };
+    std::array<uint32_t, 8> bottom{};
+    std::array<uint32_t, 8> upper{};
+    for (std::size_t i = 0; i < plan.size(); ++i) {
+        const bool inset = (i == 0) || (i == 1) || (i == 4) || (i == 5);
+        bottom[i] = builder.add_vertex(glm::vec3{plan[i].x, form.sill, plan[i].y});
+        upper[i]  = builder.add_vertex(glm::vec3{plan[i].x, inset ? y_inset : y_edge, plan[i].y});
+    }
+    const auto pair_at = [&builder](const float x, const float y, const float z) -> Face_pair {
+        return Face_pair{.front = builder.add_vertex(glm::vec3{x, y, z}), .back = builder.add_vertex(glm::vec3{x, y, -z})};
+    };
+    const float hole_x0 = center_x - form.loop_half;
+    const float hole_x1 = center_x + form.loop_half;
+    const float z_loop  = z_face - form.splay_depth;
+    const std::array<Face_pair, 4> reveal{
+        pair_at(hole_x0 - form.splay, form.loop_bottom - form.splay, z_face), pair_at(hole_x1 + form.splay, form.loop_bottom - form.splay, z_face),
+        pair_at(hole_x1 + form.splay, form.loop_top + form.splay,    z_face), pair_at(hole_x0 - form.splay, form.loop_top + form.splay,    z_face)
+    };
+    const std::array<Face_pair, 4> loop{
+        pair_at(hole_x0, form.loop_bottom, z_loop), pair_at(hole_x1, form.loop_bottom, z_loop),
+        pair_at(hole_x1, form.loop_top,    z_loop), pair_at(hole_x0, form.loop_top,    z_loop)
+    };
+    const Face_pair low_left  {.front = bottom[0], .back = bottom[5]};
+    const Face_pair low_right {.front = bottom[1], .back = bottom[4]};
+    const Face_pair high_left {.front = upper[0],  .back = upper[5]};
+    const Face_pair high_right{.front = upper[1],  .back = upper[4]};
+
+    // A face: the frame between its outline and the reveal's rectangle, then the reveal down to the loop.
+    add_face_pair(builder, {low_left,  low_right,  reveal[1], reveal[0]});
+    add_face_pair(builder, {low_right, high_right, reveal[2], reveal[1]});
+    add_face_pair(builder, {high_left, low_left,   reveal[0], reveal[3]});
+    if (form.style == Merlon_top::square) {
+        add_face_pair(builder, {high_right, high_left, reveal[3], reveal[2]});
+        builder.add_polygon(upper);
+    } else {
+        const Face_pair middle = pair_at(center_x, y_mid, z_face);
+        if (form.style == Merlon_top::pointed) {
+            add_face_pair(builder, {high_right, middle, high_left, reveal[3], reveal[2]});
+        } else {
+            add_face_pair(builder, {high_right, middle, reveal[2]});
+            add_face_pair(builder, {middle, reveal[3], reveal[2]});
+            add_face_pair(builder, {middle, high_left, reveal[3]});
+        }
+        builder.add_polygon(std::array<uint32_t, 6>{middle.front, upper[1], upper[2], upper[3], upper[4], middle.back});
+        builder.add_polygon(std::array<uint32_t, 6>{middle.back, upper[5], upper[6], upper[7], upper[0], middle.front});
+    }
+    for (std::size_t i = 0; i < 4; ++i) {
+        const std::size_t next = (i + 1) % 4;
+        add_face_pair(builder, {reveal[i], reveal[next], loop[next], loop[i]});
+        builder.add_quad(loop[i].front, loop[next].front, loop[next].back, loop[i].back);
+    }
+    for (const std::size_t i : std::array<std::size_t, 6>{1, 2, 3, 5, 6, 7}) {
+        const std::size_t next = (i + 1) % plan.size();
+        builder.add_quad(bottom[i], bottom[next], upper[next], upper[i]);
+    }
+    const std::array<uint32_t, 8> base{bottom[7], bottom[6], bottom[5], bottom[4], bottom[3], bottom[2], bottom[1], bottom[0]};
+    builder.add_polygon(base);
+}
+
+// A merlon's coping: a saddleback over a square merlon, a slab along the top lines of the two other forms.
+void add_merlon_coping(Kit_mesh_builder& builder, const Battlement_form& form, const float center_x)
+{
+    const float half   = 0.5f * form.merlon;
+    const float width  = form.half_thickness + form.overhang;
+    const float bottom = form.top - form.cap;
+    std::vector<std::vector<glm::vec3>> stations;
+    if (form.style == Merlon_top::square) {
+        const float reach = std::min(form.overhang, 0.2f * (form.pitch - form.merlon)); // into the crenels
+        const float eaves = bottom + (0.45f * form.cap);
+        for (const float x : {center_x - half - reach, center_x + half + reach}) {
+            stations.push_back({{x, bottom, -width}, {x, bottom, width}, {x, eaves, width}, {x, form.top, 0.0f}, {x, eaves, -width}});
+        }
+        add_prism(builder, stations);
+        return;
+    }
+    const float edge   = (form.style == Merlon_top::pointed) ? (bottom - form.drop) : bottom;
+    const float middle = (form.style == Merlon_top::pointed) ? bottom : (bottom - form.drop);
+    for (const glm::vec2 point : {glm::vec2{center_x - half, edge}, glm::vec2{center_x, middle}, glm::vec2{center_x + half, edge}}) {
+        stations.push_back({
+            {point.x, point.y, -width}, {point.x, point.y, width}, {point.x, point.y + form.cap, width}, {point.x, point.y + form.cap, -width}
+        });
+    }
+    add_prism(builder, stations);
+}
 
 void generate_battlement(const Kit_parameter_values& values, GEO::Mesh& mesh)
 {
-    const float            half_length = 0.5f * values.get_float("length");
-    const float            sill        = values.get_float("height");
-    const float            top         = sill + values.get_float("merlon_height");
-    const float            merlon_w    = values.get_float("merlon_width");
-    const float            crenel_w    = values.get_float("crenel_width");
-    const std::string_view style       = values.get_enum("merlon");
-    const int   bays   = std::clamp(static_cast<int>(std::lround((2.0f * half_length) / (merlon_w + crenel_w))), 1, battlement_max_bays);
-    const float pitch  = (2.0f * half_length) / static_cast<float>(bays);
-    const float crenel = pitch * crenel_w / (merlon_w + crenel_w);
-    // A swallowtail's notch and a pointed merlon's shoulders lie this far below its top.
-    const float drop   = 0.3f * (top - sill);
-
-    // Bays have a crenel at their center and half merlons at their ends, so runs join into whole merlons.
-    std::vector<Merlon> merlons;
-    for (int i = 0; i <= bays; ++i) {
-        const float x0 = (i == 0)    ? -half_length : (((static_cast<float>(i) - 0.5f - (0.5f * static_cast<float>(bays))) * pitch) + (0.5f * crenel));
-        const float x1 = (i == bays) ?  half_length : (((static_cast<float>(i) + 0.5f - (0.5f * static_cast<float>(bays))) * pitch) - (0.5f * crenel));
-        const float xc = (i == 0) ? -half_length : ((i == bays) ? half_length : ((static_cast<float>(i) - (0.5f * static_cast<float>(bays))) * pitch));
-        Merlon merlon{.x0 = x0, .x1 = x1, .top = {}};
-        if (style == "square") {
-            merlon.top = {{x0, top}, {x1, top}};
-        } else {
-            const float edge   = (style == "swallowtail") ? top : (top - drop);
-            const float center = (style == "swallowtail") ? (top - drop) : top;
-            if (i > 0) {
-                merlon.top.emplace_back(x0, edge);
-            }
-            merlon.top.emplace_back(xc, center);
-            if (i < bays) {
-                merlon.top.emplace_back(x1, edge);
-            }
-        }
-        merlons.push_back(std::move(merlon));
-    }
-
+    const Battlement_form form{values};
     Kit_mesh_builder builder;
-    Elevation        elevation{builder, 0.5f * values.get_float("thickness")};
 
-    // The face in columns at every corner's x, so it is its own mirror image: the breastwork under every column and,
-    // under each merlon's top, the merlon's face split at the top's inner corners.
-    std::vector<float> columns;
-    for (const Merlon& merlon : merlons) {
-        for (std::size_t k = 0; k < merlon.top.size(); ++k) {
-            columns.push_back(merlon.top[k].x);
-            if ((k + 1) < merlon.top.size()) {
-                const glm::vec2 a = merlon.top[k];
-                const glm::vec2 b = merlon.top[k + 1];
-                elevation.add_face({elevation.point(a.x, sill), elevation.point(b.x, sill), elevation.point(b.x, b.y), elevation.point(a.x, a.y)});
-            }
-        }
-    }
-    for (std::size_t i = 0; (i + 1) < columns.size(); ++i) {
-        const float a = columns[i];
-        const float b = columns[i + 1];
-        elevation.add_face({elevation.point(a, 0.0f), elevation.point(b, 0.0f), elevation.point(b, sill), elevation.point(a, sill)});
-    }
+    // The breastwork under the sill band, flush with the wall it stands on.
+    const float band_bottom = form.sill - form.band;
+    builder.set_slot(medieval_wall_slot);
+    builder.add_box(glm::vec3{-form.half_length, 0.0f, -form.half_thickness}, glm::vec3{form.half_length, band_bottom, form.half_thickness});
 
-    // The outline counter-clockwise seen from +Z: the base left to right, the right end, merlon tops and crenels right to
-    // left, the left end.
-    std::vector<glm::vec2> outline;
-    for (const float x : columns) {
-        outline.emplace_back(x, 0.0f);
+    // The sill band: the crenels' sill stones as one course, weathered on both edges.
+    const float band_width = form.half_thickness + form.overhang;
+    const float band_top   = form.half_thickness + (0.3f * form.overhang);
+    const float band_edge  = form.sill - (0.4f * form.band);
+    builder.set_slot(medieval_trim_slot);
+    std::vector<std::vector<glm::vec3>> course;
+    for (const float x : {-form.half_length, form.half_length}) {
+        course.push_back({
+            {x, band_bottom, -band_width}, {x, band_bottom, band_width}, {x, band_edge, band_width},
+            {x, form.sill, band_top}, {x, form.sill, -band_top}, {x, band_edge, -band_width}
+        });
     }
-    outline.emplace_back(half_length, sill);
-    for (std::size_t m = merlons.size(); m-- > 0;) {
-        const Merlon& merlon = merlons[m];
-        if ((m + 1) < merlons.size()) {
-            outline.emplace_back(merlon.x1, sill);
-        }
-        for (std::vector<glm::vec2>::const_reverse_iterator it = merlon.top.rbegin(); it != merlon.top.rend(); ++it) {
-            outline.push_back(*it);
-        }
-        outline.emplace_back(merlon.x0, sill);
-    }
-    for (std::size_t i = 0; i < outline.size(); ++i) {
-        const Elevation_point p = elevation.point(outline[i].x, outline[i].y);
-        const Elevation_point q = elevation.point(outline[(i + 1) % outline.size()].x, outline[(i + 1) % outline.size()].y);
-        builder.add_quad(p.front, p.back, q.back, q.front);
+    add_prism(builder, course);
+
+    // A bay is a merlon between two half crenels, so runs join into whole crenels and their ends are the breastwork's.
+    for (int i = 0; i < form.bays; ++i) {
+        const float center_x = (static_cast<float>(i) + 0.5f - (0.5f * static_cast<float>(form.bays))) * form.pitch;
+        builder.set_slot(medieval_wall_slot);
+        add_merlon(builder, form, center_x);
+        builder.set_slot(medieval_trim_slot);
+        add_merlon_coping(builder, form, center_x);
     }
     builder.write(mesh);
 }
 
-// One point of a tower ring in plan: x, z and its key, the angle from the front (+Z) going toward +X and the back.
-class Plan_point
+constexpr float tower_floor        = 0.3f;   // thickness of the top floor: the ceiling lies this far under the height
+constexpr float tower_head_above   = 0.1f;   // the wall's cut rises this far above the doorway's clear height
+constexpr float tower_sill         = 1.0f;   // the parapet's breastwork above the walkway
+constexpr float tower_merlon       = 0.9f;   // merlons above the breastwork, their copings included
+constexpr float tower_coping       = 0.14f;  // height of a merlon's coping
+constexpr float tower_overhang     = 0.25f;  // the parapet stands this far out on its corbels
+constexpr float tower_parapet      = 0.35f;  // thickness of the parapet
+constexpr float tower_rebate       = 0.04f;  // the wall's cut is this much wider than the doorway's frame on each side
+constexpr float tower_frame        = 0.28f;  // width of the doorway's jamb stones
+constexpr float tower_ear          = 0.07f;  // the lintel reaches this far past the jamb stones
+constexpr float tower_plinth       = 0.07f;  // the plinth course stands this far out of the batter's foot
+constexpr float tower_plinth_high  = 0.35f;
+constexpr float tower_slit_gap     = 0.4f;   // the lowest row of slits above the wall's cut
+constexpr float tower_slit_height  = 0.9f;
+constexpr float tower_slit_pitch   = 1.5f;   // from one row of slits to the next
+constexpr float tower_slit_outer   = 0.14f;  // half widths of a slit: on the outer face,
+constexpr float tower_slit_throat  = 0.045f; // at its narrowest, 0.4 of the wall in,
+constexpr float tower_slit_inner   = 0.22f;  // and on the inner face, where the wall has room
+constexpr float tower_point_margin = 0.07f;  // plan corners nearer a jamb than this along the wall are left out
+constexpr int   tower_min_merlons  = 5;
+constexpr int   tower_max_merlons  = 6;      // keeps a wide round tower within the kit's ceiling
+
+// The tower's sizes and plan, shared by the generator, the connectors and the checks. A plan point is a unit corner
+// times a scale: a round tower's corner radius, a square tower's half width.
+class Tower_form
 {
 public:
-    float x;
-    float z;
-    float key;
+    explicit Tower_form(const Kit_parameter_values& values);
+
+    // The point of the wall line of the scale toward the direction, the lateral distance along the wall from it.
+    [[nodiscard]] auto plan_point(const glm::vec2& direction, float lateral, float scale) const -> glm::vec2;
+
+    bool                   round        {true};
+    bool                   battlement   {true};
+    float                  radius       {0.0f}; // of the outer face
+    float                  wall         {0.0f};
+    float                  inner        {0.0f}; // of the inner face
+    float                  door_half    {0.0f};
+    float                  door_height  {0.0f};
+    float                  cut_height   {0.0f}; // the head of the wall's cut, and of the battered base
+    float                  height       {0.0f}; // the top floor
+    float                  soffit       {0.0f}; // the ceiling inside and the parapet's underside
+    float                  wall_top     {0.0f}; // inside the top floor
+    float                  batter       {0.0f}; // the batter's reach at the ground
+    float                  foot         {0.0f}; // the plinth's scale
+    float                  frame_front  {0.0f}; // z of the doorway's frame
+    float                  corbel_height{0.0f};
+    float                  lintel       {0.0f}; // height of the lintel at its ends
+    float                  inscribe     {1.0f}; // a side's distance from the axis over its corners'
+    int                    slit_rows    {0};    // the rows that fit
+    std::vector<glm::vec2> unit;                // plan corners (x, z), counter-clockwise seen from above, by rising key
+    std::vector<float>     keys;                // angle from the front (+Z) toward +X, in (-pi, pi]
+    std::size_t            front        {0};    // the corner right of the front side
 };
 
-[[nodiscard]] auto plan_key(const float x, const float z) -> float
+Tower_form::Tower_form(const Kit_parameter_values& values)
+    : round      {values.get_enum("profile") == "round"}
+    , battlement {values.get_enum("top") == "battlement"}
+    , radius     {0.5f * values.get_float("width")}
+    , wall       {values.get_float("wall")}
+    , inner      {(0.5f * values.get_float("width")) - values.get_float("wall")}
+    , door_half  {0.5f * values.get_float("opening_width")}
+    , door_height{values.get_float("opening_height")}
+    , cut_height {values.get_float("opening_height") + tower_head_above}
+    , height     {values.get_float("height")}
+    , soffit     {values.get_float("height") - tower_floor}
+    , wall_top   {values.get_float("height") - (0.6f * tower_floor)}
 {
-    float key = std::atan2(-z, x) + (0.5f * std::numbers::pi_v<float>);
-    if (key < 0.0f) {
-        key += 2.0f * std::numbers::pi_v<float>;
+    constexpr float pi = std::numbers::pi_v<float>;
+    batter        = cut_height * std::tan(glm::radians(values.get_float("batter")));
+    foot          = radius + batter + tower_plinth;
+    corbel_height = std::min(0.4f, soffit - cut_height - 0.2f);
+    lintel        = std::min(0.3f, 0.5f * (soffit - cut_height));
+    if (round) {
+        // Three sides per merlon; a side lies across the front, so the doorway is under a crenel.
+        const int merlons = std::clamp(static_cast<int>(std::lround(2.0f * pi * radius / 1.6f)), tower_min_merlons, tower_max_merlons);
+        const int sides   = 3 * merlons;
+        for (int h = ((sides % 2) == 0) ? (1 - sides) : (2 - sides); h <= sides; h += 2) {
+            if (h == sides) {
+                unit.emplace_back(0.0f, -1.0f);
+                keys.push_back(pi);
+                continue;
+            }
+            const float angle = static_cast<float>(std::abs(h)) * pi / static_cast<float>(sides);
+            unit.emplace_back((h < 0) ? -std::sin(angle) : std::sin(angle), std::cos(angle));
+            keys.push_back((h < 0) ? -angle : angle);
+        }
+        inscribe = std::cos(pi / static_cast<float>(sides));
+    } else {
+        unit = {glm::vec2{-1.0f, -1.0f}, glm::vec2{-1.0f, 1.0f}, glm::vec2{1.0f, 1.0f}, glm::vec2{1.0f, -1.0f}};
+        keys = {-0.75f * pi, -0.25f * pi, 0.25f * pi, 0.75f * pi};
     }
-    return key;
-}
-
-constexpr float tower_sill        = 1.0f;  // the parapet's breastwork above the walkway
-constexpr float tower_merlon      = 0.9f;  // merlons above the breastwork
-constexpr float tower_floor       = 0.3f;  // thickness of the top floor
-constexpr float tower_corbel      = 0.35f; // the parapet stands out on a sloped corbel course this high
-constexpr float tower_overhang    = 0.15f; // and this far beyond the walls
-constexpr float tower_jamb_margin = 0.04f; // ring corners nearer an opening's jambs than this are left out
-constexpr float tower_head_above  = 0.1f;  // the doorway's cut rises this far above its clear height, behind the lintel
-constexpr float tower_lintel      = 0.35f; // the lintel's height over the doorway
-constexpr float tower_slit_half   = 0.06f;
-constexpr float tower_slit_height = 1.0f;
-constexpr float tower_slit_pitch  = 1.6f;  // from one row of slits to the next
-constexpr float tower_slit_gap    = 0.5f;  // the lowest row above the doorway's cut
-constexpr float tower_slit_clear  = 0.2f;  // a row's top stays this far under the ceiling and the corbel course
-constexpr int   tower_max_merlons = 10;    // keeps a wide round tower within the kit's ceiling
-
-// A cut through the wall in plan: jambs on the planes dot(p, lateral) = offset +- half_width, toward direction.
-class Tower_cut
-{
-public:
-    glm::vec2 direction;
-    glm::vec2 lateral;
-    float     offset;
-    float     half_width;
-};
-
-// An opening: a cut from y0 to y1; the rows of slits share their cuts.
-class Tower_opening
-{
-public:
-    std::size_t cut;
-    float       y0;
-    float       y1;
-};
-
-// An entry of the body's ring: a plan corner at half size 1, or one jamb of a cut.
-class Ring_entry
-{
-public:
-    glm::vec2                  unit{0.0f};
-    std::optional<std::size_t> cut;
-    float                      side{0.0f}; // -1 or +1 along the cut's lateral axis
-};
-
-// The tower's plan (doc/editor/level_kit_shapes.md "Tower"): the body's ring with its openings, and the parapet's pattern.
-class Tower_plan
-{
-public:
-    explicit Tower_plan(const Kit_parameter_values& values)
-        : round       {values.get_enum("profile") == "round"}
-        , radius      {0.5f * values.get_float("width")}
-        , wall        {values.get_float("wall")}
-        , parapet     {std::min(values.get_float("wall"), 0.45f)}
-        , door_half   {0.5f * values.get_float("opening_width")}
-        , door_height {values.get_float("opening_height")}
-        , cut_height  {values.get_float("opening_height") + tower_head_above}
-        , height      {values.get_float("height")}
-        , foot        {radius + (cut_height * std::tan(glm::radians(values.get_float("batter"))))}
-        , battlement  {values.get_enum("top") == "battlement"}
-        , floor_y     {height - tower_floor}
-        , top_y       {battlement ? (height - tower_corbel) : height}
-    {
-        const float inner = radius - wall;
-        std::vector<glm::vec2> corners;
-        if (round) {
-            const int merlons = std::clamp(static_cast<int>(std::lround(std::numbers::pi_v<float> * 2.0f * radius / 1.7f)), 4, tower_max_merlons);
-            sides = 3 * merlons;
-            const float step = 2.0f * std::numbers::pi_v<float> / static_cast<float>(sides);
-            for (int i = 0; i < sides; ++i) {
-                const float a = (-0.5f * std::numbers::pi_v<float>) + ((static_cast<float>(i) + 0.5f) * step);
-                corners.emplace_back(std::cos(a), -std::sin(a));
-                parapet_ring.push_back(Plan_point{.x = std::cos(a), .z = -std::sin(a), .key = (static_cast<float>(i) + 0.5f) * step});
-                crenel.push_back((i % 3) == 2);
-            }
-        } else {
-            sides = 4;
-            // Per side: corner merlons, crenels with merlons between them; merlons are 1.6 times as wide as crenels.
-            const int   per_side   = std::clamp(static_cast<int>(std::lround((2.0f * radius) / 2.6f)), 1, 6);
-            const float crenel_len = 2.0f / ((1.6f * static_cast<float>(per_side + 1)) + static_cast<float>(per_side));
-            const float merlon_len = 1.6f * crenel_len;
-            corners = {glm::vec2{1.0f, 1.0f}, glm::vec2{1.0f, -1.0f}, glm::vec2{-1.0f, -1.0f}, glm::vec2{-1.0f, 1.0f}};
-            for (std::size_t c = 0; c < 4; ++c) {
-                const glm::vec2 from = corners[c];
-                const glm::vec2 dir  = 0.5f * (corners[(c + 1) % 4] - from);
-                parapet_ring.push_back(Plan_point{.x = from.x, .z = from.y, .key = plan_key(from.x, from.y)});
-                crenel.push_back(false);
-                float along = merlon_len;
-                for (int k = 0; k < per_side; ++k) {
-                    for (const float offset : {along, along + crenel_len}) {
-                        const glm::vec2 p = from + (offset * dir);
-                        parapet_ring.push_back(Plan_point{.x = p.x, .z = p.y, .key = plan_key(p.x, p.y)});
-                        crenel.push_back(offset == along);
-                    }
-                    along += crenel_len + merlon_len;
-                }
-            }
-            // The ring starts at its smallest key, after the front.
-            const std::vector<Plan_point>::iterator first = std::min_element(
-                parapet_ring.begin(), parapet_ring.end(), [](const Plan_point& a, const Plan_point& b) { return a.key < b.key; }
-            );
-            const std::ptrdiff_t shift = first - parapet_ring.begin();
-            std::rotate(parapet_ring.begin(), first, parapet_ring.end());
-            std::rotate(crenel.begin(), crenel.begin() + shift, crenel.end());
-        }
-
-        // The doorway at the front, then rows of arrow slits between the side connectors, as many rows as fit.
-        cuts.push_back(Tower_cut{.direction = {0.0f, 1.0f}, .lateral = {1.0f, 0.0f}, .offset = 0.0f, .half_width = door_half});
-        openings.push_back(Tower_opening{.cut = 0, .y0 = 0.0f, .y1 = cut_height});
-        if (round) {
-            for (int k = 0; k < 4; ++k) {
-                const float     angle = (0.25f + (0.5f * static_cast<float>(k))) * std::numbers::pi_v<float>;
-                const glm::vec2 direction{std::sin(angle), std::cos(angle)};
-                cuts.push_back(Tower_cut{.direction = direction, .lateral = {direction.y, -direction.x}, .offset = 0.0f, .half_width = tower_slit_half});
-            }
-        } else {
-            for (const glm::vec2 direction : {glm::vec2{-1.0f, 0.0f}, glm::vec2{1.0f, 0.0f}, glm::vec2{0.0f, -1.0f}}) {
-                for (const float offset : {-0.5f * inner, 0.5f * inner}) {
-                    cuts.push_back(Tower_cut{.direction = direction, .lateral = {direction.y, -direction.x}, .offset = offset, .half_width = tower_slit_half});
-                }
-            }
-        }
-        const int rows = values.get_int("slit_rows");
-        int       made = 0;
-        for (int row = 0; row < rows; ++row) {
-            const float y0 = cut_height + tower_slit_gap + (static_cast<float>(row) * tower_slit_pitch);
-            const float y1 = y0 + tower_slit_height;
-            if (y1 > (std::min(floor_y, top_y) - tower_slit_clear)) {
-                break;
-            }
-            for (std::size_t c = 1; c < cuts.size(); ++c) {
-                openings.push_back(Tower_opening{.cut = c, .y0 = y0, .y1 = y1});
-            }
-            ++made;
-        }
-        if (made == 0) {
-            cuts.resize(1); // no row fits: the slits' cuts make no jambs
-        }
-
-        // A corner is kept when it lies on the same side of every jamb plane at every radius, away from the plane.
-        for (const glm::vec2& unit : corners) {
-            bool keep = true;
-            for (const Tower_cut& opening : cuts) {
-                if (glm::dot(unit, opening.direction) <= 0.0f) {
-                    continue;
-                }
-                int inside = 0;
-                for (const float r : {inner, radius, foot}) {
-                    const float l = std::abs(glm::dot(unit * r, opening.lateral) - opening.offset);
-                    if (std::abs(l - opening.half_width) < tower_jamb_margin) {
-                        keep = false;
-                    }
-                    inside += (l < opening.half_width) ? 1 : 0;
-                }
-                if ((inside != 0) && (inside != 3)) {
-                    keep = false;
-                }
-            }
-            if (keep) {
-                ring.push_back(Ring_entry{.unit = unit, .cut = std::nullopt, .side = 0.0f});
-            }
-        }
-        for (std::size_t j = 0; j < cuts.size(); ++j) {
-            for (const float side : {-1.0f, 1.0f}) {
-                ring.push_back(Ring_entry{.unit = glm::vec2{0.0f}, .cut = j, .side = side});
-            }
-        }
-        std::sort(ring.begin(), ring.end(), [this](const Ring_entry& a, const Ring_entry& b) {
-            const glm::vec2 pa = position(a, radius);
-            const glm::vec2 pb = position(b, radius);
-            return plan_key(pa.x, pa.y) < plan_key(pb.x, pb.y);
-        });
-        // The cut each segment (entry k to k + 1) crosses, if any.
-        for (std::size_t k = 0; k < ring.size(); ++k) {
-            const glm::vec2 middle = 0.5f * (position(ring[k], radius) + position(ring[(k + 1) % ring.size()], radius));
-            std::optional<std::size_t> crossed;
-            for (std::size_t j = 0; j < cuts.size(); ++j) {
-                const Tower_cut& opening = cuts[j];
-                if ((glm::dot(middle, opening.direction) > 0.0f) && (std::abs(glm::dot(middle, opening.lateral) - opening.offset) < opening.half_width)) {
-                    crossed = j;
-                }
-            }
-            segment_cut.push_back(crossed);
-        }
+    // The frame stands out of the plinth where the base ends in it.
+    frame_front = plan_point(glm::vec2{0.0f, 1.0f}, door_half + (0.5f * tower_frame), foot).y + 0.06f;
+    while (keys[front] < 0.0f) {
+        ++front;
     }
-
-    // An entry's plan position at a half size: a corner scaled, or a jamb on its plane at the ring's distance.
-    [[nodiscard]] auto position(const Ring_entry& entry, const float half_size) const -> glm::vec2
-    {
-        if (!entry.cut.has_value()) {
-            return half_size * entry.unit;
-        }
-        const Tower_cut& opening = cuts[entry.cut.value()];
-        const float l     = opening.offset + (entry.side * opening.half_width);
-        const float depth = round ? std::sqrt((half_size * half_size) - (l * l)) : half_size;
-        return (l * opening.lateral) + (depth * opening.direction);
-    }
-
-    bool                                    round;
-    float                                   radius;
-    float                                   wall;
-    float                                   parapet;
-    float                                   door_half;
-    float                                   door_height; // clear, under the lintel
-    float                                   cut_height;
-    float                                   height;
-    float                                   foot;        // outer half size at the base, battered out from the cut's head down
-    bool                                    battlement;
-    float                                   floor_y;     // the ceiling of the hollow
-    float                                   top_y;       // the outer wall's top: the corbel course's foot or the flat top
-    int                                     sides{0};
-    std::vector<Tower_cut>                  cuts;
-    std::vector<Tower_opening>              openings;
-    std::vector<Ring_entry>                 ring;
-    std::vector<std::optional<std::size_t>> segment_cut;
-    std::vector<Plan_point>                 parapet_ring; // the parapet's corners at half size 1, by key
-    std::vector<bool>                       crenel;       // per parapet segment (corner i to i + 1): a crenel, else a merlon
-};
-
-constexpr uint32_t tower_wall_slot  = 0;
-constexpr uint32_t tower_floor_slot = 1;
-
-// The vertices of plan points at a height, and their keys; a closed ring repeats its first vertex a turn later.
-class Tower_level
-{
-public:
-    std::vector<uint32_t> vertices;
-    std::vector<float>    keys;
-};
-
-enum class Ring_closure : unsigned int { open = 0, closed };
-
-void add_level(Kit_mesh_builder& builder, const std::vector<Plan_point>& points, const float y, const Ring_closure closure, Tower_level& out_level)
-{
-    out_level.vertices.clear();
-    out_level.keys.clear();
-    for (const Plan_point& p : points) {
-        out_level.vertices.push_back(builder.add_vertex(glm::vec3{p.x, y, p.z}));
-        out_level.keys.push_back(p.key);
-    }
-    if (closure == Ring_closure::closed) {
-        out_level.vertices.push_back(out_level.vertices.front());
-        out_level.keys.push_back(out_level.keys.front() + (2.0f * std::numbers::pi_v<float>));
+    // As many rows of slits as stay clear of the corbels, or of the top floor.
+    const float limit = battlement ? (soffit - corbel_height - 0.15f) : (soffit - 0.2f);
+    const int   rows  = values.get_int("slit_rows");
+    while ((slit_rows < rows) && ((cut_height + tower_slit_gap + (static_cast<float>(slit_rows) * tower_slit_pitch) + tower_slit_height) <= limit)) {
+        ++slit_rows;
     }
 }
 
-// The body's ring entries at a half size and height. At the base an entry between the doorway's jambs gets no vertex
-// (its index is never used): nothing meets it there.
-void add_ring(Kit_mesh_builder& builder, const Tower_plan& plan, const float half_size, const float y, std::vector<uint32_t>& out_vertices)
+auto Tower_form::plan_point(const glm::vec2& direction, const float lateral, const float scale) const -> glm::vec2
 {
-    out_vertices.clear();
-    const std::size_t n = plan.ring.size();
-    for (std::size_t k = 0; k < n; ++k) {
-        const bool in_doorway = (y == 0.0f) && (plan.segment_cut[k] == 0u) && (plan.segment_cut[(k + n - 1) % n] == 0u);
-        if (in_doorway) {
-            out_vertices.push_back(0);
+    const glm::vec2 tangent{direction.y, -direction.x};
+    const float     depth = round ? std::sqrt((scale * scale) - (lateral * lateral)) : scale;
+    return (lateral * tangent) + (depth * direction);
+}
+
+[[nodiscard]] auto plan_key(const glm::vec2& point) -> float
+{
+    return std::atan2(point.x, point.y);
+}
+
+// A point of the wall's outer or inner ring in plan; the tag names a corner (its index) or a jamb (negative).
+class Wall_point
+{
+public:
+    glm::vec2 position{0.0f};
+    float     key     {0.0f};
+    int       tag     {0};
+};
+
+constexpr int wall_door_left_tag  = -1;
+constexpr int wall_door_right_tag = -2;
+
+[[nodiscard]] constexpr auto wall_slit_tag(const std::size_t slit, const std::size_t side) -> int
+{
+    return -10 - static_cast<int>((2 * slit) + side);
+}
+
+enum class Wall_link_kind : unsigned int { corner = 0, door_inside, door_left, door_right, slit_low, slit_high };
+
+// A line through the wall from an outer point to an inner one; the cells between links are solid or an opening's.
+class Wall_link
+{
+public:
+    Wall_link_kind kind  {Wall_link_kind::corner};
+    std::size_t       outer {0};
+    std::size_t       inner {0};
+    glm::vec2         throat{0.0f}; // a slit jamb's point at its narrowest
+};
+
+enum class Wall_cell : unsigned int { solid = 0, door, slit };
+
+// An arrow slit in plan: both jambs, by rising key, on the outer face, at the throat and on the inner face.
+class Wall_slit
+{
+public:
+    std::array<glm::vec2, 2> outer {};
+    std::array<glm::vec2, 2> throat{};
+    std::array<glm::vec2, 2> inner {};
+};
+
+enum class Wall_ring : unsigned int { outer = 0, inner };
+
+// The tower's wall: an upright shell between an outer and an inner ring, cut through by the doorway and the slits.
+class Tower_wall
+{
+public:
+    Tower_wall(Kit_mesh_builder& builder, const Tower_form& form);
+
+    void build();
+
+private:
+    void               add_slits     ();
+    void               add_points    (Wall_ring ring);
+    void               add_links     ();
+    [[nodiscard]] auto find_tag      (const std::vector<Wall_point>& points, int tag) const -> std::optional<std::size_t>;
+    [[nodiscard]] auto is_open       (std::size_t cell, std::size_t band) const -> bool;
+    [[nodiscard]] auto get_vertex    (Wall_ring ring, std::size_t index, std::size_t level) -> uint32_t;
+    [[nodiscard]] auto get_throat    (std::size_t link, std::size_t level) -> uint32_t;
+    void               get_cell_run  (Wall_ring ring, std::size_t cell, std::vector<std::size_t>& out_indices) const;
+    void               add_walls     (std::size_t cell, std::size_t band);
+    void               add_jamb      (std::size_t link, std::size_t band);
+    void               add_level_face(std::size_t cell, std::size_t level);
+
+    Kit_mesh_builder&          m_builder;
+    const Tower_form&       m_form;
+    float                      m_door_key_outer{0.0f}; // the right jamb's keys; the left jamb's are their negatives
+    float                      m_door_key_inner{0.0f};
+    std::vector<Wall_slit>  m_slits;
+    std::vector<Wall_point> m_outer;
+    std::vector<Wall_point> m_inner;
+    std::vector<Wall_link>  m_links;
+    std::vector<Wall_cell>  m_cells; // cell i lies between link i and the next
+    std::vector<float>         m_levels;
+    std::vector<uint32_t>      m_outer_vertices;
+    std::vector<uint32_t>      m_inner_vertices;
+    std::vector<uint32_t>      m_throat_vertices;
+};
+
+constexpr uint32_t wall_no_vertex = std::numeric_limits<uint32_t>::max();
+
+Tower_wall::Tower_wall(Kit_mesh_builder& builder, const Tower_form& form)
+    : m_builder{builder}
+    , m_form   {form}
+{
+    const float     cut_half = form.door_half + tower_rebate;
+    const glm::vec2 toward{0.0f, 1.0f};
+    m_door_key_outer = plan_key(form.plan_point(toward, cut_half, form.radius));
+    m_door_key_inner = plan_key(form.plan_point(toward, cut_half, form.inner));
+    m_levels = {0.0f, form.cut_height};
+    for (int row = 0; row < form.slit_rows; ++row) {
+        const float y = form.cut_height + tower_slit_gap + (static_cast<float>(row) * tower_slit_pitch);
+        m_levels.push_back(y);
+        m_levels.push_back(y + tower_slit_height);
+    }
+    m_levels.push_back(form.wall_top);
+}
+
+// The slits: four on a round tower, a third of a half turn before and after each side connector, the front two where the
+// doorway leaves them room; two on each of a square tower's side and back faces, either side of the wall a connector joins.
+void Tower_wall::add_slits()
+{
+    if (m_form.slit_rows == 0) {
+        return;
+    }
+    constexpr float pi = std::numbers::pi_v<float>;
+    const float inner_half   = std::min(tower_slit_inner, 0.2f * m_form.inner);
+    const float throat_scale = m_form.radius - (0.4f * m_form.wall);
+    const auto make_slit = [this, inner_half, throat_scale](const glm::vec2& direction, const float offset) -> Wall_slit {
+        Wall_slit slit;
+        for (std::size_t side = 0; side < 2; ++side) {
+            const float sign = (side == 0) ? -1.0f : 1.0f;
+            slit.outer [side] = m_form.plan_point(direction, offset + (sign * tower_slit_outer),  m_form.radius);
+            slit.throat[side] = m_form.plan_point(direction, offset + (sign * tower_slit_throat), throat_scale);
+            slit.inner [side] = m_form.plan_point(direction, offset + (sign * inner_half),           m_form.inner);
+        }
+        return slit;
+    };
+    if (!m_form.round) {
+        for (const glm::vec2 direction : {glm::vec2{-1.0f, 0.0f}, glm::vec2{1.0f, 0.0f}, glm::vec2{0.0f, -1.0f}}) {
+            for (const float offset : {-0.5f * m_form.inner, 0.5f * m_form.inner}) {
+                m_slits.push_back(make_slit(direction, offset));
+            }
+        }
+        return;
+    }
+    const float outer_clear = m_door_key_outer + (2.0f * tower_point_margin / m_form.radius);
+    const float inner_clear = m_door_key_inner + (2.0f * tower_point_margin / m_form.inner);
+    for (const float angle : {-pi * (2.0f / 3.0f), -pi / 3.0f, pi / 3.0f, pi * (2.0f / 3.0f)}) {
+        const Wall_slit slit = make_slit(glm::vec2{std::sin(angle), std::cos(angle)}, 0.0f);
+        const bool clear =
+            (std::min(std::abs(plan_key(slit.outer[0])), std::abs(plan_key(slit.outer[1]))) > outer_clear) &&
+            (std::min(std::abs(plan_key(slit.inner[0])), std::abs(plan_key(slit.inner[1]))) > inner_clear);
+        if (clear) {
+            m_slits.push_back(slit);
+        }
+    }
+}
+
+// A ring's points by rising key: the plan's corners but those too near a jamb or inside a slit, and the jambs.
+void Tower_wall::add_points(const Wall_ring ring)
+{
+    const bool                  outside  = (ring == Wall_ring::outer);
+    const float                 scale    = outside ? m_form.radius : m_form.inner;
+    const float                 margin   = tower_point_margin / scale;
+    const float                 door_key = outside ? m_door_key_outer : m_door_key_inner;
+    std::vector<Wall_point>& points   = outside ? m_outer : m_inner;
+    for (std::size_t k = 0; k < m_form.unit.size(); ++k) {
+        const float key  = m_form.keys[k];
+        bool        keep = std::abs(std::abs(key) - door_key) >= margin;
+        for (const Wall_slit& slit : m_slits) {
+            const std::array<glm::vec2, 2>& jambs = outside ? slit.outer : slit.inner;
+            if ((key > (plan_key(jambs[0]) - margin)) && (key < (plan_key(jambs[1]) + margin))) {
+                keep = false;
+            }
+        }
+        if (keep) {
+            points.push_back(Wall_point{.position = scale * m_form.unit[k], .key = key, .tag = static_cast<int>(k)});
+        }
+    }
+    const glm::vec2 jamb = m_form.plan_point(glm::vec2{0.0f, 1.0f}, m_form.door_half + tower_rebate, scale);
+    points.push_back(Wall_point{.position = glm::vec2{-jamb.x, jamb.y}, .key = -door_key, .tag = wall_door_left_tag});
+    points.push_back(Wall_point{.position = jamb,                       .key =  door_key, .tag = wall_door_right_tag});
+    for (std::size_t s = 0; s < m_slits.size(); ++s) {
+        const std::array<glm::vec2, 2>& jambs = outside ? m_slits[s].outer : m_slits[s].inner;
+        for (std::size_t side = 0; side < 2; ++side) {
+            points.push_back(Wall_point{.position = jambs[side], .key = plan_key(jambs[side]), .tag = wall_slit_tag(s, side)});
+        }
+    }
+    // No two keys are near each other: corners near a jamb are left out, and a slit near the doorway is not made.
+    std::sort(points.begin(), points.end(), [](const Wall_point& a, const Wall_point& b) { return a.key < b.key; });
+}
+
+auto Tower_wall::find_tag(const std::vector<Wall_point>& points, const int tag) const -> std::optional<std::size_t>
+{
+    for (std::size_t i = 0; i < points.size(); ++i) {
+        if (points[i].tag == tag) {
+            return i;
+        }
+    }
+    return std::nullopt;
+}
+
+// Links: the jambs, and each corner both rings have on the same side of the doorway's jambs.
+void Tower_wall::add_links()
+{
+    for (std::size_t k = 0; k < m_form.unit.size(); ++k) {
+        const std::optional<std::size_t> outside = find_tag(m_outer, static_cast<int>(k));
+        const std::optional<std::size_t> inside  = find_tag(m_inner, static_cast<int>(k));
+        if (!outside.has_value() || !inside.has_value()) {
             continue;
         }
-        const glm::vec2 p = plan.position(plan.ring[k], half_size);
-        out_vertices.push_back(builder.add_vertex(glm::vec3{p.x, y, p.y}));
+        const float key         = std::abs(m_form.keys[k]);
+        const bool  door_outer  = key < m_door_key_outer;
+        const bool  door_inner  = key < m_door_key_inner;
+        if (door_outer == door_inner) {
+            m_links.push_back(Wall_link{
+                .kind = door_outer ? Wall_link_kind::door_inside : Wall_link_kind::corner, .outer = outside.value(), .inner = inside.value(), .throat = {}
+            });
+        }
     }
+    m_links.push_back(Wall_link{
+        .kind = Wall_link_kind::door_left, .outer = find_tag(m_outer, wall_door_left_tag).value(), .inner = find_tag(m_inner, wall_door_left_tag).value(), .throat = {}
+    });
+    m_links.push_back(Wall_link{
+        .kind = Wall_link_kind::door_right, .outer = find_tag(m_outer, wall_door_right_tag).value(), .inner = find_tag(m_inner, wall_door_right_tag).value(), .throat = {}
+    });
+    for (std::size_t s = 0; s < m_slits.size(); ++s) {
+        for (std::size_t side = 0; side < 2; ++side) {
+            const int tag = wall_slit_tag(s, side);
+            m_links.push_back(Wall_link{
+                .kind   = (side == 0) ? Wall_link_kind::slit_low : Wall_link_kind::slit_high,
+                .outer  = find_tag(m_outer, tag).value(),
+                .inner  = find_tag(m_inner, tag).value(),
+                .throat = m_slits[s].throat[side]
+            });
+        }
+    }
+    std::sort(m_links.begin(), m_links.end(), [](const Wall_link& a, const Wall_link& b) { return a.outer < b.outer; });
+    for (std::size_t c = 0; c < m_links.size(); ++c) {
+        const Wall_link_kind a = m_links[c].kind;
+        const Wall_link_kind b = m_links[(c + 1) % m_links.size()].kind;
+        const bool door =
+            ((a == Wall_link_kind::door_left) || (a == Wall_link_kind::door_inside)) &&
+            ((b == Wall_link_kind::door_right) || (b == Wall_link_kind::door_inside));
+        const bool slit = (a == Wall_link_kind::slit_low) && (b == Wall_link_kind::slit_high);
+        m_cells.push_back(door ? Wall_cell::door : (slit ? Wall_cell::slit : Wall_cell::solid));
+    }
+}
+
+// Bands: under the cut's head, then under, across and over each row of slits.
+auto Tower_wall::is_open(const std::size_t cell, const std::size_t band) const -> bool
+{
+    if (m_cells[cell] == Wall_cell::door) {
+        return band == 0;
+    }
+    return (m_cells[cell] == Wall_cell::slit) && (band >= 2) && ((band % 2) == 0);
+}
+
+// Vertices are made when a facet first uses them: a corner over the doorway has none under its head.
+auto Tower_wall::get_vertex(const Wall_ring ring, const std::size_t index, const std::size_t level) -> uint32_t
+{
+    const bool                        outside  = (ring == Wall_ring::outer);
+    const std::vector<Wall_point>& points   = outside ? m_outer : m_inner;
+    std::vector<uint32_t>&            vertices = outside ? m_outer_vertices : m_inner_vertices;
+    uint32_t&                         entry    = vertices[(level * points.size()) + index];
+    if (entry == wall_no_vertex) {
+        entry = m_builder.add_vertex(glm::vec3{points[index].position.x, m_levels[level], points[index].position.y});
+    }
+    return entry;
+}
+
+auto Tower_wall::get_throat(const std::size_t link, const std::size_t level) -> uint32_t
+{
+    uint32_t& entry = m_throat_vertices[(level * m_links.size()) + link];
+    if (entry == wall_no_vertex) {
+        entry = m_builder.add_vertex(glm::vec3{m_links[link].throat.x, m_levels[level], m_links[link].throat.y});
+    }
+    return entry;
+}
+
+// The ring's points from the cell's first link to its second.
+void Tower_wall::get_cell_run(const Wall_ring ring, const std::size_t cell, std::vector<std::size_t>& out_indices) const
+{
+    const bool          outside = (ring == Wall_ring::outer);
+    const std::size_t   count   = outside ? m_outer.size() : m_inner.size();
+    const Wall_link& a       = m_links[cell];
+    const Wall_link& b       = m_links[(cell + 1) % m_links.size()];
+    const std::size_t   last    = outside ? b.outer : b.inner;
+    out_indices.clear();
+    for (std::size_t i = outside ? a.outer : a.inner; ; i = (i + 1) % count) {
+        out_indices.push_back(i);
+        if (i == last) {
+            break;
+        }
+    }
+}
+
+void Tower_wall::add_walls(const std::size_t cell, const std::size_t band)
+{
+    std::vector<std::size_t> run;
+    get_cell_run(Wall_ring::outer, cell, run);
+    for (std::size_t i = 0; (i + 1) < run.size(); ++i) {
+        const uint32_t a_low  = get_vertex(Wall_ring::outer, run[i],     band);
+        const uint32_t b_low  = get_vertex(Wall_ring::outer, run[i + 1], band);
+        const uint32_t b_high = get_vertex(Wall_ring::outer, run[i + 1], band + 1);
+        const uint32_t a_high = get_vertex(Wall_ring::outer, run[i],     band + 1);
+        m_builder.add_quad(a_low, b_low, b_high, a_high);
+    }
+    get_cell_run(Wall_ring::inner, cell, run);
+    for (std::size_t i = 0; (i + 1) < run.size(); ++i) {
+        const uint32_t a_low  = get_vertex(Wall_ring::inner, run[i],     band);
+        const uint32_t b_low  = get_vertex(Wall_ring::inner, run[i + 1], band);
+        const uint32_t b_high = get_vertex(Wall_ring::inner, run[i + 1], band + 1);
+        const uint32_t a_high = get_vertex(Wall_ring::inner, run[i],     band + 1);
+        m_builder.add_quad(a_low, a_high, b_high, b_low);
+    }
+}
+
+// The face through the wall at a link with an opening on one side: a doorway's jamb, a slit's two splays.
+void Tower_wall::add_jamb(const std::size_t link, const std::size_t band)
+{
+    const std::size_t before      = (link + m_links.size() - 1) % m_links.size();
+    const bool        open_before = is_open(before, band);
+    const bool        open_after  = is_open(link, band);
+    if (open_before == open_after) {
+        return;
+    }
+    const Wall_link& at = m_links[link];
+    std::vector<uint32_t> low {get_vertex(Wall_ring::outer, at.outer, band)};
+    std::vector<uint32_t> high{get_vertex(Wall_ring::outer, at.outer, band + 1)};
+    if ((at.kind == Wall_link_kind::slit_low) || (at.kind == Wall_link_kind::slit_high)) {
+        low.push_back(get_throat(link, band));
+        high.push_back(get_throat(link, band + 1));
+    }
+    low.push_back(get_vertex(Wall_ring::inner, at.inner, band));
+    high.push_back(get_vertex(Wall_ring::inner, at.inner, band + 1));
+    for (std::size_t i = 0; (i + 1) < low.size(); ++i) {
+        if (open_after) {
+            m_builder.add_quad(low[i], low[i + 1], high[i + 1], high[i]);
+        } else {
+            m_builder.add_quad(low[i], high[i], high[i + 1], low[i + 1]);
+        }
+    }
+}
+
+// The level face of a cell with the wall on one side of the level: the wall's base and top, a head or a sill.
+void Tower_wall::add_level_face(const std::size_t cell, const std::size_t level)
+{
+    const bool open_below = (level > 0) && is_open(cell, level - 1);
+    const bool open_above = ((level + 1) < m_levels.size()) && is_open(cell, level);
+    const bool below      = (level > 0) && !open_below;
+    const bool above      = ((level + 1) < m_levels.size()) && !open_above;
+    if (below == above) {
+        return;
+    }
+    const std::size_t next = (cell + 1) % m_links.size();
+    if ((m_cells[cell] == Wall_cell::slit) && (open_below || open_above)) {
+        // A slit's sill or head, by way of its throat as its jambs are.
+        const std::array<uint32_t, 3> a{get_vertex(Wall_ring::outer, m_links[cell].outer, level), get_throat(cell, level), get_vertex(Wall_ring::inner, m_links[cell].inner, level)};
+        const std::array<uint32_t, 3> b{get_vertex(Wall_ring::outer, m_links[next].outer, level), get_throat(next, level), get_vertex(Wall_ring::inner, m_links[next].inner, level)};
+        for (std::size_t i = 0; i < 2; ++i) {
+            if (below) {
+                m_builder.add_quad(a[i], b[i], b[i + 1], a[i + 1]);
+            } else {
+                m_builder.add_quad(a[i], a[i + 1], b[i + 1], b[i]);
+            }
+        }
+        return;
+    }
+    constexpr float turn = 2.0f * std::numbers::pi_v<float>;
+    std::vector<std::size_t> run;
+    std::array<std::vector<uint32_t>, 2> vertices;
+    std::array<std::vector<float>, 2>    keys;
+    for (std::size_t r = 0; r < 2; ++r) {
+        const Wall_ring                ring   = (r == 0) ? Wall_ring::outer : Wall_ring::inner;
+        const std::vector<Wall_point>& points = (r == 0) ? m_outer : m_inner;
+        get_cell_run(ring, cell, run);
+        for (const std::size_t index : run) {
+            // Keys rise along the run: past the back they go on by a turn.
+            vertices[r].push_back(get_vertex(ring, index, level));
+            keys[r].push_back(points[index].key + ((index < run.front()) ? turn : 0.0f));
+        }
+    }
+    if ((vertices[0].size() == 2) && (vertices[1].size() == 2)) {
+        if (below) {
+            m_builder.add_quad(vertices[0][0], vertices[0][1], vertices[1][1], vertices[1][0]);
+        } else {
+            m_builder.add_quad(vertices[0][0], vertices[1][0], vertices[1][1], vertices[0][1]);
+        }
+    } else if (below) {
+        m_builder.add_band(vertices[0], keys[0], vertices[1], keys[1]);
+    } else {
+        m_builder.add_band(vertices[1], keys[1], vertices[0], keys[0]);
+    }
+}
+
+void Tower_wall::build()
+{
+    add_slits();
+    add_points(Wall_ring::outer);
+    add_points(Wall_ring::inner);
+    add_links();
+    m_outer_vertices .assign(m_levels.size() * m_outer.size(), wall_no_vertex);
+    m_inner_vertices .assign(m_levels.size() * m_inner.size(), wall_no_vertex);
+    m_throat_vertices.assign(m_levels.size() * m_links.size(), wall_no_vertex);
+    for (std::size_t band = 0; (band + 1) < m_levels.size(); ++band) {
+        for (std::size_t cell = 0; cell < m_cells.size(); ++cell) {
+            if (!is_open(cell, band)) {
+                add_walls(cell, band);
+            }
+            add_jamb(cell, band);
+        }
+    }
+    for (std::size_t level = 0; level < m_levels.size(); ++level) {
+        for (std::size_t cell = 0; cell < m_cells.size(); ++cell) {
+            add_level_face(cell, level);
+        }
+    }
+}
+
+// A ring of a solid around the axis: the plan times the scale, at the height.
+class Tower_ring
+{
+public:
+    float scale{0.0f};
+    float y    {0.0f};
+};
+
+// Rings bottom to top over the plan: a quad per plan side between two rings, in the band's slot, and a polygon per cap.
+void add_plan_solid(
+    Kit_mesh_builder&                 builder,
+    const std::vector<glm::vec2>&     plan,
+    const std::vector<Tower_ring>& rings,
+    const std::vector<uint32_t>&      band_slots,
+    const uint32_t                    bottom_slot,
+    const uint32_t                    top_slot
+)
+{
+    const std::size_t count = plan.size();
+    std::vector<uint32_t> previous;
+    std::vector<uint32_t> current;
+    for (std::size_t r = 0; r < rings.size(); ++r) {
+        current.clear();
+        for (const glm::vec2& point : plan) {
+            current.push_back(builder.add_vertex(glm::vec3{rings[r].scale * point.x, rings[r].y, rings[r].scale * point.y}));
+        }
+        if (r == 0) {
+            const std::vector<uint32_t> bottom_cap(current.rbegin(), current.rend());
+            builder.set_slot(bottom_slot);
+            builder.add_polygon(bottom_cap);
+        } else {
+            builder.set_slot(band_slots[r - 1]);
+            for (std::size_t i = 0; i < count; ++i) {
+                const std::size_t next = (i + 1) % count;
+                builder.add_quad(previous[i], previous[next], current[next], current[i]);
+            }
+        }
+        previous = current;
+    }
+    builder.set_slot(top_slot);
+    builder.add_polygon(previous);
+}
+
+// The station of a profile of (scale, y) points at a plan point.
+[[nodiscard]] auto make_station(const glm::vec2& plan_point, const std::vector<glm::vec2>& profile) -> std::vector<glm::vec3>
+{
+    std::vector<glm::vec3> station;
+    for (const glm::vec2& point : profile) {
+        station.emplace_back(point.x * plan_point.x, point.y, point.x * plan_point.y);
+    }
+    return station;
+}
+
+// The top floor behind the corbelled parapet: a cup whose bottom is the ceiling inside and the parapet's underside.
+void add_tower_head(Kit_mesh_builder& builder, const Tower_form& form)
+{
+    const float outer = form.radius + tower_overhang;
+    const float walk  = outer - tower_parapet;
+    const float sill  = form.height + tower_sill;
+    add_plan_solid(
+        builder, form.unit,
+        {{outer, form.soffit}, {outer, form.height}, {outer, sill}, {walk, sill}, {walk, form.height}},
+        {medieval_trim_slot, medieval_wall_slot, medieval_trim_slot, medieval_wall_slot},
+        medieval_wall_slot, medieval_floor_slot
+    );
+
+    // Merlons as runs of plan points along the parapet: around a round tower's corners, along and around a square one's.
+    std::vector<std::vector<glm::vec2>> merlons;
+    const std::size_t corners = form.unit.size();
+    if (form.round) {
+        for (std::size_t first = 0; first < corners; first += 3) {
+            merlons.push_back({form.unit[(form.front + first) % corners], form.unit[(form.front + first + 1) % corners], form.unit[(form.front + first + 2) % corners]});
+        }
+    } else {
+        // Per side: corner merlons and crenels with merlons between them; merlons are 1.6 times as wide as crenels.
+        const int   crenels    = std::clamp(static_cast<int>(std::lround((2.0f * form.radius) / 2.6f)), 1, 6);
+        const float crenel_run = 2.0f / ((1.6f * static_cast<float>(crenels + 1)) + static_cast<float>(crenels));
+        const float merlon_run = 1.6f * crenel_run;
+        for (std::size_t c = 0; c < corners; ++c) {
+            const glm::vec2 corner = form.unit[c];
+            const glm::vec2 along  = 0.5f * (form.unit[(c + 1) % corners] - corner);
+            const glm::vec2 before = 0.5f * (corner - form.unit[(c + corners - 1) % corners]);
+            merlons.push_back({corner - (merlon_run * before), corner, corner + (merlon_run * along)});
+            for (int k = 1; k < crenels; ++k) {
+                const float start = static_cast<float>(k) * (crenel_run + merlon_run);
+                merlons.push_back({corner + (start * along), corner + ((start + merlon_run) * along)});
+            }
+        }
+    }
+    // A merlon stands a little inside the breastwork's faces; its coping is a saddleback that overhangs them.
+    constexpr float inset    = 0.02f;
+    constexpr float overhang = 0.04f;
+    const float body_top = sill + tower_merlon - tower_coping;
+    const float eaves    = body_top + (0.4f * tower_coping);
+    const std::vector<glm::vec2> body{{walk + inset, sill}, {outer - inset, sill}, {outer - inset, body_top}, {walk + inset, body_top}};
+    const std::vector<glm::vec2> coping{
+        {walk - overhang, body_top}, {outer + overhang, body_top}, {outer + overhang, eaves},
+        {0.5f * (walk + outer), sill + tower_merlon}, {walk - overhang, eaves}
+    };
+    for (const std::vector<glm::vec2>& merlon : merlons) {
+        std::vector<std::vector<glm::vec3>> body_stations;
+        std::vector<std::vector<glm::vec3>> coping_stations;
+        for (const glm::vec2& point : merlon) {
+            body_stations.push_back(make_station(point, body));
+            coping_stations.push_back(make_station(point, coping));
+        }
+        builder.set_slot(medieval_wall_slot);
+        add_prism(builder, body_stations);
+        builder.set_slot(medieval_trim_slot);
+        add_prism(builder, coping_stations);
+    }
+}
+
+// One corbel under the parapet: a bracket out of the wall at the anchor, its nose sloped back to the wall.
+void add_corbel(
+    Kit_mesh_builder&    builder,
+    const Tower_form& form,
+    const glm::vec2&     anchor,
+    const glm::vec2&     outward,
+    const float          half_width,
+    const float          back,
+    const float          reach
+)
+{
+    const glm::vec2 tangent{outward.y, -outward.x};
+    const float     top    = form.soffit + 0.03f;
+    const float     bottom = form.soffit - form.corbel_height;
+    const float     nose   = form.soffit - (0.3f * form.corbel_height);
+    std::vector<std::vector<glm::vec3>> stations;
+    for (const float side : {-half_width, half_width}) {
+        const glm::vec2 inside  = anchor + (side * tangent) - (back * outward);
+        const glm::vec2 outside = anchor + (side * tangent) + (reach * outward);
+        stations.push_back({{inside.x, top, inside.y}, {inside.x, bottom, inside.y}, {outside.x, nose, outside.y}, {outside.x, top, outside.y}});
+    }
+    add_prism(builder, stations);
+}
+
+// The corbels that carry the parapet: one at each corner, and along a square tower's sides.
+void add_tower_corbels(Kit_mesh_builder& builder, const Tower_form& form)
+{
+    constexpr float   pi      = std::numbers::pi_v<float>;
+    const std::size_t corners = form.unit.size();
+    builder.set_slot(medieval_trim_slot);
+    if (form.round) {
+        // A corbel's sides stay inside the wall at their back and under the parapet at their nose.
+        const float bend  = std::tan(pi / static_cast<float>(corners));
+        const float width = std::clamp(0.4f * form.radius * std::sin(pi / static_cast<float>(corners)), 0.08f, 0.3f);
+        for (const glm::vec2& corner : form.unit) {
+            add_corbel(builder, form, form.radius * corner, corner, width, (width * bend) + 0.06f, tower_overhang - (width * bend) - 0.05f);
+        }
+        return;
+    }
+    constexpr float half_width = 0.09f;
+    const float     diagonal   = std::sqrt(0.5f);
+    const int       between    = std::clamp(static_cast<int>(std::lround((2.0f * form.radius) / 0.75f)) - 1, 1, 7);
+    for (std::size_t c = 0; c < corners; ++c) {
+        const glm::vec2 corner = form.unit[c];
+        const glm::vec2 along  = 0.5f * (form.unit[(c + 1) % corners] - corner);
+        add_corbel(builder, form, form.radius * corner, diagonal * corner, half_width, half_width + 0.06f, (tower_overhang / diagonal) - half_width - 0.05f);
+        for (int k = 1; k <= between; ++k) {
+            const glm::vec2 point = corner + ((2.0f * static_cast<float>(k) / static_cast<float>(between + 1)) * along);
+            add_corbel(builder, form, form.radius * point, glm::vec2{-along.y, along.x}, half_width, 0.06f, tower_overhang - 0.05f);
+        }
+    }
+}
+
+// The battered base: a plinth course and the batter above it, around the tower from one side of the doorway's frame to
+// the other; its ends lie inside the jamb stones.
+void add_tower_base(Kit_mesh_builder& builder, const Tower_form& form)
+{
+    constexpr float sink     = 0.025f; // the base's back lies this far inside the wall's face at most
+    const float     slope_y0 = tower_plinth_high + tower_plinth;
+    // Five points at every batter: the batter's face from its foot into the wall, at most 0.15 over the cut's head.
+    // The face stays at least 5 mm into the wall at its top, so a batter of 0 leaves no edge on the wall's face.
+    const float run  = form.cut_height - slope_y0;
+    const float back = std::max(std::min(sink, 0.15f * form.batter / run), 0.005f);
+    const float rise = std::min(0.15f, back * run / std::max(form.batter, 1.0e-6f));
+    std::vector<glm::vec2> profile{{form.radius - back, 0.0f}, {form.foot, 0.0f}, {form.foot, tower_plinth_high}};
+    profile.emplace_back(form.radius + form.batter, slope_y0);
+    profile.emplace_back(form.radius - back, form.cut_height + rise);
+
+    // The plan's corners clear of the ends at every scale of the profile.
+    const float     end_x   = form.door_half + (0.5f * tower_frame);
+    const glm::vec2 toward{0.0f, 1.0f};
+    const float     end_key = plan_key(form.plan_point(toward, end_x, form.radius - back)) + (tower_point_margin / form.radius);
+    const auto make_end = [&form, &profile, &toward](const float x) -> std::vector<glm::vec3> {
+        std::vector<glm::vec3> station;
+        for (const glm::vec2& point : profile) {
+            const glm::vec2 at = form.plan_point(toward, x, point.x);
+            station.emplace_back(at.x, point.y, at.y);
+        }
+        return station;
+    };
+    std::vector<std::vector<glm::vec3>> stations{make_end(end_x)};
+    for (std::size_t k = 0; k < form.unit.size(); ++k) {
+        if (form.keys[k] > end_key) {
+            stations.push_back(make_station(form.unit[k], profile));
+        }
+    }
+    for (std::size_t k = 0; k < form.unit.size(); ++k) {
+        if (form.keys[k] < -end_key) {
+            stations.push_back(make_station(form.unit[k], profile));
+        }
+    }
+    stations.push_back(make_end(-end_x));
+    builder.set_slot(medieval_wall_slot);
+    add_sweep(builder, stations, Sweep_path::open, Sweep_ends::triangles, 3);
+}
+
+// The string course over the battered base, around the whole tower.
+void add_tower_string_course(Kit_mesh_builder& builder, const Tower_form& form)
+{
+    const float y = form.cut_height - 0.02f;
+    const std::vector<glm::vec2> profile{
+        {form.radius - 0.03f, y}, {form.radius + 0.06f, y + 0.04f}, {form.radius + 0.06f, y + 0.11f}, {form.radius - 0.03f, y + 0.17f}
+    };
+    std::vector<std::vector<glm::vec3>> stations;
+    for (const glm::vec2& corner : form.unit) {
+        stations.push_back(make_station(corner, profile));
+    }
+    builder.set_slot(medieval_trim_slot);
+    add_sweep(builder, stations, Sweep_path::closed, Sweep_ends::quads, 0);
+}
+
+// The doorway's surround: two jamb stones through the batter and a gabled lintel on them; the clear opening is between
+// the jambs and under the lintel.
+void add_tower_doorway(Kit_mesh_builder& builder, const Tower_form& form)
+{
+    const glm::vec2 toward{0.0f, 1.0f};
+    const float jamb_outer = form.door_half + tower_frame;
+    const float lintel_end = jamb_outer + tower_ear;
+    // The stones' backs lie inside the wall's face at their outer edges.
+    const float jamb_back   = form.plan_point(toward, jamb_outer, form.radius).y - 0.05f;
+    const float lintel_back = form.plan_point(toward, lintel_end, form.radius).y - 0.05f;
+    const float jamb_top    = form.door_height + (0.5f * form.lintel);
+    builder.set_slot(medieval_trim_slot);
+    builder.add_box(glm::vec3{-jamb_outer, 0.0f, jamb_back}, glm::vec3{-form.door_half, jamb_top, form.frame_front});
+    builder.add_box(glm::vec3{form.door_half, 0.0f, jamb_back}, glm::vec3{jamb_outer, jamb_top, form.frame_front});
+    const float y0 = form.door_height;
+    const float y1 = form.door_height + form.lintel;
+    const float y2 = y1 + (0.5f * form.lintel);
+    std::vector<std::vector<glm::vec3>> stations;
+    for (const float z : {form.frame_front + 0.04f, lintel_back}) {
+        stations.push_back({{-lintel_end, y0, z}, {lintel_end, y0, z}, {lintel_end, y1, z}, {0.0f, y2, z}, {-lintel_end, y1, z}});
+    }
+    add_prism(builder, stations);
 }
 
 void generate_tower(const Kit_parameter_values& values, GEO::Mesh& mesh)
 {
-    const Tower_plan  plan{values};
-    const float       inner = plan.radius - plan.wall;
-    const std::size_t n     = plan.ring.size();
-    Kit_mesh_builder  builder;
-    builder.set_slot(tower_wall_slot);
-
-    // The levels: the base, the doorway's head, each slit row's sill and head, and the tops of the outer and inner walls.
-    std::vector<float> levels{0.0f, plan.cut_height};
-    for (std::size_t j = 1; j < plan.openings.size(); ++j) {
-        for (const float y : {plan.openings[j].y0, plan.openings[j].y1}) {
-            if (y > levels.back()) {
-                levels.push_back(y);
-            }
-        }
-    }
-    const std::size_t body_levels = levels.size();
-    std::vector<std::vector<uint32_t>> outer(body_levels + 1);
-    std::vector<std::vector<uint32_t>> inside(body_levels + 1);
-    for (std::size_t l = 0; l < body_levels; ++l) {
-        add_ring(builder, plan, (l == 0) ? plan.foot : plan.radius, levels[l], outer[l]);
-        add_ring(builder, plan, inner, levels[l], inside[l]);
-    }
-    add_ring(builder, plan, plan.radius, plan.top_y, outer[body_levels]);
-    add_ring(builder, plan, inner, plan.floor_y, inside[body_levels]);
-
-    // The opening a segment crosses in the band from level l up, if the band is open there.
-    const auto opening_in_band = [&plan, &levels](const std::size_t k, const std::size_t l) -> std::optional<std::size_t> {
-        const std::optional<std::size_t> cut = plan.segment_cut[k];
-        if (!cut.has_value() || ((l + 1) >= levels.size())) {
-            return std::nullopt;
-        }
-        for (std::size_t j = 0; j < plan.openings.size(); ++j) {
-            const Tower_opening& opening = plan.openings[j];
-            if ((opening.cut == cut.value()) && (opening.y0 <= levels[l]) && (opening.y1 >= levels[l + 1])) {
-                return j;
-            }
-        }
-        return std::nullopt;
-    };
-    const std::vector<glm::vec3>& positions = builder.get_positions();
-    // A horizontal quad between an inner and an outer segment, split at its reflex corner where the corners turn.
-    const auto add_annulus_quad = [&builder, &positions](const uint32_t a, const uint32_t b, const uint32_t c, const uint32_t d) {
-        const glm::vec3 n0 = glm::cross(positions[b] - positions[a], positions[c] - positions[b]);
-        const glm::vec3 n1 = glm::cross(positions[d] - positions[c], positions[a] - positions[d]);
-        if ((n0.y * n1.y) > 0.0f) {
-            builder.add_triangle(a, b, c);
-            builder.add_triangle(a, c, d);
-        } else {
-            builder.add_triangle(a, b, d);
-            builder.add_triangle(b, c, d);
-        }
-    };
-    for (std::size_t k = 0; k < n; ++k) {
-        const std::size_t m = (k + 1) % n;
-        if (!opening_in_band(k, 0).has_value()) {
-            add_annulus_quad(inside[0][k], inside[0][m], outer[0][m], outer[0][k]); // base
-        }
-        for (std::size_t l = 0; l < body_levels; ++l) {
-            const std::optional<std::size_t> j = opening_in_band(k, l);
-            if (j.has_value()) {
-                // The opening's sill unless at the base, and its head.
-                if (l > 0) {
-                    add_annulus_quad(outer[l][k], outer[l][m], inside[l][m], inside[l][k]);
-                }
-                add_annulus_quad(inside[l + 1][k], inside[l + 1][m], outer[l + 1][m], outer[l + 1][k]);
-                continue;
-            }
-            const std::vector<uint32_t>& a = outer[l];
-            const std::vector<uint32_t>& b = outer[l + 1];
-            if (l == 0) { // battered: its jamb corners are not scaled copies, so triangles
-                builder.add_triangle(a[k], a[m], b[m]);
-                builder.add_triangle(a[k], b[m], b[k]);
-            } else {
-                builder.add_quad(a[k], a[m], b[m], b[k]);
-            }
-            builder.add_quad(inside[l][k], inside[l + 1][k], inside[l + 1][m], inside[l][m]);
-        }
-    }
-    // Each opening's two jambs, facing into it.
-    for (std::size_t k = 0; k < n; ++k) {
-        const Ring_entry& entry = plan.ring[k];
-        if (!entry.cut.has_value()) {
-            continue;
-        }
-        const Tower_cut& cut = plan.cuts[entry.cut.value()];
-        // The jamb's segment into the cut: the one of its two that crosses it.
-        const std::size_t into_segment = (plan.segment_cut[k] == entry.cut) ? k : ((k + n - 1) % n);
-        for (std::size_t l = 0; l < body_levels; ++l) {
-            if (!opening_in_band(into_segment, l).has_value()) {
-                continue;
-            }
-            const glm::vec3 o0     = positions[outer[l][k]];
-            const glm::vec3 o1     = positions[outer[l + 1][k]];
-            const glm::vec3 i1     = positions[inside[l + 1][k]];
-            const glm::vec3 normal = glm::cross(o1 - o0, i1 - o1);
-            const glm::vec2 into   = -entry.side * cut.lateral;
-            if (((normal.x * into.x) + (normal.z * into.y)) > 0.0f) {
-                builder.add_quad(outer[l][k], outer[l + 1][k], inside[l + 1][k], inside[l][k]);
-            } else {
-                builder.add_quad(outer[l][k], inside[l][k], inside[l + 1][k], outer[l + 1][k]);
-            }
-        }
-    }
-    // The hollow's ceiling.
-    const uint32_t ceiling = builder.add_vertex(glm::vec3{0.0f, plan.floor_y, 0.0f});
-    for (std::size_t k = 0; k < n; ++k) {
-        builder.add_triangle(ceiling, inside[body_levels][(k + 1) % n], inside[body_levels][k]);
-    }
-    // A stone lintel standing out over the doorway, its ends in the wall.
-    {
-        const float x  = plan.door_half + 0.2f;
-        const float z0 = (plan.round ? std::sqrt((plan.radius * plan.radius) - (x * x)) : plan.radius) - 0.1f;
-        builder.add_box(glm::vec3{-x, plan.door_height, z0}, glm::vec3{x, plan.door_height + tower_lintel, plan.foot + 0.06f});
-    }
-
-    const std::vector<uint32_t>& top = outer[body_levels];
-    if (!plan.battlement) {
-        builder.set_slot(tower_floor_slot);
-        const uint32_t center = builder.add_vertex(glm::vec3{0.0f, plan.height, 0.0f});
-        for (std::size_t k = 0; k < n; ++k) {
-            builder.add_triangle(top[k], top[(k + 1) % n], center);
-        }
-        builder.write(mesh);
-        return;
-    }
-
-    // The parapet, standing out on a corbel course: outer and inner faces up to the sill, merlons above, the walkway
-    // inside it.
-    Tower_level corbel;
-    for (std::size_t k = 0; k <= n; ++k) {
-        const glm::vec2 p = plan.position(plan.ring[k % n], plan.radius);
-        corbel.vertices.push_back(top[k % n]);
-        corbel.keys.push_back(plan_key(p.x, p.y) + ((k == n) ? (2.0f * std::numbers::pi_v<float>) : 0.0f));
-    }
-    const float sill_y   = plan.height + tower_sill;
-    const float merlon_y = sill_y + tower_merlon;
-    const float walk     = plan.radius - plan.parapet;
-    const float outside  = plan.radius + tower_overhang;
-    std::vector<Plan_point> scaled;
-    const auto scale = [&scaled, &plan](const float half_size) -> const std::vector<Plan_point>& {
-        scaled.clear();
-        for (const Plan_point& p : plan.parapet_ring) {
-            scaled.push_back(Plan_point{.x = half_size * p.x, .z = half_size * p.z, .key = p.key});
-        }
-        return scaled;
-    };
-    Tower_level outer_top;
-    Tower_level outer_sill;
-    Tower_level inner_top;
-    Tower_level inner_sill;
-    add_level(builder, scale(outside), plan.height, Ring_closure::closed, outer_top);
-    add_level(builder, scale(outside), sill_y,      Ring_closure::closed, outer_sill);
-    add_level(builder, scale(walk),    plan.height, Ring_closure::closed, inner_top);
-    add_level(builder, scale(walk),    sill_y,      Ring_closure::closed, inner_sill);
-    builder.add_band(corbel.vertices, corbel.keys, outer_top.vertices, outer_top.keys);
-
-    const std::size_t count = plan.parapet_ring.size();
-    std::vector<uint32_t> outer_merlon(count, 0);
-    std::vector<uint32_t> inner_merlon(count, 0);
-    for (std::size_t i = 0; i < count; ++i) {
-        const std::size_t previous = (i + count - 1) % count;
-        if (!plan.crenel[i] || !plan.crenel[previous]) {
-            const Plan_point& p = plan.parapet_ring[i];
-            outer_merlon[i] = builder.add_vertex(glm::vec3{outside * p.x, merlon_y, outside * p.z});
-            inner_merlon[i] = builder.add_vertex(glm::vec3{walk * p.x, merlon_y, walk * p.z});
-        }
-    }
-    for (std::size_t i = 0; i < count; ++i) {
-        const std::size_t j = i + 1; // in the closed levels
-        const std::size_t next = (i + 1) % count;
-        builder.add_quad(outer_top.vertices[i], outer_top.vertices[j], outer_sill.vertices[j], outer_sill.vertices[i]);
-        builder.add_quad(inner_top.vertices[i], inner_sill.vertices[i], inner_sill.vertices[j], inner_top.vertices[j]);
-        if (plan.crenel[i]) {
-            builder.add_quad(outer_sill.vertices[i], outer_sill.vertices[j], inner_sill.vertices[j], inner_sill.vertices[i]);
-            continue;
-        }
-        builder.add_quad(outer_sill.vertices[i], outer_sill.vertices[j], outer_merlon[next], outer_merlon[i]);
-        builder.add_quad(inner_sill.vertices[i], inner_merlon[i], inner_merlon[next], inner_sill.vertices[j]);
-        builder.add_quad(outer_merlon[i], outer_merlon[next], inner_merlon[next], inner_merlon[i]);
-    }
-    // A merlon's end faces its neighbouring crenel.
-    for (std::size_t i = 0; i < count; ++i) {
-        const std::size_t previous = (i + count - 1) % count;
-        if (plan.crenel[i] == plan.crenel[previous]) {
-            continue;
-        }
-        if (plan.crenel[i]) {
-            builder.add_quad(outer_sill.vertices[i], inner_sill.vertices[i], inner_merlon[i], outer_merlon[i]);
-        } else {
-            builder.add_quad(outer_sill.vertices[i], outer_merlon[i], inner_merlon[i], inner_sill.vertices[i]);
-        }
-    }
-    builder.set_slot(tower_floor_slot);
-    const uint32_t center = builder.add_vertex(glm::vec3{0.0f, plan.height, 0.0f});
-    for (std::size_t i = 0; i < count; ++i) {
-        builder.add_triangle(inner_top.vertices[i], inner_top.vertices[i + 1], center);
+    const Tower_form form{values};
+    Kit_mesh_builder builder;
+    builder.set_slot(medieval_wall_slot);
+    Tower_wall wall{builder, form};
+    wall.build();
+    add_tower_base(builder, form);
+    add_tower_string_course(builder, form);
+    add_tower_doorway(builder, form);
+    if (form.battlement) {
+        add_tower_head(builder, form);
+        add_tower_corbels(builder, form);
+    } else {
+        // A flat top: the floor as a course a little proud of the wall, which a further segment stands on.
+        const float scale = form.radius + 0.04f;
+        add_plan_solid(
+            builder, form.unit, {{scale, form.soffit}, {scale, form.height}}, {medieval_trim_slot}, medieval_wall_slot, medieval_floor_slot
+        );
     }
     builder.write(mesh);
 }
@@ -655,11 +1109,13 @@ void add_medieval_shapes(std::vector<Kit_shape_definition>& shapes)
     {
         Kit_shape_definition shape;
         shape.id              = "architecture.battlement";
+        shape.former_ids      = {"architecture.battlement.v2"};
         shape.kit             = "architecture";
         shape.display_name    = "Battlement";
         shape.description     =
-            "Medieval parapet run along X on a wall top: a breastwork to the crenels' sill and merlons above it (square, "
-            "swallowtail or pointed), crenels at the bays' centers and half merlons at the ends, so runs join into whole merlons.";
+            "Medieval parapet run along X on a wall top: a breastwork under a sill band and merlons with copings (square, "
+            "swallowtail or pointed), each with an arrow loop; a merlon at each bay's center and half crenels at the ends, "
+            "so runs join into whole crenels.";
         shape.tags            = {"obstacle", "wall", "parapet", "medieval", "tiles", "size:2x0.6"};
         shape.parameters      = {
             derive_float(make_length_parameter("length",        "Size along X", 2.0f, Kit_default_scale::modules, 0.5f, 24.0f), 1.0f, 6.0f, 0.5f),
@@ -671,17 +1127,14 @@ void add_medieval_shapes(std::vector<Kit_shape_definition>& shapes)
             derive_enum (make_enum_parameter  ("merlon",        "Merlon top", {"square", "swallowtail", "pointed"}, 0)),
             make_seed_parameter()
         };
-        shape.material_slots  = {"wall"};
+        shape.material_slots  = {"wall", "trim"}; // the masonry; the sill band and the copings
         shape.normal_style    = Kit_normal_style::faceted;
-        shape.triangle_budget = 48;
+        shape.triangle_budget = 120;
         shape.collision       = Kit_collision::triangle_mesh;
         shape.generator       = generate_battlement;
         shape.mirror_planes   = std::vector<Kit_mirror_plane>{Kit_mirror_plane::x, Kit_mirror_plane::z};
-        shape.get_seam_sides  = [](const Kit_parameter_values& values) {
-            return (values.get_enum("merlon") == "square")
-                ? std::vector<Kit_side>{Kit_side::x_neg, Kit_side::x_pos, Kit_side::y_neg}
-                : std::vector<Kit_side>{Kit_side::y_neg};
-        };
+        // The band and the copings overhang the faces, so no side fills its rectangle.
+        shape.get_seam_sides  = [](const Kit_parameter_values&) { return std::vector<Kit_side>{}; };
         shape.get_connectors  = [](const Kit_parameter_values& values, std::vector<Kit_connector>& out_connectors) {
             const float half_length = 0.5f * values.get_float("length");
             out_connectors.push_back(Kit_connector{.name = "base", .position = glm::vec3{0.0f}, .outward = glm::vec3{0.0f, -1.0f, 0.0f}, .up = glm::vec3{0.0f, 0.0f, 1.0f}});
@@ -693,13 +1146,14 @@ void add_medieval_shapes(std::vector<Kit_shape_definition>& shapes)
     {
         Kit_shape_definition shape;
         shape.id              = "architecture.tower";
+        shape.former_ids      = {"architecture.tower.v2"};
         shape.kit             = "architecture";
         shape.display_name    = "Tower";
         shape.description     =
-            "Medieval tower segment, round or square, standing at its origin: walls battered out below the door's head, a "
-            "doorway under a stone lintel at the front (+Z) into the hollow inside, rows of arrow slits away from the side "
-            "connectors, and a walkable top floor at the height behind a corbelled crenellated parapet, or a flat top a "
-            "further segment stands on.";
+            "Medieval tower segment, round or square, standing at its origin: a plinth and a battered base under a string "
+            "course, a doorway in a stone surround at the front (+Z) into the hollow inside, rows of splayed arrow slits away "
+            "from the side connectors, and a walkable top floor at the height behind a parapet on corbels with coped merlons, "
+            "or a flat top a further segment stands on.";
         shape.tags            = {"walkable", "obstacle", "opening", "tower", "medieval", "size:3x3x1.5"};
         shape.parameters      = {
             derive_enum (make_enum_parameter  ("profile",        "Plan", {"round", "square"}, 0)),
@@ -714,20 +1168,19 @@ void add_medieval_shapes(std::vector<Kit_shape_definition>& shapes)
             derive_int  (make_count_parameter ("slit_rows",      "Rows of arrow slits above the doorway, as many as the height has room for", 1, 0, 2), 0, 2),
             make_seed_parameter()
         };
-        shape.material_slots  = {"wall", "floor"};
+        shape.material_slots  = {"wall", "trim", "floor"}; // the masonry; the dressed stone; the walkable top
         shape.normal_style    = Kit_normal_style::smooth_with_hard_edges;
         shape.hard_edge_angle_degrees = 30.0f;
-        shape.triangle_budget = 700;
+        shape.triangle_budget = 1540;
         shape.collision       = Kit_collision::triangle_mesh;
         shape.generator       = generate_tower;
         shape.origin_rule     = Kit_origin_rule::base_contains_origin; // the doorway leaves the base's front open
         shape.check_combination = [](const Kit_parameter_values& values) -> std::string {
-            const float width  = values.get_float("width");
-            const float wall   = values.get_float("wall");
+            const float inside = values.get_float("width") - (2.0f * values.get_float("wall"));
             const float door_w = values.get_float("opening_width");
             const float door_h = values.get_float("opening_height");
-            if ((width - (2.0f * wall)) < (door_w + 0.4f)) {
-                return fmt::format("{}: the inside, {} m wide, is narrower than the doorway's {} m and 0.4 m", values.get_shape()->id, width - (2.0f * wall), door_w);
+            if (inside < (door_w + 0.4f)) {
+                return fmt::format("{}: the inside, {} m wide, is narrower than the doorway's {} m and 0.4 m", values.get_shape()->id, inside, door_w);
             }
             if (values.get_float("height") < (door_h + tower_head_above + 0.8f)) {
                 return fmt::format("{}: height {} m leaves no top floor above the doorway's {} m and 0.9 m", values.get_shape()->id, values.get_float("height"), door_h);
@@ -735,30 +1188,28 @@ void add_medieval_shapes(std::vector<Kit_shape_definition>& shapes)
             return {};
         };
         shape.check_walkability = [](const Kit_parameter_values& values, const Kit_agent& agent) -> std::string {
-            const Tower_plan  plan{values};
-            const float       need    = (2.0f * agent.radius) + kit_opening_margin;
-            const float       inscribe = plan.round ? std::cos(std::numbers::pi_v<float> / static_cast<float>(plan.sides)) : 1.0f;
-            const std::string opening = check_kit_opening(*values.get_shape(), 2.0f * plan.door_half, plan.door_height, agent);
+            const Tower_form form{values};
+            const float         need    = (2.0f * agent.radius) + kit_opening_margin;
+            const std::string   opening = check_kit_opening(*values.get_shape(), 2.0f * form.door_half, form.door_height, agent);
             if (!opening.empty()) {
                 return opening;
             }
-            if ((2.0f * (plan.radius - plan.wall) * inscribe) < need) {
+            if ((2.0f * form.inner * form.inscribe) < need) {
                 return fmt::format("{}: the inside is narrower than the agent's {} m", values.get_shape()->id, need);
             }
-            if (plan.battlement && ((2.0f * (plan.radius - plan.parapet) * inscribe) < need)) {
+            if (form.battlement && ((2.0f * (form.radius + tower_overhang - tower_parapet) * form.inscribe) < need)) {
                 return fmt::format("{}: the walkway is narrower than the agent's {} m", values.get_shape()->id, need);
             }
             return {};
         };
-        shape.get_connectors  = [](const Kit_parameter_values& values, std::vector<Kit_connector>& out_connectors) {
-            const Tower_plan plan{values};
-            const float      middle = plan.radius - (0.5f * plan.wall); // walls joined to the sides end inside the tower's wall
-            add_base_and_top_connectors(out_connectors, plan.height);
-            const glm::vec2  jamb   = plan.position(Ring_entry{.unit = glm::vec2{0.0f}, .cut = 0, .side = 1.0f}, plan.foot);
-            add_side_connector(out_connectors, "opening_front", glm::vec3{0.0f, 0.0f, jamb.y}, glm::vec3{0.0f, 0.0f, 1.0f});
-            add_side_connector(out_connectors, "left",  glm::vec3{-middle, 0.0f, 0.0f},    glm::vec3{-1.0f, 0.0f,  0.0f});
-            add_side_connector(out_connectors, "right", glm::vec3{ middle, 0.0f, 0.0f},    glm::vec3{ 1.0f, 0.0f,  0.0f});
-            add_side_connector(out_connectors, "back",  glm::vec3{0.0f, 0.0f, -middle},    glm::vec3{ 0.0f, 0.0f, -1.0f});
+        shape.get_connectors = [](const Kit_parameter_values& values, std::vector<Kit_connector>& out_connectors) {
+            const Tower_form form{values};
+            const float         middle = form.radius - (0.5f * form.wall); // walls joined to the sides end inside the tower's wall
+            add_base_and_top_connectors(out_connectors, form.height);
+            add_side_connector(out_connectors, "opening_front", glm::vec3{0.0f, 0.0f, form.frame_front}, glm::vec3{0.0f, 0.0f, 1.0f});
+            add_side_connector(out_connectors, "left",  glm::vec3{-middle, 0.0f, 0.0f}, glm::vec3{-1.0f, 0.0f,  0.0f});
+            add_side_connector(out_connectors, "right", glm::vec3{ middle, 0.0f, 0.0f}, glm::vec3{ 1.0f, 0.0f,  0.0f});
+            add_side_connector(out_connectors, "back",  glm::vec3{0.0f, 0.0f, -middle}, glm::vec3{ 0.0f, 0.0f, -1.0f});
         };
         shapes.push_back(std::move(shape));
     }

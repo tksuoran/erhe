@@ -44,11 +44,13 @@ enum class Kit_normal_style : unsigned int {
     smooth_with_hard_edges
 };
 
-// The collision shape of a shape's pieces (R2.11, D2.3); none: no physics body and no navigation input (P5).
+// The collision shape of a shape's pieces (R2.11, D2.3); none: no physics body and no navigation input (P5); box: the
+// mesh bounds (U54).
 enum class Kit_collision : unsigned int {
     convex_hull = 0,
     triangle_mesh,
-    none
+    none,
+    box
 };
 
 // What the mesh checks hold a shape's mesh to (R2.5): a closed solid, or a stated surface whose boundary is open.
@@ -247,12 +249,13 @@ using Kit_walkability_check   = std::function<std::string(const Kit_parameter_va
 using Kit_seam_sides_function = std::function<std::vector<Kit_side>(const Kit_parameter_values& values)>;
 using Kit_connectors_function = std::function<void(const Kit_parameter_values& values, std::vector<Kit_connector>& out_connectors)>;
 using Kit_light_frames_function = std::function<void(const Kit_parameter_values& values, std::vector<Kit_light_frame>& out_frames)>;
+using Kit_collision_function    = std::function<Kit_collision(const Kit_parameter_values& values)>;
 
 class Kit_shape_definition
 {
 public:
-    std::string                id;           // <kit>.<shape>, a recreated shape's <kit>.<shape>.v2
-    std::string                recreates;    // the id of the original this shape recreates; empty for an original
+    std::string                id;           // <kit>.<shape>
+    std::vector<std::string>   former_ids;   // ids the shape had before; Kit_shape_library::find() resolves them to it
     std::string                kit;
     std::string                display_name;
     std::string                description;
@@ -263,6 +266,7 @@ public:
     float                      hard_edge_angle_degrees{0.0f};
     unsigned int               triangle_budget        {0}; // at default parameters (R2.6)
     Kit_collision              collision              {Kit_collision::convex_hull};
+    Kit_collision_function     get_collision;          // optional: the kind at the values, box or collision (U54)
     Kit_mesh_kind              mesh_kind              {Kit_mesh_kind::solid};
     Kit_randomness             randomness             {Kit_randomness::none};
     Kit_origin_rule            origin_rule            {Kit_origin_rule::base_center}; // an unseeded shape's; a seeded one's is always base_contains_origin
@@ -278,8 +282,8 @@ public:
     [[nodiscard]] auto has_tag       (std::string_view tag) const -> bool;
 };
 
-// The id a shape's contract is known by: its original's for a recreated shape, else its own.
-[[nodiscard]] auto get_contract_id(const Kit_shape_definition& shape) -> const std::string&;
+// The collision kind of the values' pieces: the shape's get_collision at the values, else its collision.
+[[nodiscard]] auto get_kit_collision(const Kit_parameter_values& values) -> Kit_collision;
 
 // The bounds of the values' mesh from the generator's CPU geometry alone (no renderable mesh, no upload): the min and
 // max of the facet corners' single precision points, the box a brush of the values reports. Invalid without facets.

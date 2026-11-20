@@ -1,4 +1,5 @@
 #include "demo_renamed_serialization.hpp"
+#include "blend_mode.hpp"
 
 #include "test_check.hpp"
 #include <cstdio>
@@ -59,6 +60,20 @@ void test_current_key_names_written()
     std::printf("PASSED\n");
 }
 
+// An enum value's former name reads as the value; to_string() gives the current name.
+void test_enum_former_names_read()
+{
+    std::printf("test_enum_former_names_read... ");
+    Blend_mode mode{Blend_mode::opaque};
+    CODEGEN_TEST_CHECK(from_string("alpha", mode) && (mode == Blend_mode::alpha_blend));
+    mode = Blend_mode::opaque;
+    CODEGEN_TEST_CHECK(from_string("alpha_blend", mode) && (mode == Blend_mode::alpha_blend));
+    CODEGEN_TEST_CHECK(to_string(Blend_mode::alpha_blend) == "alpha_blend");
+    mode = Blend_mode::additive;
+    CODEGEN_TEST_CHECK(!from_string("alpha_blend_old", mode) && (mode == Blend_mode::additive));
+    std::printf("PASSED\n");
+}
+
 } // namespace
 
 void run_renamed_field_tests()
@@ -66,4 +81,5 @@ void run_renamed_field_tests()
     test_previous_key_names_read();
     test_previous_key_names_ignored_at_current_version();
     test_current_key_names_written();
+    test_enum_former_names_read();
 }

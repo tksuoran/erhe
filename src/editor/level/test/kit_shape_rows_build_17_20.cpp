@@ -10,7 +10,6 @@ auto get_build_17_20_rows() -> Kit_shape_rows
         "architecture.timber_bay", "architecture.railing", "nature.bamboo", "architecture.stairs", "architecture.spiral_stairs",
         "nature.rock_arch"
     };
-    rows.recreated_originals = {};
     rows.seeded_shapes       = {"nature.bamboo", "nature.rock_arch"};
     rows.enum_shapes         = {"architecture.timber_bay", "architecture.railing", "architecture.stairs", "architecture.spiral_stairs"};
     rows.components          = {

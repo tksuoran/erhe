@@ -28,7 +28,7 @@ Transform gizmo system for interactive translate, rotate, and scale operations.
 
 - **`Handle_enums`** -- Enumerations for handle types (axis, plane) and coordinate spaces.
 
-- **`Transform_tool_settings`** -- Settings for gizmo behavior (snap, local/world space). `reference_mode` (`Transform_reference_mode`, the Transform window's "Coordinate System" and the viewport toolbar's W / L / R / S / B) picks the gizmo frame. Every mode except BBox anchors the gizmo at the selected node's origin (with several targets, the average of their origins). BBox (`Transform_reference_mode::bbox`) anchors it, with world axes, at the center of a selected mesh's world bounding box (`erhe::scene::Mesh::get_aabb_world()`; any other node at its origin). Drags apply relative to the anchor (`Transform_tool::adjust()`), so in BBox mode rotate and scale pivot about the bounding box center: meshes whose node origin lies far from their vertices (Bistro props) rotate in place. The anchor is only where the gizmo is drawn and dragged: `Transform_tool_shared::anchor_from_origin` holds the node-origin frame as a translation in anchor space, and the Transform window shows and edits that frame (`get_world_from_origin()`, `adjust_from_origin()`), so its values are the node's in every mode. While the two differ, `Handle_visualizations::render_origin_indicator()` draws axes at the node origin and a cone outside the gizmo pointing at it; neither is pickable.
+- **`Transform_tool_settings`** -- Settings for gizmo behavior (snap, local/world space). `reference_mode` (`Transform_reference_mode`, the Transform window's "Coordinate System" and the viewport toolbar's W / L / R / S / B) picks the gizmo frame. Every mode except BBox anchors the gizmo at the selected node's origin (with several targets, the average of their origins). BBox (`Transform_reference_mode::bbox`) anchors it, with world axes, at the center of a selected mesh's world bounding box (`erhe::scene::Mesh::get_aabb_world()`; any other node at its origin). Drags apply relative to the anchor (`Transform_tool::adjust()`), so in BBox mode rotate and scale pivot about the bounding box center: meshes whose node origin lies far from their vertices (Bistro props) rotate in place. A translate drag with Snap To Surface and Surface Rest Anchor (or Orient To Surface) snaps the anchor itself to a surface (`doc/editor/level_tools.md` "Transform tool"), so in BBox mode the bounding box center rests on it. The anchor is only where the gizmo is drawn and dragged: `Transform_tool_shared::anchor_from_origin` holds the node-origin frame as a translation in anchor space, and the Transform window shows and edits that frame (`get_world_from_origin()`, `adjust_from_origin()`), so its values are the node's in every mode. While the two differ, `Handle_visualizations::render_origin_indicator()` draws axes at the node origin and a cone outside the gizmo pointing at it; neither is pickable.
 
 - **`Rotation_inspector`** -- The Transform window's Rotation group: the rotation shown and edited as a quaternion, a matrix, axis-angle, or Euler angles in any of the 12 axis orders. The Euler angles are read from and written to the quaternion directly (`erhe_math/euler_angles.hpp`, see [../erhe/math.md](../erhe/math.md)), so they cover the quaternion's double cover: q and -q show different angles, and editing an angle keeps the node's quaternion in the hemisphere the angles name. While the angles shown still give nearly the node's quaternion (within 30 degrees, sign-aware) - after an edit in the row ends, or while the gizmo turns the node - reading the rotation back picks, of every angle triple that gives the quaternion, the one nearest to the angles shown (`quaternion_to_euler_angles_near()`), so angles dragged or typed anywhere in (-360, 360] degrees stay as edited and gizmo rotation moves them continuously; a rotation that jumped (selection change, undo) is shown in the canonical ranges; MCP `get_transform_rotation` reports the angles shown. `scripts/rotation_inspector_smoke_test.py` checks this against a running editor by typing into the Euler fields.
 
@@ -160,19 +160,23 @@ the first step that moves a vertex, as for a move.
 
 With Snap To Surface or Orient To Surface on (the viewport toolbar, the Move
 tool group of the Transform window, the Level Kit window), a translate drag of
-the gizmo snaps each moved mesh to its nearest place on the surface within
-the Surface Max Distance at every step;
-`transform_selection` and `drag_selection` do so with their `surface_snap` /
-`surface_orient` arguments. The rules (the axis rule, rotate and scale left
-alone, the anchor, undo) are in `doc/editor/level_tools.md` "Surface settings".
+the gizmo snaps the moved set along the Surface Drag Direction (an explicit
+vector, or the camera ray through the anchor) within the Surface Max Distance
+at every step: by Surface Rest, the lead mesh's leading bounds face rests
+flush (the default) or the anchor lands on the surface, and the set moves by
+that displacement; `drag_selection` does so with its `surface_*` arguments, and
+`transform_selection` rests each moved mesh by its bounds. The rules (the
+axis rule, rotate and scale left alone, the anchor, undo) are in
+`doc/editor/level_tools.md` "Surface settings".
 With Connector Snap above 0 a translate, rotate or scale drag then moves the
 dragged nodes so that their connector nearest another kit piece's connector
 meets it within the distance; `drag_selection` and `transform_selection` take
 `connector_snap_distance`. The connector snap starts only after the pointer
 has moved, Connector Snap On Axis keeps a translate drag on its axis or plane
 handle (a rotate or scale drag takes the full offset),
-Connector Snap Orientation also turns a translate drag's snapped set so the
-pair's frames face each other (U44),
+Connector Snap Orientation (Off, Rotate, Full) also turns the snapped set of
+any drag kind so the pair's frames face each other, Rotate only about the up
+axis Orient To Surface set (U44, U50),
 and `Transform_tool.suspend_connector_snap` (Shift) held suspends it. A translate step's order is the tool's translate,
 the snap to surface, the connector snap, then the live layout preview; a
 rotate or scale step's is the tool's rotation or scale about the press pivot,

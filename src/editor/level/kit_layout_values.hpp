@@ -39,6 +39,17 @@ enum class Kit_scatter_mode : unsigned int {
 inline constexpr float c_min_scatter_region_size{0.01f};
 inline constexpr float c_max_scatter_region_size{10000.0f};
 
+// The ranges of the line, grid and ring values the rows and the layout handles keep (meters; the arc in degrees).
+inline constexpr float c_max_line_step   {1000.0f};
+inline constexpr float c_max_line_length {10000.0f};
+inline constexpr float c_max_grid_spacing{1000.0f};
+inline constexpr float c_min_ring_radius {0.01f};
+inline constexpr float c_max_ring_radius {1000.0f};
+inline constexpr float c_min_ring_arc    {1.0f};
+inline constexpr float c_max_ring_arc    {360.0f};
+// A line step or grid spacing a layout handle sets keeps its sign and at least this size.
+inline constexpr float c_min_layout_handle_step{0.01f};
+
 [[nodiscard]] auto c_str(Kit_layout_count_mode mode) -> const char*;
 [[nodiscard]] auto c_str(Kit_scatter_mode mode) -> const char*;
 [[nodiscard]] auto c_str(Repeat_ring_facing facing) -> const char*;

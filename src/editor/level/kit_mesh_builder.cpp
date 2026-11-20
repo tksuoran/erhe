@@ -130,67 +130,6 @@ void Kit_mesh_builder::add_prism(const int segments, const float radius, const f
     }
 }
 
-void Kit_mesh_builder::add_blob(const Kit_blob& blob, Kit_random& random)
-{
-    const uint32_t n          = static_cast<uint32_t>(blob.segments);
-    const uint32_t ring_count = static_cast<uint32_t>(blob.rings.size());
-    const float    step       = 2.0f * std::numbers::pi_v<float> / static_cast<float>(blob.segments);
-
-    std::vector<float> angle_factors(n);
-    for (uint32_t i = 0; i < n; ++i) {
-        angle_factors[i] = 1.0f + random.next_range(-blob.angle_jitter, blob.angle_jitter);
-    }
-
-    std::vector<uint32_t> ring_base(ring_count);
-    for (uint32_t r = 0; r < ring_count; ++r) {
-        const Kit_blob_ring& ring      = blob.rings[r];
-        const bool           flat_ring =
-            ((r == 0) && (blob.bottom_cap == Kit_blob_cap::flat)) ||
-            ((r == ring_count - 1) && (blob.top_cap == Kit_blob_cap::flat));
-        ring_base[r] = static_cast<uint32_t>(m_positions.size());
-        for (uint32_t i = 0; i < n; ++i) {
-            const float factor = angle_factors[i] * (1.0f + random.next_range(-blob.vertex_jitter, blob.vertex_jitter));
-            const float dy     = random.next_range(-blob.height_jitter, blob.height_jitter);
-            const float y      = flat_ring ? ring.y : (ring.y + dy);
-            add_vertex(ring_point(ring.radius * factor, y, step * static_cast<float>(i)));
-        }
-    }
-
-    for (uint32_t r = 0; r + 1 < ring_count; ++r) {
-        const uint32_t a = ring_base[r];
-        const uint32_t b = ring_base[r + 1];
-        for (uint32_t i = 0; i < n; ++i) {
-            const uint32_t j = (i + 1) % n;
-            add_triangle(a + i, a + j, b + j);
-            add_triangle(a + i, b + j, b + i);
-        }
-    }
-
-    const uint32_t bottom_ring = ring_base.front();
-    const uint32_t top_ring    = ring_base.back();
-    const auto apex_point = [&](const float y, const float radius) -> glm::vec3 {
-        const float dx = random.next_range(-blob.apex_offset, blob.apex_offset) * radius;
-        const float dz = random.next_range(-blob.apex_offset, blob.apex_offset) * radius;
-        return glm::vec3{dx, y, dz};
-    };
-
-    const uint32_t bottom_center = (blob.bottom_cap == Kit_blob_cap::flat)
-        ? add_vertex(glm::vec3{0.0f, blob.rings.front().y, 0.0f})
-        : add_vertex(apex_point(blob.bottom_point_y, blob.rings.front().radius));
-    for (uint32_t i = 0; i < n; ++i) {
-        const uint32_t j = (i + 1) % n;
-        add_triangle(bottom_center, bottom_ring + j, bottom_ring + i);
-    }
-
-    const uint32_t top_center = (blob.top_cap == Kit_blob_cap::flat)
-        ? add_vertex(glm::vec3{0.0f, blob.rings.back().y, 0.0f})
-        : add_vertex(apex_point(blob.top_point_y, blob.rings.back().radius));
-    for (uint32_t i = 0; i < n; ++i) {
-        const uint32_t j = (i + 1) % n;
-        add_triangle(top_ring + i, top_ring + j, top_center);
-    }
-}
-
 namespace {
 
 // The rings' points and their bands, two triangles per quad; returns the first vertex index.

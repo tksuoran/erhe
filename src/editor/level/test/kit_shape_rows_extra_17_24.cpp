@@ -10,7 +10,6 @@ auto get_extra_17_24_rows() -> Kit_shape_rows
         "ruin.broken_pillar", "ruin.broken_arch", "light.lantern", "light.fire", "harbour.buoy", "traversal.trestle", "traversal.scaffold",
         "architecture.tunnel"
     };
-    rows.recreated_originals = {};
     rows.seeded_shapes       = {"ruin.broken_pillar", "light.fire", "harbour.buoy"};
     rows.enum_shapes         = {"ruin.broken_pillar", "light.lantern", "light.fire", "harbour.buoy", "traversal.scaffold", "architecture.tunnel"};
     rows.components          = {

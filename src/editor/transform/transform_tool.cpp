@@ -1,4 +1,6 @@
 ﻿#include "transform/transform_tool.hpp"
+
+#include "brushes/brush_tool.hpp"
 #include "transform/channel_locks.hpp"
 #include "editor_item_bits.hpp"
 #include "transform/move_tool.hpp"
@@ -28,6 +30,7 @@
 #include "scene/scene_root.hpp"
 #include "scene/scene_view.hpp"
 #include "scene/viewport_scene_view.hpp"
+#include "scene/viewport_scene_views.hpp"
 #include "tools/curve_tool.hpp"
 #include "tools/lattice_tool.hpp"
 #include "tools/mesh_component_selection.hpp"
@@ -98,6 +101,15 @@ using vec4 = glm::vec4;
 using Trs_transform = erhe::scene::Trs_transform;
 
 namespace {
+
+// U50: Rotate turns about the surface normal only with Orient To Surface; without it Rotate and Full act alike.
+[[nodiscard]] auto get_effective_orientation(const Connector_snap_orientation orientation, const Surface_orient orient) -> Connector_snap_orientation
+{
+    if ((orientation == Connector_snap_orientation::rotate) && (orient != Surface_orient::on)) {
+        return Connector_snap_orientation::full;
+    }
+    return orientation;
+}
 
 // All transform-handle line rendering (the handles themselves, the hover
 // previews, the rotate protractor) uses the x-ray bucket: the occluded pass
@@ -198,6 +210,10 @@ auto Transform_tool_suspend_connector_snap_command::try_call_with_input(erhe::co
     static_cast<void>(input);
     if (m_context.transform_tool != nullptr) {
         m_context.transform_tool->on_connector_snap_suspend_key_edge();
+    }
+    // The Brush tool's kit mode connector join (step 40) follows the same key.
+    if (m_context.brush_tool != nullptr) {
+        m_context.brush_tool->on_connector_snap_suspend_key_edge();
     }
     // Not consumed: the key keeps its other meanings.
     return false;
@@ -997,13 +1013,95 @@ void Transform_tool::apply_drag_surface_step()
     if (!any_surface_option(m_drag_surface)) {
         return;
     }
-    if (is_surface_axis_drag(m_drag_surface.direction)) {
-        for (Transform_entry& entry : shared.entries) {
-            entry.surface_found = false;
+    Surface_options options = m_drag_surface;
+    if (m_drag_surface_direction == Surface_drag_direction::camera_ray) {
+        // Recomputed every step: the anchor and the camera can move during the drag.
+        if (!get_camera_ray_through(shared.world_from_anchor.get_translation(), options.direction)) {
+            clear_surface_found();
+            return;
         }
+    }
+    if (is_surface_axis_drag(options.direction)) {
+        clear_surface_found();
         return;
     }
-    static_cast<void>(snap_to_surface(m_drag_surface));
+    if ((options.orient == Surface_orient::on) && !m_drag_orient_half_turn.has_value()) {
+        m_drag_orient_half_turn = get_drag_start_half_turn(options.direction);
+    }
+    static_cast<void>(snap_anchor_to_surface(options, m_drag_orient_half_turn.value_or(Orient_half_turn::off)));
+}
+
+void Transform_tool::clear_surface_found()
+{
+    for (Transform_entry& entry : shared.entries) {
+        entry.surface_found = false;
+    }
+}
+
+auto Transform_tool::get_drag_start_half_turn(const glm::vec3& step_direction) const -> Orient_half_turn
+{
+    const Transform_entry* const lead = get_lead_entry();
+    if (lead == nullptr) {
+        return Orient_half_turn::off;
+    }
+    // The direction through the anchor where the drag started; a camera ray that has none there takes the step's.
+    glm::vec3 direction = step_direction;
+    if (m_drag_surface_direction == Surface_drag_direction::camera_ray) {
+        glm::vec3 start_direction{0.0f};
+        if (get_camera_ray_through(shared.world_from_anchor_initial_state.get_translation(), start_direction)) {
+            direction = start_direction;
+        }
+    }
+    const Trs_transform& start = lead->world_from_node_before;
+    return get_orient_half_turn(start.get_rotation(), get_orient_base_frame(start.get_scale()), direction);
+}
+
+auto Transform_tool::get_camera_ray_scene_view() const -> std::shared_ptr<Viewport_scene_view>
+{
+    // A scripted drag: the last hovered viewport when it shows the drag's scene, else the first viewport that does.
+    if (m_context.scene_views == nullptr) {
+        return {};
+    }
+    const std::shared_ptr<Scene_root> scene_root = m_context.selection->get_active_scene_root();
+    if (!scene_root) {
+        return {};
+    }
+    std::shared_ptr<Viewport_scene_view> last = m_context.scene_views->last_scene_view();
+    if (last && (last->get_scene_root() == scene_root)) {
+        return last;
+    }
+    for (const std::shared_ptr<Viewport_scene_view>& scene_view : m_context.scene_views->get_viewport_scene_views()) {
+        if (scene_view && (scene_view->get_scene_root() == scene_root)) {
+            return scene_view;
+        }
+    }
+    return {};
+}
+
+auto Transform_tool::get_camera_ray_through(const glm::vec3& anchor, glm::vec3& out_direction) const -> bool
+{
+    std::shared_ptr<erhe::scene::Camera> camera;
+    if (m_drag_scene_view != nullptr) {
+        camera = m_drag_scene_view->get_camera();
+    } else {
+        const std::shared_ptr<Viewport_scene_view> scene_view = get_camera_ray_scene_view();
+        if (scene_view) {
+            camera = scene_view->get_camera();
+        }
+    }
+    if (!camera) {
+        return false;
+    }
+    const erhe::scene::Projection* const projection = camera->projection();
+    const Camera_ray_projection kind =
+        ((projection != nullptr) && projection->is_orthographic()) ? Camera_ray_projection::orthographic : Camera_ray_projection::perspective;
+    return get_camera_ray_direction(
+        kind,
+        glm::vec3{camera->position_in_world()},
+        -glm::vec3{camera->direction_in_world()}, // a camera looks along its -Z
+        anchor,
+        out_direction
+    );
 }
 
 void Transform_tool::begin_connector_snap(const float distance, const Connector_snap_orientation orientation)
@@ -1070,7 +1168,7 @@ void Transform_tool::apply_drag_connector_step()
     }
     const bool timed = log_trs_tool->should_log(spdlog::level::trace);
     const std::chrono::steady_clock::time_point start_time = timed ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
-    std::optional<glm::vec3> offset = m_connector_snap.step(get_connector_snap_constraint(), m_connector_snap_orientation);
+    std::optional<glm::vec3> offset = m_connector_snap.step(get_connector_snap_constraint(), get_connector_snap_turn());
     if (offset.has_value() && (m_connector_snap.get_state().alignment == Kit_connector_snap_alignment::aligned)) {
         const Kit_connector_snap_alignment check = check_aligned_motion(m_connector_snap.get_state().motion);
         if (check != Kit_connector_snap_alignment::aligned) {
@@ -1107,6 +1205,25 @@ void Transform_tool::apply_drag_connector_step()
         enforce_channel_locks(*node, entry.parent_from_node_before);
     }
     shared.world_from_anchor = erhe::scene::translate(shared.world_from_anchor, offset.value());
+}
+
+auto Transform_tool::get_connector_snap_turn() const -> Kit_connector_snap_turn
+{
+    switch (m_connector_snap_orientation) {
+        case Connector_snap_orientation::off:  return Kit_connector_snap_turn{};
+        case Connector_snap_orientation::full: return Kit_connector_snap_turn{.kind = Kit_connector_snap_turn_kind::full};
+        case Connector_snap_orientation::rotate: {
+            // U50: the lead's up axis of this step, the surface normal when the step's surface snap oriented the set.
+            const Transform_entry* const lead = get_lead_entry();
+            if (lead == nullptr) {
+                return Kit_connector_snap_turn{.kind = Kit_connector_snap_turn_kind::full};
+            }
+            const Trs_transform lead_world = lead->node->world_from_node_transform();
+            const glm::vec3     up         = lead_world.get_rotation() * get_orient_base_frame(lead_world.get_scale()).up_local;
+            return Kit_connector_snap_turn{.kind = Kit_connector_snap_turn_kind::about_axis, .axis = glm::normalize(up)};
+        }
+    }
+    return Kit_connector_snap_turn{};
 }
 
 auto Transform_tool::check_aligned_motion(const Kit_join_pose& motion) const -> Kit_connector_snap_alignment
@@ -1244,37 +1361,49 @@ void Transform_tool::note_node_drag_motion()
     m_connector_snap_motion = true;
 }
 
-auto Transform_tool::can_translate_moved_roots(const glm::vec3& offset) const -> bool
+namespace {
+
+// Channel locks hold local components, so a world offset is taken into the parent's space.
+[[nodiscard]] auto is_translation_locked_against(const erhe::scene::Node& node, const glm::vec3& offset) -> bool
 {
-    using namespace erhe::utility;
     constexpr float c_locked_component_tolerance = 1.0e-5f;
     constexpr std::array<uint64_t, 3> c_axis_locks{
         erhe::Item_flags::lock_translation_x, erhe::Item_flags::lock_translation_y, erhe::Item_flags::lock_translation_z
     };
+    const uint64_t locks = node.get_flag_bits() & erhe::Item_flags::lock_translation_mask;
+    if (locks == 0) {
+        return false;
+    }
+    const std::shared_ptr<erhe::scene::Node> parent = node.get_parent_node();
+    const glm::vec3 local_offset = parent ? glm::vec3{parent->node_from_world() * glm::vec4{offset, 0.0f}} : offset;
+    for (int axis = 0; axis < 3; ++axis) {
+        if (((locks & c_axis_locks[axis]) != 0) && (std::abs(local_offset[axis]) > c_locked_component_tolerance)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+} // anonymous namespace
+
+auto Transform_tool::can_translate_moved_roots(const glm::vec3& offset) const -> bool
+{
+    using namespace erhe::utility;
     for (const Transform_entry& entry : shared.entries) {
         const std::shared_ptr<erhe::scene::Node>& node = entry.node;
         if (!node || test_bit_set(node->get_flag_bits(), editor::Editor_item_flags::lock_viewport_transform) || has_moved_ancestor_entry(*node)) {
             continue;
         }
-        const uint64_t locks = node->get_flag_bits() & erhe::Item_flags::lock_translation_mask;
-        if (locks == 0) {
-            continue;
-        }
-        // Channel locks hold local components, so the offset is taken into the parent's space.
-        const std::shared_ptr<erhe::scene::Node> parent = node->get_parent_node();
-        const glm::vec3 local_offset = parent ? glm::vec3{parent->node_from_world() * glm::vec4{offset, 0.0f}} : offset;
-        for (int axis = 0; axis < 3; ++axis) {
-            if (((locks & c_axis_locks[axis]) != 0) && (std::abs(local_offset[axis]) > c_locked_component_tolerance)) {
-                return false;
-            }
+        if (is_translation_locked_against(*node, offset)) {
+            return false;
         }
     }
     return true;
 }
 
-auto Transform_tool::snap_to_connectors(const float distance, const Connector_snap_orientation orientation) -> bool
+auto Transform_tool::snap_to_connectors(const float distance, const Connector_snap_orientation orientation, const Surface_orient orient) -> bool
 {
-    begin_connector_snap(distance, orientation);
+    begin_connector_snap(distance, get_effective_orientation(orientation, orient));
     m_connector_snap_motion = true; // the call's edits are its motion
     apply_drag_connector_step();
     const bool snapped = m_connector_snap.get_state().snapped;
@@ -1350,8 +1479,193 @@ auto Transform_tool::is_surface_axis_drag(const glm::vec3& direction) const -> b
     }
     const int       axis   = (mask == Axis_mask::x) ? 0 : (mask == Axis_mask::y) ? 1 : 2;
     const glm::mat3 basis  = m_active_tool->get_basis();
-    constexpr float c_parallel_cos = 0.999f;
-    return std::abs(glm::dot(glm::normalize(basis[axis]), direction)) > c_parallel_cos;
+    return is_axis_along_direction(basis[axis], direction);
+}
+
+void Transform_tool::gather_surface_excluded()
+{
+    m_surface_excluded.clear();
+    for (const Transform_entry& entry : shared.entries) {
+        if (!entry.node) {
+            continue;
+        }
+        static_cast<void>(
+            entry.node->for_each_const<erhe::scene::Mesh>(
+                [this](const erhe::scene::Mesh& mesh) -> bool {
+                    m_surface_excluded.push_back(&mesh);
+                    return true;
+                }
+            )
+        );
+    }
+}
+
+auto Transform_tool::is_surface_moved_root(const Transform_entry& entry) const -> bool
+{
+    const erhe::scene::Node* const node = entry.node.get();
+    return
+        (node != nullptr) &&
+        !erhe::utility::test_bit_set(node->get_flag_bits(), editor::Editor_item_flags::lock_viewport_transform) &&
+        !m_physics_drag.is_spring_driven(node) &&
+        !has_moved_ancestor_entry(*node); // a node below a moved one rides rigidly with it
+}
+
+auto Transform_tool::get_lead_entry() const -> const Transform_entry*
+{
+    for (const Transform_entry& entry : shared.entries) {
+        if (is_surface_moved_root(entry)) {
+            return &entry;
+        }
+    }
+    return nullptr;
+}
+
+auto Transform_tool::find_lead_face_rest(erhe::raytrace::IScene& committed_rt_scene, const glm::vec3& anchor, const Surface_options& options) const -> Point_surface
+{
+    // U60 leading_face: the lead (the first moved root, as orient's lead) rests by the meshes of its whole subtree, their
+    // bounds in its own frame, as a placed piece rests; the anchor (and the set) moves by its displacement.
+    const Transform_entry* const lead = get_lead_entry();
+    if (lead == nullptr) {
+        return Point_surface{};
+    }
+    const erhe::scene::Node& root      = *lead->node;
+    const Trs_transform      world     = root.world_from_node_transform();
+    const glm::mat4          root_from_world = root.node_from_world();
+    erhe::math::Aabb         subtree_bounds{};
+    static_cast<void>(
+        root.for_each_const<erhe::scene::Mesh>(
+            [&subtree_bounds, &root_from_world](const erhe::scene::Mesh& mesh) -> bool {
+                const erhe::math::Aabb mesh_bounds = mesh_local_bounds(mesh);
+                if (!mesh_bounds.is_valid_3d()) {
+                    return true;
+                }
+                const glm::mat4 root_from_mesh = root_from_world * mesh.world_from_node();
+                for (int corner = 0; corner < 8; ++corner) {
+                    const glm::vec3 local{
+                        ((corner & 1) != 0) ? mesh_bounds.max.x : mesh_bounds.min.x,
+                        ((corner & 2) != 0) ? mesh_bounds.max.y : mesh_bounds.min.y,
+                        ((corner & 4) != 0) ? mesh_bounds.max.z : mesh_bounds.min.z
+                    };
+                    subtree_bounds.include(glm::vec3{root_from_mesh * glm::vec4{local, 1.0f}});
+                }
+                return true;
+            }
+        )
+    );
+    if (!subtree_bounds.is_valid_3d()) {
+        return Point_surface{};
+    }
+    const Surface_placement placement = find_surface_placement(
+        committed_rt_scene,
+        subtree_bounds,
+        Surface_pose{.position = world.get_translation(), .rotation = world.get_rotation(), .scale = world.get_scale()},
+        options,
+        m_surface_excluded
+    );
+    if (!placement.surface_found) {
+        return Point_surface{};
+    }
+    // A lead at rest keeps the anchor bit for bit.
+    const glm::vec3 displacement = placement.pose.position - glm::vec3{world.get_translation()};
+    return Point_surface{
+        .found    = true,
+        .position = (displacement == glm::vec3{0.0f}) ? anchor : (anchor + displacement),
+        .normal   = -options.direction,
+        .distance = placement.distance
+    };
+}
+
+auto Transform_tool::snap_anchor_to_surface(const Surface_options& options, const Orient_half_turn half_turn) -> std::size_t
+{
+    ERHE_PROFILE_FUNCTION();
+
+    clear_surface_found();
+    if (!any_surface_option(options) || shared.component_mode || shared.entries.empty()) {
+        return 0;
+    }
+    const std::shared_ptr<Scene_root> scene_root = m_context.selection->get_active_scene_root();
+    if (!scene_root) {
+        return 0;
+    }
+    // Moved meshes (and what moves with them) are no surface; a set without a mesh (lights, cameras) is not snapped.
+    gather_surface_excluded();
+    const Transform_entry* const lead = get_lead_entry();
+    if (m_surface_excluded.empty() || (lead == nullptr)) {
+        return 0;
+    }
+    const std::chrono::steady_clock::time_point start_time = std::chrono::steady_clock::now();
+    erhe::raytrace::IScene& rt_scene = scene_root->get_raytrace_scene();
+    rt_scene.commit();
+
+    const glm::vec3     anchor = shared.world_from_anchor.get_translation();
+    const Point_surface rest   = (options.rest == Surface_snap_rest::leading_face) && (options.orient != Surface_orient::on)
+        ? find_lead_face_rest(rt_scene, anchor, options)
+        : find_point_surface(rt_scene, anchor, options, m_surface_excluded);
+    const glm::quat     identity{1.0f, 0.0f, 0.0f, 0.0f};
+    glm::quat           turn = identity;
+    if (rest.found && (options.orient == Surface_orient::on)) {
+        // The lead's up axis (local +Y, the scale's sign folded in) takes the normal; the set turns rigidly about the anchor.
+        const Trs_transform lead_world = lead->node->world_from_node_transform();
+        turn = get_orient_turn(lead_world.get_rotation(), get_orient_base_frame(lead_world.get_scale()), half_turn, rest.normal);
+    }
+    // Without a turn the set moves by the displacement itself, so a rested set keeps its transforms bit for bit.
+    const auto get_rested = [&](const Trs_transform& world) -> Trs_transform {
+        Trs_transform rested = world;
+        if (turn == identity) {
+            rested.set_translation(glm::vec3{world.get_translation()} + (rest.position - anchor));
+        } else {
+            rested.set_translation_and_rotation(
+                rest.position + (turn * (glm::vec3{world.get_translation()} - anchor)),
+                glm::normalize(turn * world.get_rotation())
+            );
+        }
+        return rested;
+    };
+    // A rest that a moved root's channel locks would refuse leaves the step as the tool computed it, the gizmo with it.
+    bool blocked = !rest.found;
+    for (const Transform_entry& entry : shared.entries) {
+        if (blocked) {
+            break;
+        }
+        if (!is_surface_moved_root(entry)) {
+            continue;
+        }
+        const erhe::scene::Node& node  = *entry.node;
+        const Trs_transform      world = node.world_from_node_transform();
+        const uint64_t           rotation_locks = node.get_flag_bits() & erhe::Item_flags::lock_rotation_mask;
+        blocked =
+            is_translation_locked_against(node, glm::vec3{get_rested(world).get_translation()} - glm::vec3{world.get_translation()}) ||
+            ((turn != identity) && (rotation_locks != 0));
+    }
+    std::size_t moved_count = 0;
+    if (!blocked) {
+        for (Transform_entry& entry : shared.entries) {
+            if (!is_surface_moved_root(entry)) {
+                continue;
+            }
+            erhe::scene::Node&  node    = *entry.node;
+            const Trs_transform world   = node.world_from_node_transform();
+            const Trs_transform rested  = get_rested(world);
+            // A set already at rest keeps its transforms: the world-to-parent round trip is not exact.
+            if ((rested.get_translation() != world.get_translation()) || (rested.get_rotation() != world.get_rotation())) {
+                node.set_world_from_node(rested);
+                enforce_channel_locks(node, entry.parent_from_node_before);
+            }
+            entry.surface_found = true;
+            ++moved_count;
+        }
+        // The anchor turns with the set: Local-mode handle axes and the BBox origin indicator follow.
+        if (turn == identity) {
+            shared.world_from_anchor.set_translation(rest.position);
+        } else {
+            shared.world_from_anchor.set_translation_and_rotation(rest.position, glm::normalize(turn * shared.world_from_anchor.get_rotation()));
+        }
+    }
+    log_trs_tool->trace(
+        "surface step: {} entries, {} snapped{}: {:.3f} ms", shared.entries.size(), moved_count, (rest.found && blocked) ? " (refused by channel locks)" : "",
+        std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start_time).count()
+    );
+    return moved_count;
 }
 
 auto Transform_tool::snap_to_surface(const Surface_options& options) -> std::size_t
@@ -1371,20 +1685,7 @@ auto Transform_tool::snap_to_surface(const Surface_options& options) -> std::siz
     const std::chrono::steady_clock::time_point start_time = std::chrono::steady_clock::now();
 
     // Moved meshes (and what moves with them) are no surface for each other.
-    m_surface_excluded.clear();
-    for (const Transform_entry& entry : shared.entries) {
-        if (!entry.node) {
-            continue;
-        }
-        static_cast<void>(
-            entry.node->for_each_const<erhe::scene::Mesh>(
-                [this](const erhe::scene::Mesh& mesh) -> bool {
-                    m_surface_excluded.push_back(&mesh);
-                    return true;
-                }
-            )
-        );
-    }
+    gather_surface_excluded();
     erhe::raytrace::IScene& rt_scene = scene_root->get_raytrace_scene();
     rt_scene.commit();
 
@@ -1408,7 +1709,6 @@ auto Transform_tool::snap_to_surface(const Surface_options& options) -> std::siz
         const Surface_placement    placement = find_surface_placement(
             rt_scene,
             mesh_local_bounds(mesh),
-            get_surface_base_rule(mesh),
             Surface_pose{.position = world.get_translation(), .rotation = world.get_rotation(), .scale = world.get_scale()},
             options,
             m_surface_excluded
@@ -2113,17 +2413,21 @@ auto Transform_tool::on_drag_ready() -> bool
             (m_active_tool == m_rotate_subtool) ? Transform_drag_kind::rotate :
                                                   Transform_drag_kind::translate;
         m_physics_drag.begin(m_context, shared.entries, kind);
-        m_drag_surface =
-            ((kind == Transform_drag_kind::translate) && (m_context.level_kits != nullptr))
-                ? m_context.level_kits->get_surface_settings()
-                : Surface_options{};
+        m_drag_surface = Surface_options{};
+        m_drag_surface_direction = Surface_drag_direction::explicit_vector;
+        m_drag_orient_half_turn.reset();
+        if ((kind == Transform_drag_kind::translate) && (m_context.level_kits != nullptr)) {
+            m_drag_surface           = m_context.level_kits->get_surface_settings();
+            m_drag_surface.direction = glm::normalize(m_context.level_kits->get_surface_drag_direction()); // the setting is finite and not zero
+            m_drag_surface.rest      = m_context.level_kits->get_surface_rest();
+            m_drag_surface_direction = m_context.level_kits->get_surface_drag_direction_mode();
+        }
         m_connector_snap_axis_mode =
             (m_context.level_kits != nullptr) ? m_context.level_kits->get_connector_snap_axis_mode() : Connector_snap_axis_mode::full_offset;
-        // U44: only a translate drag's snap turns the moved set.
-        const Connector_snap_orientation orientation =
-            ((kind == Transform_drag_kind::translate) && (m_context.level_kits != nullptr))
-                ? m_context.level_kits->get_connector_snap_orientation()
-                : Connector_snap_orientation::keep;
+        // U50: every drag kind takes the orientation; Rotate needs Orient To Surface, read here for rotate and scale drags too.
+        const Connector_snap_orientation orientation = (m_context.level_kits != nullptr)
+            ? get_effective_orientation(m_context.level_kits->get_connector_snap_orientation(), m_context.level_kits->get_surface_settings().orient)
+            : Connector_snap_orientation::off;
         begin_connector_snap((m_context.level_kits != nullptr) ? m_context.level_kits->get_connector_snap_distance() : 0.0f, orientation);
     }
     if (started && shared.component_mode) {
@@ -2156,6 +2460,8 @@ void Transform_tool::end_drag()
     m_active_tool     = nullptr;
     m_drag_scene_view = nullptr;
     m_drag_surface    = Surface_options{};
+    m_drag_surface_direction = Surface_drag_direction::explicit_vector;
+    m_drag_orient_half_turn.reset();
     shared.initial_drag_position_distance_to_camera = 0.0;
 
     end_ik_drag();
@@ -3516,11 +3822,24 @@ void Transform_tool::record_transform_operation()
     // A moved locked kit layout node with a surface setting snaps its pieces to the surface again in the same entry (D3.9).
     const std::shared_ptr<Scene_root> scene_root = m_context.selection->get_active_scene_root();
     if (scene_root && (m_context.level_kits != nullptr)) {
+        // Step 41: a release snapped to a connector attaches the piece when the recorded poses are a join of the pair.
+        const Kit_connector_snap_state& snap_state = m_connector_snap.get_state();
+        std::optional<Kit_snap_pair> snap;
+        if (snap_state.snapped) {
+            snap = Kit_snap_pair{
+                .piece            = snap_state.piece.lock(),
+                .connector        = snap_state.connector,
+                .target           = snap_state.target.lock(),
+                .target_connector = snap_state.target_connector
+            };
+        }
         m_moved_nodes.clear();
         for (const Transform_entry& entry : shared.entries) {
             m_moved_nodes.push_back(entry.node);
         }
-        m_context.level_kits->append_layout_move_operations(*scene_root, m_moved_nodes, compompound_parameters.operations);
+        m_context.level_kits->append_layout_move_operations(
+            *scene_root, m_moved_nodes, compompound_parameters.operations, snap.has_value() ? &snap.value() : nullptr
+        );
         m_moved_nodes.clear();
     }
 
@@ -3534,6 +3853,7 @@ void Transform_tool::record_transform_operation()
 auto Transform_tool::begin_scripted_drag(
     const Transform_drag_kind        kind,
     const Surface_options&           surface,
+    const Surface_drag_direction     surface_direction_mode,
     const float                      connector_snap_distance,
     const Connector_snap_orientation connector_snap_orientation
 ) -> bool
@@ -3555,9 +3875,11 @@ auto Transform_tool::begin_scripted_drag(
         (kind == Transform_drag_kind::rotate) ? static_cast<Subtool*>(m_context.rotate_tool) :
                                                 static_cast<Subtool*>(m_context.move_tool);
     m_physics_drag.begin(m_context, shared.entries, kind);
-    m_drag_surface = (kind == Transform_drag_kind::translate) ? surface : Surface_options{};
+    m_drag_surface           = (kind == Transform_drag_kind::translate) ? surface : Surface_options{};
+    m_drag_surface_direction = surface_direction_mode;
+    m_drag_orient_half_turn.reset();
     m_connector_snap_axis_mode = Connector_snap_axis_mode::full_offset; // no handle: the full offset
-    begin_connector_snap(connector_snap_distance, (kind == Transform_drag_kind::translate) ? connector_snap_orientation : Connector_snap_orientation::keep);
+    begin_connector_snap(connector_snap_distance, get_effective_orientation(connector_snap_orientation, surface.orient));
     return true;
 }
 
@@ -3573,6 +3895,8 @@ void Transform_tool::end_scripted_drag()
     m_scripted_drag_active = false;
     m_active_tool          = nullptr;
     m_drag_surface         = Surface_options{};
+    m_drag_surface_direction = Surface_drag_direction::explicit_vector;
+    m_drag_orient_half_turn.reset();
     end_ik_drag();
 }
 
@@ -3620,6 +3944,8 @@ auto Transform_tool::cancel_node_drag() -> bool
     m_active_tool          = nullptr;
     m_drag_scene_view      = nullptr;
     m_drag_surface         = Surface_options{};
+    m_drag_surface_direction = Surface_drag_direction::explicit_vector;
+    m_drag_orient_half_turn.reset();
     shared.initial_drag_position_distance_to_camera = 0.0;
     // end_ik_drag() rebuilds the entries when the IK drag appended joints; otherwise the rebuild is here.
     const bool entries_rebuilt = m_ik_entries_appended;

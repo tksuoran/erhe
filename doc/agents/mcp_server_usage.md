@@ -1609,7 +1609,8 @@ use.
 | `key_press` | `key`, `modifiers`, `hold_frames` | A key chord as real input |
 | `type_text` | `text` | UTF-8 text events to whatever holds keyboard focus |
 | `inject_input_events` | `events` | Raw `erhe::window::Input_event` values with per-event `frame` offsets |
-| `get_input_state` | - | Injected pointer position, held buttons, modifiers, the stepping gesture |
+| `get_input_state` | - | Injected pointer position, held buttons, modifiers, the stepping gesture, `active_tool`, `active_mouse_command`, `last_hovered_scene` (`doc/agents/mcp_ui_driving.md`) |
+| `set_active_tool` | `tool` | Makes the named tool (as `active_tool` names it) the active tool, or none with null |
 | `list_input_bindings` | `filter` | Per user-bindable command: input kind, default and effective bindings, `modified`, conflicts (`doc/editor/input_bindings.md`) |
 | `set_command_bindings` | `command`, `bindings` | Replaces the command's bindings (`Binding_desc` text form, e.g. `key:ctrl+x`) |
 | `reset_command_bindings` | `command` or `all` | Back to the default bindings |

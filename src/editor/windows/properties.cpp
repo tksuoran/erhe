@@ -470,6 +470,8 @@ auto Properties::get_inspected_material() const -> const std::shared_ptr<erhe::p
 void Properties::on_items_removed(const Removed_items& removed)
 {
     m_dependency_rows.release_edit_items([&removed](const erhe::Item_base& item) { return removed.lookup.contains(&item); });
+    // The Attached row of a kit piece names its target, which may have gone.
+    m_kit_piece_editor.mark_dirty();
     const std::shared_ptr<erhe::Item_base> target = m_target.lock();
     if (target && removed.lookup.contains(target.get())) {
         m_target.reset();
@@ -1260,11 +1262,24 @@ void Properties::kit_piece_properties(const std::shared_ptr<erhe::scene::Mesh>& 
             m_kit_piece_editor.on_edit(kit_parameter_row(m_kit_piece_editor.get_values(), i, Kit_row_label::recorded, m_kit_piece_editor.get_lengths()));
         });
     }
-    if (get_contract_id(*shape) == "basic.stairs") {
+    if (shape->id == "basic.stairs") {
         add_entry(Property_row_id::properties_layout, "Layout", [this]() { kit_stairs_line(m_kit_piece_editor.get_values()); });
     }
     if (!m_kit_piece_editor.get_message().empty()) {
         add_entry(Property_row_id::properties_message, "Message", [this]() { kit_message_line(m_kit_piece_editor.get_message()); });
+    }
+    // Step 41: the attachment the piece follows, with Detach (doc/editor/level_tools.md "Attachments").
+    if (!m_kit_piece_editor.get_attachment_text().empty()) {
+        add_entry(Property_row_id::properties_kit_attachment, "Attached", [this]() {
+            if (ImGui::SmallButton("Detach")) {
+                m_kit_piece_editor.detach();
+            }
+            if (ImGui::IsItemHovered()) {
+                ImGui::SetTooltip("%s", "The piece stops following its target and stays where it is (one undo entry).");
+            }
+            ImGui::SameLine();
+            ImGui::TextUnformatted(m_kit_piece_editor.get_attachment_text().c_str());
+        });
     }
     // U33: the piece switch and one switch per connector of the shape (doc/editor/level_tools.md "Connector switches").
     const std::vector<Kit_connector>& connectors = m_kit_piece_editor.get_connectors();

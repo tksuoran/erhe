@@ -16,19 +16,24 @@ enum class Surface_widget_label : unsigned int {
 
 void surface_snap_checkbox  (Level_kits& level_kits, Surface_widget_label label);
 void surface_orient_checkbox(Level_kits& level_kits, Surface_widget_label label);
+// U60: what snap without orient rests, the leading bounds face or the anchor point.
+void surface_rest_combo(Level_kits& level_kits, Surface_widget_label label);
 // The surface max distance in meters (U30).
 void surface_max_distance_input   (Level_kits& level_kits, Surface_widget_label label);
+// U51: the search direction of Transform tool drags, explicit vector or camera ray, and the explicit vector.
+void surface_drag_direction_mode_combo(Level_kits& level_kits, Surface_widget_label label);
+void surface_drag_direction_input     (Level_kits& level_kits, Surface_widget_label label);
 // The connector snap distance in meters (D3.13), 0 = off.
 void connector_snap_distance_input(Level_kits& level_kits, Surface_widget_label label);
 // U27: on, an axis or plane drag applies only the snap offset's part along the dragged axis or in the plane.
 void connector_snap_axis_checkbox (Level_kits& level_kits, Surface_widget_label label);
-// U44: on, a translate drag's connector snap also turns the moved nodes so the connector frames face each other.
-void connector_snap_orientation_checkbox(Level_kits& level_kits, Surface_widget_label label);
+// U50: Off, Rotate or Full: how a drag's connector snap turns the moved nodes so the connector frames face each other.
+void connector_snap_orientation_combo(Level_kits& level_kits, Surface_widget_label label);
 
-// Both checkboxes, the surface max distance, the connector snap distance, its axis and orientation checkboxes with their labels (the Level Kit window).
+// Both checkboxes, the rest rule, the surface max distance, the drag direction mode and vector, the connector snap distance, its axis checkbox and orientation combo with their labels (the Level Kit window).
 void surface_settings_checkboxes(Level_kits& level_kits);
 
-// Two toggle buttons, the surface max distance, the connector snap distance, its axis and orientation toggles of the viewport toolbar; text buttons without the icon font.
+// Two toggle buttons, the rest anchor toggle, the surface max distance, the camera ray toggle, the connector snap distance, its axis toggle and orientation cycle button of the viewport toolbar; text buttons without the icon font.
 void surface_settings_toolbar_buttons(Level_kits& level_kits, ImFont* icon_font, float font_size);
 
 } // namespace editor

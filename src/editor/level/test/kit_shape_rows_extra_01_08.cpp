@@ -9,7 +9,6 @@ auto get_extra_01_08_rows() -> Kit_shape_rows
     rows.shapes              = {
         "prop.crate", "prop.barrel", "ruin.broken_wall", "ruin.rubble", "traversal.ladder", "harbour.pier", "harbour.mooring", "light.lamp_post"
     };
-    rows.recreated_originals = {};
     rows.seeded_shapes       = {"ruin.broken_wall", "ruin.rubble", "harbour.pier", "harbour.mooring"};
     rows.enum_shapes         = {"prop.crate", "prop.barrel", "ruin.broken_wall", "harbour.pier", "harbour.mooring", "light.lamp_post"};
     rows.components          = {

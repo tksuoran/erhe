@@ -1165,7 +1165,7 @@ def load_level(editor):
                                         "pattern": {"kind": "path", "count_mode": "gap", "gap": 0.5},
                                         "points": [{"position": [0.0, 0.0, 0.0]}, {"position": [6.0, 0.0, 0.0]}, {"position": [6.0, 0.0, 4.0]}, {"position": [7.0, 0.0, 4.0]}]})
     editor.wait_idle()
-    editor.call("level_create_layout", {"scene_name": scene, "name": "Stepping Stones", "position": [-10.0, 0.0, 6.0], "surface_snap": True,
+    editor.call("level_create_layout", {"scene_name": scene, "name": "Stepping Stones", "position": [-10.0, 0.0, 6.0], "surface_snap": True, "surface_backward_distance": 1.0,
                                         "items": [{"shape": "nature.rock", "parameters": {"seed": 3}}],
                                         "pattern": {"kind": "path", "count_mode": "gap", "gap": 0.4},
                                         "points": [{"position": [0.0, 0.0, 0.0], "kind": "smooth", "out": [2.0, 0.0, 0.0]},

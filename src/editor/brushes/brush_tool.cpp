@@ -8,7 +8,10 @@
 #include "brushes/brush.hpp"
 #include "brushes/brush_placement.hpp"
 #include "editor_log.hpp"
+#include "level/kit_piece.hpp"
 #include "level/level_kits.hpp"
+#include "operations/compound_operation.hpp"
+#include "transform/transform_tool.hpp"
 #include "graphics/icon_set.hpp"
 #include "grid/grid.hpp"
 #include "operations/item_insert_remove_operation.hpp"
@@ -212,6 +215,16 @@ Brush_tool::Brush_tool(
             on_selection(message);
         }
     );
+    m_node_touched_subscription = app_message_bus.node_touched.subscribe(
+        [this](Node_touched_message& message) {
+            on_kit_join_target_changed(message.node);
+        }
+    );
+    m_kit_piece_connectors_changed_subscription = app_message_bus.kit_piece_connectors_changed.subscribe(
+        [this](Kit_piece_connectors_changed_message&) {
+            on_kit_join_target_changed(nullptr);
+        }
+    );
 
     m_grid_scale = scene_config.object_scale;
 
@@ -243,6 +256,7 @@ void Brush_tool::set_kit_brush(const Kit_parameter_values& values, const std::sh
     }
     m_kit_values = values;
     m_kit_brush  = brush;
+    get_shape_connectors(m_kit_values, m_kit_connectors);
     Level_kits& level_kits = *m_context.level_kits;
     level_kits.get_default_slot_materials(*shape, m_kit_slot_materials);
     m_kit_preview_materials.clear();
@@ -265,6 +279,7 @@ void Brush_tool::leave_kit_mode()
     m_kit_brush.reset();
     m_kit_slot_materials.clear();
     m_kit_preview_materials.clear();
+    m_kit_connectors.clear();
     m_kit_pose.reset();
     remove_preview_mesh();
 }
@@ -304,9 +319,35 @@ auto Brush_tool::get_kit_pose() const -> std::optional<Kit_placement_pose>
     return (m_kit_brush && m_preview_node) ? m_kit_pose : std::optional<Kit_placement_pose>{};
 }
 
+auto Brush_tool::get_kit_join() const -> std::optional<Kit_brush_join>
+{
+    return (m_kit_brush && m_preview_node) ? m_kit_join : std::optional<Kit_brush_join>{};
+}
+
+auto Brush_tool::is_kit_join_suspended() const -> bool
+{
+    return m_kit_join_suspended;
+}
+
+void Brush_tool::on_connector_snap_suspend_key_edge()
+{
+    // A key repeat or a key outside kit mode changes nothing.
+    if (!m_kit_brush || !m_preview_node || (m_context.transform_tool == nullptr)) {
+        return;
+    }
+    if (m_context.transform_tool->is_connector_snap_suspend_held() != m_kit_join_suspended) {
+        update_preview_mesh();
+    }
+}
+
 auto Brush_tool::get_hover_world_position() const -> std::optional<glm::vec3>
 {
     return m_hover_world_position;
+}
+
+auto Brush_tool::get_hover_world_normal() const -> std::optional<glm::vec3>
+{
+    return m_hover_world_normal;
 }
 
 void Brush_tool::on_selection(const Selection_message& message)
@@ -354,6 +395,12 @@ auto Brush_tool::get_drag_and_drop_brush() const -> const std::shared_ptr<Brush>
 
 void Brush_tool::on_items_removed(const Removed_items& removed)
 {
+    if (m_kit_join.has_value()) {
+        const std::shared_ptr<erhe::scene::Node> target = m_kit_join.value().target.lock();
+        if (!target || removed.lookup.contains(target.get())) {
+            on_kit_join_target_changed(nullptr);
+        }
+    }
     const std::shared_ptr<Brush> active_brush = m_active_brush.get_as<Brush>();
     if (active_brush && removed.lookup.contains(active_brush.get())) {
         clear_active_brush();
@@ -413,6 +460,7 @@ void Brush_tool::handle_priority_update(int old_priority, int new_priority)
         m_preview_command.set_inactive();
         m_hover = Hover_entry{};
         m_hover_world_position.reset();
+        m_hover_world_normal.reset();
         leave_kit_mode();
         remove_preview_mesh();
         clear_active_brush();
@@ -438,12 +486,14 @@ void Brush_tool::remove_preview_mesh()
     }
 
     m_hover_frame.reset();
+    clear_kit_join();
 }
 
 auto Brush_tool::try_rotate(int direction) -> bool
 {
     if (m_kit_brush) {
-        // Kit mode turns the next piece about the up axis; seen from above, rotate_cw turns clockwise.
+        // Kit mode turns the next piece about its up axis (the surface normal with orient); seen from above, rotate_cw turns clockwise.
+        // A connector join takes the steps as quarter twists about the target connector's outward axis.
         const Kit_placement_settings settings  = m_context.level_kits->get_placement_settings();
         const int                    per_turn  = std::max(1, static_cast<int>(std::lround(360.0f / std::max(1.0f, settings.rotation_step_degrees))));
         m_kit_yaw_steps = (((m_kit_yaw_steps - direction) % per_turn) + per_turn) % per_turn;
@@ -501,16 +551,26 @@ auto Brush_tool::try_rotate(int direction) -> bool
     glm::mat4  initial_node_transform   = node->parent_from_node();
     glm::mat4  updated_node_transform   = initial_node_transform * brush_update_transform;
 
-    auto node_operation = std::make_shared<Node_transform_operation>(
+    // Step 41: in a scene with attachments the turn is immediate, so the follow operation joins the followers to its end pose.
+    Scene_root* const scene_root     = dynamic_cast<Scene_root*>(node_shared->get_item_host());
+    const bool        follows        = (scene_root != nullptr) && (m_context.level_kits != nullptr) && Level_kits::has_attachments(*scene_root);
+    auto              node_operation = std::make_shared<Node_transform_operation>(
         Node_transform_operation::Parameters{
             .node                    = node_shared,
             .parent_from_node_before = node_shared->parent_from_node_transform(),
             .parent_from_node_after  = erhe::scene::Trs_transform{updated_node_transform},
             .xform_op_stack_before   = node_shared->copy_xform_op_stack(),
-            .time_duration           = 0.25f
+            .time_duration           = follows ? 0.0f : 0.25f
         }
     );
-    m_context.operation_stack->queue(node_operation);
+    if (follows) {
+        Compound_operation::Parameters compound{};
+        compound.operations.push_back(node_operation);
+        m_context.level_kits->append_attachment_follow_ups(std::span<const std::shared_ptr<erhe::scene::Node>>{&node_shared, 1}, compound.operations);
+        m_context.operation_stack->queue(std::make_shared<Compound_operation>(std::move(compound)));
+    } else {
+        m_context.operation_stack->queue(node_operation);
+    }
 
     set_brush_placement_corner(*node, new_corner);
     return true;
@@ -609,6 +669,17 @@ auto Brush_tool::try_insert_kit_piece() -> bool
     placement.values   = m_kit_values;
     placement.position = m_kit_pose.value().position;
     placement.rotation = m_kit_pose.value().rotation;
+    if (m_kit_join.has_value()) {
+        // Step 40: the same join level_place_pieces connect makes; a target removed since the hover is refused by place().
+        const Kit_brush_join& join = m_kit_join.value();
+        placement.connect = Kit_connect{
+            .connector        = join.connector,
+            .target           = join.target.lock(),
+            .target_connector = join.target_connector,
+            .twist_steps      = join.twist_steps,
+            .gap              = 0.0f
+        };
+    }
     for (const std::string& name : m_kit_slot_materials) {
         placement.materials.push_back(Kit_slot_material{.material = {}, .palette_name = name});
     }
@@ -619,7 +690,11 @@ auto Brush_tool::try_insert_kit_piece() -> bool
         item.shape      = placement.shape->id;
         item.parameters = m_kit_values.to_canonical_text();
         item.materials.assign(m_kit_slot_materials.begin(), m_kit_slot_materials.end());
-        const Kit_layout_result layout = level_kits.add_layout_initial(*scene_root, item, placement.position, placement.rotation);
+        // A joined pose has no surface: the layout searches down, the default (step 40).
+        const glm::vec3 surface_direction = m_kit_join.has_value() ? c_default_surface_direction : m_kit_pose.value().surface_direction;
+        const Kit_layout_result layout = level_kits.add_layout_initial(
+            *scene_root, item, placement.position, placement.rotation, surface_direction
+        );
         if (!layout.error.empty()) {
             log_scene->warn("Brush tool: kit layout placement failed: {}", layout.error);
             return false;
@@ -678,11 +753,18 @@ void Brush_tool::on_motion()
         // ImGui host needs for its click handling.
         m_hover = Hover_entry{};
         m_hover_world_position.reset();
+        m_hover_world_normal.reset();
         remove_preview_mesh();
         return;
     }
     m_hover = *nearest_hover;
     m_hover_world_position = nearest_hover->position;
+    m_hover_world_normal   = nearest_hover->normal;
+    // A back-face hit (a double-sided plane seen from behind) faces the viewer, so the search goes into the surface (U51).
+    const std::optional<glm::vec3> ray_direction = scene_view->get_control_ray_direction_in_world();
+    if (m_hover_world_normal.has_value() && ray_direction.has_value() && (glm::dot(m_hover_world_normal.value(), ray_direction.value()) > 0.0f)) {
+        m_hover_world_normal = -m_hover_world_normal.value();
+    }
 
     std::shared_ptr<erhe::scene::Mesh> hover_scene_mesh = m_hover.scene_mesh_weak.lock();
     if (hover_scene_mesh) {
@@ -913,6 +995,7 @@ void Brush_tool::update_preview_mesh_node_transform()
 void Brush_tool::update_kit_preview_transform(Brush& brush)
 {
     m_kit_pose.reset();
+    clear_kit_join();
     const std::shared_ptr<Scene_root>& scene_root = get_scene_root();
     if (!scene_root || !m_hover_world_position.has_value()) {
         return;
@@ -921,15 +1004,206 @@ void Brush_tool::update_kit_preview_transform(Brush& brush)
     const glm::vec3 point = (m_hover.slot == Hover_entry::grid_slot)
         ? glm::vec3{get_world_from_grid_hover_point()[3]}
         : m_hover_world_position.value();
+    // U51: placed along the normal of the surface under the pointer (the grid's normal on the grid).
     Level_kits& level_kits = *m_context.level_kits;
     m_kit_pose = level_kits.make_placement_pose(
-        *scene_root, brush.get_bounding_box(), point, m_kit_yaw_steps, level_kits.get_placement_settings()
+        *scene_root, brush.get_bounding_box(), point, m_hover_world_normal, m_kit_yaw_steps, level_kits.get_placement_settings()
     );
+    update_kit_join(*scene_root);
     // add_preview_mesh() gave the preview the kit brush's primitive at scale 1 under the scene root;
     // a new kit brush makes a new preview, so only the transform changes here.
     m_preview_node->set_parent_from_node(
         erhe::math::create_translation<float>(m_kit_pose.value().position) * glm::mat4_cast(m_kit_pose.value().rotation)
     );
+}
+
+void Brush_tool::clear_kit_join()
+{
+    m_kit_join.reset();
+    if (m_context.level_kits != nullptr) {
+        m_context.level_kits->get_connector_indicators().clear_brush_join();
+    }
+}
+
+void Brush_tool::update_kit_join(Scene_root& scene_root)
+{
+    ERHE_PROFILE_FUNCTION();
+
+    clear_kit_join();
+    m_kit_join_suspended = (m_context.transform_tool != nullptr) && m_context.transform_tool->is_connector_snap_suspend_held();
+    Level_kits& level_kits = *m_context.level_kits;
+    const float reach      = level_kits.get_connector_snap_distance();
+    if (
+        m_kit_join_suspended || !(reach > 0.0f) || m_kit_connectors.empty() || !m_kit_pose.has_value() ||
+        (m_hover.slot != Hover_entry::content_slot) || !m_hover_world_position.has_value()
+    ) {
+        return;
+    }
+    // The hovered mesh is the piece's node (Brush::make_instance()).
+    const std::shared_ptr<erhe::scene::Node> piece = m_hover.scene_mesh_weak.lock();
+    if (!piece || (piece->get_item_host() != &scene_root) || !carries_kit_piece(*piece)) {
+        return;
+    }
+    // Enabled frames only (U33, U39): a switched-off or layout-hidden connector is never a target.
+    const std::vector<Kit_connector>& local = level_kits.get_connector_indicators().get_local_connectors(*piece);
+    if (local.empty() || !transform_connectors(local, piece->world_from_node(), m_kit_target_connectors)) {
+        return;
+    }
+    const glm::vec3 hover_point = m_hover_world_position.value();
+    // The nearest free one within reach (inclusive); the first in the shape's order on a tie.
+    std::optional<std::size_t> nearest{};
+    float nearest_distance = 0.0f;
+    for (std::size_t i = 0, end = m_kit_target_connectors.size(); i < end; ++i) {
+        const float distance = glm::distance(m_kit_target_connectors[i].position, hover_point);
+        if (
+            (distance <= reach) && (!nearest.has_value() || (distance < nearest_distance)) &&
+            !is_kit_connector_joined(scene_root, *piece, m_kit_target_connectors[i])
+        ) {
+            nearest          = i;
+            nearest_distance = distance;
+        }
+    }
+    if (!nearest.has_value()) {
+        return;
+    }
+    // The new piece's connector whose outward opposes the target's most, both in their pieces' own frames; the first on a tie.
+    const Kit_connector& target_local = local[nearest.value()];
+    const Kit_connector* moved        = nullptr;
+    float                moved_dot    = 2.0f;
+    for (const Kit_connector& connector : m_kit_connectors) {
+        const float facing = glm::dot(connector.outward, target_local.outward);
+        if (facing < (moved_dot - 1.0e-4f)) {
+            moved     = &connector;
+            moved_dot = facing;
+        }
+    }
+    // The quarter twist nearest the rotation steps' yaw angle.
+    const float yaw_degrees = static_cast<float>(m_kit_yaw_steps) * level_kits.get_placement_settings().rotation_step_degrees;
+    const int   twist_steps = static_cast<int>(std::lround(yaw_degrees / 90.0f)) % 4;
+    static_cast<void>(apply_kit_join(scene_root, piece, target_local.name, m_kit_target_connectors[nearest.value()], *moved, twist_steps, nearest_distance));
+}
+
+auto Brush_tool::apply_kit_join(
+    Scene_root&                               scene_root,
+    const std::shared_ptr<erhe::scene::Node>& piece,
+    const char* const                         target_connector_name,
+    const Kit_connector&                      target_world,
+    const Kit_connector&                      moved,
+    const int                                 twist_steps,
+    const float                               distance
+) -> bool
+{
+    // As resolve_connect() computes it for a new piece (world_from_node identity), so a click lands on this pose.
+    const std::optional<Kit_join_pose> pose = join_motion(moved, glm::mat4{1.0f}, target_world, twist_steps, 0.0f);
+    if (!pose.has_value() || !m_kit_pose.has_value()) {
+        return false;
+    }
+    m_kit_pose.value().position      = pose.value().position;
+    m_kit_pose.value().rotation      = pose.value().rotation;
+    m_kit_pose.value().surface_found = false;
+    m_kit_join = Kit_brush_join{
+        .target           = piece,
+        .target_id        = static_cast<std::uint64_t>(piece->get_id()),
+        .target_connector = target_connector_name,
+        .connector        = moved.name,
+        .twist_steps      = twist_steps,
+        .distance         = distance
+    };
+    const std::optional<Kit_connector> moved_world = transform_connector(moved, apply_motion(pose.value(), glm::mat4{1.0f}));
+    m_context.level_kits->get_connector_indicators().set_brush_join(
+        scene_root, piece, target_connector_name, moved_world.value_or(target_world),
+        m_preview_node ? static_cast<std::uint64_t>(m_preview_node->get_id()) : 0
+    );
+    return true;
+}
+
+void Brush_tool::refresh_kit_join()
+{
+    // The same pair at the target's new frame: the pointer has not moved, so the hover point is not searched again.
+    const Kit_brush_join                     join       = m_kit_join.value();
+    const std::shared_ptr<erhe::scene::Node> target     = join.target.lock();
+    const std::shared_ptr<Scene_root>&       scene_root = get_scene_root();
+    if (target && scene_root && m_preview_node && (target->get_item_host() == scene_root.get())) {
+        const std::vector<Kit_connector>& local        = m_context.level_kits->get_connector_indicators().get_local_connectors(*target);
+        const Kit_connector* const        target_local = find_connector(local, join.target_connector);
+        const Kit_connector* const        moved        = find_connector(m_kit_connectors, join.connector);
+        if ((target_local != nullptr) && (moved != nullptr)) {
+            const std::optional<Kit_connector> target_world = transform_connector(*target_local, target->world_from_node());
+            if (
+                target_world.has_value() &&
+                apply_kit_join(*scene_root, target, join.target_connector, target_world.value(), *moved, join.twist_steps, join.distance)
+            ) {
+                m_preview_node->set_parent_from_node(
+                    erhe::math::create_translation<float>(m_kit_pose.value().position) * glm::mat4_cast(m_kit_pose.value().rotation)
+                );
+                return;
+            }
+        }
+    }
+    // The target is gone or its connector switched off: the preview places as without it.
+    update_preview_mesh();
+}
+
+auto Brush_tool::is_kit_connector_joined(const Scene_root& scene_root, const erhe::scene::Node& piece, const Kit_connector& connector) -> bool
+{
+    constexpr float c_position_tolerance = 1.0e-3f;
+    constexpr float c_facing_dot         = -0.999f;
+    Kit_connector_indicators& indicators = m_context.level_kits->get_connector_indicators();
+    bool joined = false;
+    scene_root.get_scene().for_each_node(
+        [&](const std::shared_ptr<erhe::scene::Node>& node) -> bool {
+            if (!node || (node.get() == &piece) || !carries_kit_piece(*node)) {
+                return true;
+            }
+            const erhe::scene::Mesh* const mesh = dynamic_cast<const erhe::scene::Mesh*>(node.get());
+            if (mesh == nullptr) {
+                return true;
+            }
+            const erhe::math::Aabb bounds = mesh->get_aabb_world();
+            const glm::vec3        p      = connector.position;
+            if (
+                !bounds.is_valid_3d() ||
+                glm::any(glm::lessThan(p, bounds.min - glm::vec3{c_position_tolerance})) ||
+                glm::any(glm::greaterThan(p, bounds.max + glm::vec3{c_position_tolerance}))
+            ) {
+                return true;
+            }
+            const glm::mat4 world_from_node = node->world_from_node();
+            for (const Kit_connector& local : indicators.get_local_connectors(*node)) {
+                const std::optional<Kit_connector> other = transform_connector(local, world_from_node);
+                if (
+                    other.has_value() && (glm::distance(other.value().position, p) <= c_position_tolerance) &&
+                    (glm::dot(other.value().outward, connector.outward) <= c_facing_dot)
+                ) {
+                    joined = true;
+                    return false;
+                }
+            }
+            return true;
+        }
+    );
+    return joined;
+}
+
+void Brush_tool::on_kit_join_target_changed(const erhe::scene::Node* const node)
+{
+    if (!m_kit_join.has_value() || !m_kit_brush || !m_preview_node) {
+        return;
+    }
+    if (node != nullptr) {
+        // Only a move of the target or a node above it moves the target connector.
+        bool above_target = false;
+        for (std::shared_ptr<erhe::scene::Node> n = m_kit_join.value().target.lock(); n; n = n->get_parent_node()) {
+            if (n.get() == node) {
+                above_target = true;
+                break;
+            }
+        }
+        if (!above_target) {
+            return;
+        }
+    }
+    refresh_kit_join();
 }
 
 void Brush_tool::do_insert_operation(Brush& brush)

@@ -977,7 +977,8 @@ namespace {
 
 auto Imgui_renderer::image_button(Draw_texture_parameters&& parameters) -> bool
 {
-    if (parameters.texture_reference) {
+    // Without a texture: a plain button of the same size.
+    if (!parameters.texture_reference) {
         if ((parameters.width == 0) || (parameters.height == 0)) {
             return false;
         }

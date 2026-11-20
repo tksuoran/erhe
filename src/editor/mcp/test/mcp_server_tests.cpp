@@ -5027,6 +5027,55 @@ TEST_F(Mcp_test, inject_input_events_validates_arguments_and_tracks_pointer_stat
     EXPECT_FALSE(state.payload["gesture"].value("active", true));
 }
 
+// U56: get_input_state reports the active tool by its stable name; set_active_tool sets it, none with null, and
+// refuses a missing key or an unknown name. The tools switched leave the selection and the Brush tool's brush alone
+// (the Selection and Brush tools clear them when they lose priority); a transform tool hides its gizmo part when it
+// loses priority, so the parts are given back.
+TEST_F(Mcp_test, set_active_tool_round_trips_through_get_input_state)
+{
+    Mcp_client& client = Mcp_env::get().client();
+
+    Mcp_client::Tool_result found = client.call_tool("get_input_state", json::object());
+    ASSERT_FALSE(found.is_error) << found.text;
+    ASSERT_TRUE(found.payload.contains("active_tool")) << found.payload.dump();
+    const json start = found.payload["active_tool"];
+    ASSERT_NE(start, json("selection")) << "leaving the Selection tool would clear the shared editor's selection";
+    ASSERT_NE(start, json("brush")) << "leaving the Brush tool would drop the shared editor's active brush";
+    Mcp_client::Tool_result gizmo = client.call_tool("set_gizmo_visibility", json::object());
+    ASSERT_FALSE(gizmo.is_error) << gizmo.text;
+    json gizmo_parts = json::object();
+    for (const char* const key : {"translate", "rotate", "scale", "scale_gizmo_mode"}) {
+        if (gizmo.payload.contains(key)) {
+            gizmo_parts[key] = gizmo.payload[key];
+        }
+    }
+    const json selection_before = client.call_tool("get_selection", json::object()).payload["items"];
+    const json brush_before     = client.call_tool("get_editor_references", json::object()).payload["brush_tool"];
+
+    for (const char* const name : {"move", "paint", "material_paint"}) {
+        Mcp_client::Tool_result set = client.call_tool("set_active_tool", json{{"tool", name}});
+        ASSERT_FALSE(set.is_error) << set.text;
+        EXPECT_EQ(set.payload.value("active_tool", json()), json(name));
+        Mcp_client::Tool_result state = client.call_tool("get_input_state", json::object());
+        ASSERT_FALSE(state.is_error) << state.text;
+        EXPECT_EQ(state.payload["active_tool"], json(name));
+    }
+    Mcp_client::Tool_result none = client.call_tool("set_active_tool", json{{"tool", nullptr}});
+    ASSERT_FALSE(none.is_error) << none.text;
+    EXPECT_TRUE(client.call_tool("get_input_state", json::object()).payload["active_tool"].is_null());
+    EXPECT_TRUE(client.call_tool("set_active_tool", json{{"tool", "no such tool"}}).is_error);
+    Mcp_client::Tool_result missing = client.call_tool("set_active_tool", json::object());
+    EXPECT_TRUE(missing.is_error) << "a call without 'tool' was accepted";
+    EXPECT_TRUE(client.call_tool("get_input_state", json::object()).payload["active_tool"].is_null()) << "a refused call changed the tool";
+
+    Mcp_client::Tool_result back = client.call_tool("set_active_tool", json{{"tool", start}});
+    ASSERT_FALSE(back.is_error) << back.text;
+    EXPECT_EQ(client.call_tool("get_input_state", json::object()).payload["active_tool"], start);
+    EXPECT_FALSE(client.call_tool("set_gizmo_visibility", gizmo_parts).is_error);
+    EXPECT_EQ(client.call_tool("get_selection", json::object()).payload["items"], selection_before);
+    EXPECT_EQ(client.call_tool("get_editor_references", json::object()).payload["brush_tool"], brush_before);
+}
+
 // ---- Gestures (doc/agents/mcp_ui_driving.md) -------------------------------
 
 namespace {

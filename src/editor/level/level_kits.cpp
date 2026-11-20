@@ -1,4 +1,5 @@
 #include "level/level_kits.hpp"
+#include "level/kit_thumbnails.hpp"
 
 #include "level/kit_layout.hpp"
 #include "level/kit_mesh_builder.hpp"
@@ -199,7 +200,9 @@ void process_kit_geometry(const Kit_shape_definition& shape, erhe::geometry::Geo
     return {};
 }
 
-[[nodiscard]] auto make_palette_material(const Kit_palette_material& palette) -> std::shared_ptr<erhe::primitive::Material>
+} // anonymous namespace
+
+auto make_palette_material(const Kit_palette_material& palette) -> std::shared_ptr<erhe::primitive::Material>
 {
     erhe::primitive::Material_values material_values{};
     material_values.base_color = palette.base_color;
@@ -210,6 +213,8 @@ void process_kit_geometry(const Kit_shape_definition& shape, erhe::geometry::Geo
         erhe::primitive::Material_create_info{.name = palette.name, .values = material_values}
     );
 }
+
+namespace {
 
 // The given slot materials of a placement; returns the problem, empty when each resolves (Kit_slot_material).
 [[nodiscard]] auto check_slot_materials(
@@ -308,6 +313,28 @@ private:
     );
 }
 
+// Kit_snap::module (U51): with a surface option on, the coordinate along the direction's dominant axis puts the
+// point back on the plane through it across the direction, so the rounding acts within the surface.
+[[nodiscard]] auto snap_point_to_module(const glm::vec3& point, const float module, const Surface_options& surface) -> glm::vec3
+{
+    const glm::vec3 rounded = Level_kits::snap_to_module(point, module);
+    if (!any_surface_option(surface)) {
+        return rounded;
+    }
+    const glm::vec3& direction = surface.direction;
+    const glm::vec3  size      = glm::abs(direction);
+    // Ties prefer Y, then X: a 45 degree slope keeps its X and Z on the lattice.
+    const int axis = ((size.y >= size.x) && (size.y >= size.z)) ? 1 : ((size.x >= size.z) ? 0 : 2);
+    if (!(size[axis] > 0.0f)) {
+        return rounded;
+    }
+    glm::vec3 across = rounded - point;
+    across[axis] = 0.0f;
+    glm::vec3 result = rounded;
+    result[axis] = point[axis] - (glm::dot(across, direction) / direction[axis]);
+    return result;
+}
+
 // The module snap first, then the surface options (D3.2, D4.4); excludes nothing from the rays.
 [[nodiscard]] auto snapped_pose(
     Scene_root&             scene_root,
@@ -320,9 +347,9 @@ private:
     const Surface_options&  surface
 ) -> Surface_placement
 {
-    const glm::vec3 snapped = (snap == Kit_snap::module) ? Level_kits::snap_to_module(position, module) : position;
+    const glm::vec3 snapped = (snap == Kit_snap::module) ? snap_point_to_module(position, module, surface) : position;
     return find_surface_placement(
-        scene_root, local_bounds, Surface_base_rule::authored_y_up, Surface_pose{.position = snapped, .rotation = rotation, .scale = scale}, surface, {}
+        scene_root, local_bounds, Surface_pose{.position = snapped, .rotation = rotation, .scale = scale}, surface, {}
     );
 }
 
@@ -330,6 +357,7 @@ private:
 
 Level_kits::Level_kits(App_context& context, App_message_bus& app_message_bus)
     : m_context             {context}
+    , m_thumbnails          {std::make_unique<Kit_thumbnails>(*this, context, app_message_bus)}
     , m_connector_indicators{*this}
     , m_layout_indicators   {*this}
 {
@@ -402,6 +430,13 @@ void Level_kits::on_level_lengths_changed()
 {
     // Item footprints and extents derive from the lengths: every outline resolves again.
     m_layout_indicators.forget_all();
+    // The shape defaults derive from them too.
+    m_thumbnails->on_level_lengths_changed();
+}
+
+auto Level_kits::get_thumbnails() -> Kit_thumbnails&
+{
+    return *m_thumbnails;
 }
 
 void Level_kits::on_kit_piece_record_changed(const erhe::scene::Node& node)
@@ -434,6 +469,7 @@ auto Level_kits::get_placement_settings() const -> Kit_placement_settings
     const Level_kit_config& config = m_context.editor_settings->level_kit;
     settings.snap                  = config.snap_to_module ? Kit_snap::module : Kit_snap::none;
     settings.surface               = get_surface_settings();
+    settings.surface.rest          = get_surface_rest(); // U60: the Brush tool follows the setting, as Transform tool drags do
     settings.rotation_step_degrees = static_cast<float>(config.rotation_step_degrees);
     settings.seed_per_piece        = config.new_seed_per_piece ? Kit_seed_per_piece::next : Kit_seed_per_piece::same;
     return settings;
@@ -478,7 +514,10 @@ auto Level_kits::get_layout_initial_values() const -> Kit_layout_initial_values
     values.data.snap           = config.layout_module_snap    ? Kit_snap::module              : Kit_snap::none;
     values.data.surface_snap   = config.layout_surface_snap   ? Surface_snap::on              : Surface_snap::off;
     values.data.surface_orient = config.layout_surface_orient ? Surface_orient::on            : Surface_orient::off;
-    values.data.surface_max_distance = config.layout_surface_max_distance;
+    values.data.surface_direction         = config.layout_surface_direction;
+    values.data.surface_forward_distance  = config.layout_surface_forward_distance;
+    values.data.surface_backward_distance = config.layout_surface_backward_distance;
+    values.data.surface_support           = config.layout_surface_support;
     values.data.seeds          = config.layout_per_piece_seed   ? Kit_layout_seeds::per_element : Kit_layout_seeds::item;
     values.data.seed           = config.layout_seed;
     values.data.lock           = config.layout_locked         ? Kit_layout_lock::locked       : Kit_layout_lock::unlocked;
@@ -505,7 +544,10 @@ void Level_kits::set_layout_initial_values(const Kit_layout_initial_values& valu
     config.layout_module_snap       = (values.data.snap == Kit_snap::module);
     config.layout_surface_snap      = (values.data.surface_snap == Surface_snap::on);
     config.layout_surface_orient    = (values.data.surface_orient == Surface_orient::on);
-    config.layout_surface_max_distance = values.data.surface_max_distance;
+    config.layout_surface_direction         = values.data.surface_direction;
+    config.layout_surface_forward_distance  = values.data.surface_forward_distance;
+    config.layout_surface_backward_distance = values.data.surface_backward_distance;
+    config.layout_surface_support           = values.data.surface_support;
     config.layout_per_piece_seed      = (values.data.seeds == Kit_layout_seeds::per_element);
     config.layout_seed              = values.data.seed;
     config.layout_locked            = (values.data.lock == Kit_layout_lock::locked);
@@ -526,15 +568,16 @@ void Level_kits::set_layout_initial_values(const Kit_layout_initial_values& valu
 
 auto Level_kits::get_surface_settings() const -> Surface_options
 {
-    Surface_options options;
     if (m_context.editor_settings == nullptr) {
-        return options;
+        return make_surface_options(Surface_snap::off, Surface_orient::off, c_default_surface_direction, c_default_surface_max_distance);
     }
     const Surface_snap_config& config = m_context.editor_settings->surface_snap;
-    options.snap   = config.snap_to_surface   ? Surface_snap::on   : Surface_snap::off;
-    options.orient = config.orient_to_surface ? Surface_orient::on : Surface_orient::off;
-    options.max_distance = config.max_distance;
-    return options;
+    return make_surface_options(
+        config.snap_to_surface   ? Surface_snap::on   : Surface_snap::off,
+        config.orient_to_surface ? Surface_orient::on : Surface_orient::off,
+        c_default_surface_direction,
+        config.max_distance
+    );
 }
 
 void Level_kits::validate_surface_settings()
@@ -543,12 +586,92 @@ void Level_kits::validate_surface_settings()
         return;
     }
     // The settings file is where an out-of-range distance enters; it is reported and replaced there.
-    for (float* const distance : {&m_context.editor_settings->surface_snap.max_distance, &m_context.editor_settings->level_kit.layout_surface_max_distance}) {
-        const std::string error = check_surface_max_distance(*distance);
+    Level_kit_config& level_kit = m_context.editor_settings->level_kit;
+    class Setting_distance
+    {
+    public:
+        float*      value;
+        float       fallback;
+        const char* name;
+    };
+    for (const Setting_distance& distance : {
+        Setting_distance{&m_context.editor_settings->surface_snap.max_distance, c_default_surface_max_distance,      "surface_snap.max_distance"},
+        Setting_distance{&level_kit.layout_surface_forward_distance,             c_default_surface_forward_distance,  "level_kit.layout_surface_forward_distance"},
+        Setting_distance{&level_kit.layout_surface_backward_distance,            c_default_surface_backward_distance, "level_kit.layout_surface_backward_distance"}
+    }) {
+        const std::string error = check_surface_max_distance(*distance.value, distance.name);
         if (!error.empty()) {
-            log_scene->error("editor_settings.json: {}; the default {} m is used", error, c_default_surface_max_distance);
-            *distance = c_default_surface_max_distance;
+            log_scene->error("editor_settings.json: {}; the default {} m is used", error, distance.fallback);
+            *distance.value = distance.fallback;
         }
+    }
+    class Setting_direction
+    {
+    public:
+        glm::vec3*  value;
+        const char* name;
+    };
+    for (const Setting_direction& direction : {
+        Setting_direction{&level_kit.layout_surface_direction,                   "level_kit.layout_surface_direction"},
+        Setting_direction{&m_context.editor_settings->surface_snap.drag_direction, "surface_snap.drag_direction"}
+    }) {
+        const std::string direction_error = check_surface_direction(*direction.value);
+        if (!direction_error.empty()) {
+            log_scene->error("editor_settings.json: {}: {}; the default (0, -1, 0) is used", direction.name, direction_error);
+            *direction.value = c_default_surface_direction;
+        }
+    }
+}
+
+auto Level_kits::get_surface_rest() const -> Surface_snap_rest
+{
+    if (m_context.editor_settings == nullptr) {
+        return Surface_snap_rest::leading_face;
+    }
+    return m_context.editor_settings->surface_snap.rest;
+}
+
+void Level_kits::set_surface_rest(const Surface_snap_rest rest)
+{
+    if (m_context.editor_settings == nullptr) {
+        return;
+    }
+    m_context.editor_settings->surface_snap.rest = rest;
+    if (m_context.app_settings != nullptr) {
+        m_context.app_settings->settings_store().touch();
+    }
+}
+
+auto Level_kits::get_surface_drag_direction_mode() const -> Surface_drag_direction
+{
+    return (m_context.editor_settings != nullptr) ? m_context.editor_settings->surface_snap.drag_direction_mode : Surface_drag_direction::explicit_vector;
+}
+
+void Level_kits::set_surface_drag_direction_mode(const Surface_drag_direction mode)
+{
+    if (m_context.editor_settings == nullptr) {
+        return;
+    }
+    m_context.editor_settings->surface_snap.drag_direction_mode = mode;
+    if (m_context.app_settings != nullptr) {
+        m_context.app_settings->settings_store().touch();
+    }
+}
+
+auto Level_kits::get_surface_drag_direction() const -> glm::vec3
+{
+    return (m_context.editor_settings != nullptr) ? m_context.editor_settings->surface_snap.drag_direction : c_default_surface_direction;
+}
+
+void Level_kits::set_surface_drag_direction(const glm::vec3& direction)
+{
+    ERHE_VERIFY(check_surface_direction(direction).empty());
+    if (m_context.editor_settings == nullptr) {
+        return;
+    }
+    m_context.editor_settings->surface_snap.drag_direction = direction;
+    if (m_context.app_settings != nullptr) {
+        m_context.app_settings->settings_store().touch();
     }
 }
 
@@ -620,7 +743,7 @@ void Level_kits::set_connector_snap_axis_mode(const Connector_snap_axis_mode mod
 
 auto Level_kits::get_connector_snap_orientation() const -> Connector_snap_orientation
 {
-    return (m_context.editor_settings != nullptr) ? m_context.editor_settings->surface_snap.connector_snap_orientation : Connector_snap_orientation::keep;
+    return (m_context.editor_settings != nullptr) ? m_context.editor_settings->surface_snap.connector_snap_orientation : Connector_snap_orientation::off;
 }
 
 void Level_kits::set_connector_snap_orientation(const Connector_snap_orientation orientation)
@@ -635,22 +758,33 @@ void Level_kits::set_connector_snap_orientation(const Connector_snap_orientation
 }
 
 auto Level_kits::make_placement_pose(
-    Scene_root&                   scene_root,
-    const erhe::math::Aabb&       local_bounds,
-    const glm::vec3&              point,
-    const int                     yaw_steps,
-    const Kit_placement_settings& settings
+    Scene_root&                     scene_root,
+    const erhe::math::Aabb&         local_bounds,
+    const glm::vec3&                point,
+    const std::optional<glm::vec3>& surface_normal,
+    const int                       yaw_steps,
+    const Kit_placement_settings&   settings
 ) const -> Kit_placement_pose
 {
     const Kit_lengths lengths  = get_lengths(scene_root);
     const Kit_snap    snap     = (lengths.module > 0.0f) ? settings.snap : Kit_snap::none;
     const float       yaw      = glm::radians(static_cast<float>(yaw_steps) * settings.rotation_step_degrees);
     const glm::quat   rotation = glm::angleAxis(yaw, glm::vec3{0.0f, 1.0f, 0.0f});
-    const Surface_placement placement = snapped_pose(scene_root, local_bounds, point, rotation, glm::vec3{1.0f}, snap, lengths.module, settings.surface);
+
+    // U51: the search runs into the surface under the pointer; without a usable normal the settings' direction (down).
+    Surface_options surface = settings.surface;
+    if (surface_normal.has_value()) {
+        const float length = glm::length(surface_normal.value());
+        if (std::isfinite(length) && (length > 1.0e-6f)) {
+            surface.direction = -(surface_normal.value() / length);
+        }
+    }
+    const Surface_placement placement = snapped_pose(scene_root, local_bounds, point, rotation, glm::vec3{1.0f}, snap, lengths.module, surface);
     return Kit_placement_pose{
-        .position      = placement.pose.position,
-        .rotation      = placement.pose.rotation,
-        .surface_found = placement.surface_found
+        .position          = placement.pose.position,
+        .rotation          = placement.pose.rotation,
+        .surface_direction = surface.direction,
+        .surface_found     = placement.surface_found
     };
 }
 
@@ -715,9 +849,10 @@ auto Level_kits::snap_to_module(const glm::vec3& position, const float module) -
     };
 }
 
-auto Level_kits::make_brush(const Kit_parameter_values& values) -> std::shared_ptr<Brush>
+auto Level_kits::make_brush(const Kit_parameter_values& values, const Kit_brush_use use) -> std::shared_ptr<Brush>
 {
-    const Kit_shape_definition& shape = *values.get_shape();
+    const Kit_shape_definition& shape     = *values.get_shape();
+    const bool                  all_types = (use == Kit_brush_use::placement);
     Brush_data brush_data{
         .context      = m_context,
         .app_settings = *m_context.app_settings,
@@ -725,10 +860,10 @@ auto Level_kits::make_brush(const Kit_parameter_values& values) -> std::shared_p
         .build_info   = erhe::primitive::Build_info{
             .primitive_types = {
                 .fill_triangles          = true,
-                .fill_triangles_expanded = true,
-                .edge_lines              = true,
-                .corner_points           = true,
-                .centroid_points         = true
+                .fill_triangles_expanded = all_types,
+                .edge_lines              = all_types,
+                .corner_points           = all_types,
+                .centroid_points         = all_types
             },
             .buffer_info     = m_context.mesh_memory->make_primitive_buffer_info()
         },
@@ -746,15 +881,21 @@ auto Level_kits::make_brush(const Kit_parameter_values& values) -> std::shared_p
             return {};
         }
     }
-    // A convex shape takes the brush's convex hull (Brush::late_initialize); the others their own triangles (D2.3);
-    // a shape without a body has neither (P5).
-    if (shape.collision == Kit_collision::none) {
+    // A convex shape takes the brush's convex hull (Brush::late_initialize); the others their own triangles (D2.3)
+    // or their bounds (U54); a shape without a body has none (P5).
+    const Kit_collision collision = (use == Kit_brush_use::thumbnail) ? Kit_collision::none : get_kit_collision(values);
+    if (collision == Kit_collision::none) {
         brush_data.body = Brush_body::none;
     }
-    if (shape.collision == Kit_collision::triangle_mesh) {
+    if (collision == Kit_collision::triangle_mesh) {
         brush_data.collision_shape_generator = [values](const float scale) -> std::shared_ptr<erhe::physics::ICollision_shape> {
             const std::shared_ptr<erhe::geometry::Geometry> geometry = make_kit_geometry(values);
             return build_triangle_mesh_shape(geometry->get_mesh(), scale);
+        };
+    }
+    if (collision == Kit_collision::box) {
+        brush_data.collision_shape_generator = [values](const float scale) -> std::shared_ptr<erhe::physics::ICollision_shape> {
+            return build_box_shape(get_kit_geometry_bounds(values), scale);
         };
     }
     std::shared_ptr<Brush> brush = std::make_shared<Brush>(brush_data);
@@ -867,7 +1008,7 @@ auto Level_kits::get_brush(const Kit_parameter_values& values) -> std::shared_pt
             return cached;
         }
     }
-    std::shared_ptr<Brush> brush = make_brush(values);
+    std::shared_ptr<Brush> brush = make_brush(values, Kit_brush_use::placement);
     if (!brush) {
         return {};
     }
@@ -891,16 +1032,7 @@ auto Level_kits::find_cached_brush(const Kit_parameter_values& values) const -> 
 
 auto Level_kits::read_piece_values(const Kit_piece_data& record, Kit_parameter_values& out_values) const -> std::string
 {
-    const Kit_shape_definition* const shape = m_library.find(record.shape);
-    if (shape == nullptr) {
-        return fmt::format("the kits have no shape '{}'", record.shape);
-    }
-    out_values = Kit_parameter_values{*shape};
-    const std::string parse_error = parse_canonical_text(*shape, record.parameters, out_values);
-    if (!parse_error.empty()) {
-        return fmt::format("the parameters do not read: {}", parse_error);
-    }
-    return out_values.validate();
+    return read_kit_piece_record(m_library, record.shape, record.parameters, out_values);
 }
 
 auto Level_kits::check_piece(const erhe::scene::Node& node) const -> Kit_piece_check
@@ -1009,6 +1141,10 @@ auto Level_kits::refresh_piece(Scene_refresh& refresh, const std::shared_ptr<erh
             set_node_collision_shape(*mesh, scaled->collision_shape);
         }
         set_brush_placement(*mesh, brush, GEO::NO_INDEX, GEO::NO_INDEX);
+        // A record naming a former id of the shape takes its id, as erhe::property former names migrate.
+        if (record.value().shape != values.get_shape()->id) {
+            mesh->set_value(Kit_piece::shape_property, values.get_shape()->id);
+        }
     }
     refresh.report.light_change_count += m_light_sync.apply_now(scene_root, mesh, values);
     ++refresh.report.follow_count;
@@ -1075,7 +1211,6 @@ class Surface_snap_request
 public:
     std::shared_ptr<erhe::scene::Mesh> mesh;
     erhe::math::Aabb                   local_bounds;
-    Surface_base_rule                  base_rule{Surface_base_rule::from_pose};
 };
 
 class Surface_snap_plan
@@ -1148,7 +1283,7 @@ void plan_surface_snaps(
         const erhe::scene::Trs_transform world = moved.has_value() ? erhe::scene::Trs_transform{moved.value()} : mesh->world_from_node_transform();
         const Surface_pose start{.position = world.get_translation(), .rotation = world.get_rotation(), .scale = world.get_scale()};
         Surface_snap_plan& plan = out_plans[i];
-        plan.placement = find_surface_placement(committed_rt_scene, requests[i].local_bounds, requests[i].base_rule, start, options, excluded);
+        plan.placement = find_surface_placement(committed_rt_scene, requests[i].local_bounds, start, options, excluded);
         plan.moved = plan.placement.surface_found &&
             ((plan.placement.pose.position != start.position) || (plan.placement.pose.rotation != start.rotation));
         const bool records = (record == Snap_record::when_found) ? plan.placement.surface_found : plan.moved;
@@ -1194,9 +1329,10 @@ auto Level_kits::snap_to_surface(
     requests.reserve(meshes.size());
     for (const std::shared_ptr<erhe::scene::Mesh>& mesh : meshes) {
         excluded.push_back(mesh.get());
-        requests.push_back(Surface_snap_request{.mesh = mesh, .local_bounds = mesh_local_bounds(*mesh), .base_rule = get_surface_base_rule(*mesh)});
+        requests.push_back(Surface_snap_request{.mesh = mesh, .local_bounds = mesh_local_bounds(*mesh)});
     }
-    std::vector<std::shared_ptr<Operation>> operations;
+    std::vector<std::shared_ptr<Operation>>         operations;
+    std::vector<std::shared_ptr<erhe::scene::Node>> moved_nodes;
     if (any_surface_option(options)) {
         erhe::raytrace::IScene& rt_scene = scene_root.get_raytrace_scene();
         rt_scene.commit();
@@ -1206,6 +1342,7 @@ auto Level_kits::snap_to_surface(
             out_results.push_back(Kit_snap_result{.mesh = meshes[i], .placement = plans[i].placement});
             if ((apply == Kit_snap_apply::move) && plans[i].operation) {
                 operations.push_back(plans[i].operation);
+                moved_nodes.push_back(meshes[i]);
             }
         }
     } else {
@@ -1219,6 +1356,11 @@ auto Level_kits::snap_to_surface(
     }
     const std::size_t moved_count = operations.size();
     if (!operations.empty()) {
+        // Step 41: the pieces attached to the snapped pieces follow (and a snapped attached piece off its join detaches).
+        std::shared_ptr<Operation> follow = make_attachment_follow_operation(scene_root, moved_nodes, {});
+        if (follow) {
+            operations.push_back(std::move(follow));
+        }
         m_context.operation_stack->execute_now(
             (operations.size() == 1)
                 ? operations.front()
@@ -1401,6 +1543,11 @@ auto Level_kits::prepare_placements(
             insert.node->enable_flag_bits(Editor_item_flags::pass_through);
         }
         write_kit_piece(*insert.node.get(), Kit_piece_data{.shape = shape.id, .parameters = values[i].to_canonical_text()});
+        // Step 41: a join records its attachment on the new piece (in no chain yet), unless a locked layout owns either side.
+        if (placement.connect.has_value() && (placement.connect.value().attach == Kit_attach::attach) &&
+            !locked_layout_child_refusal(*parent).has_value() && !find_locking_kit_layout(*placement.connect.value().target)) {
+            insert.node->set_value(Kit_piece::attachment_property, make_attachment_text(make_connect_attachment(*insert.node, placement.connect.value())));
+        }
         // The lights ride the piece's insert as its children (D3.15).
         add_piece_lights(scene_root, insert.node, values[i]);
         insert_operations.push_back(insert.operation);
@@ -1662,12 +1809,30 @@ auto Level_kits::connect_piece(Scene_root& scene_root, const std::shared_ptr<erh
     if (!result.error.empty()) {
         return result;
     }
+    // Step 41: the attachment the join records; a locked layout's child on either side makes the join without one.
+    std::shared_ptr<Operation> attach_operation;
+    if (connect.attach == Kit_attach::attach) {
+        Kit_attach_check check = check_attach(*node, *connect.target);
+        if (check.refusal == Kit_attach_refusal::cycle) {
+            result.error = std::move(check.message);
+            return result;
+        }
+        if (check.refusal == Kit_attach_refusal::none) {
+            attach_operation = make_attachment_operation(node, make_connect_attachment(*node, connect));
+        } else {
+            result.not_attached = std::move(check.message);
+        }
+    }
     // D3.12: the piece keeps its own scale; the rigid motion is applied to its world matrix.
     const glm::mat4                  world_from_node = apply_motion(motion, node->world_from_node());
     const erhe::scene::Trs_transform world_after{world_from_node};
     result.position = glm::vec3{world_from_node[3]};
     result.rotation = world_after.get_rotation();
     if (is_identity_motion(motion)) {
+        if (attach_operation) {
+            m_context.operation_stack->execute_now(attach_operation);
+            result.changed = true;
+        }
         return result;
     }
 
@@ -1696,6 +1861,10 @@ auto Level_kits::connect_piece(Scene_root& scene_root, const std::shared_ptr<erh
             }
         )
     );
+    // The attachment is written before the move hook's following, which then finds the piece on its new join.
+    if (attach_operation) {
+        operations.push_back(attach_operation);
+    }
     append_layout_move_operations(scene_root, std::span<const std::shared_ptr<erhe::scene::Node>>{&node, 1}, operations);
     m_context.operation_stack->execute_now(
         (operations.size() == 1)
@@ -2111,6 +2280,11 @@ auto Level_kits::mirror(Scene_root& scene_root, const std::shared_ptr<erhe::scen
             ++result.not_exact_count;
         }
     }
+    // Step 41: the pieces attached to the group's content follow it; its pieces moved off a join outside it detach.
+    std::shared_ptr<Operation> follow = make_attachment_follow_operation(scene_root, std::span<const std::shared_ptr<erhe::scene::Node>>{&group, 1}, {});
+    if (follow) {
+        operations.push_back(std::move(follow));
+    }
     m_context.operation_stack->execute_now(std::make_shared<Compound_operation>(Compound_operation::Parameters{.operations = std::move(operations)}));
     return result;
 }
@@ -2134,6 +2308,7 @@ void apply_preview_primitives(App_context& context, const std::shared_ptr<erhe::
 
 // The checks set_parameters() and preview_parameters() share; returns the mesh and record, or the refusal.
 [[nodiscard]] auto check_piece_values(
+    const Kit_shape_library&                  library,
     const std::shared_ptr<erhe::scene::Node>& node,
     const Kit_parameter_values&               values,
     std::shared_ptr<erhe::scene::Mesh>&       out_mesh,
@@ -2154,7 +2329,7 @@ void apply_preview_primitives(App_context& context, const std::shared_ptr<erhe::
     }
     out_record = record.value();
     const Kit_shape_definition* const shape = values.get_shape();
-    if ((shape == nullptr) || (shape->id != out_record.shape)) {
+    if ((shape == nullptr) || (library.find(out_record.shape) != shape)) {
         return fmt::format("the parameter values are not of the piece's shape {}", out_record.shape);
     }
     return values.validate();
@@ -2176,6 +2351,7 @@ void Level_kits::cancel_parameter_preview()
     m_parameter_preview.reset();
     apply_preview_primitives(m_context, preview.mesh, preview.before.primitives);
     restore_preview_lights(*preview.mesh);
+    restore_follow_preview(m_parameter_follow_preview);
 }
 
 void Level_kits::restore_preview_lights(const erhe::scene::Mesh& mesh)
@@ -2260,6 +2436,13 @@ void Level_kits::on_close_scene(const erhe::Item_host* const closing_host)
         m_layout_preview.clear();
         m_layout_transform_preview = false;
     }
+    // So do its followers.
+    for (Follow_preview* preview : {&m_move_follow_preview, &m_parameter_follow_preview}) {
+        if ((preview->scene_root != nullptr) && (static_cast<const erhe::Item_host*>(preview->scene_root) == closing_host)) {
+            preview->moves.clear();
+            restore_follow_preview(*preview);
+        }
+    }
 }
 
 auto Level_kits::preview_parameters(const std::shared_ptr<erhe::scene::Node>& node, const Kit_parameter_values& values) -> std::string
@@ -2267,7 +2450,7 @@ auto Level_kits::preview_parameters(const std::shared_ptr<erhe::scene::Node>& no
     const std::chrono::steady_clock::time_point start = std::chrono::steady_clock::now();
     std::shared_ptr<erhe::scene::Mesh> mesh;
     Kit_piece_data                     record;
-    const std::string error = check_piece_values(node, values, mesh, record);
+    const std::string error = check_piece_values(m_library, node, values, mesh, record);
     if (!error.empty()) {
         return error;
     }
@@ -2306,6 +2489,8 @@ auto Level_kits::preview_parameters(const std::shared_ptr<erhe::scene::Node>& no
         std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> scene_lock{mesh->get_item_host()->item_host_mutex};
         m_light_sync.preview(mesh, values);
     }
+    // Step 41: the pieces attached to it (and the piece itself when attached) join its step's connectors.
+    step_parameter_follow_preview(mesh, values);
     log_scene->trace(
         "Kit piece '{}' preview step {}: {:.3f} ms", mesh->get_name(), get_mesh_key(values),
         std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count()
@@ -2318,7 +2503,7 @@ auto Level_kits::set_parameters(const std::shared_ptr<erhe::scene::Node>& node, 
     Kit_set_parameters_result          result;
     std::shared_ptr<erhe::scene::Mesh> mesh;
     Kit_piece_data                     record;
-    result.error = check_piece_values(node, values, mesh, record);
+    result.error = check_piece_values(m_library, node, values, mesh, record);
     if (!result.error.empty()) {
         if (is_previewing(*node)) {
             cancel_parameter_preview();
@@ -2351,6 +2536,8 @@ auto Level_kits::set_parameters(const std::shared_ptr<erhe::scene::Node>& node, 
         m_parameter_preview.reset();
         // The release's light moves are recorded from where the lights stood before the drag.
         restore_preview_lights(*mesh);
+        // The followers' moves too: the entry's following records them from their poses before the drag.
+        restore_follow_preview(m_parameter_follow_preview);
     } else {
         const std::optional<Brush_placement_data> placement = read_brush_placement(*mesh);
         before = Kit_piece_mesh_state{
@@ -2372,7 +2559,7 @@ auto Level_kits::set_parameters(const std::shared_ptr<erhe::scene::Node>& node, 
 
     // The piece keeps its materials, slot by slot; only the shared primitives change.
     Kit_piece_mesh_state after{
-        .shape           = record.shape,
+        .shape           = values.get_shape()->id, // a former id migrates to the shape's id
         .primitives      = with_brush_primitives(before.primitives, *scaled),
         .collision_shape = carries_node_physics(*mesh) ? scaled->collision_shape : before.collision_shape,
         .brush           = result.brush,
@@ -2385,6 +2572,12 @@ auto Level_kits::set_parameters(const std::shared_ptr<erhe::scene::Node>& node, 
     Scene_root* const scene_root = dynamic_cast<Scene_root*>(mesh->get_item_host());
     if (scene_root != nullptr) {
         m_light_sync.append(m_context, *scene_root, mesh, values, operations);
+        // Step 41: the pieces attached to it follow its moved connectors, and the piece its own when attached.
+        const std::shared_ptr<erhe::scene::Node> changed = mesh;
+        std::shared_ptr<Operation> follow = make_attachment_follow_operation(*scene_root, {}, std::span<const std::shared_ptr<erhe::scene::Node>>{&changed, 1});
+        if (follow) {
+            operations.push_back(std::move(follow));
+        }
     }
     m_context.operation_stack->execute_now(
         (operations.size() == 1)
@@ -2558,7 +2751,10 @@ auto Level_kits::replace_shape(
             result.error = "the surface direction must be a unit vector";
             return result;
         }
-        const std::string distance_problem = check_surface_max_distance(surface.max_distance);
+        std::string distance_problem = check_surface_max_distance(surface.forward_distance, "surface forward distance");
+        if (distance_problem.empty()) {
+            distance_problem = check_surface_max_distance(surface.backward_distance, "surface backward distance");
+        }
         if (!distance_problem.empty()) {
             result.error = distance_problem;
             return result;
@@ -2695,8 +2891,7 @@ auto Level_kits::replace_shape(
         if (snap) {
             snap_requests.push_back(Surface_snap_request{
                 .mesh         = mesh,
-                .local_bounds = mesh_local_bounds(std::span<const erhe::scene::Mesh_primitive>{primitives}),
-                .base_rule    = Surface_base_rule::authored_y_up
+                .local_bounds = mesh_local_bounds(std::span<const erhe::scene::Mesh_primitive>{primitives})
             });
             snap_pieces.push_back(i);
         }
@@ -2750,6 +2945,18 @@ auto Level_kits::replace_shape(
     }
     for (std::shared_ptr<Operation>& operation : snap_operations) {
         parameters.operations.push_back(std::move(operation));
+    }
+    // Step 41: the pieces attached to a replaced piece join its new connector of the same name, and a replaced attached
+    // piece joins again with its own; a name the new shape lacks leaves the attachment dormant.
+    std::vector<std::shared_ptr<erhe::scene::Node>> replaced_nodes;
+    for (const Kit_replaced_piece& piece : result.pieces) {
+        if (piece.replaced) {
+            replaced_nodes.push_back(piece.mesh);
+        }
+    }
+    std::shared_ptr<Operation> follow = make_attachment_follow_operation(scene_root, {}, replaced_nodes);
+    if (follow) {
+        parameters.operations.push_back(std::move(follow));
     }
     m_context.operation_stack->execute_now(
         (parameters.operations.size() == 1)

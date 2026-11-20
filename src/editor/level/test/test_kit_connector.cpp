@@ -963,3 +963,134 @@ TEST(Kit_connector_orientation_snap, a_turn_under_a_non_uniformly_scaled_parent_
     ASSERT_TRUE(root.has_value());
     expect_near_matrix(root.value(), editor::apply_motion(turn, parent_from_node));
 }
+
+namespace {
+
+// U50: how near a moved frame is to the join frame of a twist, as best_turn_about_axis() scores it (3 = facing exactly).
+auto facing_score(const Kit_connector& moved, const Kit_connector& target, const int twist) -> float
+{
+    const glm::vec3 to_outward = -target.outward;
+    const glm::vec3 to_up      = glm::angleAxis(glm::half_pi<float>() * static_cast<float>(twist), target.outward) * target.up;
+    return
+        glm::dot(moved.outward, to_outward) +
+        glm::dot(moved.up, to_up) +
+        glm::dot(glm::cross(moved.outward, moved.up), glm::cross(to_outward, to_up));
+}
+
+auto turned(const Kit_connector& connector, const glm::quat& rotation) -> Kit_connector
+{
+    return Kit_connector{.name = connector.name, .position = rotation * connector.position, .outward = rotation * connector.outward, .up = rotation * connector.up};
+}
+
+// The rotation turns only about the axis, the pivot (the moved connector) lands on the target, and no sampled turn about the
+// axis at any twist faces better.
+void expect_best_turn_about(const Kit_connector& moved, const Kit_connector& target, const glm::vec3& axis)
+{
+    const Kit_connector_alignment alignment = editor::align_connector_frames_about_axis(moved, target, axis);
+    const glm::quat rotation = alignment.motion.rotation;
+    expect_near(rotation * axis, axis);
+    expect_near((rotation * moved.position) + alignment.motion.position, target.position);
+    const float achieved = facing_score(turned(moved, rotation), target, alignment.twist_steps);
+    for (int twist = 0; twist < 4; ++twist) {
+        for (int step = 0; step < 720; ++step) {
+            const glm::quat sample = glm::angleAxis(glm::radians(0.5f * static_cast<float>(step)), axis);
+            EXPECT_GE(achieved + 1.0e-4f, facing_score(turned(moved, sample), target, twist)) << twist << " " << step;
+        }
+    }
+}
+
+} // anonymous namespace
+
+TEST(Kit_connector_rotate_snap, turns_only_about_the_normal_and_faces_a_target_on_the_same_slope)
+{
+    // Both walls oriented onto one slope (up axis = its normal), yawed differently about it: a turn about the normal faces them.
+    const Kit_connector start  = connector(connectors_of(defaults("architecture.wall")), "start");
+    const Kit_connector end    = connector(connectors_of(defaults("architecture.wall")), "end");
+    const glm::vec3     normal = glm::normalize(glm::vec3{0.3f, 1.0f, -0.2f});
+    const glm::quat     onto_slope = glm::quat{glm::vec3{0.0f, 1.0f, 0.0f}, normal};
+    const glm::mat4     moved_world  = trs(glm::vec3{2.0f, 0.5f, 1.0f}, glm::angleAxis(0.7f, normal) * onto_slope, glm::vec3{1.0f});
+    const glm::mat4     target_world = trs(glm::vec3{-1.0f, 0.2f, 3.0f}, glm::angleAxis(-0.4f, normal) * onto_slope, glm::vec3{1.0f});
+    const std::optional<Kit_connector> moved  = editor::transform_connector(start, moved_world);
+    const std::optional<Kit_connector> target = editor::transform_connector(end, target_world);
+    ASSERT_TRUE(moved.has_value() && target.has_value());
+    expect_best_turn_about(moved.value(), target.value(), normal);
+    const Kit_connector_alignment alignment = editor::align_connector_frames_about_axis(moved.value(), target.value(), normal);
+    const Kit_connector faced = turned(moved.value(), alignment.motion.rotation);
+    EXPECT_NEAR(facing_score(faced, target.value(), alignment.twist_steps), 3.0f, 1.0e-4f);
+    // Where a turn about the normal can face the pair exactly, Rotate and Full agree.
+    const Kit_connector_alignment full = editor::align_connector_frames(moved.value(), target.value());
+    EXPECT_NEAR(std::abs(glm::dot(full.motion.rotation, alignment.motion.rotation)), 1.0f, 1.0e-4f);
+    expect_near(full.motion.position, alignment.motion.position);
+}
+
+TEST(Kit_connector_rotate_snap, keeps_the_normal_when_the_target_leans_another_way)
+{
+    // The target stands on another slope: Full would tilt the moved piece, Rotate only turns it about its normal, as near as that allows.
+    const Kit_connector start  = connector(connectors_of(defaults("architecture.wall")), "start");
+    const Kit_connector end    = connector(connectors_of(defaults("architecture.wall")), "end");
+    const glm::vec3     normal = glm::normalize(glm::vec3{-0.4f, 1.0f, 0.1f});
+    const glm::mat4     moved_world  = trs(glm::vec3{0.5f, 0.0f, 0.0f}, glm::angleAxis(1.3f, normal) * glm::quat{glm::vec3{0.0f, 1.0f, 0.0f}, normal}, glm::vec3{1.0f});
+    const glm::mat4     target_world = trs(glm::vec3{-2.0f, 0.3f, 1.0f}, glm::angleAxis(0.35f, glm::normalize(glm::vec3{1.0f, 0.0f, 0.4f})), glm::vec3{1.0f});
+    const std::optional<Kit_connector> moved  = editor::transform_connector(start, moved_world);
+    const std::optional<Kit_connector> target = editor::transform_connector(end, target_world);
+    ASSERT_TRUE(moved.has_value() && target.has_value());
+    expect_best_turn_about(moved.value(), target.value(), normal);
+    const Kit_connector_alignment full = editor::align_connector_frames(moved.value(), target.value());
+    EXPECT_GT(glm::length(full.motion.rotation * normal - normal), 1.0e-2f); // Full tilts it off the normal
+}
+
+TEST(Kit_connector_rotate_snap, outward_along_the_normal_turns_the_up_axes_the_least)
+{
+    // A top connector (outward = the normal) over a base connector: only the roll is free; the twist nearest the current one.
+    const glm::vec3     normal{0.0f, 1.0f, 0.0f};
+    const Kit_connector target{.name = "top", .position = glm::vec3{0.0f, 2.0f, 0.0f}, .outward = normal, .up = glm::vec3{0.0f, 0.0f, 1.0f}};
+    for (const float yaw_degrees : {0.0f, 20.0f, 80.0f, 130.0f, -100.0f}) {
+        const glm::quat     yaw = glm::angleAxis(glm::radians(yaw_degrees), normal);
+        const Kit_connector moved{.name = "base", .position = glm::vec3{0.2f, 2.1f, -0.1f}, .outward = -normal, .up = yaw * target.up};
+        expect_best_turn_about(moved, target, normal);
+        const Kit_connector_alignment alignment = editor::align_connector_frames_about_axis(moved, target, normal);
+        const float angle = 2.0f * std::acos(std::min(1.0f, std::abs(alignment.motion.rotation.w)));
+        EXPECT_LE(angle, glm::radians(45.0f) + 1.0e-4f) << yaw_degrees;
+        EXPECT_EQ(alignment.twist_steps, editor::closest_join_twist(moved, target)) << yaw_degrees;
+    }
+}
+
+TEST(Kit_connector_rotate_snap, outward_axes_both_along_the_axis)
+{
+    // Both outward axes point along the axis, so no turn about it opposes them; the best turn is still found.
+    const glm::vec3     axis{0.0f, 1.0f, 0.0f};
+    const Kit_connector target{.name = "t", .position = glm::vec3{1.0f, 0.0f, 0.0f}, .outward = axis, .up = glm::vec3{1.0f, 0.0f, 0.0f}};
+    const Kit_connector moved {.name = "m", .position = glm::vec3{0.0f}, .outward = axis, .up = glm::vec3{1.0f, 0.0f, 0.0f}};
+    expect_best_turn_about(moved, target, axis);
+}
+
+TEST(Kit_connector_rotate_snap, outward_axes_nearly_along_the_axis_take_no_turn)
+{
+    // A top-to-top pair the distance search may pick: the target's outward tilted 0.1 degree in any direction is no reason to turn.
+    const glm::vec3     axis{0.0f, 1.0f, 0.0f};
+    const Kit_connector moved{.name = "top", .position = glm::vec3{0.1f, 1.0f, 0.0f}, .outward = axis, .up = glm::vec3{0.0f, 0.0f, 1.0f}};
+    std::optional<int> first_twist;
+    for (const float direction_degrees : {0.0f, 30.0f, 60.0f, 90.0f, 120.0f}) {
+        const glm::vec3 tilt_axis = glm::angleAxis(glm::radians(direction_degrees), axis) * glm::vec3{1.0f, 0.0f, 0.0f};
+        const glm::quat tilt      = glm::angleAxis(glm::radians(0.1f), tilt_axis);
+        const Kit_connector target{.name = "top", .position = glm::vec3{0.0f, 1.0f, 0.0f}, .outward = tilt * axis, .up = tilt * glm::vec3{0.0f, 0.0f, 1.0f}};
+        const Kit_connector_alignment alignment = editor::align_connector_frames_about_axis(moved, target, axis);
+        EXPECT_NEAR(std::abs(alignment.motion.rotation.w), 1.0f, 1.0e-6f) << direction_degrees;
+        expect_near(alignment.motion.position, target.position - moved.position);
+        if (!first_twist.has_value()) {
+            first_twist = alignment.twist_steps;
+        }
+        EXPECT_EQ(alignment.twist_steps, first_twist.value()) << direction_degrees;
+        EXPECT_NEAR(editor::get_facing_score(moved, target, alignment.twist_steps, alignment.motion.rotation),
+                    editor::get_facing_score(moved, target, alignment.twist_steps, glm::quat{1.0f, 0.0f, 0.0f, 0.0f}), 1.0e-6f);
+    }
+}
+
+TEST(Kit_connector_rotate_snap, facing_score_is_three_for_a_joined_pair)
+{
+    const Kit_connector target{.name = "end", .position = glm::vec3{0.0f}, .outward = glm::vec3{1.0f, 0.0f, 0.0f}, .up = glm::vec3{0.0f, 1.0f, 0.0f}};
+    const Kit_connector moved {.name = "start", .position = glm::vec3{0.2f, 0.0f, 0.1f}, .outward = glm::vec3{0.0f, 0.0f, 1.0f}, .up = glm::vec3{0.0f, 1.0f, 0.0f}};
+    const Kit_connector_alignment alignment = editor::align_connector_frames_about_axis(moved, target, glm::vec3{0.0f, 1.0f, 0.0f});
+    EXPECT_NEAR(editor::get_facing_score(moved, target, alignment.twist_steps, alignment.motion.rotation), 3.0f, 1.0e-5f);
+    EXPECT_LT(editor::get_facing_score(moved, target, alignment.twist_steps, glm::quat{1.0f, 0.0f, 0.0f, 0.0f}), 3.0f - 0.5f);
+}

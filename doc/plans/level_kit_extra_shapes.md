@@ -35,9 +35,9 @@ Each shape follows D1 of `doc/plans/level_tools_design.md` and R2 - R3 of
   `Kit_collision::triangle_mesh`, `none` is the new kind of P5.
 - Layouts: the kit layout kinds the shape is made for (line, grid, ring,
   path, scatter).
-- Geometry: the helper that builds it. `box`, `prism`, `blob` and `polygon`
-  are `Kit_mesh_builder::add_box()`, `add_prism()`, `add_blob()` (with zero
-  jitter it is a lathe of rings around Y) and `add_polygon()`; `hull` is
+- Geometry: the helper that builds it. `box`, `prism` and `polygon` are
+  `Kit_mesh_builder::add_box()`, `add_prism()` and `add_polygon()`; `blob`
+  names a lathe of rings around Y (the builder's ring helpers); `hull` is
   `erhe::geometry::shapes::make_convex_hull()`; `sweep` is
   `erhe::geometry::shapes::make_sweep()`; `beam` and `add_mesh` are the
   builder helpers of P4.

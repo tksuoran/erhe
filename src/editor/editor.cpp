@@ -65,6 +65,7 @@
 #include "assets/asset_fetch.hpp"
 #include "level/kit_layout_region_tool.hpp"
 #include "level/level_kit_window.hpp"
+#include "level/kit_thumbnails.hpp"
 #include "level/level_kits.hpp"
 #include "assets/asset_manager.hpp"
 #include "brushes/brush.hpp"
@@ -1731,6 +1732,10 @@ public:
             ERHE_PROFILE_SCOPE("Thumbnails");
             erhe::log::set_breadcrumb("tick: thumbnails update");
             m_thumbnails->update(command_buffer);
+            // The Level Kit window's shape thumbnails, a few per frame (doc/editor/level_tools.md "Shape thumbnails").
+            if (m_level_kits) {
+                m_level_kits->get_thumbnails().update(command_buffer);
+            }
         }
         // The requests the windows made at ImGui time for render-side objects
         // (the Properties material preview and BRDF slice, the Depth
@@ -4545,6 +4550,7 @@ public:
         m_app_context.grid_tool                = m_grid_tool             .get();
 #if defined(ERHE_XR_LIBRARY_OPENXR)
         m_app_context.hand_tracker             = m_hand_tracker          .get();
+        m_app_context.headset_travel_tool      = m_headset_travel_tool   .get();
 #endif
         m_app_context.headset_view             = m_headset_view          .get();
         m_app_context.hotbar                   = m_hotbar                .get();

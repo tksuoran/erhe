@@ -99,7 +99,7 @@ dedicated editor started with a configure-time test token
 The MCP-driven verify scripts (`scripts/level_tools_verify.py`,
 `scripts/curve_verify.py`, `scripts/navigation_verify.py`,
 `scripts/prepared_asset_verify.py`, `scripts/prepared_asset_bistro_verify.py`,
-`scripts/level_shape_compare.py`) launch their headless editor through
+`scripts/level_shape_render.py`) launch their headless editor through
 `prepared_asset_verify.Editor`. The editor runs on its deterministic clock
 and every wait reads the condition it waits for (AGENTS.md "Waiting for the
 editor: no time-based sleeps"):

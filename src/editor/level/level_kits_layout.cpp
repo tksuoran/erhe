@@ -61,22 +61,47 @@ constexpr float c_rotation_tolerance = 1.0e-5f;
     return {};
 }
 
+// A raw write of the support rule: one of the enumerators (U52), else the refusal.
+[[nodiscard]] auto read_surface_support(const erhe::property::Enum_value enumerator, Surface_support& out_support) -> std::string
+{
+    switch (static_cast<Surface_support>(enumerator.value)) {
+        case Surface_support::five_lines:
+        case Surface_support::center_blocks:
+        case Surface_support::center_fallback: {
+            out_support = static_cast<Surface_support>(enumerator.value);
+            return {};
+        }
+        default: {
+            return fmt::format("surface support {} is none of five_lines, center_blocks, center_fallback", enumerator.value);
+        }
+    }
+}
+
+// Whether a value equal to the node's is written anyway: a node saved before U51 reads a distance it does not hold from
+// its legacy value, so writing that distance takes it off the fallback.
+enum class Kit_value_write : unsigned int {
+    when_changed = 0,
+    when_not_local
+};
+
 template <typename T>
 void add_value_operation(
     const std::shared_ptr<erhe::scene::Node>& node,
     const erhe::property::Property<T>&        property,
     const T&                                  value,
-    std::vector<std::shared_ptr<Operation>>&  out_operations
+    std::vector<std::shared_ptr<Operation>>&  out_operations,
+    const Kit_value_write                     write = Kit_value_write::when_changed
 )
 {
-    if (node->get_value(property) == value) {
+    const bool local = node->read_local_value(property).has_value();
+    if ((node->get_value(property) == value) && ((write == Kit_value_write::when_changed) || local)) {
         return;
     }
     const std::shared_ptr<Property_set_operation> operation = std::make_shared<Property_set_operation>(
         node,
         property.get(),
         node->read_local_state(property.get()),
-        std::optional<erhe::property::Local_state>{erhe::property::Local_state{erhe::property::Property_value{value}}}
+        std::optional<erhe::property::Local_state>{erhe::property::Local_state{erhe::property::make_value(value)}}
     );
     // The entry point adds the generation itself.
     operation->set_follow_ups(Property_set_follow_ups::none);
@@ -91,7 +116,13 @@ void add_value_operations(const std::shared_ptr<erhe::scene::Node>& node, const 
     add_value_operation(node, Kit_layout::module_snap_property,    data.snap == Kit_snap::module, out_operations);
     add_value_operation(node, Kit_layout::surface_snap_property,   data.surface_snap == Surface_snap::on, out_operations);
     add_value_operation(node, Kit_layout::surface_orient_property, data.surface_orient == Surface_orient::on, out_operations);
-    add_value_operation(node, Kit_layout::surface_max_distance_property, data.surface_max_distance, out_operations);
+    add_value_operation(node, Kit_layout::surface_direction_property,         data.surface_direction, out_operations);
+    const Kit_value_write distance_write = node->read_local_value(Kit_layout::legacy_surface_max_distance_property).has_value()
+        ? Kit_value_write::when_not_local
+        : Kit_value_write::when_changed;
+    add_value_operation(node, Kit_layout::surface_forward_distance_property,  data.surface_forward_distance,  out_operations, distance_write);
+    add_value_operation(node, Kit_layout::surface_backward_distance_property, data.surface_backward_distance, out_operations, distance_write);
+    add_value_operation(node, Kit_layout::surface_support_property,           data.surface_support,           out_operations);
     add_value_operation(node, Kit_layout::per_piece_seed_property,   data.seeds == Kit_layout_seeds::per_element, out_operations);
     add_value_operation(node, Kit_layout::seed_property,           data.seed, out_operations);
     add_value_operation(node, Kit_layout::hide_all_connectors_property, data.connector_hiding.all == Kit_layout_connector_visibility::hidden, out_operations);
@@ -104,9 +135,11 @@ void add_value_operations(const std::shared_ptr<erhe::scene::Node>& node, const 
 // The values add_value_operations() writes, in its order.
 [[nodiscard]] auto get_layout_value_properties() -> std::span<const erhe::property::Dependency_property* const>
 {
-    static const std::array<const erhe::property::Dependency_property*, 15> properties{
+    static const std::array<const erhe::property::Dependency_property*, 18> properties{
         &Kit_layout::pattern_property.get(), &Kit_layout::items_property.get(), &Kit_layout::module_snap_property.get(),
-        &Kit_layout::surface_snap_property.get(), &Kit_layout::surface_orient_property.get(), &Kit_layout::surface_max_distance_property.get(),
+        &Kit_layout::surface_snap_property.get(), &Kit_layout::surface_orient_property.get(),
+        &Kit_layout::surface_direction_property.get(), &Kit_layout::surface_forward_distance_property.get(), &Kit_layout::surface_backward_distance_property.get(),
+        &Kit_layout::surface_support_property.get(),
         &Kit_layout::per_piece_seed_property.get(), &Kit_layout::seed_property.get(),
         &Kit_layout::hide_all_connectors_property.get(),
         &Kit_layout::hide_plus_tangent_connectors_property.get(), &Kit_layout::hide_minus_tangent_connectors_property.get(),
@@ -124,7 +157,10 @@ void write_layout_values(erhe::scene::Node& node, const Kit_layout_data& data)
     node.set_value(Kit_layout::module_snap_property,    data.snap == Kit_snap::module);
     node.set_value(Kit_layout::surface_snap_property,   data.surface_snap == Surface_snap::on);
     node.set_value(Kit_layout::surface_orient_property, data.surface_orient == Surface_orient::on);
-    node.set_value(Kit_layout::surface_max_distance_property, data.surface_max_distance);
+    node.set_value(Kit_layout::surface_direction_property,         data.surface_direction);
+    node.set_value(Kit_layout::surface_forward_distance_property,  data.surface_forward_distance);
+    node.set_value(Kit_layout::surface_backward_distance_property, data.surface_backward_distance);
+    node.set_value(Kit_layout::surface_support_property,           data.surface_support);
     node.set_value(Kit_layout::per_piece_seed_property,   data.seeds == Kit_layout_seeds::per_element);
     node.set_value(Kit_layout::seed_property,           data.seed);
     write_layout_connector_hiding(node, data.connector_hiding);
@@ -304,6 +340,15 @@ auto Level_kits::prepare_layout_generation(
     if (data.items.empty()) {
         return "a kit layout needs at least one item";
     }
+    for (const std::string& surface_error : {
+        check_surface_direction(data.surface_direction),
+        check_surface_max_distance(data.surface_forward_distance, "surface forward distance"),
+        check_surface_max_distance(data.surface_backward_distance, "surface backward distance")
+    }) {
+        if (!surface_error.empty()) {
+            return surface_error;
+        }
+    }
     // The items, their bounds from the CPU geometry and the largest extent along x (D3.9).
     out_preparation.items.resize(data.items.size());
     for (std::size_t i = 0, end = data.items.size(); i < end; ++i) {
@@ -429,11 +474,10 @@ auto Level_kits::build_layout_generation(
     const glm::mat4   layout_from_world = glm::inverse(world_from_layout);
     const Kit_lengths lengths = get_lengths(scene_root);
     const bool            segments = (data.pattern.kind == Repeat_pattern_kind::segments);
-    const Surface_options element_surface{
-        .snap         = data.surface_snap,
-        .orient       = segments ? Surface_orient::off : data.surface_orient,
-        .max_distance = data.surface_max_distance
-    };
+    Surface_options element_surface = get_layout_surface_options(data);
+    if (segments) {
+        element_surface.orient = Surface_orient::off;
+    }
     // The node's current children are no surface for the new ones.
     std::vector<const erhe::scene::Mesh*> excluded{excluded_meshes.begin(), excluded_meshes.end()};
     collect_meshes(*node, excluded);
@@ -463,7 +507,7 @@ auto Level_kits::build_layout_generation(
         }
         if (any_surface_option(element_surface)) {
             const Surface_placement snapped = find_surface_placement(
-                scene_root, bounds, Surface_base_rule::authored_y_up, Surface_pose{.position = position, .rotation = rotation, .scale = poses[i].scale}, element_surface, excluded
+                scene_root, bounds, Surface_pose{.position = position, .rotation = rotation, .scale = poses[i].scale}, element_surface, excluded
             );
             position = snapped.pose.position;
             rotation = snapped.pose.rotation;
@@ -787,7 +831,7 @@ auto Level_kits::read_piece_layout_item(const erhe::scene::Mesh& piece, Kit_layo
         return fmt::format("'{}' has {} mesh primitives for the {} material slots of {}", piece.get_name(), primitives.size(), values.get_shape()->material_slots.size(), record.value().shape);
     }
     out_item = Kit_layout_item{};
-    out_item.shape      = record.value().shape;
+    out_item.shape      = values.get_shape()->id;
     out_item.parameters = values.to_canonical_text();
     for (const erhe::scene::Mesh_primitive& primitive : primitives) {
         out_item.materials.push_back(primitive.material ? primitive.material->get_name() : std::string{});
@@ -842,7 +886,10 @@ auto Level_kits::make_layout_from_piece(Scene_root& scene_root, const Kit_layout
     create.data.snap           = from_piece.snap;
     create.data.surface_snap   = from_piece.surface_snap;
     create.data.surface_orient = from_piece.surface_orient;
-    create.data.surface_max_distance = from_piece.surface_max_distance;
+    create.data.surface_direction         = from_piece.surface_direction;
+    create.data.surface_forward_distance  = from_piece.surface_forward_distance;
+    create.data.surface_backward_distance = from_piece.surface_backward_distance;
+    create.data.surface_support           = from_piece.surface_support;
     create.data.seeds          = from_piece.seeds;
     create.data.seed           = from_piece.seed;
     create.data.lock           = from_piece.lock;
@@ -884,7 +931,10 @@ auto Level_kits::make_layout_from_piece_initial(Scene_root& scene_root, const st
         .snap           = initial.data.snap,
         .surface_snap   = initial.data.surface_snap,
         .surface_orient = initial.data.surface_orient,
-        .surface_max_distance = initial.data.surface_max_distance,
+        .surface_direction         = initial.data.surface_direction,
+        .surface_forward_distance  = initial.data.surface_forward_distance,
+        .surface_backward_distance = initial.data.surface_backward_distance,
+        .surface_support           = initial.data.surface_support,
         .seeds          = initial.data.seeds,
         .seed           = initial.data.seed,
         .lock           = initial.data.lock,
@@ -1165,11 +1215,18 @@ auto Level_kits::make_initial_layout_on_curve(
     return result;
 }
 
-auto Level_kits::add_layout_initial(Scene_root& scene_root, const Kit_layout_item& item, const glm::vec3& position, const glm::quat& rotation) -> Kit_layout_result
+auto Level_kits::add_layout_initial(
+    Scene_root&            scene_root,
+    const Kit_layout_item& item,
+    const glm::vec3&       position,
+    const glm::quat&       rotation,
+    const glm::vec3&       surface_direction
+) -> Kit_layout_result
 {
     const Kit_layout_initial_values initial = get_layout_initial_values();
     Kit_layout_create create;
     create.data = initial.data;
+    create.data.surface_direction = surface_direction;
     create.data.items.push_back(item);
     if (initial.spacing == Kit_layout_spacing::from_item) {
         const erhe::math::Aabb bounds = get_layout_item_bounds(scene_root, item);
@@ -1352,12 +1409,17 @@ auto Level_kits::check_layout_value_write(
     const bool*        const flag    = std::get_if<bool>(&value);
     const int*         const integer = std::get_if<int>(&value);
     const float*       const number  = std::get_if<float>(&value);
+    const glm::vec3*   const vector  = std::get_if<glm::vec3>(&value);
+    const erhe::property::Enum_value* const enumerator = std::get_if<erhe::property::Enum_value>(&value);
     if      ((&property == &Kit_layout::pattern_property.get())        && (text != nullptr))    { error = parse_layout_pattern(*text, data.pattern); }
     else if ((&property == &Kit_layout::items_property.get())          && (text != nullptr))    { error = parse_layout_items(*text, data.items); }
     else if ((&property == &Kit_layout::module_snap_property.get())    && (flag != nullptr))    { data.snap = *flag ? Kit_snap::module : Kit_snap::none; }
     else if ((&property == &Kit_layout::surface_snap_property.get())   && (flag != nullptr))    { data.surface_snap = *flag ? Surface_snap::on : Surface_snap::off; }
     else if ((&property == &Kit_layout::surface_orient_property.get()) && (flag != nullptr))    { data.surface_orient = *flag ? Surface_orient::on : Surface_orient::off; }
-    else if ((&property == &Kit_layout::surface_max_distance_property.get()) && (number != nullptr)) { error = check_surface_max_distance(*number); data.surface_max_distance = *number; }
+    else if ((&property == &Kit_layout::surface_direction_property.get()) && (vector != nullptr)) { error = check_surface_direction(*vector); data.surface_direction = *vector; }
+    else if ((&property == &Kit_layout::surface_forward_distance_property.get()) && (number != nullptr)) { error = check_surface_max_distance(*number, "surface forward distance"); data.surface_forward_distance = *number; }
+    else if ((&property == &Kit_layout::surface_backward_distance_property.get()) && (number != nullptr)) { error = check_surface_max_distance(*number, "surface backward distance"); data.surface_backward_distance = *number; }
+    else if ((&property == &Kit_layout::surface_support_property.get()) && (enumerator != nullptr)) { error = read_surface_support(*enumerator, data.surface_support); }
     else if ((&property == &Kit_layout::per_piece_seed_property.get())   && (flag != nullptr))    { data.seeds = *flag ? Kit_layout_seeds::per_element : Kit_layout_seeds::item; }
     else if ((&property == &Kit_layout::seed_property.get())           && (integer != nullptr)) { data.seed = *integer; }
     else if ((&property == &Kit_layout::locked_property.get())         && (flag != nullptr))    { data.lock = *flag ? Kit_layout_lock::locked : Kit_layout_lock::unlocked; }
@@ -1412,12 +1474,18 @@ void Level_kits::append_layout_regenerations(
 void Level_kits::append_layout_move_operations(
     Scene_root&                                               scene_root,
     const std::span<const std::shared_ptr<erhe::scene::Node>> moved_nodes,
-    std::vector<std::shared_ptr<Operation>>&                  out_operations
+    std::vector<std::shared_ptr<Operation>>&                  out_operations,
+    const Kit_snap_pair* const                                snap
 )
 {
     std::vector<std::shared_ptr<erhe::scene::Node>> layouts;
     collect_moved_layouts(scene_root, moved_nodes, layouts);
     append_layout_regenerations(scene_root, layouts, "after the move", out_operations);
+    // Step 41: the pieces attached to the moved nodes follow, last in the entry.
+    std::shared_ptr<Operation> follow = make_attachment_follow_operation(scene_root, moved_nodes, {}, snap);
+    if (follow) {
+        out_operations.push_back(std::move(follow));
+    }
 }
 
 void Level_kits::append_layout_transform_follow_ups(
@@ -1521,6 +1589,12 @@ void Level_kits::begin_layout_move_preview(Scene_root& scene_root, const std::sp
     collect_moved_layouts(scene_root, moved_nodes, m_layout_preview_layouts);
     begin_layout_preview(m_layout_preview_layouts);
     m_layout_preview_layouts.clear();
+    // Step 41: the attached pieces are gathered once; each step only joins them again.
+    gather_attachments(scene_root, m_move_follow_preview.attached);
+    if (!m_move_follow_preview.attached.empty()) {
+        m_move_follow_preview.scene_root = &scene_root;
+        m_move_follow_preview.moved.assign(moved_nodes.begin(), moved_nodes.end());
+    }
 }
 
 void Level_kits::begin_layout_transform_preview(
@@ -1553,7 +1627,7 @@ void Level_kits::begin_layout_transform_preview(
     }
     begin_layout_move_preview(*scene_root, nodes);
     nodes.clear();
-    m_layout_transform_preview = !m_layout_preview.empty();
+    m_layout_transform_preview = !m_layout_preview.empty() || (m_move_follow_preview.scene_root != nullptr);
 }
 
 void Level_kits::step_layout_transform_preview()
@@ -1582,6 +1656,7 @@ auto Level_kits::is_layout_previewing(const erhe::scene::Node& node) const -> bo
 
 auto Level_kits::step_layout_preview() -> std::string
 {
+    step_move_follow_preview();
     return step_layout_preview_entries(nullptr, nullptr);
 }
 
@@ -1703,6 +1778,7 @@ auto Level_kits::step_layout_preview_entries(const erhe::scene::Node* const valu
 void Level_kits::end_layout_preview()
 {
     m_layout_transform_preview = false;
+    restore_follow_preview(m_move_follow_preview);
     if (m_layout_preview.empty()) {
         return;
     }

@@ -10,6 +10,7 @@
 #include <cmath>
 #include <limits>
 #include <optional>
+#include <span>
 
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtx/matrix_decompose.hpp>
@@ -20,7 +21,6 @@ namespace {
 
 using editor::Bounds_side;
 using editor::Surface_base_frame;
-using editor::Surface_base_rule;
 using editor::Surface_hit_point;
 using editor::Surface_line;
 using editor::Surface_offset;
@@ -29,10 +29,7 @@ using editor::Surface_pose;
 const glm::vec3 c_down{0.0f, -1.0f, 0.0f};
 constexpr float c_max_distance  = 1.0f;
 constexpr float c_min_ray_height = 1.0e-3f; // level_queries.cpp
-constexpr float c_bistro_scale  = 0.0146f;
 
-// A Z-up mesh in centimeters: 60 x 40 footprint, 80 tall along local +Z.
-const erhe::math::Aabb c_z_up_bounds{.min = glm::vec3{-30.0f, -20.0f, 0.0f}, .max = glm::vec3{30.0f, 20.0f, 80.0f}};
 const erhe::math::Aabb c_y_up_bounds{.min = glm::vec3{-0.5f, 0.0f, -0.25f},  .max = glm::vec3{0.5f, 1.2f, 0.25f}};
 
 [[nodiscard]] auto rotation_about(const float degrees, const glm::vec3 axis) -> glm::quat
@@ -71,10 +68,10 @@ public:
 };
 
 // The snap lines over a floor at floor_y, as find_surface_placement() builds them, and the support report's distance.
-[[nodiscard]] auto snap_over_floor(const Surface_base_rule rule, const erhe::math::Aabb& local_bounds, const Surface_pose& pose, const float floor_y) -> Floor_snap
+[[nodiscard]] auto snap_over_floor(const erhe::math::Aabb& local_bounds, const Surface_pose& pose, const float floor_y) -> Floor_snap
 {
     Floor_snap result{};
-    result.frame = editor::get_surface_base_frame(rule, pose.rotation, pose.scale, c_down);
+    result.frame = editor::get_surface_base_frame(pose.rotation, pose.scale, c_down);
     const std::array<glm::vec3, 5> points = editor::get_base_points(editor::get_footprint_bounds(local_bounds, pose.scale, result.frame), result.frame);
     std::array<std::array<Surface_hit_point, 1>, 5> hits{};
     std::array<Surface_line, 5>                     lines{};
@@ -86,7 +83,7 @@ public:
         lines[i]   = Surface_line{.hits = hits[i], .span = std::max(c_min_ray_height, glm::dot(top - base, -c_down))};
         result.support_distance = std::min(result.support_distance, glm::dot(glm::vec3{0.0f, floor_y, 0.0f} - base, c_down));
     }
-    result.offset = editor::find_snap_height(lines, c_max_distance);
+    result.offset = editor::find_snap_height(lines, editor::Surface_search_window{.forward_distance = c_max_distance, .backward_distance = c_max_distance});
     return result;
 }
 
@@ -106,7 +103,6 @@ public:
 
 // Rests on the floor (y 0): answers 0; lifted 0.5 m: drops 0.5 m onto it, and the rest answers 0.
 void expect_rests_and_drops(
-    const Surface_base_rule            rule,
     const erhe::math::Aabb&            local_bounds,
     const Surface_pose&                start,
     const std::optional<Expected_face> face
@@ -116,7 +112,7 @@ void expect_rests_and_drops(
     pose.position.y -= world_min_y(local_bounds, pose);
     ASSERT_NEAR(world_min_y(local_bounds, pose), 0.0f, 1.0e-5f);
 
-    const Floor_snap resting = snap_over_floor(rule, local_bounds, pose, 0.0f);
+    const Floor_snap resting = snap_over_floor(local_bounds, pose, 0.0f);
     if (face.has_value()) {
         EXPECT_EQ(resting.frame.axis, face.value().axis);
         EXPECT_EQ(resting.frame.side, face.value().side);
@@ -127,20 +123,15 @@ void expect_rests_and_drops(
 
     Surface_pose lifted = pose;
     lifted.position.y += 0.5f;
-    const Floor_snap dropping = snap_over_floor(rule, local_bounds, lifted, 0.0f);
+    const Floor_snap dropping = snap_over_floor(local_bounds, lifted, 0.0f);
     ASSERT_TRUE(dropping.offset.found);
     EXPECT_NEAR(dropping.offset.height, -0.5f, 1.0e-5f);
     EXPECT_NEAR(dropping.support_distance, -dropping.offset.height, 1.0e-6f);
     const Surface_pose dropped = moved(lifted, dropping.offset);
     EXPECT_NEAR(world_min_y(local_bounds, dropped), 0.0f, 1.0e-5f);
-    const Floor_snap again = snap_over_floor(rule, local_bounds, dropped, 0.0f);
+    const Floor_snap again = snap_over_floor(local_bounds, dropped, 0.0f);
     ASSERT_TRUE(again.offset.found);
     EXPECT_LE(std::abs(again.offset.height), editor::c_surface_snap_tolerance);
-}
-
-[[nodiscard]] auto make_pose(const glm::quat& rotation, const glm::vec3 scale) -> Surface_pose
-{
-    return Surface_pose{.position = glm::vec3{1.0f, 0.0f, 2.0f}, .rotation = rotation, .scale = scale};
 }
 
 // A node's pose as every caller reads it: glm::decompose of the world matrix (Trs_transform), which makes all three scale
@@ -157,54 +148,35 @@ void expect_rests_and_drops(
     return Surface_pose{.position = out_translation, .rotation = out_rotation, .scale = out_scale};
 }
 
-const glm::quat c_z_up_rotation = rotation_about(-90.0f, glm::vec3{1.0f, 0.0f, 0.0f});
 
-TEST(Surface_base_frame, a_z_up_mesh_turned_minus_90_about_x_rests_on_its_min_z_face)
-{
-    expect_rests_and_drops(Surface_base_rule::from_pose, c_z_up_bounds, make_pose(c_z_up_rotation, glm::vec3{c_bistro_scale}), Expected_face{2, Bounds_side::min});
-    expect_rests_and_drops(Surface_base_rule::from_pose, c_z_up_bounds, decomposed_pose(c_z_up_rotation, glm::vec3{c_bistro_scale}), Expected_face{2, Bounds_side::min});
-}
 
-TEST(Surface_base_frame, a_z_up_mesh_turned_plus_90_about_x_rests_on_its_max_z_face)
-{
-    expect_rests_and_drops(
-        Surface_base_rule::from_pose, c_z_up_bounds, make_pose(rotation_about(90.0f, glm::vec3{1.0f, 0.0f, 0.0f}), glm::vec3{c_bistro_scale}), Expected_face{2, Bounds_side::max}
-    );
-}
-
-TEST(Surface_base_frame, a_mesh_lying_with_local_x_up_rests_on_its_min_x_face)
-{
-    expect_rests_and_drops(
-        Surface_base_rule::from_pose, c_y_up_bounds, make_pose(rotation_about(90.0f, glm::vec3{0.0f, 0.0f, 1.0f}), glm::vec3{0.5f, 2.0f, 1.0f}), Expected_face{0, Bounds_side::min}
-    );
-}
-
-// Mirrors along X, Y and Z, read back through glm::decompose; the world box bottom ends on the floor under either rule.
+// Mirrors along X, Y and Z, read back through glm::decompose.
 const std::array<glm::vec3, 3> c_mirrors{glm::vec3{-1.0f, 1.0f, 1.0f}, glm::vec3{1.0f, -1.0f, 1.0f}, glm::vec3{1.0f, 1.0f, -1.0f}};
 
-TEST(Surface_base_frame, a_mirrored_z_up_mesh_from_its_decomposed_pose_rests_on_its_world_bottom_face)
-{
-    for (const glm::vec3& mirror : c_mirrors) {
-        expect_rests_and_drops(Surface_base_rule::from_pose, c_z_up_bounds, decomposed_pose(c_z_up_rotation, c_bistro_scale * mirror), std::nullopt);
-    }
-}
-
-TEST(Surface_base_frame, a_mirrored_kit_piece_from_its_decomposed_pose_rests_on_its_world_bottom_y_face)
+TEST(Surface_base_frame, a_mirrored_piece_from_its_decomposed_pose_rests_on_its_world_bottom_y_face)
 {
     const glm::quat yaw = rotation_about(30.0f, glm::vec3{0.0f, 1.0f, 0.0f});
     for (const glm::vec3& mirror : c_mirrors) {
         const Surface_pose pose = decomposed_pose(yaw, mirror);
         // Upright for X and Z mirrors (the authored base below), upside down for the Y mirror (the authored top below).
-        const Surface_base_frame frame = editor::get_surface_base_frame(Surface_base_rule::authored_y_up, pose.rotation, pose.scale, c_down);
+        const Surface_base_frame frame = editor::get_surface_base_frame(pose.rotation, pose.scale, c_down);
         EXPECT_EQ(frame.axis, 1);
         EXPECT_LT(editor::get_world_point(pose, editor::get_base_center(c_y_up_bounds, frame)).y, editor::get_world_point(pose, c_y_up_bounds.center()).y);
-        expect_rests_and_drops(Surface_base_rule::authored_y_up, c_y_up_bounds, pose, std::nullopt);
-        expect_rests_and_drops(Surface_base_rule::from_pose,     c_y_up_bounds, pose, std::nullopt);
+        expect_rests_and_drops(c_y_up_bounds, pose, std::nullopt);
     }
     // An X mirror keeps the authored base, local min Y, down: the decomposed scale makes min Y the face the pose turns down.
     const Surface_pose x_mirrored = decomposed_pose(yaw, c_mirrors[0]);
-    const Surface_base_frame x_frame = editor::get_surface_base_frame(Surface_base_rule::authored_y_up, x_mirrored.rotation, x_mirrored.scale, c_down);
+    const Surface_base_frame x_frame = editor::get_surface_base_frame(x_mirrored.rotation, x_mirrored.scale, c_down);
     EXPECT_NEAR(editor::get_world_point(x_mirrored, editor::get_base_center(c_y_up_bounds, x_frame)).y, editor::get_world_point(x_mirrored, glm::vec3{0.0f, c_y_up_bounds.min.y, 0.0f}).y, 1.0e-5f);
+    // Orient's frame is the min Y face, its up axis pointing from it to the max Y face in the world, for every mirror.
+    for (const glm::vec3& mirror : c_mirrors) {
+        const Surface_pose       pose   = decomposed_pose(yaw, mirror);
+        const Surface_base_frame orient = editor::get_orient_base_frame(pose.scale);
+        EXPECT_EQ(orient.axis, 1);
+        EXPECT_EQ(orient.side, Bounds_side::min);
+        const glm::vec3 base_to_top = editor::get_world_point(pose, glm::vec3{0.0f, c_y_up_bounds.max.y, 0.0f}) - editor::get_world_point(pose, glm::vec3{0.0f, c_y_up_bounds.min.y, 0.0f});
+        EXPECT_GE(glm::dot(glm::normalize(pose.rotation * orient.up_local), glm::normalize(base_to_top)), 1.0f - 1.0e-5f);
+    }
 }
 
 // The base points before the base face was chosen: always the local min Y face, the inset on X and Z.
@@ -242,8 +214,7 @@ TEST(Surface_base_frame, upright_and_moderately_tilted_y_up_pieces_keep_the_min_
     const std::array<glm::vec3, 4> scales{glm::vec3{1.0f}, glm::vec3{1.5f, 0.5f, 2.0f}, glm::vec3{1.0f, 0.0f, 1.0f}, glm::vec3{-1.0f, 1.0f, 1.0f}};
     for (const glm::quat& rotation : rotations) {
         for (const glm::vec3& scale : scales) {
-            for (const Surface_base_rule rule : {Surface_base_rule::authored_y_up, Surface_base_rule::from_pose}) {
-                const Surface_base_frame frame = editor::get_surface_base_frame(rule, rotation, scale, c_down);
+            for (const Surface_base_frame& frame : {editor::get_surface_base_frame(rotation, scale, c_down), editor::get_orient_base_frame(scale)}) {
                 EXPECT_EQ(frame.axis, 1);
                 EXPECT_EQ(frame.side, Bounds_side::min);
                 EXPECT_EQ(frame.up_local, (glm::vec3{0.0f, 1.0f, 0.0f}));
@@ -258,86 +229,75 @@ TEST(Surface_base_frame, upright_and_moderately_tilted_y_up_pieces_keep_the_min_
     }
 }
 
-TEST(Surface_base_frame, a_mesh_from_its_pose_tilted_past_45_degrees_rests_on_the_face_now_lowest)
+TEST(Surface_base_frame, snap_rests_on_the_bounds_face_that_leads_along_the_direction)
 {
-    const Surface_base_frame frame = editor::get_surface_base_frame(Surface_base_rule::from_pose, rotation_about(60.0f, glm::vec3{1.0f, 0.0f, 0.0f}), glm::vec3{1.0f}, c_down);
-    // +60 about X takes local +Z down-ish: the max Z face is the most downward.
-    EXPECT_EQ(frame.axis, 2);
-    EXPECT_EQ(frame.side, Bounds_side::max);
-}
-
-TEST(Surface_base_frame, exact_ties_take_min_y_then_the_fixed_order)
-{
-    const glm::quat identity{1.0f, 0.0f, 0.0f, 0.0f};
-    const Surface_base_frame y_or_z = editor::get_surface_base_frame(Surface_base_rule::from_pose, identity, glm::vec3{1.0f}, glm::normalize(glm::vec3{0.0f, -1.0f, -1.0f}));
-    EXPECT_EQ(y_or_z.axis, 1);
-    EXPECT_EQ(y_or_z.side, Bounds_side::min);
-    const Surface_base_frame x_or_z = editor::get_surface_base_frame(Surface_base_rule::from_pose, identity, glm::vec3{1.0f}, glm::normalize(glm::vec3{-1.0f, 0.0f, -1.0f}));
-    EXPECT_EQ(x_or_z.axis, 0);
-    EXPECT_EQ(x_or_z.side, Bounds_side::min);
-}
-
-TEST(Surface_base_frame, orient_turns_a_z_up_mesh_onto_a_slope_on_its_base_face_and_rests_there)
-{
-    // A plane through the origin with normal (0, 2, 1) / sqrt(5); the line through the base center meets it along the direction.
-    const glm::vec3 normal = glm::normalize(glm::vec3{0.0f, 2.0f, 1.0f});
-    const auto line_height = [&normal](const glm::vec3 base) -> float {
-        const float plane_y = -((normal.x * base.x) + (normal.z * base.z)) / normal.y;
-        return plane_y - base.y;
-    };
-    const Surface_pose start{
-        .position = glm::vec3{0.3f, 1.0f, 0.2f},
-        .rotation = rotation_about(25.0f, glm::vec3{0.0f, 1.0f, 0.0f}) * rotation_about(-90.0f, glm::vec3{1.0f, 0.0f, 0.0f}),
-        .scale    = glm::vec3{c_bistro_scale}
-    };
-    const Surface_base_frame frame = editor::get_surface_base_frame(Surface_base_rule::from_pose, start.rotation, start.scale, c_down);
-    ASSERT_EQ(frame.axis, 2);
-    ASSERT_EQ(frame.side, Bounds_side::min);
-    const float        height   = line_height(editor::get_world_point(start, editor::get_base_center(c_z_up_bounds, frame)));
-    const Surface_pose oriented = editor::get_oriented_pose(start, c_z_up_bounds, frame, c_down, height, normal);
-
-    const glm::vec3 up = glm::normalize(oriented.rotation * frame.up_local);
-    EXPECT_GE(glm::dot(up, normal), 1.0f - 1.0e-6f);
-    const glm::vec3 base_center = editor::get_world_point(oriented, editor::get_base_center(c_z_up_bounds, frame));
-    EXPECT_NEAR(glm::dot(normal, base_center), 0.0f, 1.0e-5f);
-    // Every corner of the base face lies on the slope: the base face, not another face, rests there.
-    for (const glm::vec3& point : editor::get_base_points(c_z_up_bounds, frame)) {
-        EXPECT_NEAR(glm::dot(normal, editor::get_world_point(oriented, point)), 0.0f, 1.0e-5f);
-    }
-
-    // Orienting the rest again: the same base face, no rise, no turn (find_surface_placement() keeps the pose bit for bit).
-    const Surface_base_frame again = editor::get_surface_base_frame(Surface_base_rule::from_pose, oriented.rotation, oriented.scale, c_down);
-    EXPECT_EQ(again.axis, frame.axis);
-    EXPECT_EQ(again.side, frame.side);
-    EXPECT_LE(std::abs(line_height(editor::get_world_point(oriented, editor::get_base_center(c_z_up_bounds, again)))), editor::c_surface_snap_tolerance);
-    EXPECT_GE(glm::dot(glm::normalize(oriented.rotation * again.up_local), normal), 1.0f - 1.0e-6f);
-}
-
-TEST(Surface_base_frame, a_kit_piece_keeps_its_min_y_face_at_any_tilt)
-{
-    for (const float degrees : {60.0f, 89.0f}) {
-        const Surface_base_frame frame = editor::get_surface_base_frame(
-            Surface_base_rule::authored_y_up, rotation_about(degrees, glm::vec3{1.0f, 0.0f, 0.0f}), glm::vec3{1.0f}, c_down
-        );
+    // Tilted below 45 degrees the min Y face leads down; past 45 degrees the face the tilt turns down does.
+    for (const float degrees : {30.0f, 44.0f}) {
+        const Surface_base_frame frame = editor::get_surface_base_frame(rotation_about(degrees, glm::vec3{1.0f, 0.0f, 0.0f}), glm::vec3{1.0f}, c_down);
         EXPECT_EQ(frame.axis, 1);
         EXPECT_EQ(frame.side, Bounds_side::min);
         EXPECT_EQ(frame.up_local, (glm::vec3{0.0f, 1.0f, 0.0f}));
     }
-    // Turned past 90 degrees it is upside down: the max Y face is below.
-    const Surface_base_frame over = editor::get_surface_base_frame(
-        Surface_base_rule::authored_y_up, rotation_about(135.0f, glm::vec3{1.0f, 0.0f, 0.0f}), glm::vec3{1.0f}, c_down
-    );
+    // A positive turn about X takes local +Z down.
+    const Surface_base_frame steep = editor::get_surface_base_frame(rotation_about(60.0f, glm::vec3{1.0f, 0.0f, 0.0f}), glm::vec3{1.0f}, c_down);
+    EXPECT_EQ(steep.axis, 2);
+    EXPECT_EQ(steep.side, Bounds_side::max);
+    EXPECT_EQ(steep.up_local, (glm::vec3{0.0f, 0.0f, -1.0f}));
+    // Turned past 135 degrees it is upside down: snap alone, which does not turn it, rests on the max Y face below.
+    const Surface_base_frame over = editor::get_surface_base_frame(rotation_about(150.0f, glm::vec3{1.0f, 0.0f, 0.0f}), glm::vec3{1.0f}, c_down);
     EXPECT_EQ(over.axis, 1);
     EXPECT_EQ(over.side, Bounds_side::max);
-    // A negative Y scale puts the authored base on top: the max Y face is below, the up axis is still local +Y in the pose.
-    const Surface_base_frame flipped = editor::get_surface_base_frame(
-        Surface_base_rule::authored_y_up, glm::quat{1.0f, 0.0f, 0.0f, 0.0f}, glm::vec3{1.0f, -1.0f, 1.0f}, c_down
-    );
+    // A negative Y scale puts the authored base on top: the max Y face is below.
+    const Surface_base_frame flipped = editor::get_surface_base_frame(glm::quat{1.0f, 0.0f, 0.0f, 0.0f}, glm::vec3{1.0f, -1.0f, 1.0f}, c_down);
     EXPECT_EQ(flipped.axis, 1);
     EXPECT_EQ(flipped.side, Bounds_side::max);
+    // Searching up (a ceiling), an upright piece leads with its max Y face: its top rests against the ceiling.
+    const Surface_base_frame up = editor::get_surface_base_frame(glm::quat{1.0f, 0.0f, 0.0f, 0.0f}, glm::vec3{1.0f}, -c_down);
+    EXPECT_EQ(up.axis, 1);
+    EXPECT_EQ(up.side, Bounds_side::max);
+    EXPECT_EQ(up.up_local, (glm::vec3{0.0f, -1.0f, 0.0f}));
+    // Searching into a wall, an upright piece rests flush on the side face that leads: -Z into a wall behind it, +X to its right.
+    const Surface_base_frame back = editor::get_surface_base_frame(glm::quat{1.0f, 0.0f, 0.0f, 0.0f}, glm::vec3{1.0f}, glm::vec3{0.0f, 0.0f, -1.0f});
+    EXPECT_EQ(back.axis, 2);
+    EXPECT_EQ(back.side, Bounds_side::min);
+    EXPECT_EQ(back.u, 0);
+    EXPECT_EQ(back.v, 1);
+    EXPECT_EQ(back.up_local, (glm::vec3{0.0f, 0.0f, 1.0f}));
+    const Surface_base_frame right = editor::get_surface_base_frame(glm::quat{1.0f, 0.0f, 0.0f, 0.0f}, glm::vec3{1.0f}, glm::vec3{1.0f, 0.0f, 0.0f});
+    EXPECT_EQ(right.axis, 0);
+    EXPECT_EQ(right.side, Bounds_side::max);
+    // A mirror along X swaps which X face leads.
+    const Surface_base_frame mirrored = editor::get_surface_base_frame(glm::quat{1.0f, 0.0f, 0.0f, 0.0f}, glm::vec3{-1.0f, 1.0f, 1.0f}, glm::vec3{1.0f, 0.0f, 0.0f});
+    EXPECT_EQ(mirrored.axis, 0);
+    EXPECT_EQ(mirrored.side, Bounds_side::min);
 }
 
-TEST(Surface_base_frame, a_kit_piece_oriented_onto_a_60_degree_slope_rests_on_its_min_y_face_and_stays)
+TEST(Surface_base_frame, snap_alone_rests_an_upright_box_flush_against_a_wall)
+{
+    // A wall plane z = -2 facing +Z; the piece starts with its base center on it, half inside.
+    const erhe::math::Aabb   bounds{.min = glm::vec3{-0.5f, 0.0f, -0.5f}, .max = glm::vec3{0.5f, 1.0f, 0.5f}};
+    const Surface_pose       pose{.position = glm::vec3{0.0f, 1.0f, -2.0f}};
+    const glm::vec3          direction{0.0f, 0.0f, -1.0f};
+    const Surface_base_frame frame  = editor::get_surface_base_frame(pose.rotation, pose.scale, direction);
+    const std::array<glm::vec3, 5> points = editor::get_base_points(editor::get_footprint_bounds(bounds, pose.scale, frame), frame);
+    std::array<std::array<Surface_hit_point, 1>, 5> hits{};
+    std::array<Surface_line, 5>                     lines{};
+    for (std::size_t i = 0; i < points.size(); ++i) {
+        const glm::vec3 base = editor::get_world_point(pose, points[i]);
+        const glm::vec3 top  = editor::get_world_point(pose, editor::get_top_point(bounds, frame, points[i]));
+        // Heights grow against the direction: the wall face is (base.z - (-2)) along it.
+        hits[i][0] = Surface_hit_point{.height = -2.0f - base.z, .surface = true, .normal = glm::vec3{0.0f, 0.0f, 1.0f}};
+        lines[i]   = Surface_line{.hits = hits[i], .span = std::max(c_min_ray_height, glm::dot(top - base, -direction))};
+    }
+    const editor::Surface_offset offset = editor::find_snap_height(lines, editor::Surface_search_window{.forward_distance = 1.0f, .backward_distance = 1.0f});
+    ASSERT_TRUE(offset.found);
+    const glm::vec3 rest = pose.position - (offset.height * direction);
+    EXPECT_NEAR(rest.z, -1.5f, 1.0e-5f); // the -Z face on the wall, the whole piece in front of it
+    EXPECT_NEAR(rest.x, 0.0f, 1.0e-6f);
+    EXPECT_NEAR(rest.y, 1.0f, 1.0e-6f);
+}
+
+TEST(Surface_base_frame, a_piece_oriented_onto_a_60_degree_slope_rests_on_its_min_y_face_and_stays)
 {
     // A plane through the origin tilted 60 degrees about X.
     const glm::vec3 normal{0.0f, std::cos(glm::radians(60.0f)), std::sin(glm::radians(60.0f))};
@@ -346,7 +306,7 @@ TEST(Surface_base_frame, a_kit_piece_oriented_onto_a_60_degree_slope_rests_on_it
         return plane_y - base.y;
     };
     const Surface_pose start{.position = glm::vec3{0.2f, 3.0f, -0.4f}, .rotation = rotation_about(30.0f, glm::vec3{0.0f, 1.0f, 0.0f}), .scale = glm::vec3{1.0f}};
-    const Surface_base_frame frame = editor::get_surface_base_frame(Surface_base_rule::authored_y_up, start.rotation, start.scale, c_down);
+    const Surface_base_frame frame = editor::get_orient_base_frame(start.scale);
     const float        height   = line_height(editor::get_world_point(start, editor::get_base_center(c_y_up_bounds, frame)));
     const Surface_pose oriented = editor::get_oriented_pose(start, c_y_up_bounds, frame, c_down, height, normal);
     EXPECT_GE(glm::dot(glm::normalize(oriented.rotation * frame.up_local), normal), 1.0f - 1.0e-6f);
@@ -354,55 +314,120 @@ TEST(Surface_base_frame, a_kit_piece_oriented_onto_a_60_degree_slope_rests_on_it
         EXPECT_NEAR(glm::dot(normal, editor::get_world_point(oriented, point)), 0.0f, 1.0e-5f);
     }
     // Orienting the rest again keeps the min Y face: no rise, no turn.
-    const Surface_base_frame again = editor::get_surface_base_frame(Surface_base_rule::authored_y_up, oriented.rotation, oriented.scale, c_down);
+    const Surface_base_frame again = editor::get_orient_base_frame(oriented.scale);
     EXPECT_EQ(again.axis, 1);
     EXPECT_EQ(again.side, Bounds_side::min);
     EXPECT_LE(std::abs(line_height(editor::get_world_point(oriented, editor::get_base_center(c_y_up_bounds, again)))), editor::c_surface_snap_tolerance);
     EXPECT_GE(glm::dot(glm::normalize(oriented.rotation * again.up_local), normal), 1.0f - 1.0e-6f);
-    // From the pose, the same rest would take a side face as its base.
-    const Surface_base_frame from_pose = editor::get_surface_base_frame(Surface_base_rule::from_pose, oriented.rotation, oriented.scale, c_down);
-    EXPECT_NE(from_pose.axis, 1);
 }
 
-TEST(Surface_base_frame, a_mesh_from_its_pose_oriented_onto_a_60_degree_slope_rests_and_stays)
+// U51: searching up, orient turns the piece over onto a ceiling, its base against it and its heading (local X) kept.
+TEST(Surface_base_frame, orient_up_turns_an_upright_piece_onto_a_ceiling_by_its_base)
 {
-    const glm::vec3 normal{0.0f, std::cos(glm::radians(60.0f)), std::sin(glm::radians(60.0f))};
-    const auto line_height = [&normal](const glm::vec3 base) -> float {
-        const float plane_y = -((normal.x * base.x) + (normal.z * base.z)) / normal.y;
-        return plane_y - base.y;
-    };
-    class Oriented
-    {
-    public:
-        Surface_base_frame frame;
-        float              height;
-        Surface_pose       pose;
-    };
-    // find_surface_placement() with orient over a plane: the line of the face along the direction, then the face that
-    // turns least onto the normal, its own line.
-    const auto orient = [&](const Surface_pose& start) -> Oriented {
-        const Surface_base_frame line_frame = editor::get_surface_base_frame(Surface_base_rule::from_pose, start.rotation, start.scale, c_down);
-        const Surface_base_frame frame      = editor::get_orient_frame(Surface_base_rule::from_pose, start.rotation, start.scale, line_frame, normal);
-        const float              height     = line_height(editor::get_world_point(start, editor::get_base_center(c_y_up_bounds, frame)));
-        return Oriented{.frame = frame, .height = height, .pose = editor::get_oriented_pose(start, c_y_up_bounds, frame, c_down, height, normal)};
-    };
-    const Surface_pose start{.position = glm::vec3{0.2f, 3.0f, -0.4f}, .rotation = rotation_about(30.0f, glm::vec3{0.0f, 1.0f, 0.0f}), .scale = glm::vec3{1.0f}};
-    const Oriented first = orient(start);
-    const glm::vec3 up = glm::normalize(first.pose.rotation * first.frame.up_local);
-    EXPECT_GE(glm::dot(up, normal), 1.0f - 1.0e-6f);
-    for (const glm::vec3& point : editor::get_base_points(c_y_up_bounds, first.frame)) {
-        EXPECT_NEAR(glm::dot(normal, editor::get_world_point(first.pose, point)), 0.0f, 1.0e-5f);
+    const glm::vec3 up_direction{0.0f, 1.0f, 0.0f};
+    const glm::vec3 ceiling_normal{0.0f, -1.0f, 0.0f};
+    constexpr float ceiling_y = 3.0f;
+    const Surface_pose start{.position = glm::vec3{0.5f, 1.0f, -0.25f}, .rotation = rotation_about(30.0f, glm::vec3{0.0f, 1.0f, 0.0f}), .scale = glm::vec3{1.0f}};
+    const Surface_base_frame frame       = editor::get_orient_base_frame(start.scale);
+    const glm::vec3          base_center = editor::get_world_point(start, editor::get_base_center(c_y_up_bounds, frame));
+    // The rise against the direction: negative, the base moves up along it.
+    const float              height      = -(ceiling_y - base_center.y);
+    const Surface_pose       oriented    = editor::get_oriented_pose(start, c_y_up_bounds, frame, up_direction, height, ceiling_normal);
+
+    EXPECT_GE(glm::dot(glm::normalize(oriented.rotation * frame.up_local), ceiling_normal), 1.0f - 1.0e-6f);
+    for (const glm::vec3& point : editor::get_base_points(c_y_up_bounds, frame)) {
+        EXPECT_NEAR(editor::get_world_point(oriented, point).y, ceiling_y, 1.0e-5f);
     }
-    // Twice more from the rest: the same face, no rise, no turn (find_surface_placement() keeps the pose bit for bit).
-    Surface_pose pose = first.pose;
-    for (int i = 0; i < 2; ++i) {
-        const Oriented again = orient(pose);
-        EXPECT_EQ(again.frame.axis, first.frame.axis);
-        EXPECT_EQ(again.frame.side, first.frame.side);
-        EXPECT_LE(std::abs(again.height), editor::c_surface_snap_tolerance);
-        EXPECT_GE(glm::dot(glm::normalize(pose.rotation * again.frame.up_local), normal), 1.0f - 1.0e-6f);
-        pose = again.pose;
+    // The piece hangs below the ceiling, its top face 1.2 m under it.
+    EXPECT_NEAR(editor::get_world_point(oriented, glm::vec3{0.0f, c_y_up_bounds.max.y, 0.0f}).y, ceiling_y - 1.2f, 1.0e-5f);
+    // The base center stays on the vertical line it searched along.
+    const glm::vec3 rested_center = editor::get_world_point(oriented, editor::get_base_center(c_y_up_bounds, frame));
+    EXPECT_NEAR(rested_center.x, base_center.x, 1.0e-5f);
+    EXPECT_NEAR(rested_center.z, base_center.z, 1.0e-5f);
+    // The half turn is about the piece's X axis: the heading is kept.
+    EXPECT_GE(glm::dot(oriented.rotation * glm::vec3{1.0f, 0.0f, 0.0f}, start.rotation * glm::vec3{1.0f, 0.0f, 0.0f}), 1.0f - 1.0e-5f);
+    // The rest is a fixed point: the base on the ceiling, the up axis along its normal.
+    const Surface_base_frame again = editor::get_orient_base_frame(oriented.scale);
+    EXPECT_GE(glm::dot(glm::normalize(oriented.rotation * again.up_local), ceiling_normal), 1.0f - 1.0e-6f);
+}
+
+// U51: a piece turned over and oriented down onto a floor stands on its min Y face again.
+TEST(Surface_base_frame, orient_turns_an_upside_down_piece_onto_its_min_y_face)
+{
+    const glm::vec3 floor_normal{0.0f, 1.0f, 0.0f};
+    const Surface_pose start{.position = glm::vec3{0.0f, 2.0f, 0.0f}, .rotation = rotation_about(180.0f, glm::vec3{1.0f, 0.0f, 0.0f}), .scale = glm::vec3{1.0f}};
+    const Surface_base_frame frame       = editor::get_orient_base_frame(start.scale);
+    const glm::vec3          base_center = editor::get_world_point(start, editor::get_base_center(c_y_up_bounds, frame));
+    const Surface_pose       oriented    = editor::get_oriented_pose(start, c_y_up_bounds, frame, c_down, -base_center.y, floor_normal);
+    EXPECT_GE(glm::dot(glm::normalize(oriented.rotation * frame.up_local), floor_normal), 1.0f - 1.0e-6f);
+    for (const glm::vec3& point : editor::get_base_points(c_y_up_bounds, frame)) {
+        EXPECT_NEAR(editor::get_world_point(oriented, point).y, 0.0f, 1.0e-5f);
     }
+    EXPECT_NEAR(world_min_y(c_y_up_bounds, oriented), 0.0f, 1.0e-5f);
+}
+
+// Review of U51: along a wall the turn comes from the start pose and the direction, not from the normal's side of vertical.
+TEST(Surface_base_frame, orient_sideways_onto_a_wall_turns_alike_on_either_side_of_vertical)
+{
+    const glm::vec3    east{1.0f, 0.0f, 0.0f};
+    const Surface_pose start{.position = glm::vec3{0.0f, 1.0f, 0.0f}, .rotation = glm::quat{1.0f, 0.0f, 0.0f, 0.0f}, .scale = glm::vec3{1.0f}};
+    const Surface_base_frame frame = editor::get_orient_base_frame(start.scale);
+    const Surface_pose above = editor::get_oriented_pose(start, c_y_up_bounds, frame, east, -0.3f, glm::normalize(glm::vec3{-1.0f,  0.001f, 0.0f}));
+    const Surface_pose below = editor::get_oriented_pose(start, c_y_up_bounds, frame, east, -0.3f, glm::normalize(glm::vec3{-1.0f, -0.001f, 0.0f}));
+    for (const glm::vec3 axis : {glm::vec3{1.0f, 0.0f, 0.0f}, glm::vec3{0.0f, 1.0f, 0.0f}, glm::vec3{0.0f, 0.0f, 1.0f}}) {
+        EXPECT_GE(glm::dot(above.rotation * axis, below.rotation * axis), 0.999f);
+    }
+    // The up axis takes the wall's normal (west) and the base center rests 0.3 m east.
+    EXPECT_GE(glm::dot(above.rotation * glm::vec3{0.0f, 1.0f, 0.0f}, glm::normalize(glm::vec3{-1.0f, 0.001f, 0.0f})), 1.0f - 1.0e-5f);
+    const glm::vec3 base_center = editor::get_world_point(above, editor::get_base_center(c_y_up_bounds, frame));
+    EXPECT_NEAR(base_center.x, 0.3f, 1.0e-5f);
+}
+
+// The turned piece stands along the normal: its whole extent must fit, whatever its extent along the direction.
+TEST(Surface_base_frame, orient_sideways_checks_the_whole_extent_for_fit)
+{
+    const erhe::math::Aabb half_meter{.min = glm::vec3{-0.1f, 0.0f, -0.1f}, .max = glm::vec3{0.1f, 0.5f, 0.1f}};
+    const glm::vec3        east{1.0f, 0.0f, 0.0f};
+    const Surface_pose     start{.position = glm::vec3{0.0f, 1.0f, 0.0f}, .rotation = glm::quat{1.0f, 0.0f, 0.0f, 0.0f}, .scale = glm::vec3{1.0f}};
+    const editor::Orient_search search = editor::get_orient_search(half_meter, start, east, editor::Surface_search_window{.forward_distance = 1.0f, .backward_distance = 0.0f});
+    EXPECT_NEAR(search.span, 0.5f, 1.0e-6f);
+    EXPECT_EQ(search.window.forward_distance, 1.0f);
+    EXPECT_EQ(search.window.backward_distance, 0.0f);
+    // The wall 0.2 m east of the base center, a panel 0.4 m off the wall (0.2 m west of the base center).
+    const std::array<Surface_hit_point, 2> hits{
+        Surface_hit_point{.height = -0.2f, .surface = true,  .normal = glm::vec3{-1.0f, 0.0f, 0.0f}},
+        Surface_hit_point{.height =  0.2f, .surface = false, .normal = glm::vec3{ 1.0f, 0.0f, 0.0f}}
+    };
+    const std::array<Surface_line, 1> blocked{Surface_line{.hits = hits, .span = search.span}};
+    EXPECT_FALSE(editor::find_snap_height(blocked, search.window).found);
+    // Without the panel the piece mounts on the wall.
+    const std::array<Surface_line, 1> free{Surface_line{.hits = std::span<const Surface_hit_point>{hits.data(), 1}, .span = search.span}};
+    const Surface_offset mounted = editor::find_snap_height(free, search.window);
+    ASSERT_TRUE(mounted.found);
+    EXPECT_NEAR(mounted.height, -0.2f, 1.0e-6f);
+}
+
+// The window is measured from the Y face leading along the direction: a 2 m piece lying upside down on a floor finds it.
+TEST(Surface_base_frame, orient_measures_the_window_from_the_leading_face)
+{
+    const erhe::math::Aabb two_meters{.min = glm::vec3{-0.2f, 0.0f, -0.2f}, .max = glm::vec3{0.2f, 2.0f, 0.2f}};
+    const Surface_pose     start{.position = glm::vec3{0.0f, 2.0f, 0.0f}, .rotation = rotation_about(180.0f, glm::vec3{1.0f, 0.0f, 0.0f}), .scale = glm::vec3{1.0f}};
+    const editor::Surface_search_window window{.forward_distance = 1.0f, .backward_distance = 0.0f};
+    const editor::Orient_search search = editor::get_orient_search(two_meters, start, c_down, window);
+    EXPECT_NEAR(search.base_center.y, 2.0f, 1.0e-5f);
+    EXPECT_NEAR(search.window.forward_distance, 3.0f, 1.0e-5f);
+    EXPECT_NEAR(search.window.backward_distance, -2.0f, 1.0e-5f);
+    const std::array<Surface_hit_point, 1> floor{Surface_hit_point{.height = -2.0f, .surface = true}};
+    const std::array<Surface_line, 1> line{Surface_line{.hits = floor, .span = search.span}};
+    EXPECT_FALSE(editor::find_snap_height(line, window).found);
+    const Surface_offset found = editor::find_snap_height(line, search.window);
+    ASSERT_TRUE(found.found);
+    EXPECT_NEAR(found.height, -2.0f, 1.0e-5f);
+    // An upright piece leads with its -Y face: the window is as given.
+    const Surface_pose upright{.position = glm::vec3{0.0f, 0.5f, 0.0f}, .rotation = glm::quat{1.0f, 0.0f, 0.0f, 0.0f}, .scale = glm::vec3{1.0f}};
+    const editor::Orient_search plain = editor::get_orient_search(two_meters, upright, c_down, window);
+    EXPECT_EQ(plain.window.forward_distance, 1.0f);
+    EXPECT_EQ(plain.window.backward_distance, 0.0f);
 }
 
 } // anonymous namespace

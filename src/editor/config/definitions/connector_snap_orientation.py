@@ -1,9 +1,10 @@
 from erhe_codegen import *
 
-# Whether a connector snap of a translate drag also turns the moved nodes so the
-# connector frames face each other (doc/editor/level_tools.md "Connector snap").
+# How a connector snap turns the moved nodes so the connector frames face each other (U50,
+# doc/editor/level_tools.md "Connector snap"); keep and align are the former names of off and full.
 enum("Connector_snap_orientation",
-    value("keep",  0, short_desc="Keep: the snap translates only"),
-    value("align", 1, short_desc="Align: the snap also turns the frames to face each other"),
+    value("off",    0, short_desc="Off: the snap translates only", former_names=["keep"]),
+    value("rotate", 1, short_desc="Rotate: with Orient To Surface the snap turns only about the surface normal; without it as Full"),
+    value("full",   2, short_desc="Full: the snap turns the frames to face each other, overriding Orient To Surface", former_names=["align"]),
     underlying_type=UInt,
 )

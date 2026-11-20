@@ -17,6 +17,8 @@
 #include "app_message.hpp"
 #include "config/generated/connector_snap_axis_mode.hpp"
 #include "config/generated/connector_snap_orientation.hpp"
+#include "config/generated/surface_drag_direction.hpp"
+#include "config/generated/surface_snap_rest.hpp"
 
 #include "erhe_math/aabb.hpp"
 #include "erhe_math/curve_path.hpp"
@@ -24,6 +26,7 @@
 #include "erhe_property/expression.hpp"
 #include "erhe_property/property_value.hpp"
 #include "erhe_scene/trs_transform.hpp"
+#include "erhe_scene/xform_op.hpp"
 
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
@@ -62,6 +65,12 @@ public:
     std::string                                palette_name;
 };
 
+// Whether a connector join also records an attachment the joined piece follows (R5.3, plan step 41).
+enum class Kit_attach : unsigned int {
+    none = 0,
+    attach
+};
+
 // A connector join (R5.3, D3.12): the piece's connector meets a connector of the target piece.
 class Kit_connect
 {
@@ -71,7 +80,46 @@ public:
     std::string                        target_connector;
     int                                twist_steps{0};   // quarter turns about the target connector's outward axis
     float                              gap        {0.0f}; // along the target connector's outward axis
+    Kit_attach                         attach{Kit_attach::attach};
 };
+
+// Whether a piece's attachment is followed (doc/editor/level_tools.md "Attachments").
+enum class Kit_attachment_state : unsigned int {
+    none = 0, // no record of its own
+    active,
+    dormant   // kept, not followed: the reason says why
+};
+
+class Kit_attachment_status
+{
+public:
+    Kit_attachment_state               state{Kit_attachment_state::none};
+    Kit_attachment                     attachment;
+    std::shared_ptr<erhe::scene::Node> target; // null when the target is not in the piece's scene
+    std::string                        reason; // dormant: why
+};
+
+// Why a join records no attachment (step 41).
+enum class Kit_attach_refusal : unsigned int {
+    none = 0,
+    locked_layout, // a child of a locked kit layout node on either side: the join is made without an attachment
+    cycle          // the target's chain of attachments leads back to the piece: the call is refused
+};
+
+class Kit_attach_check
+{
+public:
+    Kit_attach_refusal refusal{Kit_attach_refusal::none};
+    std::string        message;
+};
+
+class Kit_detach_result
+{
+public:
+    bool        changed{false}; // an undo entry was recorded
+    std::string error;          // empty on success; with an error nothing changed
+};
+
 
 // Which of a piece's connectors a query returns (U33).
 enum class Kit_connector_set : unsigned int
@@ -110,6 +158,7 @@ public:
     glm::quat                          rotation{1.0f, 0.0f, 0.0f, 0.0f};
     bool                               changed{false}; // an undo entry was recorded
     std::string                        error;          // empty on success; with an error nothing changed
+    std::string                        not_attached;   // with attach asked: why no attachment was recorded (the join was made)
 };
 
 // One piece to place (D3.2); positions and rotations are in the scene root's space.
@@ -174,6 +223,7 @@ class Kit_placement_pose
 public:
     glm::vec3 position{0.0f};
     glm::quat rotation{1.0f, 0.0f, 0.0f, 0.0f};
+    glm::vec3 surface_direction{c_default_surface_direction}; // the search direction the pose was found along
     bool      surface_found{false};
 };
 
@@ -366,7 +416,10 @@ public:
     Kit_snap                           snap          {Kit_snap::none};
     Surface_snap                       surface_snap  {Surface_snap::off};
     Surface_orient                     surface_orient{Surface_orient::off};
-    float                              surface_max_distance{c_default_surface_max_distance};
+    glm::vec3                          surface_direction        {c_default_surface_direction};
+    float                              surface_forward_distance {c_default_surface_forward_distance};
+    float                              surface_backward_distance{c_default_surface_backward_distance};
+    Surface_support                    surface_support          {Surface_support::five_lines};
     Kit_layout_seeds                   seeds         {Kit_layout_seeds::item};
     int                                seed          {0};
     Kit_layout_lock                    lock          {Kit_layout_lock::locked};
@@ -420,6 +473,18 @@ public:
     std::string                        error;             // empty on success; with an error nothing changed
 };
 
+// A new material of the palette material's color, owned by no content library.
+[[nodiscard]] auto make_palette_material(const Kit_palette_material& palette) -> std::shared_ptr<erhe::primitive::Material>;
+
+// What a kit brush made outside the cache is for: a placement carries its shape's physics body (D2.3) and every
+// primitive type; a thumbnail has no collision shape and fill triangles only.
+enum class Kit_brush_use : unsigned int {
+    placement = 0,
+    thumbnail
+};
+
+class Kit_thumbnails;
+
 // The level kit editor part (D2.2): the shape library, the kit brush cache and piece placement.
 class Level_kits
 {
@@ -447,6 +512,14 @@ public:
     // Reports and replaces a surface max distance of the loaded editor settings that check_surface_max_distance() refuses.
     void validate_surface_settings();
     void set_surface_orient(Surface_orient orient);
+    // U60: what Transform tool drags and Brush tool kit placement rest with orient off; get_surface_settings() leaves it leading_face.
+    [[nodiscard]] auto get_surface_rest() const -> Surface_snap_rest;
+    void set_surface_rest(Surface_snap_rest rest);
+    // U51: the search direction of Transform tool drags: the explicit vector (stored as given, normalized on use; set must pass check_surface_direction()) or the camera ray.
+    [[nodiscard]] auto get_surface_drag_direction_mode() const -> Surface_drag_direction;
+    void set_surface_drag_direction_mode(Surface_drag_direction mode);
+    [[nodiscard]] auto get_surface_drag_direction() const -> glm::vec3;
+    void set_surface_drag_direction(const glm::vec3& direction);
     // D3.13: the connector snap distance of Transform tool node drags in meters, 0 = off; set clamps a negative or non-finite value to 0.
     [[nodiscard]] auto get_connector_snap_distance() const -> float;
     void set_connector_snap_distance(float distance);
@@ -457,14 +530,15 @@ public:
     [[nodiscard]] auto get_connector_snap_orientation() const -> Connector_snap_orientation;
     void set_connector_snap_orientation(Connector_snap_orientation orientation);
 
-    // D4.4: the origin at the point (module-rounded), upright, turned by yaw_steps rotation steps
-    // about the up axis, then the surface options; no allocation, raytrace scene committed here.
+    // D4.4, U51: the origin at the point (module-rounded), upright, turned by yaw_steps rotation steps about the
+    // up axis, then the surface options searching against surface_normal (none: the settings' direction); no allocation.
     [[nodiscard]] auto make_placement_pose(
-        Scene_root&                   scene_root,
-        const erhe::math::Aabb&       local_bounds,
-        const glm::vec3&              point,
-        int                           yaw_steps,
-        const Kit_placement_settings& settings
+        Scene_root&                     scene_root,
+        const erhe::math::Aabb&         local_bounds,
+        const glm::vec3&                point,
+        const std::optional<glm::vec3>& surface_normal,
+        int                             yaw_steps,
+        const Kit_placement_settings&   settings
     ) const -> Kit_placement_pose;
 
     // A material of the palette material's color, outside every content library; null for a name not in the palette.
@@ -478,6 +552,12 @@ public:
 
     // The cached brushes still alive: held by a piece or by an operation of the undo history.
     [[nodiscard]] auto get_cached_brush_count() const -> std::size_t;
+
+    // A new brush of the values outside the cache; null when its geometry fails.
+    [[nodiscard]] auto make_brush(const Kit_parameter_values& values, Kit_brush_use use) -> std::shared_ptr<Brush>;
+
+    // The Level Kit window's shape thumbnails (doc/editor/level_tools.md "Shape thumbnails").
+    [[nodiscard]] auto get_thumbnails() -> Kit_thumbnails&;
 
     // Validates every placement, then places all of them as one Compound_operation (one undo entry).
     [[nodiscard]] auto place(Scene_root& scene_root, std::span<const Kit_placement> placements, Kit_snap snap) -> Kit_place_result;
@@ -541,8 +621,49 @@ public:
         const Kit_connector_switch_edit&          edit
     ) -> Kit_connector_switch_result;
 
-    // D3.12: moves the piece, its children riding with it, so its connector meets the target's; one undo entry.
+    // D3.12: moves the piece, its children riding with it, so its connector meets the target's; one undo entry. With
+    // attach the piece also records the attachment (step 41); an attachment that would close a cycle refuses the call.
     [[nodiscard]] auto connect_piece(Scene_root& scene_root, const std::shared_ptr<erhe::scene::Node>& node, const Kit_connect& connect) -> Kit_connect_result;
+
+    // Step 41 (doc/editor/level_tools.md "Attachments"): the node's attachment, its target and whether it is followed.
+    [[nodiscard]] auto get_attachment_status(const erhe::scene::Node& node) const -> Kit_attachment_status;
+    // Whether the node may record an attachment to the target.
+    [[nodiscard]] auto check_attach(const erhe::scene::Node& node, const erhe::scene::Node& target) const -> Kit_attach_check;
+    // The record of the join, owned by the node.
+    [[nodiscard]] static auto make_connect_attachment(const erhe::scene::Node& node, const Kit_connect& connect) -> Kit_attachment;
+    // The write of the node's attachment (none: removed) as an operation; null when the node has it already.
+    [[nodiscard]] static auto make_attachment_operation(const std::shared_ptr<erhe::scene::Node>& node, const std::optional<Kit_attachment>& attachment) -> std::shared_ptr<Operation>;
+    // Removes the node's attachment as one undo entry; none when it has none.
+    [[nodiscard]] auto detach_piece(Scene_root& scene_root, const std::shared_ptr<erhe::scene::Node>& node) -> Kit_detach_result;
+    // Whether any node of the scene carries an attachment value.
+    [[nodiscard]] static auto has_attachments(const Scene_root& scene_root) -> bool;
+    // The operation, appended last to a change's entry, whose first execute records the followers' moves, the detaches
+    // and the snapped release's attachment (build_attachment_follow_ups()); null when there is nothing to follow or attach.
+    [[nodiscard]] auto make_attachment_follow_operation(
+        Scene_root&                                         scene_root,
+        std::span<const std::shared_ptr<erhe::scene::Node>> moved_nodes,
+        std::span<const std::shared_ptr<erhe::scene::Node>> changed_pieces,
+        const Kit_snap_pair*                                snap = nullptr
+    ) -> std::shared_ptr<Operation>;
+    // The follow operation of each scene of the nodes, whose moves are earlier operations of the same entry.
+    void append_attachment_follow_ups(std::span<const std::shared_ptr<erhe::scene::Node>> moved_nodes, std::vector<std::shared_ptr<Operation>>& out_operations);
+    // A write of Kit_piece.parameters or Kit_piece.shape outside these entry points (a paste, a raw row): the follow operation.
+    void append_kit_piece_record_follow_ups(
+        std::span<const std::shared_ptr<erhe::Item_base>> items,
+        const erhe::property::Dependency_property&        property,
+        std::vector<std::shared_ptr<Operation>>&          out_operations
+    );
+    // The moved nodes (moved by the user) stand at their new transforms and the changed pieces carry their new records:
+    // joins again, in dependency order, each attached piece whose target is at or below one of them or a follower,
+    // applied, one Node_transform_operation each; removes the attachment of a piece the change moved off its join; with
+    // a snap pair the moved piece attaches when it now sits on a join of the pair (doc/editor/level_tools.md "Attachments").
+    void build_attachment_follow_ups(
+        Scene_root&                                         scene_root,
+        std::span<const std::shared_ptr<erhe::scene::Node>> moved_nodes,
+        std::span<const std::shared_ptr<erhe::scene::Node>> changed_pieces,
+        const Kit_snap_pair*                                snap,
+        std::vector<std::shared_ptr<Operation>>&            out_operations
+    );
 
     // D3.8: a new group node at the base center of the nodes' combined world bounds, under their common parent
     // (else the scene root), takes the top-level nodes of the set as children, world transforms kept; one undo entry.
@@ -684,7 +805,14 @@ public:
 
     // R5.12.9: a new kit layout node of the initial values with the one item at a world pose (the Brush tool's
     // Place As Layout click), one undo entry.
-    [[nodiscard]] auto add_layout_initial(Scene_root& scene_root, const Kit_layout_item& item, const glm::vec3& position, const glm::quat& rotation) -> Kit_layout_result;
+    // surface_direction is the layout's search direction (the placement's, U51).
+    [[nodiscard]] auto add_layout_initial(
+        Scene_root&            scene_root,
+        const Kit_layout_item& item,
+        const glm::vec3&       position,
+        const glm::quat&       rotation,
+        const glm::vec3&       surface_direction
+    ) -> Kit_layout_result;
 
     // The layout item of a placed piece: its shape, record values (seed mask included) and its primitives' material names.
     [[nodiscard]] auto read_piece_layout_item(const erhe::scene::Mesh& piece, Kit_layout_item& out_item) const -> std::string;
@@ -700,10 +828,12 @@ public:
 
     // D3.9: the regeneration of each locked kit layout node at or below the moved nodes whose surface settings
     // are on, appended to the move's operations (the nodes stand at their moved transforms).
+    // Step 41: last the follow operation of the attachments, with the snapped release's pair when given.
     void append_layout_move_operations(
         Scene_root&                                         scene_root,
         std::span<const std::shared_ptr<erhe::scene::Node>> moved_nodes,
-        std::vector<std::shared_ptr<Operation>>&            out_operations
+        std::vector<std::shared_ptr<Operation>>&            out_operations,
+        const Kit_snap_pair*                                snap = nullptr
     );
 
     // D3.9: the items' translation, rotation or scale written outside the Transform tool (a Properties row, a paste,
@@ -798,8 +928,6 @@ public:
     void get_layout_item_sizes(Scene_root& scene_root, std::span<const Kit_layout_item> items, Kit_layout_item_sizes& out_sizes);
 
 private:
-    [[nodiscard]] auto make_brush(const Kit_parameter_values& values) -> std::shared_ptr<Brush>;
-
     // U47: the initial values with the kind and the item (basic.block at its defaults when none; stairs: no item).
     [[nodiscard]] auto make_initial_layout_data(Scene_root& scene_root, Repeat_pattern_kind kind, const std::optional<Kit_layout_item>& item) -> Kit_layout_data;
 
@@ -875,12 +1003,91 @@ private:
     void on_items_removed(const Removed_items& removed);
     void on_close_scene  (const erhe::Item_host* closing_host);
 
+    // Step 41: an attached piece of a scene with its connectors resolved for following.
+    class Attached_piece
+    {
+    public:
+        std::shared_ptr<erhe::scene::Node> node;
+        std::shared_ptr<erhe::scene::Node> target;       // null: not in the scene, or its uid names more than one node
+        Kit_attachment                     attachment;
+        Kit_connector                      own;          // local to node
+        Kit_connector                      target_local; // local to target
+        const char*                        link_dormant  {nullptr}; // the target missing, ambiguous or owned by a locked layout
+        const char*                        own_dormant   {nullptr}; // the piece's connector missing or disabled
+        const char*                        target_dormant{nullptr}; // the target's connector missing or disabled
+        bool                               affected{false};
+        bool                               done    {false};
+
+        // Why it is not followed; null when it is.
+        [[nodiscard]] auto dormant() const -> const char*
+        {
+            return (link_dormant != nullptr) ? link_dormant : ((own_dormant != nullptr) ? own_dormant : target_dormant);
+        }
+    };
+    class Follow_move
+    {
+    public:
+        std::shared_ptr<erhe::scene::Node>         node;
+        erhe::scene::Trs_transform                 before;
+        erhe::scene::Trs_transform                 after;
+        std::optional<erhe::scene::Xform_op_stack> xform_op_stack_before;
+    };
+    class Follow_detach
+    {
+    public:
+        std::shared_ptr<erhe::scene::Node> node;
+        const char*                        reason{""};
+    };
+    // The live following of a drag: the attached pieces gathered at its begin and the followers' poses from before it.
+    class Follow_preview
+    {
+    public:
+        Scene_root*                                     scene_root{nullptr};
+        std::vector<std::shared_ptr<erhe::scene::Node>> moved;
+        std::vector<std::shared_ptr<erhe::scene::Node>> changed;
+        std::vector<Attached_piece>                     attached;
+        std::vector<Follow_move>                        moves;
+        Kit_connector_switches                          changed_switches; // a parameter drag's piece, read at its begin
+    };
+    // The attached pieces of the scene with their connectors resolved from their records (uids looked up once).
+    void gather_attachments(const Scene_root& scene_root, std::vector<Attached_piece>& out_attached) const;
+    // The connector of the piece's values by name, enabled by the switches; the dormant reason otherwise. No allocation at capacity.
+    auto resolve_connector_of_values(
+        const Kit_parameter_values&   values,
+        const Kit_connector_switches& switches,
+        const std::string&            name,
+        Kit_connector&                out_connector
+    ) -> const char*;
+    // Joins the followers of the change in dependency order (see build_attachment_follow_ups()); a node first moved here
+    // adds its pose from before to out_moves. With out_detached, the pieces the change moved off their join go there.
+    void follow_attachments(
+        Scene_root&                                         scene_root,
+        std::span<Attached_piece>                           attached,
+        std::span<const std::shared_ptr<erhe::scene::Node>> moved_nodes,
+        std::span<const std::shared_ptr<erhe::scene::Node>> changed_pieces,
+        std::vector<Follow_move>&                           out_moves,
+        std::vector<Follow_detach>*                         out_detached
+    );
+    // The attachment of the snapped pair when the piece now sits on a join of it and may attach; none otherwise.
+    [[nodiscard]] auto find_snap_attachment(const Kit_snap_pair& snap) const -> std::optional<Kit_attachment>;
+    // Gives the preview's followers their poses from before it; forgets them.
+    void restore_follow_preview(Follow_preview& preview);
+    void step_move_follow_preview();
+    void step_parameter_follow_preview(const std::shared_ptr<erhe::scene::Node>& node, const Kit_parameter_values& values);
+    Follow_preview                        m_move_follow_preview;      // a Transform tool drag, a Properties transform row drag
+    Follow_preview                        m_parameter_follow_preview; // a live parameter drag
+    std::vector<const erhe::scene::Node*> m_follow_user;              // the change's moved nodes: moved by the user
+    std::vector<const erhe::scene::Node*> m_follow_dirty;             // nodes whose connectors move in this change
+    std::vector<const erhe::scene::Node*> m_follow_joined;            // the followers joined in this change
+    std::vector<Kit_connector>            m_follow_connectors;        // scratch of resolve_connector_of_values()
+
     App_context&                                m_context;
     Kit_shape_library                           m_library;
     // Weak: pieces (Brush_placement.brush) and undo entries hold the brushes (doc/editor/level_tools.md).
     std::map<std::string, std::weak_ptr<Brush>> m_brushes;
     // By palette material name.
     std::map<std::string, std::shared_ptr<erhe::primitive::Material>> m_preview_materials;
+    std::unique_ptr<Kit_thumbnails>                                   m_thumbnails;
 
     // The live parameter drag (D3.6): the piece, its state from before the drag and the brush shown.
     class Parameter_preview

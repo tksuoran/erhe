@@ -1,11 +1,13 @@
 #pragma once
 
+#include "level/kit_piece.hpp"
 #include "operations/operation.hpp"
 
 #include "erhe_physics/irigid_body.hpp"
 #include "erhe_scene/mesh.hpp"
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -61,6 +63,31 @@ private:
     std::shared_ptr<erhe::scene::Mesh> m_mesh;
     Kit_piece_mesh_state               m_before;
     Kit_piece_mesh_state               m_after;
+};
+
+// Step 41: appended last to a change's entry; its first execute asks Level_kits::build_attachment_follow_ups() for the
+// followers' moves and the detaches and runs them; redo runs them again, undo undoes them in reverse.
+class Kit_attachment_follow_operation : public Operation
+{
+public:
+    Kit_attachment_follow_operation(
+        std::vector<std::shared_ptr<erhe::scene::Node>>&& moved_nodes,
+        std::vector<std::shared_ptr<erhe::scene::Node>>&& changed_pieces,
+        std::optional<Kit_snap_pair>&&                    snap
+    );
+    ~Kit_attachment_follow_operation() noexcept override;
+
+    // Implements Operation
+    void execute(App_context& context) override;
+    void undo   (App_context& context) override;
+    void collect_item_references(std::unordered_set<const erhe::Item_base*>& out_items) const override;
+
+private:
+    std::vector<std::shared_ptr<erhe::scene::Node>> m_moved_nodes;
+    std::vector<std::shared_ptr<erhe::scene::Node>> m_changed_pieces;
+    std::optional<Kit_snap_pair>                    m_snap;
+    bool                                            m_recorded{false};
+    std::vector<std::shared_ptr<Operation>>         m_operations;
 };
 
 } // namespace editor

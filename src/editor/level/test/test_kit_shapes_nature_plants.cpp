@@ -18,7 +18,7 @@
 #include <string>
 #include <vector>
 
-// Tests of the shapes of kit_shapes_nature_plants_v2.cpp.
+// Tests of the palm shrub and the leaf plant (kit_shapes_nature_plants.cpp).
 namespace {
 
 using editor::Kit_mesh_report;
@@ -40,6 +40,7 @@ void expect_valid_plant(const Kit_parameter_values& values)
     SCOPED_TRACE(values.to_canonical_text());
     const Kit_mesh_report report = editor::check_kit_shape(values);
     EXPECT_TRUE(report.is_valid()) << describe(report);
+    EXPECT_EQ(report.bounds_min.y, 0.0f); // the base is the lowest point
     EXPECT_LE(report.triangle_count, get_library().find_kit("nature")->triangle_ceiling);
     const std::unique_ptr<GEO::Mesh> mesh = generate(values);
     std::vector<uint32_t> facet_slots;
@@ -96,10 +97,11 @@ void for_each_corner(const Kit_parameter_values& values, const std::vector<std::
 
 const std::vector<std::string> plant_slots{"bark", "foliage", "shoot"};
 
-TEST(Kit_recreated, palm_shrub_species_pass_at_the_corners_over_seeds)
+TEST(Kit_nature_plants, palm_shrub_species_pass_at_the_corners_over_seeds)
 {
-    const Kit_shape_definition& shrub = get_shape("nature.palm_shrub.v2");
+    const Kit_shape_definition& shrub = get_shape("nature.palm_shrub");
     ASSERT_EQ(shrub.material_slots, plant_slots);
+    EXPECT_EQ(shrub.collision, editor::Kit_collision::convex_hull);
     for (const std::string& species : shrub.parameters[shrub.find_parameter("species").value()].enum_values) {
         for (const int seed : sweep_seeds(shrub)) {
             Kit_parameter_values values = explicit_values(shrub, seed);
@@ -109,10 +111,11 @@ TEST(Kit_recreated, palm_shrub_species_pass_at_the_corners_over_seeds)
     }
 }
 
-TEST(Kit_recreated, leaf_plant_forms_pass_at_the_corners_over_seeds)
+TEST(Kit_nature_plants, leaf_plant_forms_pass_at_the_corners_over_seeds)
 {
-    const Kit_shape_definition& plant = get_shape("nature.leaf_plant.v2");
+    const Kit_shape_definition& plant = get_shape("nature.leaf_plant");
     ASSERT_EQ(plant.material_slots, plant_slots);
+    EXPECT_EQ(plant.collision, editor::Kit_collision::none); // P5: a walker passes through it
     for (const std::string& form : plant.parameters[plant.find_parameter("form").value()].enum_values) {
         for (const int seed : sweep_seeds(plant)) {
             Kit_parameter_values values = explicit_values(plant, seed);
@@ -124,9 +127,9 @@ TEST(Kit_recreated, leaf_plant_forms_pass_at_the_corners_over_seeds)
 
 // R3.7: a plant's facets, their order and their slots follow from the species or form, the leaf count and the seed
 // alone; the lengths and ratios only move vertices.
-TEST(Kit_recreated, plant_topology_follows_from_integers_alone)
+TEST(Kit_nature_plants, plant_topology_follows_from_integers_alone)
 {
-    const Kit_shape_definition& shrub = get_shape("nature.palm_shrub.v2");
+    const Kit_shape_definition& shrub = get_shape("nature.palm_shrub");
     for (const std::string& species : shrub.parameters[shrub.find_parameter("species").value()].enum_values) {
         for (const int seed : {1, 3, 17, 4242}) {
             Kit_parameter_values values = explicit_values(shrub, seed);
@@ -137,7 +140,7 @@ TEST(Kit_recreated, plant_topology_follows_from_integers_alone)
             });
         }
     }
-    const Kit_shape_definition& plant = get_shape("nature.leaf_plant.v2");
+    const Kit_shape_definition& plant = get_shape("nature.leaf_plant");
     for (const std::string& form : plant.parameters[plant.find_parameter("form").value()].enum_values) {
         for (const int seed : {1, 3, 17, 4242}) {
             Kit_parameter_values values = explicit_values(plant, seed);
@@ -152,10 +155,10 @@ TEST(Kit_recreated, plant_topology_follows_from_integers_alone)
 
 // Every leaf count gives its own mesh within the ceiling, and a leaf more never takes triangles away below the count
 // where the fronds' leaflet pairs step down.
-TEST(Kit_recreated, plants_keep_the_ceiling_at_every_leaf_count)
+TEST(Kit_nature_plants, plants_keep_the_ceiling_at_every_leaf_count)
 {
     const unsigned int ceiling = get_library().find_kit("nature")->triangle_ceiling;
-    const Kit_shape_definition& shrub = get_shape("nature.palm_shrub.v2");
+    const Kit_shape_definition& shrub = get_shape("nature.palm_shrub");
     const Kit_parameter&        fronds = shrub.parameters[shrub.find_parameter("fronds").value()];
     for (const std::string& species : shrub.parameters[shrub.find_parameter("species").value()].enum_values) {
         for (int count = fronds.int_min; count <= fronds.int_max; ++count) {
@@ -167,7 +170,7 @@ TEST(Kit_recreated, plants_keep_the_ceiling_at_every_leaf_count)
             }
         }
     }
-    const Kit_shape_definition& plant  = get_shape("nature.leaf_plant.v2");
+    const Kit_shape_definition& plant  = get_shape("nature.leaf_plant");
     const Kit_parameter&        leaves = plant.parameters[plant.find_parameter("leaves").value()];
     for (const std::string& form : plant.parameters[plant.find_parameter("form").value()].enum_values) {
         for (int count = leaves.int_min; count <= leaves.int_max; ++count) {
@@ -182,9 +185,9 @@ TEST(Kit_recreated, plants_keep_the_ceiling_at_every_leaf_count)
 }
 
 // The stem stands on the origin: its base is a fan about a vertex there, in slot bark.
-TEST(Kit_recreated, plants_stand_on_a_stem_at_the_origin)
+TEST(Kit_nature_plants, plants_stand_on_a_stem_at_the_origin)
 {
-    for (const char* const id : {"nature.palm_shrub.v2", "nature.leaf_plant.v2"}) {
+    for (const char* const id : {"nature.palm_shrub", "nature.leaf_plant"}) {
         const Kit_shape_definition& shape = get_shape(id);
         for (const std::string& kind : shape.parameters[0].enum_values) {
             for (const int seed : derive_seeds()) {

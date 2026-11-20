@@ -82,11 +82,13 @@ class EnumValueSchema:
         *,
         short_desc: Optional[str] = None,
         long_desc: Optional[str] = None,
+        former_names: Optional[list[str]] = None,
     ):
         self.name = name
         self.numeric_value = numeric_value
         self.short_desc = short_desc
         self.long_desc = long_desc
+        self.former_names = list(former_names) if former_names else []
 
     def __repr__(self) -> str:
         return f"EnumValueSchema({self.name!r}, {self.numeric_value})"
@@ -227,12 +229,14 @@ def value(
     *,
     short_desc: Optional[str] = None,
     long_desc: Optional[str] = None,
+    former_names: Optional[list[str]] = None,
 ) -> EnumValueSchema:
     """Create an enum value definition (used inside enum() calls)."""
     return EnumValueSchema(
         name, numeric_value,
         short_desc=short_desc,
         long_desc=long_desc,
+        former_names=former_names,
     )
 
 
@@ -382,6 +386,14 @@ def _validate_enum(e: EnumSchema) -> None:
                 f"for enumerator {v.name!r}"
             )
         seen_values.add(v.numeric_value)
+
+    # A former name names one value only and is no current name
+    seen_former: set[str] = set()
+    for v in e.values:
+        for former in v.former_names:
+            if (former in seen_names) or (former in seen_former):
+                raise ValueError(f"Enum {e.name!r}: former name {former!r} of {v.name!r} is already a name")
+            seen_former.add(former)
 
 
 def validate_references() -> None:

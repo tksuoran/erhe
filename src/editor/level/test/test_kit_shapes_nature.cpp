@@ -20,7 +20,7 @@
 #include <string>
 #include <vector>
 
-// Tests of the shapes of kit_shapes_nature_v2.cpp.
+// Tests of the rock, the land mass, the hill, the tree and the bush (kit_shapes_nature.cpp).
 namespace {
 
 using editor::Kit_agent;
@@ -87,9 +87,9 @@ void for_each_corner(const Kit_parameter_values& values, const std::vector<std::
     return topology;
 }
 
-TEST(Kit_recreated, rock_forms_pass_at_the_corners_over_seeds)
+TEST(Kit_nature_shapes, rock_forms_pass_at_the_corners_over_seeds)
 {
-    const Kit_shape_definition& rock = get_shape("nature.rock.v2");
+    const Kit_shape_definition& rock = get_shape("nature.rock");
     ASSERT_EQ(rock.material_slots, (std::vector<std::string>{"rock"}));
     for (const std::string& form : rock.parameters[rock.find_parameter("form").value()].enum_values) {
         for (const int seed : sweep_seeds(rock)) {
@@ -103,9 +103,9 @@ TEST(Kit_recreated, rock_forms_pass_at_the_corners_over_seeds)
 
 // R3.7: a rock's facets and their order follow from the form, the piece count and the seed alone; the lengths and the
 // roughness only move vertices, so no float comparison decides the topology.
-TEST(Kit_recreated, nature_topology_follows_from_integers_alone)
+TEST(Kit_nature_shapes, nature_topology_follows_from_integers_alone)
 {
-    const Kit_shape_definition& rock = get_shape("nature.rock.v2");
+    const Kit_shape_definition& rock = get_shape("nature.rock");
     for (const std::string& form : rock.parameters[rock.find_parameter("form").value()].enum_values) {
         for (const int seed : {1, 3, 17, 4242}) {
             Kit_parameter_values values = explicit_values(rock, seed);
@@ -116,7 +116,7 @@ TEST(Kit_recreated, nature_topology_follows_from_integers_alone)
             });
         }
     }
-    const Kit_shape_definition& tree = get_shape("nature.tree.v2");
+    const Kit_shape_definition& tree = get_shape("nature.tree");
     for (const std::string& species : tree.parameters[tree.find_parameter("species").value()].enum_values) {
         for (const int seed : {1, 3, 17, 4242}) {
             Kit_parameter_values values = explicit_values(tree, seed);
@@ -127,7 +127,7 @@ TEST(Kit_recreated, nature_topology_follows_from_integers_alone)
             });
         }
     }
-    for (const char* const id : {"nature.land_mass.v2", "nature.hill.v2", "nature.bush.v2"}) {
+    for (const char* const id : {"nature.land_mass", "nature.hill", "nature.bush"}) {
         const Kit_shape_definition& shape = get_shape(id);
         std::vector<std::string> lengths;
         for (const Kit_parameter& parameter : shape.parameters) {
@@ -146,9 +146,9 @@ TEST(Kit_recreated, nature_topology_follows_from_integers_alone)
 }
 
 // Seeds give a family: the side counts differ between seeds, so the vertex counts take several values.
-TEST(Kit_recreated, rock_seeds_give_several_topologies)
+TEST(Kit_nature_shapes, rock_seeds_give_several_topologies)
 {
-    const Kit_shape_definition& rock = get_shape("nature.rock.v2");
+    const Kit_shape_definition& rock = get_shape("nature.rock");
     std::set<unsigned int> vertex_counts;
     for (int seed = 0; seed < 40; ++seed) {
         vertex_counts.insert(generate(explicit_values(rock, seed))->vertices.nb());
@@ -156,9 +156,9 @@ TEST(Kit_recreated, rock_seeds_give_several_topologies)
     EXPECT_GE(vertex_counts.size(), 5u);
 }
 
-TEST(Kit_recreated, land_mass_passes_at_the_corners_with_a_flat_walkable_top)
+TEST(Kit_nature_shapes, land_mass_passes_at_the_corners_with_a_flat_walkable_top)
 {
-    const Kit_shape_definition& land_mass = get_shape("nature.land_mass.v2");
+    const Kit_shape_definition& land_mass = get_shape("nature.land_mass");
     ASSERT_EQ(land_mass.material_slots, (std::vector<std::string>{"grass", "earth", "rock"}));
     for (const int seed : sweep_seeds(land_mass)) {
         for_each_corner(explicit_values(land_mass, seed), {"footprint", "height", "erosion", "segments"}, expect_valid_with_every_slot);
@@ -194,9 +194,9 @@ TEST(Kit_recreated, land_mass_passes_at_the_corners_with_a_flat_walkable_top)
     }
 }
 
-TEST(Kit_recreated, land_mass_connectors_are_its_base_and_its_top)
+TEST(Kit_nature_shapes, land_mass_connectors_are_its_base_and_its_top)
 {
-    const Kit_shape_definition& land_mass = get_shape("nature.land_mass.v2");
+    const Kit_shape_definition& land_mass = get_shape("nature.land_mass");
     Kit_parameter_values values = explicit_values(land_mass, 1);
     ASSERT_TRUE(values.set_float("height", 1.75f));
     std::vector<Kit_connector> connectors;
@@ -237,9 +237,9 @@ public:
     return grass;
 }
 
-TEST(Kit_recreated, hill_passes_at_the_corners_and_its_grass_is_walkable_over_seeds)
+TEST(Kit_nature_shapes, hill_passes_at_the_corners_and_its_grass_is_walkable_over_seeds)
 {
-    const Kit_shape_definition& hill = get_shape("nature.hill.v2");
+    const Kit_shape_definition& hill = get_shape("nature.hill");
     ASSERT_EQ(hill.material_slots, (std::vector<std::string>{"grass", "rock"}));
     for (const int seed : sweep_seeds(hill)) {
         for_each_corner(explicit_values(hill, seed), {"radius", "height", "rocks", "segments"}, expect_valid_with_every_slot);
@@ -259,9 +259,9 @@ TEST(Kit_recreated, hill_passes_at_the_corners_and_its_grass_is_walkable_over_se
     EXPECT_NE(hill.check_walkability(steep, agent), "");
 }
 
-TEST(Kit_recreated, tree_species_pass_at_the_corners_and_stand_on_the_origin)
+TEST(Kit_nature_shapes, tree_species_pass_at_the_corners_and_stand_on_the_origin)
 {
-    const Kit_shape_definition& tree = get_shape("nature.tree.v2");
+    const Kit_shape_definition& tree = get_shape("nature.tree");
     ASSERT_EQ(tree.material_slots, (std::vector<std::string>{"bark", "foliage"}));
     for (const std::string& species : tree.parameters[tree.find_parameter("species").value()].enum_values) {
         for (const int seed : sweep_seeds(tree)) {
@@ -289,9 +289,9 @@ TEST(Kit_recreated, tree_species_pass_at_the_corners_and_stand_on_the_origin)
     }
 }
 
-TEST(Kit_recreated, bush_passes_at_the_corners_over_seeds)
+TEST(Kit_nature_shapes, bush_passes_at_the_corners_over_seeds)
 {
-    const Kit_shape_definition& bush = get_shape("nature.bush.v2");
+    const Kit_shape_definition& bush = get_shape("nature.bush");
     ASSERT_EQ(bush.material_slots, (std::vector<std::string>{"foliage", "bark"}));
     for (const int seed : sweep_seeds(bush)) {
         for_each_corner(explicit_values(bush, seed), {"size", "twigs"}, expect_valid_with_every_slot);

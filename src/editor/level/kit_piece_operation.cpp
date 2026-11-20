@@ -1,6 +1,7 @@
 #include "level/kit_piece_operation.hpp"
 
 #include "level/kit_piece.hpp"
+#include "level/level_kits.hpp"
 
 #include "app_context.hpp"
 #include "app_message_bus.hpp"
@@ -11,6 +12,7 @@
 #include "operations/mesh_primitive_swap.hpp"
 #include "scene/node_physics.hpp"
 #include "scene/node_physics_system.hpp"
+#include "scene/scene_root.hpp"
 
 #include "erhe_item/item_host.hpp"
 #include "erhe_physics/icollision_shape.hpp"
@@ -97,6 +99,58 @@ void Kit_piece_parameters_operation::undo(App_context& context)
 void Kit_piece_parameters_operation::collect_item_references(std::unordered_set<const erhe::Item_base*>& out_items) const
 {
     out_items.insert(m_mesh.get());
+}
+
+Kit_attachment_follow_operation::Kit_attachment_follow_operation(
+    std::vector<std::shared_ptr<erhe::scene::Node>>&& moved_nodes,
+    std::vector<std::shared_ptr<erhe::scene::Node>>&& changed_pieces,
+    std::optional<Kit_snap_pair>&&                    snap
+)
+    : m_moved_nodes   {std::move(moved_nodes)}
+    , m_changed_pieces{std::move(changed_pieces)}
+    , m_snap          {std::move(snap)}
+{
+    set_description(fmt::format("[{}] Kit attachments follow", get_serial()));
+}
+
+Kit_attachment_follow_operation::~Kit_attachment_follow_operation() noexcept = default;
+
+void Kit_attachment_follow_operation::execute(App_context& context)
+{
+    if (!m_recorded) {
+        m_recorded = true;
+        Scene_root* scene_root = nullptr;
+        for (const std::vector<std::shared_ptr<erhe::scene::Node>>* nodes : {&m_moved_nodes, &m_changed_pieces}) {
+            for (const std::shared_ptr<erhe::scene::Node>& node : *nodes) {
+                if ((scene_root == nullptr) && node) {
+                    scene_root = dynamic_cast<Scene_root*>(node->get_item_host());
+                }
+            }
+        }
+        if ((scene_root == nullptr) && m_snap.has_value() && m_snap.value().piece) {
+            scene_root = dynamic_cast<Scene_root*>(m_snap.value().piece->get_item_host());
+        }
+        if ((scene_root != nullptr) && (context.level_kits != nullptr)) {
+            context.level_kits->build_attachment_follow_ups(*scene_root, m_moved_nodes, m_changed_pieces, m_snap.has_value() ? &m_snap.value() : nullptr, m_operations);
+        }
+    }
+    for (const std::shared_ptr<Operation>& operation : m_operations) {
+        operation->execute(context);
+    }
+}
+
+void Kit_attachment_follow_operation::undo(App_context& context)
+{
+    for (auto i = m_operations.rbegin(), end = m_operations.rend(); i != end; ++i) {
+        (*i)->undo(context);
+    }
+}
+
+void Kit_attachment_follow_operation::collect_item_references(std::unordered_set<const erhe::Item_base*>& out_items) const
+{
+    for (const std::shared_ptr<Operation>& operation : m_operations) {
+        operation->collect_item_references(out_items);
+    }
 }
 
 } // namespace editor

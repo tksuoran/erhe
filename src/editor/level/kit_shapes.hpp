@@ -3,6 +3,7 @@
 #include "level/kit_connector.hpp"
 #include "level/kit_shape.hpp"
 
+#include <array>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -55,20 +56,15 @@ enum class Kit_arch_head : unsigned int {
     Kit_random*   random = nullptr
 ) -> std::vector<glm::vec2>;
 
-// A recreated shape's id is its original's plus this, its display name its original's plus the mark.
-constexpr const char* c_kit_recreated_id_suffix   = ".v2";
-constexpr const char* c_kit_recreated_name_suffix = " (F)";
-
-// The original's definition with the recreated id, name and `recreates`, the given generator and triangle budget.
-[[nodiscard]] auto make_recreated_shape(
-    const std::vector<Kit_shape_definition>& shapes,
-    std::string_view                         original_id,
-    Kit_generator                            generator,
-    unsigned int                             triangle_budget
-) -> Kit_shape_definition;
-
 // Point i of n on the unit circle, (x, z) from +X toward -Z; mirror images are equal to the bit and axis points exact.
 [[nodiscard]] auto get_kit_circle_point(int i, int n) -> glm::vec2;
+
+// U53: a toothed wheel's boundary connectors besides its mesh connector on +X, at quarter turns 1 - 3.
+inline constexpr std::array<const char*, 3> c_kit_gear_boundary_names{"mesh_2", "mesh_3", "mesh_4"};
+
+// The unit direction (x, z) of the boundary connector at the quarter turn: at the tooth at or before it, so that a
+// tooth stands a quarter pitch before it as before the mesh connector (doc/editor/level_kit_shapes.md "Machine kit").
+[[nodiscard]] auto get_kit_gear_boundary_direction(int quarter, int teeth) -> glm::vec2;
 
 void add_basic_shapes       (std::vector<Kit_shape_definition>& shapes);
 void add_architecture_shapes(std::vector<Kit_shape_definition>& shapes);
@@ -85,13 +81,6 @@ void add_extra_25_32_shapes (std::vector<Kit_shape_definition>& shapes);
 void add_extra_33_36_shapes (std::vector<Kit_shape_definition>& shapes);
 void add_machine_01_08_shapes(std::vector<Kit_shape_definition>& shapes);
 void add_machine_09_18_shapes(std::vector<Kit_shape_definition>& shapes);
-// The recreated shapes (doc/editor/level_tools.md "Recreated shapes"); called after every original is added.
-void add_basic_shapes_v2        (std::vector<Kit_shape_definition>& shapes);
-void add_architecture_shapes_v2 (std::vector<Kit_shape_definition>& shapes);
-void add_medieval_shapes_v2     (std::vector<Kit_shape_definition>& shapes);
-void add_nature_shapes_v2       (std::vector<Kit_shape_definition>& shapes);
-void add_nature_plants_shapes_v2(std::vector<Kit_shape_definition>& shapes);
-void add_nature_rocks_shapes_v2 (std::vector<Kit_shape_definition>& shapes);
 // Called by add_nature_shapes(): the terrain (cliff, shore, water, dune, ground patch), the rocks and the plants.
 void add_nature_terrain_shapes(std::vector<Kit_shape_definition>& shapes);
 void add_nature_rock_shapes   (std::vector<Kit_shape_definition>& shapes);

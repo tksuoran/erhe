@@ -86,7 +86,7 @@ public:
 
 private:
     void level_settings_imgui   (Scene_root& scene_root);
-    void shapes_imgui           (const Scene_root& scene_root);
+    void shapes_imgui           (const std::shared_ptr<Scene_root>& scene_root);
     void place_parameters_imgui (const Scene_root& scene_root);
     void placement_settings_imgui();
     void selection_imgui        (const std::shared_ptr<Scene_root>& scene_root);

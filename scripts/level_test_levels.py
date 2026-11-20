@@ -329,16 +329,16 @@ def build_castle_courtyard(level):
     ])
     level.layout("east hill trees", position=[24, 6, -8 + 5.5], pattern={"kind": "ring", "count": 9, "radius": 5.5},
                  items=[{"shape": "nature.tree"}, {"shape": "nature.tree", "materials": {"foliage": "Kit Autumn Foliage"}}],
-                 surface_snap=True, surface_max_distance=8.0, per_piece_seed=True, expect=9)
+                 surface_snap=True, surface_forward_distance=8.0, surface_backward_distance=8.0, per_piece_seed=True, expect=9)
     level.layout("west meadow", position=[-24, 5, 12], pattern={"kind": "scatter", "scatter_mode": "count", "count": 40,
                                                                 "region": "disc", "region_radius": 9.0, "min_spacing": 0.5},
                  items=[{"shape": "nature.grass_tuft", "weight": 5}, {"shape": "nature.bush", "weight": 2},
                         {"shape": "nature.rock"}, {"shape": "nature.tree"}],
-                 surface_snap=True, surface_max_distance=8.0, per_piece_seed=True)
+                 surface_snap=True, surface_forward_distance=8.0, surface_backward_distance=8.0, per_piece_seed=True)
     level.layout("north wood", position=[-6, 5, -27], pattern={"kind": "scatter", "scatter_mode": "count", "count": 18,
                                                                "region": "rectangle", "size_x": 24.0, "size_z": 9.0, "min_spacing": 1.5},
                  items=[{"shape": "nature.tree", "weight": 3}, {"shape": "nature.blocky_tree"}, {"shape": "nature.bush", "weight": 2}],
-                 surface_snap=True, surface_max_distance=8.0, per_piece_seed=True)
+                 surface_snap=True, surface_forward_distance=8.0, surface_backward_distance=8.0, per_piece_seed=True)
 
     eye = [30.0, 24.0, 36.0]
     level.place_camera(eye, [0.0, 1.0, 0.0])
@@ -399,7 +399,7 @@ def build_harbour_cove(level):
         level.piece("nature.rock_spire", "sea stack", [-20.0, -2.0, 22.0], parameters={"form": "stack", "height": 9.0}),
         level.piece("nature.rock_spire", "pinnacle", [-12.0, -2.0, 28.0], parameters={"form": "pinnacle", "height": 7.0, "seed": 3}),
         level.piece("nature.rock_arch", "sea arch", [-27.0, -2.0, 15.0], yaw(30.0)),
-        level.piece("nature.land_mass", "headland", [-34.0, -2.0, 24.0], parameters={"footprint": 12.0, "height": 4.5, "roundness": 0.3}),
+        level.piece("nature.land_mass", "headland", [-34.0, -2.0, 24.0], parameters={"footprint": 12.0, "height": 4.5, "erosion": 0.3}),
         level.piece("nature.boulder_cluster", "headland boulders", [-28.5, -2.0, 23.0], parameters={"radius": 2.5}),
     ])
     level.place([level.piece("harbour.lighthouse", "lighthouse", [-34.0, 8.0, 24.0], parameters={"gallery": "rail"},
@@ -411,18 +411,18 @@ def build_harbour_cove(level):
                                                                        "min_spacing": 0.0},
                  items=[{"shape": "nature.palm", "parameters": {"species": species}}
                         for species in ["coconut", "date", "royal", "fan", "bottle"]],
-                 surface_snap=True, surface_max_distance=6.0, per_piece_seed=True)
+                 surface_snap=True, surface_forward_distance=6.0, surface_backward_distance=6.0, per_piece_seed=True)
     level.layout("beach shells", position=[-17.0, 2.0, 1.5], pattern={"kind": "scatter", "scatter_mode": "count", "count": 16,
                                                                        "region": "rectangle", "size_x": 30.0, "size_z": 2.0,
                                                                        "min_spacing": 0.6},
                  items=[{"shape": "nature.shell"}, {"shape": "nature.succulent"}, {"shape": "nature.rock"}],
-                 surface_snap=True, surface_max_distance=4.0, per_piece_seed=True)
+                 surface_snap=True, surface_forward_distance=4.0, surface_backward_distance=4.0, per_piece_seed=True)
     level.layout("dune grass", position=[-17.0, 3.0, -5.0], pattern={"kind": "scatter", "scatter_mode": "count", "count": 24,
                                                                       "region": "rectangle", "size_x": 32.0, "size_z": 3.0,
                                                                       "min_spacing": 0.6},
                  items=[{"shape": "nature.grass_tuft", "weight": 3}, {"shape": "nature.palm_shrub"},
                         {"shape": "nature.leaf_plant"}],
-                 surface_snap=True, surface_max_distance=4.0, per_piece_seed=True)
+                 surface_snap=True, surface_forward_distance=4.0, surface_backward_distance=4.0, per_piece_seed=True)
 
     # The cliffs behind the beach: a path layout along a curve, each cliff tangent to it.
     level.layout("cliffs", position=[-36.0, 1.0, -12.0], pattern={"kind": "path", "count": 9},
@@ -463,7 +463,7 @@ def build_hillside_ruins(level):
 
     level.ground("ground", [0.0, 0.0], 80.0, 80.0, 0.0, "Kit Grass")
     level.place([
-        level.piece("nature.land_mass", "plateau", [12.0, 0, -10.0], parameters={"footprint": 16.0, "height": 3.0, "roundness": 0.15}),
+        level.piece("nature.land_mass", "plateau", [12.0, 0, -10.0], parameters={"footprint": 16.0, "height": 3.0, "erosion": 0.15}),
         level.piece("nature.hill", "path hill", [-10.0, 0, 8.0], parameters={"radius": 7.0, "height": 1.6, "seed": 2}),
         level.piece("nature.hill", "far hill", [-22.0, 0, -22.0], parameters={"radius": 10.0, "height": 3.5, "seed": 4}),
         level.piece("nature.ground_patch", "worn ground", [-14.0, 0, -6.0]),
@@ -477,7 +477,7 @@ def build_hillside_ruins(level):
     level.layout("temple floor", position=[9.0, deck + 1.0, -13.0], pattern={"kind": "grid", "count_x": 4, "count_z": 3,
                                                                              "spacing_x": 2.0, "spacing_z": 2.0},
                  items=[{"shape": "ruin.cracked_floor", "parameters": {"seed": s}} for s in (1, 2, 3)],
-                 surface_snap=True, surface_max_distance=2.0, per_piece_seed=True, expect=12)
+                 surface_snap=True, surface_forward_distance=2.0, surface_backward_distance=2.0, per_piece_seed=True, expect=12)
     floor = level.height_at(12.0, -11.0)
     level.layout("temple walls", position=[0, 0, 0], pattern={"kind": "segments"},
                  points=[corner(8.0, floor, -8.0), corner(8.0, floor, -14.0), corner(16.0, floor, -14.0), corner(16.0, floor, -8.0)],
@@ -499,7 +499,7 @@ def build_hillside_ruins(level):
     level.layout("temple rubble", position=[12.0, floor + 2.0, -11.0], pattern={"kind": "scatter", "scatter_mode": "count",
                                                                                  "count": 10, "region": "rectangle",
                                                                                  "size_x": 7.0, "size_z": 5.0, "min_spacing": 0.8},
-                 items=[{"shape": "ruin.rubble"}], surface_snap=True, surface_max_distance=3.0, per_piece_seed=True)
+                 items=[{"shape": "ruin.rubble"}], surface_snap=True, surface_forward_distance=3.0, surface_backward_distance=3.0, per_piece_seed=True)
 
     # A staircase that curves up the plateau's west flank to the temple base.
     level.layout("plateau stairs", position=[-1.0, 0.02, -2.0], pattern={"kind": "stairs", "stairs": {"width": 1.8}},
@@ -509,10 +509,10 @@ def build_hillside_ruins(level):
     path_points = [smooth(0, 0, 0), smooth(6.0, 0, -3.0), smooth(12.0, 0, -8.0), smooth(16.0, 0, -14.0), smooth(20.0, 0, -15.5)]
     level.layout("stepping stones", position=[-21.0, 4.0, 13.5], pattern={"kind": "path", "count_mode": "gap", "gap": 0.35},
                  points=path_points, items=[{"shape": "nature.stepping_stone"}],
-                 surface_snap=True, surface_max_distance=6.0, per_piece_seed=True)
+                 surface_snap=True, surface_forward_distance=6.0, surface_backward_distance=6.0, per_piece_seed=True)
     level.layout("torii", position=[-21.0, 4.0, 13.5], pattern={"kind": "path", "count": 4},
                  points=path_points[:4], items=[{"shape": "architecture.torii", "materials": {"wood": "Kit Vermilion"}}],
-                 surface_snap=True, surface_max_distance=6.0, expect=4)
+                 surface_snap=True, surface_forward_distance=6.0, surface_backward_distance=6.0, expect=4)
 
     # A stream crossed by a stone bridge of three joined arched decks.
     level.place([
@@ -528,18 +528,18 @@ def build_hillside_ruins(level):
     # Vegetation: a bamboo grove, boulders, trees ringing the far hill and grass everywhere.
     level.layout("bamboo grove", position=[-26.0, 4.0, -2.0], pattern={"kind": "scatter", "scatter_mode": "count", "count": 8,
                                                                         "region": "disc", "region_radius": 6.0, "min_spacing": 2.0},
-                 items=[{"shape": "nature.bamboo"}], surface_snap=True, surface_max_distance=6.0, per_piece_seed=True)
+                 items=[{"shape": "nature.bamboo"}], surface_snap=True, surface_forward_distance=6.0, surface_backward_distance=6.0, per_piece_seed=True)
     level.layout("boulders", position=[24.0, 4.0, 12.0], pattern={"kind": "scatter", "scatter_mode": "count", "count": 6,
                                                                    "region": "rectangle", "size_x": 14.0, "size_z": 12.0, "min_spacing": 2.0},
                  items=[{"shape": "nature.boulder_cluster", "parameters": {"form": form}} for form in ["angular", "worn", "mixed"]],
-                 surface_snap=True, surface_max_distance=6.0, per_piece_seed=True)
+                 surface_snap=True, surface_forward_distance=6.0, surface_backward_distance=6.0, per_piece_seed=True)
     level.layout("far hill trees", position=[-22.0, 8.0, -22.0 + 7.0], pattern={"kind": "ring", "count": 10, "radius": 7.0},
                  items=[{"shape": "nature.tree"}, {"shape": "nature.blocky_tree"}],
-                 surface_snap=True, surface_max_distance=10.0, per_piece_seed=True, expect=10)
+                 surface_snap=True, surface_forward_distance=10.0, surface_backward_distance=10.0, per_piece_seed=True, expect=10)
     level.layout("meadow", position=[0.0, 6.0, 4.0], pattern={"kind": "scatter", "scatter_mode": "count", "count": 50,
                                                                "region": "rectangle", "size_x": 50.0, "size_z": 30.0, "min_spacing": 1.0},
                  items=[{"shape": "nature.grass_tuft", "weight": 6}, {"shape": "nature.bush", "weight": 2}, {"shape": "nature.rock"}],
-                 surface_snap=True, surface_max_distance=8.0, per_piece_seed=True)
+                 surface_snap=True, surface_forward_distance=8.0, surface_backward_distance=8.0, per_piece_seed=True)
 
     # The workshop yard: a joined pipe run, tanks, a container with an antenna, a scaffold with a ladder leaning on it.
     level.place([

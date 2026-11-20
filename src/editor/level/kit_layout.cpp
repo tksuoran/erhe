@@ -2,6 +2,7 @@
 
 #include "erhe_item/hierarchy.hpp"
 #include "erhe_property/attached_group.hpp"
+#include "erhe_property/enum_info.hpp"
 #include "erhe_property/property_metadata.hpp"
 #include "erhe_scene/curve.hpp"
 #include "erhe_scene/node.hpp"
@@ -18,6 +19,14 @@ using erhe::property::Property_metadata;
 using erhe::property::Property_ui;
 
 constexpr std::string_view c_group = "Kit Layout";
+
+// The labels are the codegen enum's names, the text form of the Level Kit window setting and the MCP key (U52).
+constexpr erhe::property::Enum_entry c_surface_support_entries[] = {
+    { "five_lines",      static_cast<int32_t>(Surface_support::five_lines)      },
+    { "center_blocks",   static_cast<int32_t>(Surface_support::center_blocks)   },
+    { "center_fallback", static_cast<int32_t>(Surface_support::center_fallback) }
+};
+const erhe::property::Enum_info c_surface_support_enum_info{"Surface_support", c_surface_support_entries};
 
 [[nodiscard]] auto make_metadata(erhe::property::Property_value default_value, const char* label, const char* tooltip, const bool key) -> Property_metadata
 {
@@ -65,9 +74,30 @@ const Property<bool> Kit_layout::surface_orient_property = Property<bool>::regis
     "surface_orient", Kit_layout::property_owner_type(), erhe::scene::Node::property_owner_type(),
     make_metadata(false, "Orient To Surface", "Each element's up axis takes the surface normal", false)
 );
-const Property<float> Kit_layout::surface_max_distance_property = Property<float>::register_attached(
+const Property<glm::vec3> Kit_layout::surface_direction_property = Property<glm::vec3>::register_attached(
+    "surface_direction", Kit_layout::property_owner_type(), erhe::scene::Node::property_owner_type(),
+    make_metadata(c_default_surface_direction, "Surface Direction", "World space: the direction an element searches along to snap to the surface; down by default, up for a ceiling", false)
+);
+const Property<float> Kit_layout::surface_forward_distance_property = Property<float>::register_attached(
+    "surface_forward_distance", Kit_layout::property_owner_type(), erhe::scene::Node::property_owner_type(),
+    make_metadata(c_default_surface_forward_distance, "Surface Forward Distance", "Meters: an element moves at most this far along the search direction to snap to the surface; beyond, it stays", false)
+);
+const Property<float> Kit_layout::surface_backward_distance_property = Property<float>::register_attached(
+    "surface_backward_distance", Kit_layout::property_owner_type(), erhe::scene::Node::property_owner_type(),
+    make_metadata(c_default_surface_backward_distance, "Surface Backward Distance", "Meters: an element moves at most this far against the search direction to snap to the surface; 0 searches along it only", false)
+);
+const Property<Surface_support> Kit_layout::surface_support_property = Property<Surface_support>::register_attached(
+    "surface_support", Kit_layout::property_owner_type(), erhe::scene::Node::property_owner_type(), c_surface_support_enum_info,
+    make_metadata(
+        erhe::property::make_value(Surface_support::five_lines), "Surface Support",
+        "Which base lines support and block an element's snap without orient: all five (base center and footprint corners), "
+        "all five supporting with only the center blocking, or the nearest place with a refused element resting on the surface under its base center, along the search direction",
+        false
+    )
+);
+const Property<float> Kit_layout::legacy_surface_max_distance_property = Property<float>::register_attached(
     "surface_max_distance", Kit_layout::property_owner_type(), erhe::scene::Node::property_owner_type(),
-    make_metadata(c_default_surface_max_distance, "Surface Max Distance", "Meters: an element moves at most this far along the snap direction to snap to the surface; beyond, it stays", false)
+    make_metadata(c_default_surface_max_distance, "Surface Max Distance (Legacy)", "Saved before U51: meters searched either way; read as the forward and backward distance a node does not hold", false)
 );
 const Property<bool> Kit_layout::per_piece_seed_property = Property<bool>::register_attached(
     "per_piece_seed", Kit_layout::property_owner_type(), erhe::scene::Node::property_owner_type(),
@@ -176,7 +206,10 @@ auto is_kit_layout_property(const erhe::property::Dependency_property& property)
         &Kit_layout::module_snap_property.get(),
         &Kit_layout::surface_snap_property.get(),
         &Kit_layout::surface_orient_property.get(),
-        &Kit_layout::surface_max_distance_property.get(),
+        &Kit_layout::surface_direction_property.get(),
+        &Kit_layout::surface_forward_distance_property.get(),
+        &Kit_layout::surface_backward_distance_property.get(),
+        &Kit_layout::surface_support_property.get(),
         &Kit_layout::per_piece_seed_property.get(),
         &Kit_layout::seed_property.get(),
         &Kit_layout::locked_property.get()
@@ -235,6 +268,18 @@ auto check_layout_kind(const erhe::scene::Node& node, const Repeat_pattern_kind 
     return {};
 }
 
+auto get_layout_surface_options(const Kit_layout_data& data) -> Surface_options
+{
+    return Surface_options{
+        .snap              = data.surface_snap,
+        .orient            = data.surface_orient,
+        .direction         = glm::normalize(data.surface_direction),
+        .forward_distance  = data.surface_forward_distance,
+        .backward_distance = data.surface_backward_distance,
+        .support           = data.surface_support
+    };
+}
+
 auto read_kit_layout(const erhe::scene::Node& node, Kit_layout_data& out_data) -> std::string
 {
     if (!carries_kit_layout(node)) {
@@ -256,10 +301,27 @@ auto read_kit_layout(const erhe::scene::Node& node, Kit_layout_data& out_data) -
     data.snap           = node.get_value(Kit_layout::module_snap_property)    ? Kit_snap::module           : Kit_snap::none;
     data.surface_snap   = node.get_value(Kit_layout::surface_snap_property)   ? Surface_snap::on           : Surface_snap::off;
     data.surface_orient = node.get_value(Kit_layout::surface_orient_property) ? Surface_orient::on         : Surface_orient::off;
-    data.surface_max_distance = node.get_value(Kit_layout::surface_max_distance_property);
-    error = check_surface_max_distance(data.surface_max_distance);
-    if (!error.empty()) {
-        return fmt::format("'{}': {}", node.get_name(), error);
+    data.surface_direction         = node.get_value(Kit_layout::surface_direction_property);
+    data.surface_forward_distance  = node.get_value(Kit_layout::surface_forward_distance_property);
+    data.surface_backward_distance = node.get_value(Kit_layout::surface_backward_distance_property);
+    data.surface_support           = node.get_value(Kit_layout::surface_support_property);
+    const std::optional<float> legacy_distance = node.read_local_value(Kit_layout::legacy_surface_max_distance_property);
+    if (legacy_distance.has_value()) {
+        if (!node.read_local_value(Kit_layout::surface_forward_distance_property).has_value()) {
+            data.surface_forward_distance = legacy_distance.value();
+        }
+        if (!node.read_local_value(Kit_layout::surface_backward_distance_property).has_value()) {
+            data.surface_backward_distance = legacy_distance.value();
+        }
+    }
+    for (const std::string& value_error : {
+        check_surface_direction(data.surface_direction),
+        check_surface_max_distance(data.surface_forward_distance, "surface forward distance"),
+        check_surface_max_distance(data.surface_backward_distance, "surface backward distance")
+    }) {
+        if (!value_error.empty()) {
+            return fmt::format("'{}': {}", node.get_name(), value_error);
+        }
     }
     data.seeds          = node.get_value(Kit_layout::per_piece_seed_property)   ? Kit_layout_seeds::per_element : Kit_layout_seeds::item;
     data.seed           = node.get_value(Kit_layout::seed_property);
@@ -276,7 +338,10 @@ void write_kit_layout(erhe::scene::Node& node, const Kit_layout_data& data)
     node.set_value(Kit_layout::module_snap_property,    data.snap == Kit_snap::module);
     node.set_value(Kit_layout::surface_snap_property,   data.surface_snap == Surface_snap::on);
     node.set_value(Kit_layout::surface_orient_property, data.surface_orient == Surface_orient::on);
-    node.set_value(Kit_layout::surface_max_distance_property, data.surface_max_distance);
+    node.set_value(Kit_layout::surface_direction_property,         data.surface_direction);
+    node.set_value(Kit_layout::surface_forward_distance_property,  data.surface_forward_distance);
+    node.set_value(Kit_layout::surface_backward_distance_property, data.surface_backward_distance);
+    node.set_value(Kit_layout::surface_support_property,           data.surface_support);
     node.set_value(Kit_layout::per_piece_seed_property,   data.seeds == Kit_layout_seeds::per_element);
     node.set_value(Kit_layout::seed_property,           data.seed);
     node.set_value(Kit_layout::locked_property,         data.lock == Kit_layout_lock::locked);

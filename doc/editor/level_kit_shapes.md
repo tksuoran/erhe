@@ -7,13 +7,11 @@ slots and the palette, the derive ranges, and per shape its id, parameters
 (defaults and ranges), slots, connectors, body, mirror planes, tags and how
 its mesh is built. What a shape is and how pieces are placed, derived,
 replaced, grouped and lit is `doc/editor/level_tools.md` ("Shapes", "Derive
-from seed", "Recreated shapes", "Materials", "Groups", "Lights on pieces").
+from seed", "Former shape ids", "Materials", "Groups", "Lights on pieces").
 The open questions about the shapes are in `doc/plans/level_kit_more_shapes.md`,
 `doc/plans/level_kit_extra_shapes.md` and
 `doc/plans/level_kit_machine_elements.md`. The generators are in
-`src/editor/level/kit_shapes_<group>.cpp`; a recreated shape's generator is in
-the `_v2` file of its original's group (`doc/editor/level_tools.md`
-"Recreated shapes").
+`src/editor/level/kit_shapes_<group>.cpp`.
 
 ## Kits
 
@@ -37,8 +35,9 @@ the ceiling at its range maxima.
 
 ## Shared construction
 
-- Topology from integers (R3.7): the recreated shapes, every shape of the
-  prop, ruin, traversal, harbour, light, industrial and machine kits, and the
+- Topology from integers (R3.7): the basic shapes, the door wall, pillar,
+  arch, battlement, tower, rock, land mass, hill, tree, bush, rock spire, leaf
+  plant and palm shrub, every shape of the prop, ruin, traversal, harbour, light, industrial and machine kits, and the
   succulent, grass tuft, boulder cluster, stepping stone, timber bay,
   railing, bamboo, stairs with side walls, spiral stairs, rock arch, bridge
   deck, buttress, log, shell and blocky tree build their topology (vertex
@@ -49,9 +48,9 @@ the ceiling at its range maxima.
   `architecture.stairs`, `architecture.spiral_stairs`), a ladder's rungs
   (from `height` and `rung_spacing`), a pier's planks (from `length`) and
   bents (from `length` and `pile_spacing`), and a rope bridge's planks (from
-  `span` and `plank_gap`). Two recreated shapes take further counts from
-  lengths: the battlement (F) its bays (from `length`, `merlon_width` and
-  `crenel_width`); the tower (F) its merlons (round, from `width`), its
+  `span` and `plank_gap`). Two shapes take further counts from
+  lengths: the battlement its bays (from `length`, `merlon_width` and
+  `crenel_width`); the tower its merlons (round, from `width`), its
   crenels per side and corbels between the corners (square, from `width`),
   its rows of slits (as many of `slit_rows` as fit between the cut's head,
   from `opening_height`, and the corbels or the top floor, from `height`),
@@ -163,8 +162,7 @@ palette name:
 
 The derivable parameters, their derive ranges and the default masks (masked
 in bold) of the shapes whose sections below do not state them; every seed
-and every segment count is fixed. A recreated shape without a row of its own
-derives as its original.
+and every segment count is fixed.
 
 | Shape | Derivable (range) |
 |---|---|
@@ -187,28 +185,20 @@ derives as its original.
 | architecture.pediment | width (2 - 8 modules, step 0.5), pitch (12 - 30 degrees, step 1), depth (0.3 - 0.9 modules, step 0.05), recess (0.05 - 0.2 m, step 0.01), dentils (6 - 12) |
 | architecture.stepped_platform | width, depth (3 - 8 modules, step 0.5), tiers (1 - 5), tier_rise (0.15 - 0.35 m), tier_inset (0.3 - 0.5 m), step 0.05 |
 | architecture.stone_lantern | height (1.2 - 2.1 m, step 0.1), width (0.5 - 0.8 m, step 0.05), cap (every value), **cap_curve** (0.2 - 0.9, step 0.05) |
-| nature.rock | form, **size** (0.6 - 1.5 modules, step 0.05), roughness (0.1 - 0.6, step 0.01), bevels (0 - 2) |
-| nature.rock.v2 | form, **size** (0.6 - 1.5 modules, step 0.05), roughness (0.25 - 0.8, step 0.01), pieces (1 - 4) |
-| nature.land_mass | footprint (3 - 8 modules, step 0.5), height (0.5 - 2 modules, step 0.25), **roundness** (0.2 - 0.8, step 0.01) |
-| nature.land_mass.v2 | footprint (3 - 8 modules, step 0.5), height (0.5 - 2 modules, step 0.25), **erosion** (0.2 - 0.9, step 0.01) |
-| nature.hill | radius (2.5 - 6 modules, step 0.5), **height** (0.5 - 1.25 modules, step 0.05) |
-| nature.hill.v2 | radius (2.5 - 6 modules, step 0.5), **height** (0.5 - 0.9 modules, step 0.05), rocks (1 - 3) |
-| nature.tree | **trunk_height** (0.4 - 0.8 wall heights, step 0.05), **canopy_size** (1.5 - 3 modules, step 0.1), canopy |
-| nature.tree.v2 | **trunk_height** (0.4 - 0.8 wall heights, step 0.05), **canopy_size** (1.5 - 3 modules, step 0.1), species |
-| nature.bush | **size** (0.6 - 1.4 modules, step 0.05) |
-| nature.bush.v2 | **size** (0.6 - 1.4 modules, step 0.05), twigs (2 - 4) |
+| nature.rock | form, **size** (0.6 - 1.5 modules, step 0.05), roughness (0.25 - 0.8, step 0.01), pieces (1 - 4) |
+| nature.land_mass | footprint (3 - 8 modules, step 0.5), height (0.5 - 2 modules, step 0.25), **erosion** (0.2 - 0.9, step 0.01) |
+| nature.hill | radius (2.5 - 6 modules, step 0.5), **height** (0.5 - 0.9 modules, step 0.05), rocks (1 - 3) |
+| nature.tree | **trunk_height** (0.4 - 0.8 wall heights, step 0.05), **canopy_size** (1.5 - 3 modules, step 0.1), species |
+| nature.bush | **size** (0.6 - 1.4 modules, step 0.05), twigs (2 - 4) |
 | nature.cliff | length (2 - 16 modules, step 0.5), **height** (1 - 4 wall heights, step 0.1), depth (1.5 - 3 modules, step 0.25), strata, **overhang** (-0.2 - 0.05, step 0.05), roughness (0.3 - 0.8, step 0.05), ledges (0 - 3) |
 | nature.shore | length (2 - 8 modules), run (5 - 10 modules), step 1; **undulation** (0 - 0.15 m, step 0.01), berm (0 - 0.4, step 0.05); rise fixed |
 | nature.water | width, depth (4 - 16 modules, step 1); subdivisions fixed |
 | nature.palm | species, **height** (1 - 5 wall heights, step 0.1), **bend** (0 - 0.35, step 0.01), **fronds** (8 - 20), frond_length (3 - 5.5 m, step 0.1), **droop** (0.2 - 0.7, step 0.01) |
-| nature.leaf_plant | form, **height** (0.4 - 4 m, step 0.1), **leaves** (4 - 12), **droop** (0.1 - 0.7), leaf_width (0.25 - 0.45), step 0.01 |
-| nature.leaf_plant.v2 | form, **height** (0.4 - 4 m, step 0.1), **leaves** (4 - 12), **droop** (0.1 - 0.7, step 0.01), leaf_width (0.25 - 0.45, step 0.01) |
-| nature.rock_spire | form, **height** (1 - 6 wall heights, step 0.1), **radius** (0.5 - 4 modules, step 0.1), taper (0.2 - 0.8), roughness (0.3 - 0.9), step 0.05; **lean** (0 - 8 degrees, step 0.5) |
-| nature.rock_spire.v2 | form, **height** (1 - 6 wall heights, step 0.1), **radius** (0.5 - 4 modules, step 0.1), taper (0.2 - 0.8, step 0.05), **lean** (0 - 8 degrees, step 0.5), roughness (0.3 - 0.9, step 0.05), strata (7 - 11) |
+| nature.leaf_plant | form, **height** (0.4 - 4 m, step 0.1), **leaves** (4 - 12), **droop** (0.1 - 0.7, step 0.01), leaf_width (0.25 - 0.45, step 0.01) |
+| nature.rock_spire | form, **height** (1 - 6 wall heights, step 0.1), **radius** (0.5 - 4 modules, step 0.1), taper (0.2 - 0.8, step 0.05), **lean** (0 - 8 degrees, step 0.5), roughness (0.3 - 0.9, step 0.05), strata (7 - 11) |
 | nature.basalt_columns | **radius** (1 - 3 modules, step 0.25), column_width (0.4 - 0.8 modules), height (0.5 - 1.5 wall heights), **height_spread** (0.1 - 0.6), step 0.05; step fixed |
 | nature.palm_clump | species, **stems** (3 - 9), **height** (0.6 - 1.6 wall heights, step 0.1), spread (0.2 - 0.8, step 0.05), fronds (4 - 8) |
 | nature.palm_shrub | species, **size** (0.6 - 2.5 m, step 0.1), **fronds** (5 - 16) |
-| nature.palm_shrub.v2 | species, **size** (0.6 - 2.5 m, step 0.1), **fronds** (5 - 16) |
 | nature.dune | **length** (9 - 15 m, step 0.5), **width** (4.5 - 7 m, step 0.25), **height** (0.5 - 0.85 m), asymmetry (0 - 0.4), step 0.05 |
 | nature.ground_patch | **size** (1 - 6 modules, step 0.25), **irregularity** (0.1 - 0.5, step 0.01), dome (0 - 0.1, step 0.01); thickness fixed |
 | nature.succulent | form, **size** (0.4 - 2.5 m, step 0.1), **leaves** (8 - 24), spread (20 - 80 degrees, step 5) |
@@ -247,8 +237,9 @@ nothing from its seed and masks nothing by default.
 `basic.block` is a box with its origin at the center of its base that tiles
 on the module grid. Parameters `width`, `height` and `depth` (1 module each,
 0.05 - 64 m); connectors base, top, and front, back, left and right at the
-centers of the base's edges; a convex hull body; mirror planes x and z; every
-side a seam side; tags `obstacle`, `walkable` and `tiles`. 12 triangles.
+centers of the base's edges; a box body; mirror planes x and z; every
+side a seam side; tags `obstacle`, `walkable` and `tiles`. Six quads over
+eight corners, 12 triangles.
 
 ### Wedge
 
@@ -257,14 +248,20 @@ origin at the center of its base. Parameters `run` (the slope's length along
 Z, 2 modules), `rise` (the high end's height, 1 module) and `width` (1
 module); connectors bottom (the front edge on the ground, facing +Z), top
 (the high edge, facing -Z) and base; a convex hull body; mirror plane x; tags
-`walkable` and `slope`. 8 triangles.
+`walkable` and `slope`. The triangular prism, five facets over six corners,
+8 triangles.
 
 ### Cylinder
 
 `basic.cylinder` is an upright cylinder around Y, its origin at the center of
 its base. Parameters `radius` (0.5 modules), `height` (1 module) and
 `segments` (sides around the axis, 16, 3 - 64); connectors base and top; a
-convex hull body; mirror plane z; tags `obstacle` and `walkable`.
+convex hull body; mirror plane z; tags `obstacle` and `walkable`. The sides
+are one quad per segment, each cap one polygon. The ring's points
+(`get_kit_circle_point()`, `kit_shapes.hpp`, shared by the round shapes) are
+mirror images of each other to the bit (about z = 0 at every segment count,
+about x = 0 at an even one), the points on the axes are exact, and a side edge
+uses one (x, z) at both ends.
 
 ### Stairs
 
@@ -274,40 +271,21 @@ front edge at +Z. Parameters `rise` (the height climbed, 1 wall height),
 0.05 - 1; never derived): the step count is the least that keeps each step
 within the limit and the tread depth is 1.5 times the step rise. Connectors
 bottom, top and base as the wedge's; a triangle mesh body; mirror plane x;
-tags `walkable` and `stairs`.
+tags `walkable` and `stairs`. The side walls are a column per step - a
+trapezoid from the base up to the line of the riser feet and the step's
+triangle above it - and the base a strip per step, 12 triangles a step (180
+at the defaults, 1536 at 128 steps). No vertex has more than six facets: the
+riser feet lie on one line, so a side wall without a fan has vertices on the
+base, each costing four triangles.
 
 ### Floor slab
 
 `basic.floor_slab` is a flat slab with its origin at the center of its base;
 its top is the walking surface. Parameters `width` and `depth` (2 modules
 each) and `thickness` (0.2 m, 0.01 - 4); slot `floor`; connectors base, top,
-and front, back, left and right at the top's edges; a convex hull body;
+and front, back, left and right at the top's edges; a box body;
 mirror planes x and z; every side a seam side; tags `walkable`, `floor` and
-`tiles`. 12 triangles.
-
-### Recreated basic shapes
-
-`kit_shapes_basic_v2.cpp` recreates the five basic shapes:
-
-- `basic.block.v2`, `basic.floor_slab.v2`: the box, six quads over eight
-  corners.
-- `basic.wedge.v2`: the triangular prism, five facets over six corners.
-- `basic.cylinder.v2`: the sides one quad per segment, each cap one polygon.
-  The ring's points are mirror images of each other to the bit (about
-  z = 0 at every segment count, about x = 0 at an even one), the points on
-  the axes are exact, and a side edge uses one (x, z) at both ends.
-- `basic.stairs.v2`: the side walls are a column per step - a trapezoid
-  from the base up to the line of the riser feet and the step's triangle
-  above it - and the base a strip per step, 12 triangles a step (180 at the
-  defaults, 1536 at 128 steps). No vertex has more than six facets; the
-  original's side walls fan from one corner, 8 triangles a step plus 4. The
-  riser feet lie on one line, so a side wall without a fan needs vertices
-  on the base, and each one costs four triangles.
-
-These five have their originals' forms, bounds and shading: a plain
-building block's description leaves no room for a bevel that would keep it
-tiling flush. `get_kit_circle_point()` (`kit_shapes.hpp`) is the ring point
-the recreated round shapes share.
+`tiles`. Six quads over eight corners, 12 triangles.
 
 ## Architecture kit
 
@@ -317,40 +295,106 @@ the recreated round shapes share.
 X with its faces toward +Z and -Z, its origin at the center of its base.
 Parameters `length` (4 modules), `height` (1 wall height) and `thickness`
 (0.25 m); slot `wall`; connectors start and end (the ends), base, top, front
-and back; a convex hull body; mirror planes x and z; every side a seam side;
+and back; a box body; mirror planes x and z; every side a seam side;
 tags `obstacle`, `wall` and `tiles`. 12 triangles.
 
 ### Door wall
 
 `architecture.door_wall` is a wall along X with a door opening from the
-floor at its center; its ends and top meet plain walls. The wall's
-parameters (`length` at least 2 m, `height` at least 2.5 m) and
-`opening_width` (the clear width, 1.2 m, 0.3 - 1.8) and `opening_height`
-(2.2 m, 0.5 - 2.4); slot `wall`; connectors start, end, base, top,
-opening_front and opening_back; a triangle mesh body; mirror planes x and z;
-seam sides -x, +x and +y; tags `obstacle`, `wall`, `opening` and `tiles`. The
-opening passes the opening check (`check_kit_opening()`). 44 triangles.
+floor at its center in a frame with a lintel; its ends and top meet plain
+walls. The wall's parameters (`length` at least 2 m, `height` at least 2.5
+m) and `opening_width` (the clear width, 1.2 m, 0.3 - 1.8) and
+`opening_height` (2.2 m, 0.5 - 2.4); slots `wall` and `trim`; connectors
+start, end, base, top, opening_front and opening_back; a triangle mesh body;
+mirror planes x and z; seam sides -x, +x and +y; tags `obstacle`, `wall`,
+`opening` and `tiles`. The opening passes the opening check
+(`check_kit_opening()`).
+
+- A door frame on both faces: a chamfer from the frame down to the opening's
+  edge (the reveal), a flat frame band, and a V groove around the band that
+  turns out under the lintel and back over it, so the lintel is a block with
+  an ear past each jamb. The frame's face is the wall's face; the opening is
+  the stated clear width and height at the reveal's edge, and the ends and
+  the top are full rectangles. The frame's widths (chamfer 0.07 m, band
+  0.10 m, groove 0.07 m) shrink with a jamb narrower than 0.42 m and its
+  heights (lintel 0.20 m) with a header lower than 0.45 m; the groove is at
+  most 0.16 and the reveal 0.28 of the thickness deep. The wall has no
+  threshold: a sill would lower the stated clear height.
+- The frame is the `trim` slot: the reveal, the band out to the center of the
+  groove beside it, and the lintel with its ears out to the center of the
+  groove around it, on both faces, with the opening's three walls through the
+  slab (131 of the 314 facets at every value); the rest of the slab is
+  `wall`.
+- `Relief_slab` builds it: a grid in the XY plane whose nodes lie at one of a
+  few depths below the faces, mirrored about z = 0; a cell between two depths
+  is a bevel (a quad), a cell with three corners at one depth is a mitre (two
+  triangles split through the fourth corner), and an open cell is an opening
+  with a wall through the slab on each of its edges. It holds a slot per cell
+  (`set_cell_slot()`), and a wall through the slab takes its solid cell's
+  slot.
+
+572 triangles at every value.
 
 ### Pillar
 
-`architecture.pillar` is an upright pillar with its origin at the center of
-its base. Parameters `profile` (`square`, `round`), `width` (the width or
-diameter, 0.5 modules), `height` (1 wall height) and `segments` (sides of a
-round pillar, 12, 3 - 64); slot `trim`; connectors base and top; a convex hull
-body; mirror plane z; a square pillar's every side is a seam side; tags
-`obstacle` and `pillar`.
+`architecture.pillar` is an upright pillar with a base and a capital, its
+origin at the center of its base. Parameters `profile` (`square`, `round`),
+`width` (the width or diameter, 0.5 modules), `height` (1 wall height) and
+`segments` (sides of a round pillar, 12, 3 - 64); slot `trim`; connectors base
+and top; a box body for a square pillar, whose plinth and abacus fill its
+bounds, a convex hull body for a round one; mirror plane z; a square pillar's seam sides are
+-y and +y; tags `obstacle` and `pillar`.
+
+- Round: a base (a plinth and a torus), a shaft that tapers from 0.80 to 0.70
+  of the radius, and a capital (an astragal, a necking, an echinus and an
+  abacus), all inside the cylinder of the width and the height: the plinth
+  and the abacus have the full radius. Base and capital follow the width
+  (0.34 and 0.40 of it), take at most 0.20 and 0.22 of a low pillar's height
+  and at least 0.02 of a thin tall one's. 15 rings of the segment count, a
+  quad per segment between two rings and a polygon per cap: 30 triangles a
+  segment less 4 (356 at 12 segments, 1916 at 64).
+- Square: a pier of 13 square rings - a plinth, a chamfered base course, a
+  shaft inset to 0.80 of the half width, a necking band, a flare and an
+  abacus - 100 triangles at every value. The plinth and the abacus have the
+  full width, so the pier's bounds are the width's square box. Base and
+  capital heights follow the width as the round profile's do.
+- `add_lathe()` takes the plan as unit points, so the round and the square
+  profile share it.
 
 ### Arch
 
-`architecture.arch` is a free-standing arch ring across X with a
+`architecture.arch` is a free-standing masonry arch across X with a
 half-elliptic opening of the span and the rise, standing on its two feet,
 its faces toward +Z and -Z. Parameters `span` (the clear width at the base,
 2 modules), `rise` (the clear height, 0.8 wall heights), `depth` (0.5
-modules), `thickness` (of the ring, 0.3 m) and `segments` (along the curve,
-12, 2 - 48); slot `trim`; connectors start and end (beyond the feet), base
-and top (at rise + thickness); a triangle mesh body; mirror planes x and z;
-tags `obstacle`, `opening` and `arch`. `get_arch_clear_width()` is the
-opening's clear width at a height. 100 triangles at 12 segments.
+modules), `thickness` (of the ring, 0.3 m) and `segments` (the stones, 12,
+2 - 48); slots `trim` and `stone`; connectors start and end (beyond the
+feet), base and top (at rise + thickness); a triangle mesh body; mirror
+planes x and z; tags `obstacle`, `opening` and `arch`.
+
+- The opening is the half ellipse of the span and the rise, its points on
+  the ellipse at equal steps of the angle, at least 32 of them and among them
+  every point of the `segments`-point half ellipse that
+  `get_arch_clear_width()` measures the opening's clear width at a height
+  by. The ring is the thickness measured along the ellipse's normal.
+- `segments` counts the stones: one keystone at the crown, a springer at each
+  foot and voussoirs between them (11 stones at 12 segments: an even count
+  has its keystone across the crown and springers of one and a half
+  segments; 2 segments make 3 stones). The keystone and the springers fill
+  the envelope - the feet span the opening and the thickness on each side,
+  the keystone's top is at rise + thickness; the voussoirs lie back from it
+  (0.16 of the thickness at the extrados, 0.16 of the half depth on each
+  face, 0.05 of the thickness outside the opening's curve), so every joint to
+  them is a step. A joint between two voussoirs is a V groove around the
+  ring. The curve is smooth shaded inside a stone and the steps and grooves
+  are hard edges.
+- Slots `trim` (the voussoirs) and `stone` (the keystone and the two
+  springers, with the steps down to the voussoirs beside them). An arch of
+  two to four segments has no voussoirs: its springers are the `trim` slot
+  and its keystone the `stone` slot, so both slots have facets at every
+  segment count.
+
+516 triangles at 12 segments, at most 1476 (48 segments).
 
 ### Column
 
@@ -454,25 +498,34 @@ run along X on a wall top. Parameters `length` (2 modules), `height` (the
 crenels' sill, 0.9 m), `thickness` (the wall's default, 0.25 m),
 `merlon_height` (above the sill, 0.9 m), `merlon_width` (1.2 m) and
 `crenel_width` (0.8 m) (nominal: the bays fit the length), `merlon`
-(`square`, `swallowtail`, `pointed`) and `seed`; slot `wall`; connectors base,
-start and end; a triangle mesh body; mirror planes x and z; seam sides -x, +x
-and -y for square merlons, -y otherwise.
+(`square`, `swallowtail`, `pointed`) and `seed`; slots `wall` (the masonry)
+and `trim` (the dressed stone); connectors base, start and end; a triangle
+mesh body; mirror planes x and z; no seam side, since the band and the
+copings stand out of the faces (bounds along Z: the thickness and twice the
+overhang).
 
-- The run has a whole number of bays (at most 32), each a crenel at its center
-  between half merlons, so runs joined end to start make whole merlons and a
-  run's ends are equal. A swallowtail merlon's notch and a pointed merlon's
-  shoulders lie 0.3 of the merlon height below its top.
-- The front elevation is columns of quads at every merlon corner's x (the
-  breastwork under each, a merlon's face split at its top's inner corners),
-  so the faces are their own mirror images; the outline is extruded through
-  the thickness.
+- A closed part per piece of masonry, overlapping. A breastwork (a box flush
+  with the wall it stands on) carries a sill band - the crenels' sill stones
+  as one course of the `trim` slot, at most 0.07 m high, standing at most
+  0.035 m out of both faces with weathered edges - and on the band one merlon
+  per bay: a block with chamfered upright edges (at most 0.04 m), pierced by
+  an arrow loop (0.1 m wide, 0.55 of the merlon's height under its lowest top
+  line) whose reveal is splayed on both faces, under a coping of the `trim`
+  slot that overhangs the faces - a saddleback over a `square` merlon, a slab
+  along the two top lines of a `swallowtail` or a `pointed` one. The stated
+  top (`height` + `merlon_height`) is the copings' highest line. The detail's
+  sizes follow the merlon's width, its height and the thickness where those
+  leave little room.
+- A bay is a merlon between two half crenels, so runs join into whole
+  crenels, every merlon and coping is whole, and a run's two ends are the
+  breastwork and the band alone, equal at every value; at most 22 bays.
 - It rests on a wall's top by base on top, keeping the wall's direction; a
   line layout of battlements without a step steps by their length, end to
   end along a wall. Replace carries `length`, `thickness` and `height`
   (clamped to the sill's range) to and from `architecture.wall`.
 
-At the defaults it has 44 triangles (budget 48), under 0.1 ms; the most is
-1160 (24 m of swallowtail merlons 0.4 m wide: 32 bays).
+112 triangles at the defaults, 80 a bay with square merlons and 88 with the
+two other forms plus 32, at most 1968 (22 bays).
 
 ### Tower
 
@@ -480,40 +533,53 @@ At the defaults it has 44 triangles (budget 48), under 0.1 ms; the most is
 standing at its origin. Parameters `profile` (`round`, `square`), `width` (the
 outer width above the batter, 3 m: in meters, because the doorway and the
 agent fix the least width at every module), `height` (the top floor, 1.5 wall
-heights), `batter` (the walls' outward slope below the doorway's head, 0 - 10
-degrees), `wall` (0.4 m), `opening_width` and `opening_height` (the doorway's
-clear size under its lintel, fixed: 0.8 - 1.8 m and 2 - 3.4 m, default 1.2 by
-2.2 m, the agent's clearance at their minimums), `top` (`battlement`,
-`flat`), `slit_rows` (rows of arrow slits, 0 - 2, default 1) and `seed`;
-slots `wall` and `floor` (the walkable top); connectors base, top (the top
-floor's center), opening_front (the doorway's outer threshold), left, right
-and back (the sides' wall middles at the base, where joined walls end inside
-the tower's wall); a triangle mesh body; tags `walkable`, `opening` and
-`medieval`; origin rule `base_contains_origin`.
+heights), `batter` (the base's outward slope, 0 - 10 degrees), `wall`
+(0.4 m), `opening_width` and `opening_height` (the doorway's clear size,
+fixed: 0.8 - 1.8 m and 2 - 3.4 m, default 1.2 by 2.2 m, the agent's clearance
+at their minimums), `top` (`battlement`, `flat`), `slit_rows` (rows of arrow
+slits, 0 - 2, default 1) and `seed`; slots `wall` (the masonry), `trim` (the
+dressed stone) and `floor` (the walkable top at `height`); connectors base,
+top (the top floor's center), opening_front (the surround's front at the
+ground), left, right and back (the sides' wall middles at the base, where
+joined walls end inside the tower's wall); a triangle mesh body; tags
+`walkable`, `opening` and `medieval`; origin rule `base_contains_origin`. The
+tower declares no mirror plane. Closed, overlapping parts:
 
-- The plan: a round tower has three sides per merlon, 4 - 10 merlons as its
-  width allows (a crenel at the front, over the doorway); a square tower's
-  sides have corner merlons and one to six crenels between merlons 1.6 times
-  as wide. The walls below the doorway's head are battered out.
-- Openings go through the wall: each is a cut in plan (two jamb planes
-  toward a direction) over a height. The doorway at the front rises 0.1 m
-  above its clear height behind a stone lintel 0.35 m high that stands out
-  of the wall over it, its ends in the wall. Arrow slits, 0.12 m wide and
-  1 m high, in rows 1.6 m apart starting 0.5 m above the doorway's head,
-  as many rows as stay 0.2 m under the ceiling and the corbel course: on a
-  round tower at the four diagonals, on a square one two per side face at
-  half the inner half width from the middle, on the left, right and back
-  faces; the connectors' wall ends lie between them. The rows share their
-  cuts.
-- The body is rings of the same entries at every level (the plan's corners,
-  less those a jamb plane passes near or between radii, and every cut's two
-  jambs), so its bands are quads between equal entries; a segment of a cut
-  is open in the bands its openings span, which get jamb faces, a sill and
-  a head instead. Inside, the hollow rises to a ceiling 0.3 m under the top
-  floor. The battlement top stands on a sloped corbel course 0.35 m high,
-  0.15 m out: a 1 m breastwork with merlons 0.9 m above it around a walkway
-  at the height; a flat top is the floor itself, which a further segment
-  stands on by base on top. The tower declares no mirror plane.
+- the wall, an upright shell between an outer and an inner ring from the
+  ground to inside the top floor, cut through by the doorway (0.04 m wider on
+  each side than the clear opening and 0.1 m higher) and by the slits;
+- the base, a plinth course 0.35 m high and 0.07 m out with a chamfer and
+  above it the batter up to the cut's head, around the tower from one jamb
+  stone to the other; its section has five points at every batter, the
+  batter's face ending at least 5 mm inside the wall's face (at a batter of 0
+  an upright face just inside it);
+- a string course over the batter, around the whole tower;
+- the doorway's surround - two jamb stones 0.28 m wide through the base, whose
+  faces are the clear width, and a gabled lintel on them, whose underside is
+  the clear height - standing out of the plinth;
+- arrow slits 0.9 m high in rows 1.5 m apart from 0.4 m above the cut's head
+  (as many of `slit_rows` as stay clear of the corbels, or of a flat top's
+  floor): 0.28 m wide on the outer face, 0.09 m at the throat 0.4 of the wall
+  in, and up to 0.44 m on the inner face - on a round tower four, a third of a
+  half turn before and after each side connector (the front two only where
+  the doorway's jambs leave them room), on a square tower two on each of the
+  side and back faces;
+- with the `battlement` top a top floor that stands 0.25 m out on corbels (one
+  at each corner, and one to seven along each side of a square tower), a
+  parapet 0.35 m thick with a breastwork 1 m above the walkway, and merlons to
+  0.9 m above it under saddleback copings - a round tower has three sides per
+  merlon, five or six merlons (15 or 18 sides), a crenel over the doorway; a
+  square tower's sides have corner merlons and one to six crenels between
+  merlons 1.6 times as wide; with the `flat` top the floor as a course 0.04 m
+  out of the wall, which a further segment stands on by base on top.
+
+The walkway is 0.1 m narrower than the wall's outer face all around. The
+doorway's clear box holds no vertex at any value. The wall's rings hold the
+plan's corners but those within 0.07 m of a jamb or inside a slit, and the
+jambs; a facet through the wall joins the two rings at each jamb and at each
+corner both rings have on the same side of the doorway, and the level faces
+between such lines are quads or `add_band()` strips.
+
 - Refused combinations: an inside narrower than the doorway and 0.4 m, and a
   height less than the doorway's and 0.9 m. Walkability (R2.10): the doorway
   passes the opening check, the inside and the walkway are at least the
@@ -523,9 +589,8 @@ the tower's wall); a triangle mesh body; tags `walkable`, `opening` and
   wall; a navigation build reaches the hollow through the doorway, and the
   top is a walkable floor (an island of its own until stairs reach it).
 
-At the defaults (round, battlement top, one row of slits) it has 676
-triangles (budget 700), about 0.8 ms; the most is 1524 (round, 16 m wide,
-two rows), within the ceiling.
+1524 triangles at the defaults (round, battlement top, one row of four
+slits), at most 1940 (square, 16 m wide, two rows); more than 10 parts.
 
 ### Roof
 
@@ -655,8 +720,8 @@ with nine. Parameters `width`, `depth` (4 modules each), `tiers` (3, 1 - 9),
 `tier_rise` (0.2 m, 0.05 - 4), `tier_inset` (each tier's step in, 0.3 m,
 0.05 - 8) and `seed` (draws nothing); slots `stone` and `floor` (the deck);
 connectors base, top (the deck's center), front, back, left and right (the
-centers of the base's edges); a triangle mesh body; mirror planes x and z;
-seam side -y; tag `walkable`.
+centers of the base's edges); a box body for one tier, a triangle mesh body
+for more; mirror planes x and z; seam side -y; tag `walkable`.
 
 - One closed mesh: per tier a riser, a chamfer round its top edge (0.12 of the
   rise, at most 0.06 m and a quarter of the inset) and the tread to the
@@ -982,230 +1047,114 @@ Derive ranges: `length` 2 - 6 modules (step 1), `wall` 0.2 - 0.5 m (0.05),
 At the defaults it has 92 triangles (budget 100); the most is 236 (a round head
 of 48 segments).
 
-### Recreated architecture shapes
-
-`kit_shapes_architecture_v2.cpp` (door wall, pillar, arch) and
-`kit_shapes_medieval_v2.cpp` (battlement, tower). The door wall, the pillar
-and the arch keep their originals' bounds, so their detail is cut into the
-original's envelope.
-
-### Door wall (F)
-
-`architecture.door_wall.v2`: a door frame on both faces - a chamfer from the
-frame down to the opening's edge (the reveal), a flat frame band, and a V
-groove around the band that turns out under the lintel and back over it, so
-the lintel is a block with an ear past each jamb. The frame's face is the
-wall's face; the opening is the stated clear width and height at the
-reveal's edge, and the ends and the top are full rectangles. The frame's
-widths (chamfer 0.07 m, band 0.10 m, groove 0.07 m) shrink with a jamb
-narrower than 0.42 m and its heights (lintel 0.20 m) with a header lower than
-0.45 m; the groove is at most 0.16 and the reveal 0.28 of the thickness deep.
-The wall has no threshold: a sill would lower the stated clear height.
-
-- Slots `wall` and `trim` (the original: `wall` alone). The frame is the
-  `trim` slot: the reveal, the band out to the center of the groove beside
-  it, and the lintel with its ears out to the center of the groove around it,
-  on both faces, with the opening's three walls through the slab (131 of the
-  314 facets at every value); the rest of the slab is `wall`.
-- `Relief_slab_v2` builds it: a grid in the XY plane whose nodes lie at one of
-  a few depths below the faces, mirrored about z = 0; a cell between two
-  depths is a bevel (a quad), a cell with three corners at one depth is a
-  mitre (two triangles split through the fourth corner), and an open cell is
-  an opening with a wall through the slab on each of its edges. It holds a
-  slot per cell (`set_cell_slot()`), and a wall through the slab takes its
-  solid cell's slot.
-- 572 triangles at every value (the original: 44).
-
-### Pillar (F)
-
-`architecture.pillar.v2`:
-
-- Round: a base (a plinth and a torus), a shaft that tapers from 0.80 to 0.70
-  of the radius, and a capital (an astragal, a necking, an echinus and an
-  abacus), all inside the original's cylinder: the plinth and the abacus have
-  the full radius. Base and capital follow the width (0.34 and 0.40 of it),
-  take at most 0.20 and 0.22 of a low pillar's height and at least 0.02 of a
-  thin tall one's. 15 rings of the segment count, a quad per segment between
-  two rings and a polygon per cap: 30 triangles a segment less 4 (356 at 12
-  segments, 1916 at 64; the original: 4 a segment less 4).
-- Square: a pier of 13 square rings - a plinth, a chamfered base course, a
-  shaft inset to 0.80 of the half width, a necking band, a flare and an
-  abacus - 100 triangles at every value (the original: 12). The plinth and
-  the abacus have the full width, so the pier keeps the original's bounds and
-  its `base` and `top` connectors; its seam sides are -y and +y alone (the
-  original's square profile states all six). Base and capital heights follow
-  the width as the round profile's do.
-- `add_lathe_v2()` takes the plan as unit points, so the round and the square
-  profile share it.
-
-### Arch (F)
-
-`architecture.arch.v2`: a masonry arch. The opening is the half ellipse of
-the span and the rise, its points on the ellipse at equal steps of the angle,
-at least 32 of them and among them every vertex of the original's opening, so
-`get_arch_clear_width()` holds for it. The ring is the thickness measured
-along the ellipse's normal (the original's outer curve is a second ellipse,
-thinner at the haunches). `segments` counts the stones: one keystone at the
-crown, a springer at each foot and voussoirs between them (11 stones at 12
-segments: an even count has its keystone across the crown and springers of
-one and a half segments; 2 segments make 3 stones). The keystone and the
-springers fill the envelope - the feet are the original's footprint, the
-keystone's top is at rise + thickness; the voussoirs lie back from it (0.16 of
-the thickness at the extrados, 0.16 of the half depth on each face, 0.05 of
-the thickness outside the opening's curve), so every joint to them is a step.
-A joint between two voussoirs is a V groove around the ring. The curve is
-smooth shaded inside a stone and the steps and grooves are hard edges.
-
-- Slots `trim` (the voussoirs) and `stone` (the keystone and the two
-  springers, with the steps down to the voussoirs beside them); the original
-  has `trim` alone. An arch of two to four segments has no voussoirs: its
-  springers are the `trim` slot and its keystone the `stone` slot, so both
-  slots have facets at every segment count.
-- An arch of an odd segment count is taller than its original by the
-  original's missing crown: the original's top is a chord below rise +
-  thickness there, where the `top` connector is.
-- 516 triangles at 12 segments, at most 1476 (48 segments); the original: 100.
-
-### Battlement (F)
-
-`architecture.battlement.v2`: the original's parameters and connectors; a
-closed part per piece of masonry, overlapping, in the slots `wall` (the
-masonry) and `trim` (the dressed stone). A breastwork (a box flush with the
-wall it stands on) carries a sill band - the crenels' sill stones as one
-course of the `trim` slot, at most 0.07 m high, standing at most 0.035 m out
-of both faces with weathered edges - and on the band one merlon per bay: a
-block with chamfered upright edges (at most 0.04 m), pierced by an arrow loop
-(0.1 m wide, 0.55 of the merlon's height under its lowest top line) whose
-reveal is splayed on both faces, under a coping of the `trim` slot that
-overhangs the faces - a saddleback over a `square` merlon, a slab along the
-two top lines of a `swallowtail` or a `pointed` one. The stated top
-(`height` + `merlon_height`) is the copings' highest line. The detail's sizes
-follow the merlon's width, its height and the thickness where those leave
-little room.
-
-- A bay is a merlon between two half crenels (the original: a crenel between
-  two half merlons), so runs join into whole crenels, every merlon and coping
-  is whole, and a run's two ends are the breastwork and the band alone, equal
-  at every value; at most 22 bays (the original: 32).
-- No seam side, since the band and the copings stand out of the faces
-  (bounds along Z: the thickness and twice the overhang); mirror planes x and
-  z as the original.
-- 112 triangles at the defaults (the original: 44), 80 a bay with square
-  merlons and 88 with the two other forms plus 32, at most 1968 (22 bays).
-
-### Tower (F)
-
-`architecture.tower.v2`: the original's parameters, connector names and
-checks (refused combinations, walkability, origin rule); closed, overlapping
-parts in the slots `wall` (the masonry), `trim` (the dressed stone) and
-`floor` (the walkable top at `height`). Its parts:
-
-- the wall, an upright shell between an outer and an inner ring from the
-  ground to inside the top floor, cut through by the doorway (0.04 m wider on
-  each side than the clear opening and 0.1 m higher) and by the slits;
-- the base, a plinth course 0.35 m high and 0.07 m out with a chamfer and
-  above it the batter up to the cut's head (`batter`, as the original's),
-  around the tower from one jamb stone to the other; its section has five
-  points at every batter, the batter's face ending at least 5 mm inside the
-  wall's face (at a batter of 0 an upright face just inside it);
-- a string course over the batter, around the whole tower;
-- the doorway's surround - two jamb stones 0.28 m wide through the base, whose
-  faces are the clear width, and a gabled lintel on them, whose underside is
-  the clear height - standing out of the plinth;
-- arrow slits 0.9 m high in rows 1.5 m apart from 0.4 m above the cut's head
-  (as many of `slit_rows` as stay clear of the corbels, or of a flat top's
-  floor): 0.28 m wide on the outer face, 0.09 m at the throat 0.4 of the wall
-  in, and up to 0.44 m on the inner face - on a round tower four, a third of a
-  half turn before and after each side connector (the front two only where
-  the doorway's jambs leave them room), on a square tower two on each of the
-  side and back faces;
-- with the `battlement` top a top floor that stands 0.25 m out on corbels (one
-  at each corner, and one to seven along each side of a square tower), a
-  parapet 0.35 m thick with a breastwork 1 m above the walkway, and merlons to
-  0.9 m above it under saddleback copings - a round tower has three sides per
-  merlon, five or six merlons (15 or 18 sides; the original: 4 - 10 merlons),
-  a crenel over the doorway; a square tower's sides have corner merlons and
-  one to six crenels as the original's; with the `flat` top the floor as a
-  course 0.04 m out of the wall.
-
-The walkway is 0.1 m narrower than the wall's outer face all around (the
-original's lies inside the wall's face by the parapet). Connectors:
-`opening_front` lies on the surround's front at the ground (the original's on
-the batter's foot); the others as the original's. The doorway's clear box
-holds no vertex at any value. The wall's rings hold the plan's corners but
-those within 0.07 m of a jamb or inside a slit, and the jambs; a facet through
-the wall joins the two rings at each jamb and at each corner both rings have
-on the same side of the doorway, and the level faces between such lines are
-quads or `add_band()` strips. 1524 triangles at the defaults (round,
-battlement top, one row of four slits; the original: 676), at most 1940
-(square, 16 m wide, two rows); more than 10 parts (the original: 2).
-
 ## Nature kit
 
-### Rock forms
+### Rock
 
-`nature.rock` (D1.9) has the parameters `form` (`blob`, `angular` - the
-default -, `worn`, `slab`), `size`, `roughness`, `bevels` (0 - 2, default 1;
-the blob has none) and `seed`.
+`nature.rock` (`kit_shapes_nature.cpp`) is one to four pieces, the largest on
+the origin and the smaller ones (0.62, 0.45 and 0.30 of its size) against its
+flank. Parameters `form` (`boulder`, `angular`: tall shards, `slab`: low,
+wide, one ledge, `layered`: ledges and overhangs, a third of the sides
+sheer), `size` (the largest piece's width, 1 module), `roughness` (irregular
+sides, dip, lean, tilt), `pieces` (1 - 4, default 3) and `seed`; slot `rock`;
+a convex hull body; tags `obstacle` and `decoration`.
 
-- `blob`: the star-shaped blob of seven segments around Y, its dents scaled by
-  the roughness.
-- The hull forms: the convex hull (`erhe::geometry::shapes::make_convex_hull()`)
-  of a jittered Fibonacci sphere scaled to the form's half extents per meter of
-  size (angular 10 points, x and z 0.5, y 0.42; worn 22 points, y 0.40; slab 12
-  points, y 0.18, z 0.42), each axis jittered by up to 20 percent (angular) or
-  12 percent, each point's direction by up to the point spacing and its radius
-  by up to 40 percent, both times the roughness. With two bevel passes the
-  forms take 9 points (worn 10), which keeps them within the kit's ceiling.
-  Each bevel pass is `erhe::geometry::operation::chamfer3()`, the operation of
-  MCP `chamfer`, over the whole mesh, with a bevel ratio of 0.22 for the first
-  pass and 0.12 for the second; it runs in the generator as other geometry
-  operations run on workers (`make_convex_hull()` takes the geogram lock).
-- The base: the beveled mesh's vertices above a plane 22 percent (slab 25
-  percent) of its height above its lowest point and its edges' crossings of
-  that plane, welded within 1 mm per meter of size, are hulled again; the
-  triangles on the plane become one base polygon at y = 0 and the origin is the
-  average of its corners. The second hull also makes the result exactly convex
-  with planar facets, which the chamfer's best-fit hexagons are not.
+- A piece is a stack of convex rings on a flat base. Every ring has the same
+  edge directions, so each side face between two rings is a planar trapezoid
+  and the ring lines read as strata; a side whose offsets run straight from
+  foot to top is one fracture plane; the other sides stand steeper or slope in
+  earlier by a draw. The strata dip and the piece leans by one affine map, the
+  base ring is the lowest level's side planes cut by the ground, the top face
+  tilts by itself (the band under it is triangles) and the boulder and the
+  angular form end in an apex inside the top ring. A ring's offsets are moved
+  toward the footprint's by the least share that keeps every edge at least 45
+  percent of its length, which keeps each ring a valid polygon without a
+  decision.
 
-The rock collides as a convex hull. At the defaults it has 112 triangles
-(budget 120). Over seeds 0 - 39 and roughness 0, 0.3 and 1 the hull forms have
-at most 32 (angular), 60 (worn) and 38 (slab) triangles without a bevel, 120,
-272 and 138 with one, and 396, 460 and 392 with two; the blob has 42.
+162 triangles at the defaults.
 
 ### Land mass
 
-`nature.land_mass` (`kit_shapes_nature.cpp`) is a blob with a rounded
-footprint, a flat walkable top and sloping sides. Parameters `footprint` (the
-base's diameter, 4 modules), `height` (of the flat top, 1 module),
-`roundness` (the side profile's rounding: 0 straight sides, 1 a rounded
-shoulder; 0.5), `seed` and `segments` (sides around the axis, 16, 3 - 64);
-slot `earth`; a triangle mesh body; tags `walkable` and `ground`. 128
-triangles at the defaults.
+`nature.land_mass` (`kit_shapes_nature.cpp`) is a plateau with a lobed
+outline (the radius between 68 and 100 percent of half the footprint) and a
+flat walkable top. Parameters `footprint` (the foot's diameter before the
+lobes, 4 modules), `height` (of the flat top, 1 module), `erosion` (depth of
+the gullies and roughness of the cliff, 0 - 1), `seed` and `segments`
+(columns around the axis, 8 - 48, default 20); slots `grass` (top, rim,
+benches), `earth` (soil band, talus, base) and `rock` (cliff); connectors
+base and top; a triangle mesh body; tags `walkable` and `ground`.
+
+- Seven rings of `segments` columns from the ground up: a talus foot, a cliff
+  with gullies down the columns, a bench of turf over two windows of the
+  perimeter, a soil band and a turf rim that overhangs the cliff. The benches
+  are found by column index, so the slot of a facet is no float decision.
+- The walkability check holds the top at least the agent's width across at
+  the outline's deepest lobe.
+
+280 triangles at the defaults.
 
 ### Hill
 
-`nature.hill` is a round mound with a raised-cosine profile, flat at its rim
-and top, with walkable sides. Parameters `radius` (of the base, 3 modules),
-`height` (1 module), `seed` and `segments` (sides around the axis, 16, 3 -
-60; the rings are a quarter of it); slot `grass`; smooth normals; a convex
-hull body; tags `walkable` and `ground`. 128 triangles at the defaults.
+`nature.hill` is a hill with a lobed foot and its crest off center, with
+walkable sides. Parameters `radius` (of the foot before its lobes, 3
+modules), `height` (of the crest, 1 module), `rocks` (1 - 4, default 2),
+`seed` and `segments` (columns around the crest, 8 - 40, default 18; the
+rings a quarter of it and one); slots `grass` and `rock`; normals smooth with
+hard edges at 38 degrees, so the hill is smooth and the rocks faceted; a
+convex hull body; tags `walkable` and `ground`.
+
+- A polar grid about a crest that stands 8 to 18 percent of the way toward
+  one rim point, so that side is steep and the opposite one long; a lobed
+  foot, a rounded crest, a straight flank and an easing foot, and a spur that
+  lifts the flank along one direction.
+- The rocks crop out of the steep side: pieces of the rock's boulder form
+  sunk into the surface.
+- The walkability check measures the steepest facet of the generated surface
+  against the agent's slope; the derive range of the height keeps the steep
+  side at most 43 degrees at every seed.
+
+304 triangles at the defaults.
 
 ### Tree
 
-`nature.tree` is a six-sided trunk (slot `bark`) standing at the origin with
-one canopy (slot `foliage`); the trunk reaches into the canopy, so the mesh
-is two closed parts. Parameters `trunk_height` (the canopy's base, 0.6 wall
-heights), `canopy_size` (its diameter, 2 modules), `canopy` (`round`,
-`conical`), `seed` and `segments` (canopy sides, 8, 3 - 32); a triangle mesh
-body; tags `obstacle` and `decoration`. 68 triangles at the defaults.
+`nature.tree` is a tree standing at the origin. Parameters `trunk_height`
+(the canopy's base, 0.6 wall heights), `canopy_size` (its diameter, 2
+modules), `species` (`broadleaf`, `conifer`, `bare`) and `seed`; slots `bark`
+and `foliage`; a triangle mesh body; tags `obstacle` and `decoration`.
+
+- A trunk of five rings with a lobed root flare, a bend and a taper, its base
+  a fan about a vertex on the origin (slot `bark`), and by species:
+  `broadleaf` - three or four limbs with an elbow, each carrying a clump of
+  leaves, a crown clump on the trunk's top and two small clumps that break the
+  outline; `conifer` - four or five tiers, each a skirt with a ragged drooping
+  edge, hollow underneath; `bare` - four forked limbs and three small tufts of
+  leaves (slot `foliage`). Every part is a closed solid and they overlap.
+
+458 triangles at the defaults.
 
 ### Bush
 
-`nature.bush` is a low lumpy blob resting on a flat base at its origin.
-Parameters `size` (its diameter, 1 module), `seed` and `segments` (sides
-around the axis, 8, 3 - 32); slot `foliage`; a convex hull body; tags
-`obstacle` and `decoration`. 48 triangles at the defaults.
+`nature.bush` is a bush on the origin: a heart clump, a ring of four or five
+lower clumps standing on the ground about it and two small clumps on top
+(slot `foliage`), with bare twigs reaching past the leaves (slot `bark`).
+Parameters `size` (its diameter, 1 module), `twigs` (1 - 6, default 3) and
+`seed`; a convex hull body; tags `obstacle` and `decoration`. 408 triangles
+at the defaults.
+
+### Nature construction
+
+The rock, land mass, hill, tree, bush, rock spire, leaf plant and palm shrub
+generators run no convex hull or sweep, sort by no computed key, weld by no
+distance and take no branch on a computed position: limits are `min` / `max`
+of continuous terms, shared vertices are made once and reused by index, and
+each draw is its own statement, so the order of the draws is the same with
+every compiler. The plants and the rock spire draw from two streams of their
+seed: one whose float draws only move vertices, and one named `... cells`
+whose integer draws decide counts, windows and diagonals.
+`Kit_nature_shapes.nature_topology_follows_from_integers_alone`,
+`Kit_nature_plants.plant_topology_follows_from_integers_alone` and
+`Kit_nature_rocks.rock_spire_topology_follows_from_integers_alone` hold the
+facet lists equal across the corners of the float ranges.
 
 ### Cliff
 
@@ -1361,65 +1310,94 @@ under 0.5 ms.
 
 ### Leaf plant
 
-`nature.leaf_plant` (`kit_shapes_nature_plants.cpp`) is a rosette of large
-leaves on stalks standing at its origin. Parameters `form` (`banana`, `taro`,
+`nature.leaf_plant` (`kit_shapes_nature_plants.cpp`) is a lush plant of large
+leaves standing at its origin. Parameters `form` (`banana`, `taro`,
 `strelitzia`, `fern`, `tree_fern`), `height` (0.3 - 8 m), `leaves` (3 - 14),
-`droop` (0 - 1), `leaf_width` (a share of a leaf's length, 0.1 - 0.6) and
-`seed`; height, leaves and droop in the default mask; slots `bark` (the trunk
-or stump) and `foliage`; no connectors; no body (`Kit_collision::none`, P5 of `doc/plans/level_kit_extra_shapes.md`:
-soft dressing a walker passes through; its pieces carry `pass_through`).
+`droop` (0 - 1), `leaf_width` (0.1 - 0.6) and `seed`; height, leaves and droop
+in the default mask; slots `bark` (stems and dead leaves), `foliage` and
+`shoot` (the youngest leaves); no connectors; no body (`Kit_collision::none`,
+P5 of `doc/plans/level_kit_extra_shapes.md`: soft dressing a walker passes
+through; its pieces carry `pass_through`). It shares its parts with the palm
+shrub ("Plant parts"). By form:
 
-- The form sets the trunk (banana: 0.45 of the height; tree fern: 0.62; the
-  others a stump), the stalks' and blades' shares of the height, the blades'
-  width, the stalks' elevations from the oldest to the youngest leaf, the
-  blade's turn from its stalk (taro: hanging down), the droop, the fold, the
-  blade's outline (banana: oblong, widest from 0.2 to 0.75 of its length;
-  taro: broad and heart-like from a wide base) and the arrangement (spiral at
-  the golden angle; strelitzia: a fan in one vertical plane, its blades
-  rolled into that plane).
-- Each leaf is a thick stalk and a folded blade ("Leaf helper"); sizes vary
-  by 0.65 - 1.1 per leaf (stream "leaf plant leaves"), the trunk leans toward
-  a seeded heading (stream "leaf plant trunk"). No control point of a leaf
-  lies lower than its half width above the ground, so a drooping or hanging
-  leaf rests just above it at every value: `editor_level_tests` checks every
-  form at the corners of height, leaves, droop and leaf width over four
-  seeds, the base the lowest point.
+- `banana`: a tapering stem, broad oblong blades with a V fold at the base
+  that arch over and twist, a rolled new leaf standing in the crown (slot
+  `shoot`) and one or two dry leaves hanging down the stem (slot `bark`).
+- `taro`: heart-shaped blades hanging from the tips of long stalks that rise
+  from a mound, each blade's halves raised about its midrib.
+- `strelitzia`: paddle blades on long stalks in one fan, alternately to
+  either side, leaning out more the older they are.
+- `fern`: arching fronds of nine pairs of leaflets (seven above ten fronds)
+  about two or three unrolling croziers (slot `shoot`).
+- `tree_fern`: the fern's crown on a trunk with two or three dead fronds
+  hanging under it (slot `bark`).
 
-At the defaults (seed 1 derives a banana of 1.25 m) it has 620 triangles
-(budget 640), about 1.7 ms; the most is 1340 (14 leaves).
+`leaf_width` is the blade's width over its length (banana, strelitzia, taro)
+and the leaflets' length (ferns); `droop` turns the leaves' ends down. 488
+triangles at the defaults, at most 1652 (a tree fern with every parameter at
+its maximum).
+
+#### Plant parts
+
+The leaf plant and the palm shrub share their parts, all closed, overlapping
+solids:
+
+- a leaf's midrib is an arc in a vertical plane whose direction turns from
+  one elevation to another (`Leaf_arc`). `fit_leaf_arc()` scales the arc's
+  descents by the largest share that keeps its tip above a given height, so a
+  drooping leaf rests above the ground at every value;
+- a ribbon (`add_ribbon()`, `add_blade()`): at each station the two edges, the
+  midrib and the keel under it, pointed at both ends; the edges' lift over the
+  midrib is the leaf's fold. A blade is a stalk widening into an oblong blade;
+- a shell (`add_shell()`): a fan of triangles from a hub over a rim, its copy
+  underneath and walls between. A palm's fan (`add_fan()`) has fingers that
+  are ridges from the hub to their tips between dropped clefts; a taro's blade
+  (`add_heart()`) is a closed rim of ten points. `flatten_above()` scales a
+  shell's heights about its hub (one affine map) where it would reach the
+  ground;
+- a frond (`add_frond()`): a three-sided rachis and pairs of leaflets, each a
+  low tetrahedron whose ridge folds it;
+- a stem (`add_stem()`): rings from the ground up, the base a fan about a
+  vertex on the origin.
+
+Leaf k of n has a rank from 0 (oldest, lowest, drooping most) to 1 (youngest,
+standing); leaves follow each other by the golden angle.
 
 ### Rock spire
 
 `nature.rock_spire` (`kit_shapes_nature_rocks.cpp`) is a standing rock on a
 flat base at its origin. Parameters `form` (`pinnacle`, `stack`, `hoodoo`,
-`mesa`), `height` (2 wall heights), `radius` (the base's, 1 module),
-`taper` (how much narrower the top is), `lean` (0 - 15 degrees, toward a
-seeded heading), `roughness`, `seed` and `segments` (sides, 6 - 20); height,
-radius and lean in the default mask; slot `rock`; connector base; a triangle
-mesh body.
+`mesa`), `height` (2 wall heights), `radius` (the base's, 1 module), `taper`
+(how much narrower the top is), `lean` (0 - 15 degrees), `roughness`,
+`strata` (beds of rock between the foot and the top, 4 - 16, default 9),
+`seed` and `segments` (columns, 6 - 20); height, radius and lean in the
+default mask; slots `rock` and `grass` (the ledge tops and a flat top);
+connector base; a triangle mesh body.
 
-- Rings about every 0.6 m (at most 30 with the shelves), each scaled by the
-  form's profile: a pinnacle tapers to a point set off its axis, a stack
-  stands near vertical with a wave-cut notch above its foot on one side, a
-  hoodoo's column narrows to a neck under a wider cap rock (a shelf whose
-  upper ring is 1.6 times the lower), a mesa rises steeply from a short talus
-  foot to a flat top. Each form has two or three shelves; above each the face
-  is set back on one seeded side only, so ledges, not rings, show.
-- The relief, seeded from the stream "rock spire": two lobes shared by every
-  ring, waves over the angle and the height (ribs and gullies winding up the
-  rock), unequal sides (each angle shifted by up to a third of a side), a
-  bulge per ring, a wandering, leaning center, per-vertex noise and a dip of
-  the bedding: every ring rises on one side and falls on the other by the
-  same amount, eased in above the base, so rings never cross.
-- The solid is `Kit_mesh_builder::add_ring_solid()`: rings of equal point
-  counts, two triangles per quad, fans to a base point at the origin and to
-  the apex or the flat top's center.
+- One grid of `segments` columns and rows from a flaring foot to the top, two
+  triangles a cell with the diagonal by an integer draw. The rows are the
+  foot, the beds of uneven thickness (alternately harder and softer, so they
+  stand out or are worn back), a shelf row after two or three of them, and
+  the hoodoo's cap rock. A ledge is a window of two or more columns whose face
+  is set back above its shelf.
+- Every column has its own plan radius (a lobed plan, about one column in
+  three a groove), a shoulder above which it is set back, and a vertical
+  shift (a dip plus faults between column blocks) that every row takes as a
+  share of the gap to its nearer neighbour row, so beds never cross and no
+  seam runs around the rock at one height. The shaft leans by `lean` and its
+  upper half bends aside. `Kit_nature_rocks.rock_spire_rows_rise_up_every_column`
+  holds the rows' order at the corners of the ranges.
+- Forms: `pinnacle` (three ledges, a point off the top ring's center),
+  `stack` (a wave-cut notch on one side of the foot, a turf top), `hoodoo` (a
+  neck under a wider cap rock), `mesa` (a talus foot, a flat turf top at the
+  height).
+- One to five fallen blocks, by the form and an integer draw, lie half sunk in
+  the foot.
 - Replace carries `roughness` to and from `nature.rock`; the forms take
   their default (the rock's form names differ).
 
-At the defaults (seed 1 derives a 14.1 m pinnacle of 3.5 m radius) it has
-720 triangles (budget 760), about 0.8 ms (Debug); the most is 1200 (60 m,
-20 segments).
+396 triangles at the defaults, at most 980 (a hoodoo with every parameter at
+its maximum).
 
 ### Basalt columns
 
@@ -1469,19 +1447,26 @@ triangle mesh body.
   spine above the ground, so a low clump's fronds rest above it.
 
 `nature.palm_shrub` is a trunkless crown at the ground at its origin.
-Parameters `species` (`palmetto`: fan leaves on long stalks from a low
-stump; `cycad`: a rosette of stiff feather fronds on a short rough stump;
-`seedling`: a few broad upright fronds on a thin stem), `size` (1.2 m),
-`fronds` (3 - 16) and `seed`; size and fronds in the default mask; slots
-`bark` and `foliage`; a convex hull body.
+Parameters `species`, `size` (1.2 m), `fronds` (3 - 16) and `seed`; size and
+fronds in the default mask; slots `bark` (the stem and dead leaves),
+`foliage` and `shoot` (the youngest leaves); a convex hull body. It shares
+its parts with the leaf plant ("Plant parts"). By species:
+
+- `palmetto`: pleated fans of eight pointed fingers on long stalks, the young
+  ones standing and the old ones low and drooping, a spear leaf in the middle
+  (slot `shoot`) and one or two dead fans on the ground (slot `bark`).
+- `cycad`: a scaly barrel carrying a rosette of arching feather fronds of
+  eleven leaflet pairs standing in a V (eight above twelve fronds) about a
+  flush of two or three new fronds (slot `shoot`).
+- `seedling`: pleated undivided wedge leaves of four fingers on a thin stem
+  about a spear.
 
 - Replace carries `height` and `fronds` (clamped) between the palm and the
   clump; the species take their default.
 
 At the defaults the clump (seed 1: eight areca stems of 3.9 m) has 1912
-triangles (budget 1940), about 4 - 6.5 ms, the most 1948; the shrub
-(seed 1: a palmetto of 2 m, 12 fans) 584 (budget 600), about 0.8 ms, the
-most 876.
+triangles (budget 1940), about 4 - 6.5 ms, the most 1948; the shrub 1246,
+at most 1778 (a cycad with every parameter at its maximum).
 
 ### Dune and ground patch
 
@@ -1813,200 +1798,6 @@ Derive ranges: `form` all values, `trunk_height` 0.4 - 0.8 wall heights (step
 At the defaults it has 132 triangles (budget 280, the most a seed derives); the
 most is 264 (four cubes of a cluster).
 
-### Recreated nature shapes
-
-`kit_shapes_nature_v2.cpp` (rock, land mass, hill, tree, bush),
-`kit_shapes_nature_plants_v2.cpp` (leaf plant, palm shrub) and
-`kit_shapes_nature_rocks_v2.cpp` (rock spire). No generator of these runs a
-convex hull or a sweep, sorts by a computed key, welds by distance or takes a
-branch on a computed position: limits are `min` / `max` of continuous terms,
-shared vertices are made once and reused by index, and each draw is its own
-statement, so the order of the draws is the same with every compiler. The
-plants and the rock spire draw from two streams of their seed: one whose
-float draws only move vertices, and one named `... cells` whose integer draws
-decide counts, windows and diagonals. `Kit_recreated.nature_topology_follows_from_integers_alone`,
-`Kit_recreated.plant_topology_follows_from_integers_alone` and
-`Kit_recreated.rock_spire_topology_follows_from_integers_alone` hold the
-facet lists equal across the corners of the float ranges.
-
-### Rock (F)
-
-`nature.rock.v2`: one to four pieces, the largest on the origin and the
-smaller ones (0.62, 0.45 and 0.30 of its size) against its flank. A piece is a
-stack of convex rings on a flat base. Every ring has the same edge
-directions, so each side face between two rings is a planar trapezoid and the
-ring lines read as strata; a side whose offsets run straight from foot to top
-is one fracture plane; the other sides stand steeper or slope in earlier by a
-draw. The strata dip and the piece leans by one affine map, the base ring is
-the lowest level's side planes cut by the ground, the top face tilts by
-itself (the band under it is triangles) and the boulder and the angular form
-end in an apex inside the top ring. A ring's offsets are moved toward the
-footprint's by the least share that keeps every edge at least 45 percent of
-its length, which keeps each ring a valid polygon without a decision.
-
-- Forms (`form`): `boulder`, `angular` (tall shards), `slab` (low, wide, one
-  ledge), `layered` (ledges and overhangs, a third of the sides sheer).
-- Parameters: `form`, `size` (the largest piece's width), `roughness`
-  (irregular sides, dip, lean, tilt), `pieces` (1 - 4, default 3), `seed`.
-  The original's `bevels` and its `blob` / `worn` forms are gone. Slot
-  `rock`; collision the convex hull, as the original.
-- 162 triangles at the defaults (the original: 112).
-
-### Land mass (F)
-
-`nature.land_mass.v2`: a plateau with a lobed outline (the radius between 68
-and 100 percent of half the footprint) and a flat top at `height`. Seven rings
-of `segments` columns from the ground up: a talus foot, a cliff with gullies
-down the columns, a bench of turf over two windows of the perimeter, a soil
-band and a turf rim that overhangs the cliff.
-
-- Slots `grass` (top, rim, benches), `earth` (soil band, talus, base) and
-  `rock` (cliff) in place of the original's `earth`.
-- Parameters: `footprint`, `height`, `erosion` (depth of the gullies and
-  roughness of the cliff, 0 - 1) in place of `roundness`, `seed`, `segments`
-  (8 - 48, default 20). Connectors `base` and `top` (the original has none).
-- The walkability check holds the top at least the agent's width across at
-  the outline's deepest lobe; the benches are found by column index, so the
-  slot of a facet is no float decision.
-- 280 triangles at the defaults (the original: 128).
-
-### Hill (F)
-
-`nature.hill.v2`: a polar grid about a crest that stands 8 to 18 percent of
-the way toward one rim point, so that side is steep and the opposite one
-long; a lobed foot, a rounded crest, a straight flank and an easing foot, and
-a spur that lifts the flank along one direction.
-
-- Rocks (`rocks`, 1 - 4, default 2) crop out of the steep side: pieces of the
-  recreated rock's boulder form sunk into the surface, in the slot `rock`
-  beside `grass`.
-- Normals are smooth with hard edges at 38 degrees, so the hill is smooth and
-  the rocks faceted. `segments` is 8 - 40 (default 18), the rings a quarter of
-  it and one.
-- The walkability check measures the steepest facet of the generated surface
-  against the agent's slope; the derive range of the height keeps the steep
-  side at most 43 degrees at every seed.
-- 304 triangles at the defaults (the original: 128).
-
-### Tree (F)
-
-`nature.tree.v2`: a trunk of five rings with a lobed root flare, a bend and a
-taper, its base a fan about a vertex on the origin (slot `bark`), and by
-`species` (in place of `canopy`): `broadleaf` - three or four limbs with an
-elbow, each carrying a clump of leaves, a crown clump on the trunk's top and
-two small clumps that break the outline; `conifer` - four or five tiers, each
-a skirt with a ragged drooping edge, hollow underneath; `bare` - four forked
-limbs and three small tufts of leaves (slot `foliage`). Every part is a
-closed solid and they overlap.
-
-- Parameters: `trunk_height`, `canopy_size`, `species`, `seed`; the
-  original's `segments` is gone. Collision the triangle mesh, as the
-  original.
-- 458 triangles at the defaults (the original: 68).
-
-### Bush (F)
-
-`nature.bush.v2`: a heart clump on the origin, a ring of four or five lower
-clumps standing on the ground about it and two small clumps on top (slot
-`foliage`), with bare twigs reaching past the leaves (slot `bark`).
-
-- Parameters: `size`, `twigs` (1 - 6, default 3) in place of `segments`,
-  `seed`.
-- 408 triangles at the defaults (the original: 48).
-
-### Recreated plants
-
-The recreated leaf plant and palm shrub share their parts
-(`kit_shapes_nature_plants_v2.cpp`), all closed, overlapping solids:
-
-- a leaf's midrib is an arc in a vertical plane whose direction turns from
-  one elevation to another (`Leaf_arc`). `fit_leaf_arc()` scales the arc's
-  descents by the largest share that keeps its tip above a given height, so a
-  drooping leaf rests above the ground at every value;
-- a ribbon (`add_ribbon()`, `add_blade()`): at each station the two edges, the
-  midrib and the keel under it, pointed at both ends; the edges' lift over the
-  midrib is the leaf's fold. A blade is a stalk widening into an oblong blade;
-- a shell (`add_shell()`): a fan of triangles from a hub over a rim, its copy
-  underneath and walls between. A palm's fan (`add_fan()`) has fingers that
-  are ridges from the hub to their tips between dropped clefts; a taro's blade
-  (`add_heart()`) is a closed rim of ten points. `flatten_above()` scales a
-  shell's heights about its hub (one affine map) where it would reach the
-  ground;
-- a frond (`add_frond()`): a three-sided rachis and pairs of leaflets, each a
-  low tetrahedron whose ridge folds it;
-- a stem (`add_stem()`): rings from the ground up, the base a fan about a
-  vertex on the origin.
-
-Both have the slots `bark` (stems, stumps, dead leaves), `foliage` and
-`shoot` (the youngest leaves). Leaf k of n has a rank from 0 (oldest, lowest,
-drooping most) to 1 (youngest, standing); leaves follow each other by the
-golden angle. Parameters, connectors (none), collision and mesh kind are the
-originals'.
-
-### Leaf plant (F)
-
-`nature.leaf_plant.v2`, by `form`:
-
-- `banana`: a tapering stem, broad oblong blades with a V fold at the base
-  that arch over and twist, a rolled new leaf standing in the crown (slot
-  `shoot`) and one or two dry leaves hanging down the stem (slot `bark`).
-- `taro`: heart-shaped blades hanging from the tips of long stalks that rise
-  from a mound, each blade's halves raised about its midrib.
-- `strelitzia`: paddle blades on long stalks in one fan, alternately to
-  either side, leaning out more the older they are.
-- `fern`: arching fronds of nine pairs of leaflets (seven above ten fronds)
-  about two or three unrolling croziers (slot `shoot`).
-- `tree_fern`: the fern's crown on a trunk with two or three dead fronds
-  hanging under it (slot `bark`).
-
-`leaf_width` is the blade's width over its length (banana, strelitzia, taro)
-and the leaflets' length (ferns); `droop` turns the leaves' ends down. 488
-triangles at the defaults (the original: 620), at most 1652 (a tree fern with
-every parameter at its maximum).
-
-### Palm shrub (F)
-
-`nature.palm_shrub.v2`, by `species`:
-
-- `palmetto`: pleated fans of eight pointed fingers on long stalks, the young
-  ones standing and the old ones low and drooping, a spear leaf in the middle
-  (slot `shoot`) and one or two dead fans on the ground (slot `bark`).
-- `cycad`: a scaly barrel carrying a rosette of arching feather fronds of
-  eleven leaflet pairs standing in a V (eight above twelve fronds) about a
-  flush of two or three new fronds (slot `shoot`).
-- `seedling`: pleated undivided wedge leaves of four fingers on a thin stem
-  about a spear.
-
-1246 triangles at the defaults (the original: 584), at most 1778 (a cycad
-with every parameter at its maximum).
-
-### Rock spire (F)
-
-`nature.rock_spire.v2`: one grid of `segments` columns and rows from a
-flaring foot to the top, two triangles a cell with the diagonal by an integer
-draw. The rows are the foot, `strata` beds of uneven thickness (parameter, 4 -
-16, default 9; alternately harder and softer, so they stand out or are worn
-back), a shelf row after two or three of them, and the hoodoo's cap rock. A
-ledge is a window of two or more columns whose face is set back above its
-shelf; the shelf cells and a flat top are the slot `grass` beside `rock`.
-Every column has its own plan radius (a lobed plan, about one column in three
-a groove), a shoulder above which it is set back, and a vertical shift (a dip
-plus faults between column blocks) that every row takes as a share of the gap
-to its nearer neighbour row, so beds never cross and no seam runs around the
-rock at one height. The shaft leans by `lean` and its upper half bends aside.
-
-- Forms (`form`): `pinnacle` (three ledges, a point off the top ring's
-  center), `stack` (a wave-cut notch on one side of the foot, a turf top),
-  `hoodoo` (a neck under a wider cap rock), `mesa` (a talus foot, a flat turf
-  top at the height).
-- One to five fallen blocks, by the form and an integer draw, lie half sunk in
-  the foot.
-- Connector `base` and the triangle mesh collision are the original's;
-  `Kit_recreated.rock_spire_rows_rise_up_every_column` holds the rows' order
-  at the corners of the ranges.
-- 396 triangles at the defaults (the original: 720), at most 980 (a hoodoo
-  with every parameter at its maximum).
-
 ## Prop kit
 
 `kit_shapes_extra_01_08.cpp` and `kit_shapes_extra_09_16.cpp`.
@@ -2016,8 +1807,9 @@ rock at one height. The shaft leans by `lean` and its upper half bends aside.
 `prop.crate` is a slatted wooden crate at its origin. Parameters `width`,
 `height` and `depth` (each 0.75 modules, 0.3 - 4 m), `slats` (slats on a side
 and planks in the lid, 2 - 5, default 3), `lid` (`closed`, `open`, `none`;
-default `closed`) and `seed`; slot `wood`; connectors base and top; a convex
-hull body; mirror plane x; tags `prop`, `crate` and `stack`.
+default `closed`) and `seed`; slot `wood`; connectors base and top; a box
+body with the lid closed or left out, a convex hull body with it open; mirror
+plane x; tags `prop`, `crate` and `stack`.
 
 - Every part is a box: two skids along Z under a floor, four corner posts that
   stand out of the sides, and `slats` level slats on each of the four sides
@@ -2342,8 +2134,10 @@ segments).
 `fragments` (3 - 24, default 9), `tilt` (the most a fragment tilts, 0 - 4
 degrees, default 2), `missing` (the share of fragments that are missing,
 0 - 0.2, default 0.1) and `seed`; slot `floor`; the slab's six connectors
-(base, top, front, back, left, right); a triangle mesh body; seeded; tags
-`walkable`, `floor`, `ruin` and `tiles`.
+(base, top, front, back, left, right); a box body with no fragment missing
+or tilted and a thickness of at least 4 cm (twice the most a fragment sinks),
+a triangle mesh body otherwise; seeded; tags `walkable`, `floor`, `ruin` and
+`tiles`.
 
 - Seeded straight cuts split the slab into rows across Z (as many as the root
   of the count, rounded down; the first rows take the fragments left over) and
@@ -2578,8 +2372,8 @@ of 16 points with a rope).
 (how far the water face leans from upright, 0 - 10 degrees, default 5),
 `fenders` (0 - 4, default 2) and `seed`; slots `stone` and `wood`; connectors
 start and end (at the ends of the walking surface, facing -X and +X), base and
-top; a triangle mesh body; mirror plane x; tags `walkable`, `quay`, `harbour`,
-`wall` and `tiles`.
+top; a box body without fenders and batter, a triangle mesh body otherwise;
+mirror plane x; tags `walkable`, `quay`, `harbour`, `wall` and `tiles`.
 
 - The land face (-Z) is upright at half the thickness. The water face (+Z)
   leans out: its foot stands `height` * tan(`batter`) beyond half the
@@ -2984,7 +2778,8 @@ high. Parameters `length` (`short`, `standard`, `long`: 3, 6 or 12 m; default
 `standard`), `ribs` (ribs of a side to every 3 m, 2 - 6, default 4), `door`
 (`closed`, `ajar`, `open`; default `closed`), `door_angle` (5 - 60 degrees,
 default 25) and `seed`; slots `metal` and `trim`; connectors base, top, front
-and back (the long sides, facing +Z and -Z); a triangle mesh body; tags
+and back (the long sides, facing +Z and -Z); a box body with the doors
+closed, a triangle mesh body with a door ajar or open; tags
 `industrial`, `container` and `stack`.
 
 - A frame (slot `trim`) of four posts and eight rails holds two sides, a roof,
@@ -3008,8 +2803,9 @@ six ribs to every 3 m).
 `industrial.vent` is a rooftop unit at its origin, within its width and
 height. Parameters `form` (`louvre_box`, `fan`, `stack`, `duct_elbow`; default
 `louvre_box`), `width` (1 module, 0.3 - 4 m), `height` (1 module, 0.3 - 4 m),
-`slats` (3 - 8, default 5) and `seed`; slot `metal`; connector base; a convex
-hull body; tags `industrial`, `vent` and `roof`.
+`slats` (3 - 8, default 5) and `seed`; slot `metal`; connector base; a box
+body for the louvre box, a convex hull body for the other forms; tags
+`industrial`, `vent` and `roof`.
 
 - `louvre_box`: a box on a curb under a cap, with `slats` slats on its faces
   toward +Z and -Z, leaning out and down.
@@ -3086,7 +2882,17 @@ fasteners, the crank train, bearings, a spring and the cam train.
   circle or pitch line where teeth engage: every `mesh` connector has a tooth
   centered a quarter pitch from it, so two parts of one `module` joined mesh
   to mesh have their teeth half a pitch apart and engage, whatever their
-  tooth counts.
+  tooth counts. A gear, a bevel gear and a worm wheel carry four such
+  boundary connectors: `mesh` on +X and `mesh_2`, `mesh_3` and `mesh_4` at
+  the teeth at or before one, two and three quarter turns from it toward -Z
+  (the tooth count times the quarter turns over four, rounded down, teeth
+  from +X), each with a tooth a quarter pitch before it as before `mesh`
+  (U53). Two gears of one module joined by any two of them engage with
+  their axes parallel and the sum of the pitch radii apart; two bevel gears
+  joined by them engage as by `mesh`, their axes at the sum of the cone
+  angles; a worm wheel's take its worm at any of the four places. Across
+  kinds (a gear and a bevel gear, a gear or another wheel and a worm
+  wheel's leaning teeth) the connectors join without engaging.
 
 The parts that mate:
 
@@ -3098,9 +2904,10 @@ The parts that mate:
 - Fasteners: a bolt, a nut and a washer of one `diameter` fit: the nut's
   bore is the thread's minor diameter (0.84 of the diameter) and the
   washer's bore 1.1 diameters. A nut joined by its `bolt` connector to a
-  bolt's `nut` connector stands upright around the shank, its bored body
-  between the bolt's tip and the connector (one diameter up the shank); the
-  bolt's `seat` is the surface the head is tightened against.
+  bolt's `nut` connector stands around the shank, its bored body between the
+  bolt's tip and the connector (one diameter up the shank): upright, or a cap
+  nut upside down with its dome over the tip; the bolt's `seat` is the
+  surface the head is tightened against.
 - Crank train: a piston's `pin` joins a connecting rod's `small_end`, the
   rod's `big_end` a crankshaft's `pin`. A bore's flats are its diameter
   across: at the defaults the rod's small bore (0.05 m) takes the piston's
@@ -3121,8 +2928,10 @@ Parameters `teeth` (16, 8 - 40; derived 10 - 24), `module` (0.03 m, 0.005 -
 along Y, 0.08 m, 0.01 - 1; derived 0.06 - 0.12, step 0.02), `bore` (0.08 m,
 0.01 - 1; derived 0.06 - 0.1, step 0.02), `body` (`solid`, `web`, `spokes`;
 default `web`), `spokes` (5, 3 - 8; derived 4 - 6) and `seed`; slot `metal`;
-connectors base, axis (the hub's top) and mesh (on the pitch circle at +X,
-half the face up, facing +X); a triangle mesh body; tags `decoration`,
+connectors base, axis (the hub's top), mesh (on the pitch circle at +X,
+half the face up, facing +X) and mesh_2 - mesh_4 (the boundary connectors,
+on the pitch circle half the face up, facing out); a triangle mesh body;
+tags `decoration`,
 `obstacle`, `machine` and `gear`.
 
 - The pitch radius is half the teeth times the module, the root circle 1.25
@@ -3159,8 +2968,9 @@ narrows upward. Parameters `teeth` (16, 8 - 32; derived 10 - 24), `module`
 cone, as the gear's), `cone` (degrees between the axis and the pitch cone,
 45, 30 - 60; fixed), `bore` (0.08 m, at most half the small end; derived
 0.06 - 0.1, step 0.02) and `seed`; slot `metal`; connectors base, axis (the
-top) and mesh (on the large end's pitch circle at +X, outward across the
-cone, up along it toward the apex); a triangle mesh body; tags `decoration`,
+top), mesh (on the large end's pitch circle at +X, outward across the
+cone, up along it toward the apex) and mesh_2 - mesh_4 (the boundary
+connectors: mesh turned about Y); a triangle mesh body; tags `decoration`,
 `obstacle`, `machine`, `gear` and `bevel`.
 
 - The large end's pitch circle stands 0.6 modules, a tenth of the face width
@@ -3205,8 +3015,8 @@ rule `base_contains_origin`; tags `decoration`, `machine`, `gear` and `worm`.
   `steel`) in its bore that stands a quarter of the face over it. A tooth
   leans along the pitch circle by the worm's lead over the worm's pitch
   circumference for each unit up, centered on its spur position halfway up
-  the face. Connectors base, axis (the bush's top) and mesh (on the pitch
-  circle at +X, facing +X).
+  the face. Connectors base, axis (the bush's top), mesh (on the pitch
+  circle at +X, facing +X) and mesh_2 - mesh_4 (the boundary connectors).
 - A worm joined to its wheel mesh to mesh at twist 0 lies with its axis
   across the wheel's, along the wheel's tangent; a wheel tooth stands in a
   gap of the thread, and the teeth's tips clear the shaft.
@@ -3241,23 +3051,34 @@ a head it is a stud. Parameters `head` (`hex`, `socket`, `round`,
 0.04 - 0.08, step 0.01), `length` (from the tip to under the head, 0.3 m,
 0.05 - 4; derived 0.2 - 0.5, step 0.05), `thread` (the share of the length
 that is threaded, 0.6, 0.2 - 1; derived 0.4 - 1, step 0.1), `turns` (ridges of
-the thread, 10, 4 - 40; derived 8 - 16) and `seed`; slot `steel`; connectors
+the thread, 10, 4 - 40; derived 8 - 16), `thread_style` (`helix`, `rings`;
+default `helix`) and `seed`; slot `steel`; connectors
 base, seat (under the head, facing the tip) and nut (on the axis one
 diameter up the shank, at most the length, facing the tip); a convex hull
-body; mirror planes x and z; tags `decoration`,
+body; no mirror plane (a helix has no mirror image); tags `decoration`,
 `machine`, `fastener` and `bolt`.
 
-- The shank is a lathe of ten points from a chamfered tip: a ridge to a turn
-  (the minor ring at 0.84 of the radius, the ridge at the radius) over 0.88
-  of the threaded length, then plain up to the head. The thread is rings,
-  not a helix.
+- The thread covers 0.88 of the threaded length from a chamfered tip (a ring
+  of 0.7 of the radius), a ridge to a turn: the root at 0.84 of the radius,
+  the ridge at the radius, then plain up to the head.
+- `helix`: a right-hand thread (U53). The root and the ridge rise a turn for
+  each turn about Y from +X toward -Z, in triangles; the ridge winds one
+  whole turn fewer than `turns`, from 0.65 of a turn over the tip, and at
+  +X the thread starts in a planar face. Over its last turn the ridge runs out
+  into the root, where a band rises to the plain shank. A turn has 16
+  points, fewer above 28 turns (1880 over four times one more than the
+  turns, at least 10), so that with the largest head the bolt stays within
+  the kit's ceiling; the shank is four triangles for each point of a turn
+  and each turn, and one turn more.
+- `rings`: the shank is a lathe of ten points, a minor ring and a ridge ring
+  to a turn.
 - `hex`: a hexagon 1.8 diameters across the corners and 0.55 diameters high
   under a chamfer. `socket`: a round head 1.5 diameters wide and one diameter
   high with a socket in its top. `round`: a dome to 0.52 diameters.
   `countersunk`: a cone widening up to a flat top 1.84 diameters wide, sunk
   into the shank by up to 0.45 diameters (0.4 of a short bolt's length).
 
-Budget 540 triangles.
+Budget 760 triangles (the defaults: 736).
 
 ### Nut
 
@@ -3266,14 +3087,23 @@ Parameters `form` (`hex`, `square`, `wing`, `cap`), `diameter` (of the bolt,
 0.06 m, 0.01 - 0.5; derived 0.04 - 0.08, step 0.01), `height` (0.05 m, 0.005
 - 0.5; derived 0.04 - 0.06, step 0.01) and `seed`; slot `steel`; connectors
 base, top (at the whole nut's top) and bolt (on the bored body's top, the
-height up, facing up); a convex hull body; mirror planes x and z;
+height up, facing up; a cap nut's on its base, facing down); a convex hull
+body; mirror planes x and z;
 tags `decoration`, `machine`, `fastener` and `nut`.
 
 - `hex`: a bored prism of six sides, its corners 0.92 diameters from the
   axis. `square`: four sides, 1.05 diameters. `wing`: a round nut of twelve
   points with a wing leaning out of each side toward +X and -X; its top is
-  1.9 heights. `cap`: the hexagon under a dome that closes the bore, 0.75
-  diameters over its top.
+  1.9 heights. `cap`: the hexagon under a sleeve and a dome around a blind
+  hole that goes on from the bore, 0.98 of its width (so that no point of
+  the two parts meets), up to a ceiling 1.15 diameters over the base (at
+  least 0.15 diameters over the hexagon). The sleeve is 0.76 diameters in
+  radius, from inside the hexagon up to 0.45 diameters under the ceiling
+  (at least to the hexagon's top), and the dome rises from there by 0.76
+  diameters over rings of 0.66 and 0.38 diameters. Joined by its bolt
+  connector to a bolt of its diameter it hangs upside down: the bolt's tip,
+  a diameter beyond the connector, lies in the blind hole, and the thread's
+  ridge stays inside the sleeve and the dome (U53).
 - The bore is 0.84 diameters wide, the bolt thread's minor diameter.
 
 Budget 90 triangles.
@@ -3357,7 +3187,7 @@ diameter, 0.1 m, 0.02 - 2, at most the height; derived 0.08 - 0.12, step
 0.02), `height` (of the axis, 0.15 m, 0.05 - 2; derived 0.15 - 0.2, step
 0.05), `width` (the base along X, 0.4 m, 0.1 - 4; derived 0.4 - 0.5, step
 0.1), `depth` (along the shaft, 0.1 m, 0.03 - 1; derived 0.08 - 0.12, step
-0.02), `bolts` (2, 2 - 4: one or two pairs; 3 makes one pair) and `seed`;
+0.02), `bolts` (`two`, `four`; default `two`) and `seed`;
 slots `metal` and `steel` (the bush and the bolts' heads); connectors base
 and axis (on the axis at the +Z face, facing +Z); a triangle mesh body;
 mirror planes x and z; tags `decoration`, `obstacle`, `machine` and

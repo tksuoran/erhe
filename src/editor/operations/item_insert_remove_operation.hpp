@@ -60,6 +60,8 @@ public:
 
 private:
     void on_materials_changed(App_context& context) const;
+    // Step 41: the kit piece rows are read again when a node comes into the scene.
+    void queue_kit_piece_rows_refresh(App_context& context) const;
 
     Mode                                                       m_mode;
     std::shared_ptr<erhe::Hierarchy>                           m_item         {};

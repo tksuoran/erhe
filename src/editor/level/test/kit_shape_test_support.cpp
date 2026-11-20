@@ -27,11 +27,6 @@ auto get_shape(const char* id) -> const Kit_shape_definition&
     return *shape;
 }
 
-auto contract_id(const Kit_shape_definition& shape) -> const std::string&
-{
-    return get_contract_id(shape);
-}
-
 auto defaults(const Kit_shape_definition& shape) -> Kit_parameter_values
 {
     return make_default_values(shape, default_module, default_wall_height);
@@ -148,31 +143,40 @@ auto range_corner(const Kit_shape_definition& shape, const Range_end range_end) 
     return values;
 }
 
-void expect_original_bounds(const Kit_parameter_values& values, const Kit_parameter_values& original_values)
+auto bounds_value_sets(const Kit_shape_definition& shape) -> std::vector<Kit_parameter_values>
 {
-    SCOPED_TRACE(fmt::format("{} {}", values.get_shape()->id, values.to_canonical_text()));
-    const Kit_mesh_report report          = check_kit_shape(values);
-    const Kit_mesh_report original_report = check_kit_shape(original_values);
-    EXPECT_TRUE(report.is_valid()) << describe(report);
-    const float tolerance = 1.0e-5f * std::max(1.0f, glm::length(original_report.bounds_max - original_report.bounds_min));
-    EXPECT_LT(glm::distance(report.bounds_min, original_report.bounds_min), tolerance);
-    EXPECT_LT(glm::distance(report.bounds_max, original_report.bounds_max), tolerance);
+    std::vector<Kit_parameter_values> sets{defaults(shape), range_corner(shape, Range_end::min), range_corner(shape, Range_end::max)};
+    for (const int seed : {1, 3, 17, 4242}) {
+        sets.push_back(all_derived(shape, seed));
+    }
+    return sets;
 }
 
-void expect_recreated_keep_original_bounds(const std::vector<std::string>& originals)
+void expect_bounds(const Kit_parameter_values& values, const glm::vec3& expected_min, const glm::vec3& expected_max)
 {
-    EXPECT_FALSE(originals.empty());
-    for (const std::string& original_id : originals) {
-        const Kit_shape_definition* const shape = get_library().find(original_id + c_kit_recreated_id_suffix);
-        ASSERT_NE(shape, nullptr) << original_id;
-        const Kit_shape_definition& original = get_shape(original_id.c_str());
-        expect_original_bounds(defaults(*shape), defaults(original));
-        expect_original_bounds(range_corner(*shape, Range_end::min), range_corner(original, Range_end::min));
-        expect_original_bounds(range_corner(*shape, Range_end::max), range_corner(original, Range_end::max));
-        for (const int seed : {1, 3, 17, 4242}) {
-            expect_original_bounds(all_derived(*shape, seed), all_derived(original, seed));
-        }
+    SCOPED_TRACE(fmt::format("{} {}", values.get_shape()->id, values.to_canonical_text()));
+    const Kit_mesh_report report = check_kit_shape(values);
+    EXPECT_TRUE(report.is_valid()) << describe(report);
+    const float tolerance = 1.0e-5f * std::max(1.0f, glm::length(expected_max - expected_min));
+    EXPECT_LT(glm::distance(report.bounds_min, expected_min), tolerance)
+        << report.bounds_min.x << " " << report.bounds_min.y << " " << report.bounds_min.z;
+    EXPECT_LT(glm::distance(report.bounds_max, expected_max), tolerance)
+        << report.bounds_max.x << " " << report.bounds_max.y << " " << report.bounds_max.z;
+}
+
+auto circle_extent(const int n, const float radius) -> std::array<float, 4>
+{
+    std::array<float, 4> extent{
+        std::numeric_limits<float>::max(), std::numeric_limits<float>::lowest(), std::numeric_limits<float>::max(), std::numeric_limits<float>::lowest()
+    };
+    for (int i = 0; i < n; ++i) {
+        const glm::vec2 point = radius * get_kit_circle_point(i, n);
+        extent[0] = std::min(extent[0], point.x);
+        extent[1] = std::max(extent[1], point.x);
+        extent[2] = std::min(extent[2], point.y);
+        extent[3] = std::max(extent[3], point.y);
     }
+    return extent;
 }
 
 auto make_mesh_pin(const std::string& name, const GEO::Mesh& mesh) -> Mesh_pin
@@ -232,13 +236,7 @@ auto make_mesh_pin(const std::string& name, const GEO::Mesh& mesh) -> Mesh_pin
 auto get_all_rows() -> const std::vector<Kit_shape_rows>&
 {
     static const std::vector<Kit_shape_rows> all{
-        get_originals_rows(),
-        get_basic_v2_rows(),
-        get_architecture_v2_rows(),
-        get_medieval_v2_rows(),
-        get_nature_v2_rows(),
-        get_nature_plants_v2_rows(),
-        get_nature_rocks_v2_rows(),
+        get_starter_rows(),
         get_build_13_16_rows(),
         get_build_17_20_rows(),
         get_build_21_24_rows(),

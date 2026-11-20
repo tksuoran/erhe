@@ -10,7 +10,6 @@ auto get_extra_25_32_rows() -> Kit_shape_rows
         "harbour.cargo", "harbour.crane", "harbour.lighthouse", "industrial.tank", "industrial.truss", "industrial.container", "industrial.vent",
         "industrial.antenna"
     };
-    rows.recreated_originals = {};
     rows.seeded_shapes       = {"harbour.cargo", "industrial.antenna"};
     rows.enum_shapes         = {
         "harbour.cargo", "harbour.crane", "harbour.lighthouse", "industrial.tank", "industrial.truss", "industrial.container", "industrial.vent",

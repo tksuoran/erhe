@@ -3,12 +3,25 @@
 
 #include "mcp/mcp_server_shared.hpp"
 
+#include "app_context.hpp"
+#include "brushes/brush_tool.hpp"
 #include "editor_log.hpp"
+#include "physics/physics_tool.hpp"
 #include "prefabs/instance_structure.hpp"
 #include "scene/collision_shape_from_mesh.hpp"
 #include "scene/scene_root.hpp"
+#include "tools/material_paint_tool.hpp"
 #include "tools/mesh_component_selection.hpp"
+#include "tools/paint_tool.hpp"
+#include "tools/selection_tool.hpp"
+#include "tools/weight_paint_tool.hpp"
+#include "transform/move_tool.hpp"
+#include "transform/rotate_tool.hpp"
+#include "transform/scale_tool.hpp"
 #include "transform/transform_tool_settings.hpp"
+#if defined(ERHE_XR_LIBRARY_OPENXR)
+#   include "xr/headset_travel_tool.hpp"
+#endif
 
 #include "erhe_geometry/geometry.hpp"
 #include "erhe_item/hierarchy.hpp"
@@ -742,6 +755,70 @@ auto bearer_token_from(const httplib::Request& req) -> std::optional<std::string
         return std::nullopt;
     }
     return header.substr(prefix.size());
+}
+
+auto c_str(const Mcp_tool tool) -> const char*
+{
+    switch (tool) {
+        case Mcp_tool::brush:          return "brush";
+        case Mcp_tool::move:           return "move";
+        case Mcp_tool::rotate:         return "rotate";
+        case Mcp_tool::scale:          return "scale";
+        case Mcp_tool::selection:      return "selection";
+        case Mcp_tool::paint:          return "paint";
+        case Mcp_tool::material_paint: return "material_paint";
+        case Mcp_tool::weight_paint:   return "weight_paint";
+        case Mcp_tool::physics:        return "physics";
+        case Mcp_tool::travel:         return "travel";
+        case Mcp_tool::count:          return "";
+    }
+    return "";
+}
+
+auto find_mcp_tool(const std::string_view name) -> std::optional<Mcp_tool>
+{
+    for (unsigned int i = 0; i < static_cast<unsigned int>(Mcp_tool::count); ++i) {
+        const Mcp_tool tool = static_cast<Mcp_tool>(i);
+        if (name == c_str(tool)) {
+            return tool;
+        }
+    }
+    return std::nullopt;
+}
+
+auto get_mcp_tool(const App_context& context, const Mcp_tool tool) -> Tool*
+{
+    switch (tool) {
+        case Mcp_tool::brush:          return context.brush_tool;
+        case Mcp_tool::move:           return context.move_tool;
+        case Mcp_tool::rotate:         return context.rotate_tool;
+        case Mcp_tool::scale:          return context.scale_tool;
+        case Mcp_tool::selection:      return context.selection_tool;
+        case Mcp_tool::paint:          return context.paint_tool;
+        case Mcp_tool::material_paint: return context.material_paint_tool;
+        case Mcp_tool::weight_paint:   return context.weight_paint_tool;
+        case Mcp_tool::physics:        return context.physics_tool;
+#if defined(ERHE_XR_LIBRARY_OPENXR)
+        case Mcp_tool::travel:         return context.headset_travel_tool;
+#else
+        case Mcp_tool::travel:         return nullptr;
+#endif
+        case Mcp_tool::count:          return nullptr;
+    }
+    return nullptr;
+}
+
+auto get_mcp_tool_name(const App_context& context, const Tool* const tool) -> std::string
+{
+    if (tool == nullptr) {
+        return {};
+    }
+    for (unsigned int i = 0; i < static_cast<unsigned int>(Mcp_tool::count); ++i) {
+        if (get_mcp_tool(context, static_cast<Mcp_tool>(i)) == tool) {
+            return c_str(static_cast<Mcp_tool>(i));
+        }
+    }
+    return {};
 }
 
 } // namespace mcp_server_detail

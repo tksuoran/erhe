@@ -4,6 +4,7 @@
 #include "erhe_item/item_host.hpp"
 
 #include "app_context.hpp"
+#include "app_message_bus.hpp"
 #include "assets/asset_manager.hpp"
 #include "editor_log.hpp"
 #include "level/level_kits.hpp"
@@ -150,6 +151,13 @@ void Item_insert_remove_operation::on_materials_changed(App_context& context) co
     }
 }
 
+void Item_insert_remove_operation::queue_kit_piece_rows_refresh(App_context& context) const
+{
+    if ((context.app_message_bus != nullptr) && (dynamic_cast<const erhe::scene::Node*>(m_item.get()) != nullptr)) {
+        context.app_message_bus->kit_piece_connectors_changed.queue_message(Kit_piece_connectors_changed_message{});
+    }
+}
+
 void Item_insert_remove_operation::execute(App_context& context)
 {
     log_operations->trace("Op Execute {}", describe());
@@ -202,6 +210,8 @@ void Item_insert_remove_operation::execute(App_context& context)
     }
     if (m_mode == Mode::insert) {
         m_inserted_once = true;
+        // A kit piece's Attached row names its target, which may be the node coming (back) into the scene.
+        queue_kit_piece_rows_refresh(context);
     }
     on_materials_changed(context);
 
@@ -253,6 +263,9 @@ void Item_insert_remove_operation::undo(App_context& context)
     for (auto i = rbegin(m_parent_changes), end = rend(m_parent_changes); i < end; ++i) {
         auto& child_parent_change = *i;
         child_parent_change->undo(context);
+    }
+    if (m_mode == Mode::remove) {
+        queue_kit_piece_rows_refresh(context);
     }
     on_materials_changed(context);
 

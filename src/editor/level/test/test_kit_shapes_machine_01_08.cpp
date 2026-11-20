@@ -242,7 +242,7 @@ TEST_P(Kit_gear_bodies, parts_and_size_follow_the_values)
         const float tip = std::hypot(pitch + module, 0.4f * module);
         EXPECT_LE(report.bounds_max.x, tip + 1.0e-5f);
         EXPECT_GE(report.bounds_max.x, (pitch + module) * std::cos(pi / static_cast<float>(teeth)));
-        expect_connector_names(values, {"base", "axis", "mesh"});
+        expect_connector_names(values, {"base", "axis", "mesh", "mesh_2", "mesh_3", "mesh_4"});
         const std::vector<Kit_connector> connectors = connectors_of(values);
         EXPECT_FLOAT_EQ(connectors[1].position.y, report.bounds_max.y);
         EXPECT_FLOAT_EQ(connectors[2].position.x, pitch);
@@ -251,6 +251,73 @@ TEST_P(Kit_gear_bodies, parts_and_size_follow_the_values)
 }
 
 INSTANTIATE_TEST_SUITE_P(Kit_gear, Kit_gear_bodies, testing::Values("solid", "web", "spokes"));
+
+// The mean z of the top tooth tips nearest +X once the mesh is turned about Y so that the direction at the angle
+// (from +X toward -Z) lies on +X.
+[[nodiscard]] auto turned_tip_z(const GEO::Mesh& mesh, const float angle, const float top, const float beyond, const float z_reach) -> float
+{
+    float sum   = 0.0f;
+    int   count = 0;
+    for (GEO::index_t v = 0; v < mesh.vertices.nb(); ++v) {
+        const glm::vec3 p = point_of(mesh, v);
+        const glm::vec3 q{(p.x * std::cos(angle)) - (p.z * std::sin(angle)), p.y, (p.x * std::sin(angle)) + (p.z * std::cos(angle))};
+        if ((std::abs(q.y - top) < 1.0e-5f) && (q.x > 0.0f) && (glm::length(glm::vec2{q.x, q.z}) > beyond) && (std::abs(q.z) < z_reach)) {
+            sum += q.z;
+            ++count;
+        }
+    }
+    return (count > 0) ? (sum / static_cast<float>(count)) : 1.0e9f;
+}
+
+// U53: mesh_2 - mesh_4 stand on the pitch circle half the face up, facing out, at the tooth at or before each quarter
+// turn, with a tooth a quarter pitch before each as before mesh; so two gears joined by any two of their four
+// boundary connectors engage, their axes the sum of the pitch radii apart.
+TEST(Kit_gear, the_boundary_connectors_engage_as_the_mesh_connector_does)
+{
+    const Kit_shape_definition& gear = get_shape("machine.gear");
+    for (int teeth = 8; teeth <= 40; ++teeth) {
+        Kit_parameter_values values = explicit_values(gear, 1);
+        ASSERT_TRUE(values.set_int("teeth", teeth));
+        SCOPED_TRACE(values.to_canonical_text());
+        const float module = values.get_float("module");
+        const float width  = values.get_float("face_width");
+        const float pitch  = 0.5f * module * static_cast<float>(teeth);
+        const float tooth  = (2.0f * pi) / static_cast<float>(teeth);
+        const std::vector<Kit_connector> connectors = connectors_of(values);
+        ASSERT_EQ(connectors.size(), 6u);
+        const std::unique_ptr<GEO::Mesh> mesh = generate(values);
+        for (std::size_t k = 2; k < 6; ++k) {
+            const Kit_connector& connector = connectors[k];
+            const int            quarter   = static_cast<int>(k) - 2;
+            const float          angle     = tooth * static_cast<float>((quarter * teeth) / 4);
+            EXPECT_NEAR(connector.outward.x, std::cos(angle), 1.0e-5f) << connector.name;
+            EXPECT_NEAR(connector.outward.z, -std::sin(angle), 1.0e-5f) << connector.name;
+            EXPECT_EQ(connector.outward.y, 0.0f);
+            EXPECT_EQ(connector.up, (glm::vec3{0.0f, 1.0f, 0.0f}));
+            EXPECT_NEAR(connector.position.x, pitch * connector.outward.x, 1.0e-5f);
+            EXPECT_NEAR(connector.position.z, pitch * connector.outward.z, 1.0e-5f);
+            EXPECT_FLOAT_EQ(connector.position.y, 0.5f * width);
+            const float z = turned_tip_z(*mesh, angle, width, pitch + (0.9f * module), 1.7f * module);
+            EXPECT_NEAR(z, (pitch + module) * std::sin(0.25f * tooth), 1.0e-5f) << connector.name;
+        }
+    }
+    // A gear of 16 teeth and one of 23, joined by each pair of their boundary connectors.
+    Kit_parameter_values first  = explicit_values(gear, 1);
+    Kit_parameter_values second = explicit_values(gear, 1);
+    ASSERT_TRUE(first.set_int("teeth", 16));
+    ASSERT_TRUE(second.set_int("teeth", 23));
+    const float distance = 0.5f * first.get_float("module") * static_cast<float>(16 + 23);
+    const std::vector<Kit_connector> a = connectors_of(first);
+    const std::vector<Kit_connector> b = connectors_of(second);
+    for (std::size_t i = 2; i < 6; ++i) {
+        for (std::size_t j = 2; j < 6; ++j) {
+            const editor::Kit_join_pose pose = editor::join_connectors(b[j], a[i], 0, 0.0f);
+            EXPECT_NEAR(glm::length(glm::vec2{pose.position.x, pose.position.z}), distance, 1.0e-5f) << a[i].name << " " << b[j].name;
+            EXPECT_NEAR(pose.position.y, 0.0f, 1.0e-6f);
+            EXPECT_NEAR(glm::dot(glm::mat3_cast(pose.rotation) * glm::vec3{0.0f, 1.0f, 0.0f}, glm::vec3{0.0f, 1.0f, 0.0f}), 1.0f, 1.0e-6f);
+        }
+    }
+}
 
 // The tooth nearest the mesh connector stands a quarter pitch beside it, toward +Z, at every tooth count: two gears
 // joined mesh to mesh (the second turned half around) have their teeth half a pitch apart.
@@ -355,16 +422,19 @@ TEST_P(Kit_bolt_heads, every_turn_count_passes_at_the_corners)
 {
     const Kit_shape_definition& bolt = get_shape("machine.bolt");
     ASSERT_EQ(bolt.material_slots, (std::vector<std::string>{"steel"}));
-    for (const int turns : {4, 10, 40}) {
-        Kit_parameter_values values = explicit_enum(bolt, "head", GetParam(), 1);
-        ASSERT_TRUE(values.set_int("turns", turns));
-        for_each_corner(values, bolt_floats, expect_valid_with_every_slot);
-        expect_topology_from_integers(values, bolt_floats);
+    for (const char* const style : {"helix", "rings"}) {
+        for (const int turns : {4, 10, 28, 29, 35, 38, 40}) {
+            Kit_parameter_values values = explicit_enum(bolt, "head", GetParam(), 1);
+            ASSERT_TRUE(values.set_enum("thread_style", style));
+            ASSERT_TRUE(values.set_int("turns", turns));
+            for_each_corner(values, bolt_floats, expect_valid_with_every_slot);
+            expect_topology_from_integers(values, bolt_floats);
+        }
     }
 }
 
-// A shank of ten sides with two rings to a turn, under a head; the tip stands on the origin and the seat is the
-// length over it.
+// A helical shank of four triangles for each point of a turn and each turn and one turn more, or a ringed shank of
+// ten sides with two rings to a turn, under a head; the tip stands on the origin and the seat is the length over it.
 TEST_P(Kit_bolt_heads, parts_and_size_follow_the_values)
 {
     const Kit_shape_definition& bolt = get_shape("machine.bolt");
@@ -379,7 +449,8 @@ TEST_P(Kit_bolt_heads, parts_and_size_follow_the_values)
         const bool headless = (GetParam() == "none");
         EXPECT_EQ(report.component_count, headless ? 1u : 2u);
         if (headless) {
-            EXPECT_EQ(report.triangle_count, 76u + (40u * turns));
+            const unsigned int points = std::clamp(1880u / (4u * (turns + 1u)), 10u, 16u);
+            EXPECT_EQ(report.triangle_count, (values.get_enum("thread_style") == "helix") ? (4u * points * (turns + 1u)) : (76u + (40u * turns)));
             EXPECT_FLOAT_EQ(report.bounds_max.y, length);
             EXPECT_FLOAT_EQ(report.bounds_max.x, 0.5f * d);
         } else {
@@ -401,6 +472,35 @@ TEST_P(Kit_bolt_heads, parts_and_size_follow_the_values)
 
 INSTANTIATE_TEST_SUITE_P(Kit_bolt, Kit_bolt_heads, testing::Values("hex", "socket", "round", "countersunk", "none"));
 
+// U53: the ridge of a helical thread at full radius rises a turn for each turn about Y from +X toward -Z (a right-hand
+// thread): every such point lies on one helix through the first ridge's start, 0.65 of a turn over the tip.
+TEST(Kit_bolt, a_helical_ridge_rises_a_turn_for_each_turn)
+{
+    const Kit_shape_definition& bolt = get_shape("machine.bolt");
+    for (int seed = 0; seed < 12; ++seed) {
+        Kit_parameter_values values = derived_enum(bolt, "thread_style", "helix", seed);
+        SCOPED_TRACE(values.to_canonical_text());
+        const float r      = 0.5f * values.get_float("diameter");
+        const float thread = 0.88f * values.get_float("thread") * values.get_float("length");
+        const float turn   = thread / static_cast<float>(values.get_int("turns"));
+        const std::unique_ptr<GEO::Mesh> mesh = generate(values);
+        int on_ridge = 0;
+        for (GEO::index_t v = 0; v < mesh->vertices.nb(); ++v) {
+            const glm::vec3 p = point_of(*mesh, v);
+            if ((std::abs(glm::length(glm::vec2{p.x, p.z}) - r) > (1.0e-5f * r)) || (p.y > thread)) {
+                continue;
+            }
+            float angle = std::atan2(-p.z, p.x);
+            angle += (angle < -1.0e-4f) ? (2.0f * pi) : 0.0f;
+            const float turns_up = ((p.y - (0.65f * turn)) / turn) - (angle / (2.0f * pi));
+            EXPECT_NEAR(turns_up, std::round(turns_up), 1.0e-3f) << p.x << " " << p.y << " " << p.z;
+            ++on_ridge;
+        }
+        // The ridge points of every turn but the last, which runs out into the root.
+        EXPECT_GE(on_ridge, ((values.get_int("turns") - 2) * 10) + 1);
+    }
+}
+
 //
 // Nut.
 //
@@ -420,7 +520,8 @@ TEST_P(Kit_nut_forms, passes_at_the_corners)
     expect_topology_from_integers(values, nut_floats);
 }
 
-// The top connector is on the nut's highest point and the bolt connector on its bored body's top; the nut is wider
+// The top connector is on the nut's highest point and the bolt connector on its bored body's top (a cap nut's on its
+// base, facing down); the nut is wider
 // than its bolt, and bored for it: the bore is the bolt's thread root wide (0.84 of the diameter).
 TEST_P(Kit_nut_forms, size_and_bore_follow_the_values)
 {
@@ -437,8 +538,13 @@ TEST_P(Kit_nut_forms, size_and_bore_follow_the_values)
         expect_connector_names(values, {"base", "top", "bolt"});
         const std::vector<Kit_connector> connectors = connectors_of(values);
         EXPECT_NEAR(connectors[1].position.y, report.bounds_max.y, 1.0e-6f);
-        EXPECT_EQ(connectors[2].position, (glm::vec3{0.0f, values.get_float("height"), 0.0f}));
-        EXPECT_EQ(connectors[2].outward, (glm::vec3{0.0f, 1.0f, 0.0f}));
+        if (GetParam() == "cap") {
+            EXPECT_EQ(connectors[2].position, glm::vec3{0.0f});
+            EXPECT_EQ(connectors[2].outward, (glm::vec3{0.0f, -1.0f, 0.0f}));
+        } else {
+            EXPECT_EQ(connectors[2].position, (glm::vec3{0.0f, values.get_float("height"), 0.0f}));
+            EXPECT_EQ(connectors[2].outward, (glm::vec3{0.0f, 1.0f, 0.0f}));
+        }
         // The points nearest the axis are the bore's.
         const std::unique_ptr<GEO::Mesh> mesh = generate(values);
         float least = 1.0e9f;
@@ -452,33 +558,105 @@ TEST_P(Kit_nut_forms, size_and_bore_follow_the_values)
     }
 }
 
-// A default nut of each form joined by its bolt connector to a default bolt's nut connector (twist 0): its body
-// stands around the shank, at or over the bolt's tip and under the nut connector, upright.
+// A default nut of each form joined by its bolt connector to a default bolt's nut connector (twist 0): its bored body
+// stands around the shank, at or over the bolt's tip and under the nut connector, upright; a cap nut upside down with
+// its dome past the tip (a_joined_cap_nut_covers_the_bolts_tip), the other nuts wholly at or over the tip.
 TEST_P(Kit_nut_forms, a_joined_nut_sits_on_the_bolt_over_its_tip)
 {
+    const bool cap = (GetParam() == "cap");
     const Kit_parameter_values bolt = explicit_values(get_shape("machine.bolt"), 1);
     const Kit_parameter_values nut  = explicit_enum(get_shape("machine.nut"), "form", GetParam(), 1);
     const std::vector<Kit_connector> bolt_connectors = connectors_of(bolt);
     const std::vector<Kit_connector> nut_connectors  = connectors_of(nut);
     const float nut_y = bolt_connectors[2].position.y;
-    EXPECT_GE(nut_y, nut.get_float("height"));
+    const float h     = nut.get_float("height");
+    EXPECT_GE(nut_y, h);
     const editor::Kit_join_pose pose = editor::join_connectors(nut_connectors[2], bolt_connectors[2], 0, 0.0f);
     const glm::mat3 rotation = glm::mat3_cast(pose.rotation);
-    EXPECT_NEAR(glm::dot(rotation * glm::vec3{0.0f, 1.0f, 0.0f}, glm::vec3{0.0f, 1.0f, 0.0f}), 1.0f, 1.0e-6f);
+    EXPECT_NEAR(glm::dot(rotation * glm::vec3{0.0f, 1.0f, 0.0f}, glm::vec3{0.0f, 1.0f, 0.0f}), cap ? -1.0f : 1.0f, 1.0e-6f);
     EXPECT_NEAR(glm::length(glm::vec2{pose.position.x, pose.position.z}), 0.0f, 1.0e-6f);
     const std::unique_ptr<GEO::Mesh> mesh = generate(nut);
     float lowest = 1.0e9f;
     for (GEO::index_t v = 0; v < mesh->vertices.nb(); ++v) {
         lowest = std::min(lowest, (pose.position + (rotation * point_of(*mesh, v))).y);
     }
-    EXPECT_GE(lowest, -1.0e-6f);
-    // The body's top face is at the nut connector, so the body lies between the tip and the connector.
+    if (cap) {
+        EXPECT_LT(lowest, 0.0f);
+    } else {
+        EXPECT_GE(lowest, -1.0e-6f);
+    }
+    // The connector is on the body's face away from the tip, so the body lies between the tip and the connector.
     EXPECT_NEAR((pose.position + (rotation * nut_connectors[2].position)).y, nut_y, 1.0e-6f);
-    EXPECT_NEAR(pose.position.y, nut_y - nut.get_float("height"), 1.0e-6f);
+    EXPECT_NEAR((pose.position + (rotation * glm::vec3{0.0f, cap ? h : 0.0f, 0.0f})).y, nut_y - h, 1.0e-6f);
     EXPECT_LT(nut_y, bolt.get_float("length"));
 }
 
 INSTANTIATE_TEST_SUITE_P(Kit_nut, Kit_nut_forms, testing::Values("hex", "square", "wing", "cap"));
+
+// U53: a cap nut joined by its bolt connector to the nut connector of a bolt of its diameter (twist 0) hangs upside
+// down, its hexagon between the connector and the tip and its dome below: the blind hole's ceiling lies past the
+// tip, and the shank's widest ring (the thread's ridge) stays inside the sleeve and the dome around it.
+TEST(Kit_nut, a_joined_cap_nut_covers_the_bolts_tip)
+{
+    for (int seed = 0; seed < 12; ++seed) {
+        Kit_parameter_values bolt = all_derived(get_shape("machine.bolt"), seed);
+        Kit_parameter_values nut  = derived_enum(get_shape("machine.nut"), "form", "cap", seed + 100);
+        bolt.set_value_source(bolt.get_shape()->find_parameter("diameter").value(), editor::Kit_value_source::explicit_value);
+        ASSERT_TRUE(bolt.set_float("diameter", nut.get_float("diameter")));
+        SCOPED_TRACE(bolt.to_canonical_text() + " " + nut.to_canonical_text());
+        const float d = nut.get_float("diameter");
+        const float h = nut.get_float("height");
+        const std::vector<Kit_connector> bolt_connectors = connectors_of(bolt);
+        const std::vector<Kit_connector> nut_connectors  = connectors_of(nut);
+        const float nut_y = bolt_connectors[2].position.y;
+        const editor::Kit_join_pose pose = editor::join_connectors(nut_connectors[2], bolt_connectors[2], 0, 0.0f);
+        const glm::mat3 rotation = glm::mat3_cast(pose.rotation);
+        EXPECT_NEAR(glm::dot(rotation * glm::vec3{0.0f, 1.0f, 0.0f}, glm::vec3{0.0f, -1.0f, 0.0f}), 1.0f, 1.0e-6f);
+        EXPECT_NEAR(glm::length(glm::vec3{pose.position.x, pose.position.y - nut_y, pose.position.z}), 0.0f, 1.0e-6f);
+        // The nut's points in the bolt's frame: the hexagon's base at the connector, the rest toward and past the tip.
+        const std::unique_ptr<GEO::Mesh> mesh = generate(nut);
+        float highest = -1.0e9f;
+        float ceiling = -1.0e9f; // the blind hole's ceiling: the higher of the two points on the axis
+        for (GEO::index_t v = 0; v < mesh->vertices.nb(); ++v) {
+            const glm::vec3 p = pose.position + (rotation * point_of(*mesh, v));
+            highest = std::max(highest, p.y);
+            if (glm::length(glm::vec2{p.x, p.z}) < 1.0e-6f) {
+                ceiling = std::max(ceiling, p.y);
+            }
+        }
+        EXPECT_NEAR(highest, nut_y, 1.0e-6f);
+        EXPECT_LT(ceiling, -0.1f * d);
+        // The outer profile below the hexagon, (radius, depth under the connector), as doc/editor/level_kit_shapes.md
+        // "Nut" states it; a point of the shank under the hexagon lies inside the profile's flats.
+        const float hole_ceiling = std::max(1.15f * d, h + (0.15f * d));
+        const float dome_base    = std::max(hole_ceiling - (0.45f * d), h);
+        const std::array<glm::vec2, 5> profile{{
+            {0.76f * d, h}, {0.76f * d, dome_base}, {0.66f * d, dome_base + (0.38f * d)}, {0.38f * d, dome_base + (0.66f * d)}, {0.0f, dome_base + (0.76f * d)}
+        }};
+        EXPECT_NEAR(dome_base + (0.76f * d), nut_connectors[1].position.y, 1.0e-6f);
+        const auto outer_radius = [&profile](const float depth) -> float {
+            for (std::size_t i = 0; (i + 1) < profile.size(); ++i) {
+                if (depth <= profile[i + 1].y) {
+                    const float t = (depth - profile[i].y) / std::max(profile[i + 1].y - profile[i].y, 1.0e-9f);
+                    return profile[i].x + (t * (profile[i + 1].x - profile[i].x));
+                }
+            }
+            return 0.0f;
+        };
+        const std::unique_ptr<GEO::Mesh> shank = generate(bolt);
+        int under = 0;
+        for (GEO::index_t v = 0; v < shank->vertices.nb(); ++v) {
+            const glm::vec3 p     = point_of(*shank, v);
+            const float     depth = nut_y - p.y;
+            if (depth > h) {
+                EXPECT_LT(glm::length(glm::vec2{p.x, p.z}), outer_radius(depth) * std::cos(pi / 12.0f)) << p.y;
+                ++under;
+            }
+        }
+        // With no shank point under the hexagon the tip lies in its bore.
+        EXPECT_TRUE((under > 0) || (h >= nut_y)) << h << " " << nut_y;
+    }
+}
 
 //
 // Spring.

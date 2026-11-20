@@ -83,7 +83,11 @@ void App_context::on_item_property_changed(erhe::Item_base& item, const erhe::pr
             level_kits->on_kit_piece_record_changed(*node);
         }
     }
-    if ((app_message_bus != nullptr) && connector_switch) {
+    // An attachment written (a join, a detach, their undo and redo) or a piece renamed (a target's name shows in the
+    // Attached row) reads the piece rows again too.
+    const erhe::scene::Node* const renamed_node = (&property == &erhe::Item_base::name_property.get()) ? dynamic_cast<const erhe::scene::Node*>(&item) : nullptr;
+    const bool renamed_piece = (renamed_node != nullptr) && carries_kit_piece(*renamed_node);
+    if ((app_message_bus != nullptr) && (connector_switch || renamed_piece || (&property == &Kit_piece::attachment_property.get()))) {
         app_message_bus->kit_piece_connectors_changed.queue_message(Kit_piece_connectors_changed_message{});
     }
 

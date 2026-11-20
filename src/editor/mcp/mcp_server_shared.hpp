@@ -49,11 +49,25 @@ namespace erhe::scene_renderer {
 
 namespace editor {
 
+class App_context;
 class Scene_root;
+class Tool;
 
 using json = nlohmann::json;
 
 namespace mcp_server_detail {
+
+// The toolbox tools by their stable names in get_input_state (active_tool), set_active_tool and set_tool_asset.
+enum class Mcp_tool : unsigned int {
+    brush = 0, move, rotate, scale, selection, paint, material_paint, weight_paint, physics, travel, count
+};
+
+[[nodiscard]] auto c_str        (Mcp_tool tool) -> const char*;
+[[nodiscard]] auto find_mcp_tool(std::string_view name) -> std::optional<Mcp_tool>;
+// Null when this build or run has no such tool (the travel tool runs under OpenXR only).
+[[nodiscard]] auto get_mcp_tool (const App_context& context, Mcp_tool tool) -> Tool*;
+// The tool's stable name; empty for a tool without one.
+[[nodiscard]] auto get_mcp_tool_name(const App_context& context, const Tool* tool) -> std::string;
 
 // Build timestamp of mcp_server_shared.cpp and the running process id. Both are
 // surfaced in the startup log, the initialize response and get_server_info so a

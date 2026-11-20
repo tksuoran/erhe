@@ -84,6 +84,10 @@ def emit_enum_cpp(e: EnumSchema) -> str:
     lines.append("{")
     for v in e.values:
         lines.append(f'    if (str == "{v.name}") {{ out = {e.name}::{v.name}; return true; }}')
+    # A former name reads as its value; to_string() writes the current name
+    for v in e.values:
+        for former in v.former_names:
+            lines.append(f'    if (str == "{former}") {{ out = {e.name}::{v.name}; return true; }}')
     lines.append("    return false; // unknown string, out unchanged")
     lines.append("}")
     lines.append("")

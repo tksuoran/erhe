@@ -23,9 +23,8 @@ class App_message_bus;
 class Scene_root;
 class Tools;
 
-// Viewport handles on a selected scatter kit layout node's region outline (doc/editor/level_tools.md "Scatter region
-// handles"): a point set tool whose target is the kit layout node while it is the only selected item. The points are
-// the outline's Kit_region_handle list; one handle is selected at a time and the gizmo drag resizes the region.
+// Viewport handles on a selected line, grid, ring or scatter kit layout node's outline (doc/editor/level_tools.md
+// "Layout handles"); a point set tool whose points are the outline's Kit_region_handle list, one selected at a time.
 class Kit_layout_region_tool : public Point_set_tool
 {
 public:
@@ -38,7 +37,7 @@ public:
 
     [[nodiscard]] auto get_target_layout() const -> std::shared_ptr<erhe::scene::Node>;
     [[nodiscard]] auto get_selected_handle() const -> std::optional<std::size_t>;
-    // The target's handles in its own frame (empty when it draws no scatter region); clears and fills.
+    // The target's handles in its own frame (empty when its outline is not drawn or has none); clears and fills.
     void get_handles(std::vector<Kit_region_handle>& out_handles) const;
     // Makes layout the only selected item and the tool's target, then selects the handle (nullopt clears).
     auto select_layout_handle(const std::shared_ptr<erhe::scene::Node>& layout, std::optional<std::size_t> handle) -> bool;
@@ -81,7 +80,7 @@ private:
     std::weak_ptr<erhe::scene::Node>     m_target;
     bool                                 m_target_stale{true};
     std::optional<std::size_t>           m_selected;  // one handle at a time
-    std::optional<Repeat_scatter_region> m_region;    // the target's while it is a scatter: what the indices name
+    std::optional<Kit_layout_handle_set> m_handle_set; // the target's: what the indices name
     bool                                 m_miss_clear{false};
 
     class Edit
@@ -93,6 +92,7 @@ private:
         Kit_layout_data                    before;
         Kit_layout_data                    tried;          // the values of the last step
         Kit_layout_pattern                 shown_pattern;  // the last pattern the preview or the pending outline took
+        Kit_layout_handle_drag             drag;
         glm::mat4                          world_from_node{1.0f};
         glm::mat4                          node_from_world{1.0f};
         bool                               active {false};

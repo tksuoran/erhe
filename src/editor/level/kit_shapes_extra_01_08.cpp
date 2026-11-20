@@ -1373,6 +1373,10 @@ void add_extra_01_08_shapes(std::vector<Kit_shape_definition>& shapes)
         shape.triangle_budget = 300;
         shape.collision       = Kit_collision::convex_hull;
         shape.generator       = generate_crate;
+        // A closed or missing lid leaves the box (U54); an open lid stands over its back edge.
+        shape.get_collision   = [](const Kit_parameter_values& values) {
+            return (values.get_enum("lid") == "open") ? Kit_collision::convex_hull : Kit_collision::box;
+        };
         shape.mirror_planes   = std::vector<Kit_mirror_plane>{Kit_mirror_plane::x};
         shape.get_connectors  = [](const Kit_parameter_values& values, std::vector<Kit_connector>& out_connectors) {
             add_base_and_top_connectors(out_connectors, Crate_form{values}.get_top());

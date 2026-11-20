@@ -640,12 +640,20 @@ TEST(Kit_bevel_gear, parts_size_and_the_mesh_point_follow_the_values)
             EXPECT_EQ(report.bounds_min.y, 0.0f);
             EXPECT_GE(report.bounds_max.x, pitch);
             EXPECT_LE(report.bounds_max.x, std::hypot(pitch + (module * std::cos(angle)), 0.4f * module) + 1.0e-5f);
-            expect_connector_names(values, {"base", "axis", "mesh"});
+            expect_connector_names(values, {"base", "axis", "mesh", "mesh_2", "mesh_3", "mesh_4"});
             const std::vector<Kit_connector> connectors = connectors_of(values);
             EXPECT_FLOAT_EQ(connectors[2].position.x, pitch);
             EXPECT_EQ(connectors[2].position.z, 0.0f);
             EXPECT_NEAR(connectors[2].outward.x, std::cos(angle), 1.0e-6f);
             EXPECT_NEAR(connectors[2].outward.y, std::sin(angle), 1.0e-6f);
+            // U53: the boundary connectors are the mesh connector turned about Y to the tooth at or before each quarter turn.
+            for (std::size_t k = 3; k < 6; ++k) {
+                const float turn = (2.0f * pi * static_cast<float>(((static_cast<int>(k) - 2) * static_cast<int>(teeth)) / 4)) / static_cast<float>(teeth);
+                const glm::vec3 out{std::cos(turn), 0.0f, -std::sin(turn)};
+                EXPECT_NEAR(glm::length(connectors[k].position - ((pitch * out) + glm::vec3{0.0f, connectors[2].position.y, 0.0f})), 0.0f, 1.0e-5f);
+                EXPECT_NEAR(glm::length(connectors[k].outward - ((std::cos(angle) * out) + glm::vec3{0.0f, std::sin(angle), 0.0f})), 0.0f, 1.0e-5f);
+                EXPECT_NEAR(glm::length(connectors[k].up - ((-std::sin(angle) * out) + glm::vec3{0.0f, std::cos(angle), 0.0f})), 0.0f, 1.0e-5f);
+            }
             const std::unique_ptr<GEO::Mesh> mesh = generate(values);
             // The body's root ring lies 1.25 modules inside the mesh connector's pitch circle, across the cone.
             const float root_r    = pitch - (1.25f * module * std::cos(angle));
@@ -809,11 +817,18 @@ TEST(Kit_worm, a_wheels_parts_and_pitch_follow_the_values)
         const float lean   = (pi * module * static_cast<float>(values.get_int("starts"))) / (2.0f * pi * radius);
         EXPECT_LE(report.bounds_max.x, std::hypot(pitch + module, (0.4f * module) + (0.6f * radius * lean)) + 1.0e-5f);
         EXPECT_GE(report.bounds_max.x, (pitch + module) * std::cos(pi / static_cast<float>(teeth)));
-        expect_connector_names(values, {"base", "axis", "mesh"});
+        expect_connector_names(values, {"base", "axis", "mesh", "mesh_2", "mesh_3", "mesh_4"});
         const std::vector<Kit_connector> connectors = connectors_of(values);
         EXPECT_FLOAT_EQ(connectors[1].position.y, report.bounds_max.y);
         EXPECT_FLOAT_EQ(connectors[2].position.x, pitch);
         EXPECT_EQ(connectors[2].outward, (glm::vec3{1.0f, 0.0f, 0.0f}));
+        // U53: the boundary connectors on the pitch circle, at the tooth at or before each quarter turn.
+        for (std::size_t k = 3; k < 6; ++k) {
+            const float turn = (2.0f * pi * static_cast<float>(((static_cast<int>(k) - 2) * static_cast<int>(teeth)) / 4)) / static_cast<float>(teeth);
+            const glm::vec3 out{std::cos(turn), 0.0f, -std::sin(turn)};
+            EXPECT_NEAR(glm::length(connectors[k].position - ((pitch * out) + glm::vec3{0.0f, connectors[2].position.y, 0.0f})), 0.0f, 1.0e-5f);
+            EXPECT_NEAR(glm::length(connectors[k].outward - out), 0.0f, 1.0e-5f);
+        }
     }
 }
 
@@ -1104,23 +1119,23 @@ TEST(Kit_pillow_block, every_bolt_count_passes_at_the_corners_with_every_slot)
 {
     const Kit_shape_definition& pillow = get_shape("machine.pillow_block");
     ASSERT_EQ(pillow.material_slots, (std::vector<std::string>{"metal", "steel"}));
-    for (int bolts = 2; bolts <= 4; ++bolts) {
+    for (const char* const bolts : {"two", "four"}) {
         Kit_parameter_values values = explicit_values(pillow, 1);
-        ASSERT_TRUE(values.set_int("bolts", bolts));
+        ASSERT_TRUE(values.set_enum("bolts", bolts));
         for_each_corner(values, pillow_floats, expect_valid_with_every_slot);
         expect_topology_from_integers(values, pillow_floats);
     }
 }
 
-// A base, a pedestal, the housing and its bush, and a bolt head for each bolt (three bolts make two). The axis
-// connector is on the shaft's line at the height, on the +Z face.
+// A base, a pedestal, the housing and its bush, and a bolt head for each bolt. The axis connector is on the shaft's
+// line at the height, on the +Z face.
 TEST(Kit_pillow_block, parts_and_size_follow_the_values)
 {
     const Kit_shape_definition& pillow = get_shape("machine.pillow_block");
     for (const int seed : derive_seeds()) {
         const Kit_parameter_values values = all_derived(pillow, seed);
         SCOPED_TRACE(values.to_canonical_text());
-        const unsigned int heads  = 2u * (static_cast<unsigned int>(values.get_int("bolts")) / 2u);
+        const unsigned int heads  = (values.get_enum("bolts") == "four") ? 4u : 2u;
         const float        height = values.get_float("height");
         const float        width  = values.get_float("width");
         const float        depth  = values.get_float("depth");
@@ -1139,6 +1154,24 @@ TEST(Kit_pillow_block, parts_and_size_follow_the_values)
         EXPECT_EQ(connectors[1].position, (glm::vec3{0.0f, height, 0.5f * depth}));
         EXPECT_EQ(connectors[1].outward, (glm::vec3{0.0f, 0.0f, 1.0f}));
     }
+}
+
+// U53: bolts is a choice of two or four; parameter text with any other value, or with the count it had before, does
+// not read.
+TEST(Kit_pillow_block, bolts_are_two_or_four)
+{
+    const Kit_shape_definition& pillow = get_shape("machine.pillow_block");
+    EXPECT_EQ(pillow.parameters[pillow.find_parameter("bolts").value()].enum_values, (std::vector<std::string>{"two", "four"}));
+    Kit_parameter_values values = explicit_values(pillow, 1);
+    EXPECT_EQ(values.get_enum("bolts"), "two");
+    EXPECT_TRUE(values.set_enum("bolts", "four"));
+    EXPECT_FALSE(values.set_enum("bolts", "three"));
+    std::string text = values.to_canonical_text();
+    const std::size_t at = text.find("\"bolts\":\"four\"");
+    ASSERT_NE(at, std::string::npos) << text;
+    text.replace(at, std::string{"\"bolts\":\"four\""}.size(), "\"bolts\":4");
+    Kit_parameter_values parsed;
+    EXPECT_NE(editor::parse_canonical_text(pillow, text, parsed), "") << text;
 }
 
 // A shaft of the bore's diameter goes through the housing and its bush.

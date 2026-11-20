@@ -43,16 +43,10 @@ using editor::Kit_stairs_layout;
 
 TEST(Kit_shape_library, library_has_the_starter_set_and_the_more_shapes)
 {
-    // The shapes each batch states (kit_shape_rows_<batch>.cpp), the recreated ones beside their originals.
-    const std::vector<std::string> expected  = get_union(&Kit_shape_rows::shapes);
-    const std::vector<std::string> recreated = get_union(&Kit_shape_rows::recreated_originals);
+    // The shapes each batch states (kit_shape_rows_<batch>.cpp).
+    const std::vector<std::string> expected = get_union(&Kit_shape_rows::shapes);
     const Kit_shape_library& library = get_library();
-    ASSERT_EQ(library.get_shapes().size(), expected.size() + recreated.size());
-    for (const std::string& id : recreated) {
-        const Kit_shape_definition* const shape = library.find(id + editor::c_kit_recreated_id_suffix);
-        ASSERT_NE(shape, nullptr) << id;
-        EXPECT_EQ(shape->recreates, id);
-    }
+    ASSERT_EQ(library.get_shapes().size(), expected.size());
     std::set<std::string> ids;
     for (const Kit_shape_definition& shape : library.get_shapes()) {
         SCOPED_TRACE(shape.id);
@@ -140,32 +134,6 @@ TEST(Kit_shape_library, every_facet_belongs_to_a_declared_slot)
     }
 }
 
-// The tree's trunk is its bark slot and its canopy its foliage slot, each a closed part.
-TEST(Kit_shape_library, tree_has_bark_and_foliage_slots)
-{
-    const Kit_shape_definition& tree = get_shape("nature.tree");
-    ASSERT_EQ(tree.material_slots, (std::vector<std::string>{"bark", "foliage"}));
-    for (const std::string& canopy : {std::string{"round"}, std::string{"conical"}}) {
-        SCOPED_TRACE(canopy);
-        Kit_parameter_values values = defaults(tree);
-        ASSERT_TRUE(values.set_enum("canopy", canopy));
-        const std::unique_ptr<GEO::Mesh> mesh = generate(values);
-        std::vector<uint32_t> facet_slots;
-        editor::read_kit_facet_slots(*mesh, facet_slots);
-        for (uint32_t slot = 0; slot < 2; ++slot) {
-            GEO::Mesh part{3, true};
-            editor::extract_kit_slot_mesh(*mesh, facet_slots, slot, part);
-            const Kit_mesh_report report = editor::check_kit_mesh(part);
-            EXPECT_TRUE(report.is_valid()) << tree.material_slots[slot] << ": " << describe(report);
-            EXPECT_EQ(report.component_count, 1u) << tree.material_slots[slot];
-        }
-        // The trunk is the six-sided prism: 6 sides and two hexagon caps.
-        GEO::Mesh bark{3, true};
-        editor::extract_kit_slot_mesh(*mesh, facet_slots, 0, bark);
-        EXPECT_EQ(editor::count_kit_triangles(bark), 20u);
-    }
-}
-
 // R11.1 at defaults, plus R2.6: the shape's own budget and the kit ceiling.
 
 TEST(Kit_shape_library, every_shape_passes_the_mesh_checks_at_defaults)
@@ -182,15 +150,13 @@ TEST(Kit_shape_library, every_shape_passes_the_mesh_checks_at_defaults)
         EXPECT_LE(report.triangle_count, shape.triangle_budget);
         EXPECT_LE(shape.triangle_budget, kit->triangle_ceiling);
         EXPECT_EQ(kit->triangle_ceiling, 2000u);
-        // The batch's row of the shape's id, else of its contract id, else one component.
+        // The batch's row of the shape, else one component.
         Kit_component_row expected_components{};
-        for (const std::string* const id : {&contract_id(shape), &shape.id}) {
-            const std::vector<Kit_component_row>::const_iterator row = std::find_if(
-                components.begin(), components.end(), [id](const Kit_component_row& candidate) { return candidate.id == *id; }
-            );
-            if (row != components.end()) {
-                expected_components = *row;
-            }
+        const std::vector<Kit_component_row>::const_iterator row = std::find_if(
+            components.begin(), components.end(), [&shape](const Kit_component_row& candidate) { return candidate.id == shape.id; }
+        );
+        if (row != components.end()) {
+            expected_components = *row;
         }
         if (expected_components.rule == Kit_component_rule::more_than) {
             EXPECT_GT(report.component_count, expected_components.count);
@@ -466,7 +432,7 @@ TEST(Kit_shape_library, walkable_shapes_suit_the_default_agent_at_defaults)
 // D1.7: stairs and the wedge rise toward -Z from their front edge at +Z.
 TEST(Kit_shape_library, stairs_and_wedge_rise_toward_minus_z)
 {
-    for (const char* id : {"basic.stairs", "basic.wedge", "basic.stairs.v2", "basic.wedge.v2"}) {
+    for (const char* id : {"basic.stairs", "basic.wedge"}) {
         SCOPED_TRACE(id);
         const std::unique_ptr<GEO::Mesh> mesh = generate(defaults(get_shape(id)));
         float max_y = 0.0f;
@@ -629,39 +595,8 @@ TEST(Kit_derive, next_seed_is_another_seed_in_range)
     EXPECT_EQ(seeds.size(), 100u);
 }
 
-// D1.9: every rock form at 0, 1 and 2 bevels passes the mesh checks and the kit's triangle ceiling (R2.6).
-TEST(Kit_rock, every_form_and_bevel_count_passes_the_checks)
-{
-    const Kit_shape_definition& rock = get_shape("nature.rock");
-    for (const std::string& form : rock.parameters[rock.find_parameter("form").value()].enum_values) {
-        for (int bevels = 0; bevels <= 2; ++bevels) {
-            unsigned int max_triangles = 0;
-            for (const int seed : sweep_seeds(rock)) {
-                for (const float roughness : {0.0f, 0.3f, 1.0f}) {
-                    Kit_parameter_values values = defaults(rock);
-                    ASSERT_TRUE(values.set_enum("form", form));
-                    ASSERT_TRUE(values.set_int("bevels", bevels));
-                    ASSERT_TRUE(values.set_int("seed", seed));
-                    ASSERT_TRUE(values.set_float("roughness", roughness));
-                    values.resolve_derived(default_module, default_wall_height);
-                    SCOPED_TRACE(values.to_canonical_text());
-                    const Kit_mesh_report report = editor::check_kit_shape(values);
-                    EXPECT_TRUE(report.is_valid()) << describe(report);
-                    EXPECT_LE(report.triangle_count, get_library().find_kit("nature")->triangle_ceiling);
-                    EXPECT_EQ(report.component_count, 1u);
-                    max_triangles = std::max(max_triangles, report.triangle_count);
-                }
-            }
-            Kit_parameter_values values = defaults(rock);
-            ASSERT_TRUE(values.set_enum("form", form));
-            ASSERT_TRUE(values.set_int("bevels", bevels));
-            const unsigned int at_defaults = editor::count_kit_triangles(*generate(values));
-            testing::Test::RecordProperty(fmt::format("rock_{}_bevels_{}", form, bevels), fmt::format("{} at the default seed, at most {}", at_defaults, max_triangles));
-        }
-    }
-}
-
-// R2.6: the kit's ceiling binds at every in-range value; the all-maximum corner is the most a shape makes.
+// R2.6: the kit's ceiling binds at every in-range value; the all-maximum corner is the most a shape makes, but for the
+// helical bolt, whose most lies at 35 and 38 turns (its worst_cases row).
 TEST(Kit_shape_library, every_shape_keeps_the_ceiling_at_the_range_maxima)
 {
     for (const Kit_shape_definition& shape : get_library().get_shapes()) {
@@ -1096,17 +1031,6 @@ auto check_combinations(const Kit_shape_definition& shape, const std::vector<int
 } // anonymous namespace
 
 // Step 62's second batch at the corners where parameters interact (doc/plans/level_kit_more_shapes.md).
-TEST(Kit_leaf_plant, every_form_passes_the_checks_at_the_size_corners_over_seeds)
-{
-    const Kit_shape_definition& plant = get_shape("nature.leaf_plant");
-    EXPECT_EQ(plant.collision, editor::Kit_collision::none);
-    const int checked = check_combinations(plant, sweep_seeds(plant), {
-        all_enum_values(plant, "form"), range_ends(plant, "height"), range_ends(plant, "leaves"),
-        Sweep_axis{"droop", {0.0f, 1.0f}}, range_ends(plant, "leaf_width")
-    });
-    EXPECT_EQ(checked, static_cast<int>(sweep_seeds(plant).size()) * 5 * 16);
-}
-
 TEST(Kit_column, every_order_passes_the_checks_at_the_corners)
 {
     const Kit_shape_definition& column = get_shape("architecture.column");
@@ -1167,68 +1091,6 @@ TEST(Kit_torii, corners_pass_and_the_opening_suits_the_agent_at_derived_values)
     EXPECT_NE(torii.check_walkability(low, Kit_agent{}), ""); // the tie beam is lower than the agent
 }
 
-TEST(Kit_battlement, corners_pass_and_ends_join)
-{
-    const Kit_shape_definition& battlement = get_shape("architecture.battlement");
-    const int checked = check_combinations(battlement, {1}, {
-        all_enum_values(battlement, "merlon"), range_ends(battlement, "length"), range_ends(battlement, "merlon_width"),
-        range_ends(battlement, "crenel_width"), range_ends(battlement, "height"), range_ends(battlement, "thickness")
-    });
-    EXPECT_EQ(checked, 3 * 32);
-    for (const std::string& merlon : {std::string{"square"}, std::string{"swallowtail"}, std::string{"pointed"}}) {
-        for (const float length : {1.0f, 2.0f, 5.5f}) {
-            Kit_parameter_values values = explicit_values(battlement, 1);
-            ASSERT_TRUE(values.set_enum("merlon", merlon));
-            ASSERT_TRUE(values.set_float("length", length));
-            const std::unique_ptr<GEO::Mesh> mesh = generate(values);
-            std::vector<std::array<float, 3>> start = vertices_on_x(*mesh, -0.5f * length);
-            std::vector<std::array<float, 3>> end   = vertices_on_x(*mesh,  0.5f * length);
-            ASSERT_EQ(start.size(), end.size()) << merlon << " " << length;
-            for (std::size_t i = 0; i < start.size(); ++i) {
-                EXPECT_EQ(start[i][1], end[i][1]);
-                EXPECT_EQ(start[i][2], end[i][2]);
-            }
-        }
-    }
-}
-
-TEST(Kit_tower, every_profile_and_top_passes_at_the_corners_with_a_walkable_top)
-{
-    const Kit_shape_definition& tower = get_shape("architecture.tower");
-    const int checked = check_combinations(tower, {1}, {
-        all_enum_values(tower, "profile"), all_enum_values(tower, "top"), range_ends(tower, "width"), range_ends(tower, "height"),
-        range_ends(tower, "batter"), range_ends(tower, "wall"), range_ends(tower, "opening_width"), range_ends(tower, "opening_height")
-    });
-    EXPECT_EQ(checked, 120); // a narrow tower with thick walls and a wide doorway, or a low one, is refused
-    for (const std::string& profile : {std::string{"round"}, std::string{"square"}}) {
-        for (const std::string& top : {std::string{"battlement"}, std::string{"flat"}}) {
-            Kit_parameter_values values = defaults(tower);
-            ASSERT_TRUE(values.set_enum("profile", profile));
-            ASSERT_TRUE(values.set_enum("top", top));
-            SCOPED_TRACE(values.to_canonical_text());
-            // The floor slot is the walkable top: flat, at the height, under the top connector.
-            const std::unique_ptr<GEO::Mesh> mesh = generate(values);
-            std::vector<uint32_t> facet_slots;
-            editor::read_kit_facet_slots(*mesh, facet_slots);
-            for (GEO::index_t f = 0; f < mesh->facets.nb(); ++f) {
-                if (facet_slots[f] != 1) {
-                    continue;
-                }
-                for (GEO::index_t c = 0; c < mesh->facets.nb_vertices(f); ++c) {
-                    EXPECT_EQ(erhe::geometry::get_pointf(mesh->vertices, mesh->facets.vertex(f, c)).y, values.get_float("height"));
-                }
-            }
-            EXPECT_EQ(tower.check_walkability(values, Kit_agent{}), "");
-            // The doorway is clear: no vertex inside its box but on its jambs, head and threshold.
-            const float half = 0.5f * values.get_float("opening_width");
-            for (GEO::index_t v = 0; v < mesh->vertices.nb(); ++v) {
-                const GEO::vec3f p = erhe::geometry::get_pointf(mesh->vertices, v);
-                const bool inside = (std::abs(p.x) < half - 1.0e-4f) && (p.y > 1.0e-4f) && (p.y < values.get_float("opening_height") - 1.0e-4f) && (p.z > 0.0f);
-                EXPECT_FALSE(inside) << p.x << " " << p.y << " " << p.z;
-            }
-        }
-    }
-}
 // R2.6 where the triangle maxima lie at mixed values, not at the all-maximum corner (found by a search over every
 // combination of range ends and random in-range values): each passes the mesh checks within the kit's ceiling.
 TEST(Kit_shape_library, worst_case_combinations_keep_the_ceiling)
@@ -1345,7 +1207,7 @@ TEST(Kit_derive, derived_values_are_accepted_and_walkable_at_other_level_lengths
             }
             SCOPED_TRACE(fmt::format("{} at module {} m, wall height {} m", shape.id, lengths.first, lengths.second));
             EXPECT_EQ(refused, 0);
-            if (!walkability_open.contains(shape.id) && !walkability_open.contains(contract_id(shape))) {
+            if (!walkability_open.contains(shape.id)) {
                 EXPECT_EQ(unwalkable, 0);
             } else {
                 testing::Test::RecordProperty(fmt::format("{}_unwalkable_at_{}_{}", shape.id, lengths.first, lengths.second), unwalkable);
@@ -1379,17 +1241,6 @@ auto steepest_facet_degrees(const GEO::Mesh& mesh, const float step) -> float
 } // anonymous namespace
 
 // Step 62's third batch at the corners where parameters interact (doc/plans/level_kit_more_shapes.md).
-TEST(Kit_rock_spire, every_form_passes_the_checks_at_the_corners_over_seeds)
-{
-    const Kit_shape_definition& spire = get_shape("nature.rock_spire");
-    // A thin, tall, leaning rock of maximum roughness and a wide low one: the base stays the lowest point.
-    const int checked = check_combinations(spire, sweep_seeds(spire), {
-        all_enum_values(spire, "form"), range_ends(spire, "height"), range_ends(spire, "radius"), range_ends(spire, "taper"),
-        range_ends(spire, "lean"), Sweep_axis{"roughness", {0.0f, 1.0f}}, range_ends(spire, "segments")
-    });
-    EXPECT_EQ(checked, static_cast<int>(sweep_seeds(spire).size()) * 4 * 64);
-}
-
 TEST(Kit_basalt_columns, corners_pass_and_neighbouring_tops_are_at_most_one_step_apart)
 {
     const Kit_shape_definition& basalt = get_shape("nature.basalt_columns");
@@ -1483,16 +1334,6 @@ TEST(Kit_palm_clump, every_species_passes_the_checks_at_the_corners_over_seeds)
     Kit_parameter_values binding;
     ASSERT_EQ(editor::parse_canonical_text(clump, R"({"species":"areca","stems":9,"height":"0x1p-1","spread":"0x0p+0","fronds":10,"seed":1})", binding), "");
     EXPECT_GE(editor::count_kit_triangles(*generate(binding)), 1940u);
-}
-
-TEST(Kit_palm_shrub, every_species_passes_the_checks_at_the_corners_over_seeds)
-{
-    const Kit_shape_definition& shrub = get_shape("nature.palm_shrub");
-    EXPECT_EQ(shrub.collision, editor::Kit_collision::convex_hull);
-    const int checked = check_combinations(shrub, sweep_seeds(shrub), {
-        all_enum_values(shrub, "species"), range_ends(shrub, "size"), range_ends(shrub, "fronds")
-    });
-    EXPECT_EQ(checked, static_cast<int>(sweep_seeds(shrub).size()) * 3 * 4);
 }
 
 // The dune's and the ground patch's walkability checks bound the generated slopes: a value set either check passes
@@ -1634,32 +1475,68 @@ INSTANTIATE_TEST_SUITE_P(Kit_dune, Kit_dune_widths, testing::Values(2.0f, 2.75f,
 
 namespace {
 
-// A recreated shape names an original of its kit, has its id plus the suffix and stands directly after it; the rest of
-// its definition is its own (doc/editor/level_tools.md "Recreated shapes").
-TEST(Kit_recreated, every_recreated_shape_pairs_with_its_original)
+// Every former id resolves to its shape and names no other; an unknown id resolves to nothing.
+TEST(Kit_former_ids, find_resolves_former_ids_to_their_shape)
 {
-    const std::vector<Kit_shape_definition>& shapes = get_library().get_shapes();
-    std::vector<std::string> paired;
-    for (std::size_t i = 0; i < shapes.size(); ++i) {
-        const Kit_shape_definition& shape = shapes[i];
-        if (shape.recreates.empty()) {
-            continue;
-        }
-        paired.push_back(shape.recreates);
+    const Kit_shape_library& library = get_library();
+    std::set<std::string> names;
+    int former_count = 0;
+    for (const Kit_shape_definition& shape : library.get_shapes()) {
         SCOPED_TRACE(shape.id);
-        const Kit_shape_definition* const original = get_library().find(shape.recreates);
-        ASSERT_NE(original, nullptr);
-        EXPECT_TRUE(original->recreates.empty());
-        ASSERT_GT(i, 0u);
-        EXPECT_EQ(&shapes[i - 1], original);
-        EXPECT_EQ(shape.id,           original->id + editor::c_kit_recreated_id_suffix);
-        EXPECT_EQ(shape.display_name, original->display_name + editor::c_kit_recreated_name_suffix);
-        EXPECT_EQ(shape.kit,          original->kit);
+        EXPECT_TRUE(names.insert(shape.id).second);
+        for (const std::string& former_id : shape.former_ids) {
+            EXPECT_TRUE(names.insert(former_id).second) << former_id;
+            EXPECT_EQ(library.find(former_id), &shape) << former_id;
+            ++former_count;
+        }
     }
-    std::vector<std::string> expected = get_union(&Kit_shape_rows::recreated_originals);
-    std::sort(paired.begin(), paired.end());
-    std::sort(expected.begin(), expected.end());
-    EXPECT_EQ(paired, expected);
+    EXPECT_EQ(former_count, 18);
+    EXPECT_EQ(library.find("nature.rock.v3"), nullptr);
+}
+
+// A saved piece record (shape id and parameter text) of either id reads as the shape through read_kit_piece_record(),
+// the reader Level_kits::read_piece_values() is, and generates its mesh.
+TEST(Kit_former_ids, piece_records_of_either_id_read_and_generate)
+{
+    const Kit_shape_library& library = get_library();
+    for (const Kit_shape_definition& shape : library.get_shapes()) {
+        for (const std::string& former_id : shape.former_ids) {
+            for (const std::string* const record_shape : {&shape.id, &former_id}) {
+                SCOPED_TRACE(*record_shape);
+                for (const Kit_parameter_values& saved : {defaults(shape), all_derived(shape, 17)}) {
+                    Kit_parameter_values values;
+                    ASSERT_EQ(editor::read_kit_piece_record(library, *record_shape, saved.to_canonical_text(), values), "");
+                    EXPECT_EQ(values.get_shape(), &shape);
+                    EXPECT_TRUE(values == saved);
+                    const Kit_mesh_report report = editor::check_kit_shape(values);
+                    EXPECT_TRUE(report.is_valid()) << describe(report);
+                    EXPECT_GT(report.triangle_count, 0u);
+                }
+            }
+        }
+    }
+    Kit_parameter_values values;
+    EXPECT_EQ(editor::read_kit_piece_record(library, "basic.block.v3", "{}", values), "the kits have no shape 'basic.block.v3'");
+}
+
+// A record whose parameter text names a parameter the shape lacks, or lacks one it has, does not read: the piece keeps
+// its loaded mesh (doc/editor/level_tools.md "Derive from seed"). The rock's bevels and the tree's canopy are gone.
+TEST(Kit_former_ids, records_of_other_parameters_do_not_read)
+{
+    const Kit_shape_library& library = get_library();
+    Kit_parameter_values values;
+    const std::string unknown = editor::read_kit_piece_record(
+        library, "nature.rock.v2", R"({"form":"angular","size":"0x1p+0","roughness":"0x1.333334p-2","bevels":1,"seed":1,"derive":["size"]})", values
+    );
+    EXPECT_EQ(unknown, "the parameters do not read: nature.rock: unknown parameter 'bevels'");
+    const std::string missing = editor::read_kit_piece_record(
+        library, "nature.rock", R"({"form":"slab","size":"0x1p+0","roughness":"0x1.333334p-2","seed":1})", values
+    );
+    EXPECT_EQ(missing, "the parameters do not read: nature.rock: parameter 'pieces' is missing");
+    EXPECT_NE(
+        editor::read_kit_piece_record(library, "nature.tree.v2", R"({"trunk_height":"0x1.ccccccp+0","canopy_size":"0x1p+1","canopy":"round","seed":1,"segments":8})", values),
+        ""
+    );
 }
 
 } // anonymous namespace

@@ -39,14 +39,17 @@ Kit_connector_indicators::Kit_connector_indicators(const Level_kits& level_kits)
 auto Kit_connector_indicators::get_local_connectors(const erhe::scene::Node& node) -> const std::vector<Kit_connector>&
 {
     const std::uint64_t id = static_cast<std::uint64_t>(node.get_id());
+    const std::shared_ptr<erhe::scene::Node> parent = node.get_parent_node();
+    const std::uint64_t parent_id = parent ? static_cast<std::uint64_t>(parent->get_id()) : 0;
+    // A reparent sends no message (erhe::Hierarchy::set_parent()), so the entry keeps the parent it was read under:
+    // under another parent its layout's switches may hide other connectors (U39).
     const std::unordered_map<std::uint64_t, Cached_piece>::const_iterator i = m_local_connectors.find(id);
-    if (i != m_local_connectors.end()) {
+    if ((i != m_local_connectors.end()) && (i->second.parent_id == parent_id)) {
         return i->second.connectors;
     }
     Cached_piece& piece = m_local_connectors[id];
-    piece.item = &node;
-    const std::shared_ptr<erhe::scene::Node> parent = node.get_parent_node();
-    piece.parent_id = parent ? static_cast<std::uint64_t>(parent->get_id()) : 0;
+    piece.item      = &node;
+    piece.parent_id = parent_id;
     // An unreadable record caches no frames, as get_world_connectors() refuses it; a disabled or layout-hidden connector is not drawn (U33, U39).
     static_cast<void>(m_level_kits.get_local_connectors(node, piece.connectors, Kit_connector_set::enabled));
     return piece.connectors;
@@ -84,6 +87,18 @@ void Kit_connector_indicators::collect(
     ERHE_PROFILE_FUNCTION();
 
     out_indicators.clear();
+    collect_pieces(scene_root, mode, selection, drag_snap, out_indicators);
+    add_brush_join(scene_root, out_indicators);
+}
+
+void Kit_connector_indicators::collect_pieces(
+    const Scene_root&                     scene_root,
+    const Visualization_mode              mode,
+    const Selection&                      selection,
+    const Kit_connector_drag_snap* const  drag_snap,
+    std::vector<Kit_connector_indicator>& out_indicators
+)
+{
     // A drag shows its connectors in the views of its own scene only.
     if ((drag_snap != nullptr) && (drag_snap->get_scene_root() == &scene_root)) {
         drag_snap->collect_indicators(c_connector_indicator_reach, out_indicators);
@@ -136,6 +151,62 @@ void Kit_connector_indicators::clear_connect_choice()
 {
     m_target_choice = Choice{};
     m_moved_choice  = Choice{};
+}
+
+void Kit_connector_indicators::set_brush_join(
+    const Scene_root&                         scene_root,
+    const std::shared_ptr<erhe::scene::Node>& piece,
+    const char* const                         connector_name,
+    const Kit_connector&                      preview_connector,
+    const std::uint64_t                       preview_id
+)
+{
+    m_brush_join.scene_root        = &scene_root;
+    m_brush_join.piece             = piece;
+    m_brush_join.connector         = connector_name;
+    m_brush_join.preview_connector = preview_connector;
+    m_brush_join.preview_id        = preview_id;
+}
+
+void Kit_connector_indicators::clear_brush_join()
+{
+    m_brush_join = Brush_join{};
+}
+
+auto Kit_connector_indicators::has_brush_join(const Scene_root& scene_root) const -> bool
+{
+    return (m_brush_join.scene_root == &scene_root) && !m_brush_join.piece.expired();
+}
+
+void Kit_connector_indicators::add_brush_join(const Scene_root& scene_root, std::vector<Kit_connector_indicator>& out_indicators)
+{
+    if (m_brush_join.scene_root != &scene_root) {
+        return;
+    }
+    const std::shared_ptr<erhe::scene::Node> piece = m_brush_join.piece.lock();
+    if (!piece) {
+        return;
+    }
+    // The pair, as a snapping drag draws it: the target connector and the preview's own.
+    out_indicators.push_back(
+        Kit_connector_indicator{.frame = m_brush_join.preview_connector, .piece_id = m_brush_join.preview_id, .role = Kit_connector_indicator_role::snapped}
+    );
+    const std::uint64_t    id   = static_cast<std::uint64_t>(piece->get_id());
+    const std::string_view name = m_brush_join.connector;
+    for (Kit_connector_indicator& indicator : out_indicators) {
+        if ((indicator.piece_id == id) && (name == indicator.frame.name)) {
+            indicator.role = Kit_connector_indicator_role::snapped;
+            return;
+        }
+    }
+    const Kit_connector* const local = find_connector(get_local_connectors(*piece), name);
+    if (local == nullptr) {
+        return;
+    }
+    const std::optional<Kit_connector> world = transform_connector(*local, piece->world_from_node());
+    if (world.has_value()) {
+        out_indicators.push_back(Kit_connector_indicator{.frame = world.value(), .piece_id = id, .role = Kit_connector_indicator_role::snapped});
+    }
 }
 
 void Kit_connector_indicators::forget_piece(const erhe::scene::Node& node)

@@ -49,6 +49,7 @@ public:
 
     [[nodiscard]] auto get_kits  () const -> const std::vector<Kit_definition>&;
     [[nodiscard]] auto get_shapes() const -> const std::vector<Kit_shape_definition>&;
+    // The shape of the id or of a former id (Kit_shape_definition::former_ids); null for an unknown id.
     [[nodiscard]] auto find      (std::string_view id) const -> const Kit_shape_definition*;
     [[nodiscard]] auto find_kit  (std::string_view name) const -> const Kit_definition*;
     [[nodiscard]] auto get_palette          () const -> const std::vector<Kit_palette_material>&;
@@ -64,5 +65,14 @@ private:
     std::vector<Kit_palette_material> m_palette;
     std::vector<Kit_slot_palette>     m_slot_palettes;
 };
+
+// The values of a saved piece record: its shape id (or a former id) and its parameter text. Returns the reason the
+// record does not read (an unknown shape, a text parse_canonical_text() refuses, a value out of range), empty on success.
+[[nodiscard]] auto read_kit_piece_record(
+    const Kit_shape_library& library,
+    std::string_view         shape_id,
+    std::string_view         parameters,
+    Kit_parameter_values&    out_values
+) -> std::string;
 
 } // namespace editor

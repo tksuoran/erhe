@@ -419,9 +419,7 @@ erhe_target_sources_grouped(
     level/kit_shape_library.hpp
     level/kit_shapes.hpp
     level/kit_shapes_architecture.cpp
-    level/kit_shapes_architecture_v2.cpp
     level/kit_shapes_basic.cpp
-    level/kit_shapes_basic_v2.cpp
     level/kit_shapes_build_13_16.cpp
     level/kit_shapes_build_17_20.cpp
     level/kit_shapes_build_21_24.cpp
@@ -435,21 +433,20 @@ erhe_target_sources_grouped(
     level/kit_shapes_classical.cpp
     level/kit_shapes_japanese.cpp
     level/kit_shapes_medieval.cpp
-    level/kit_shapes_medieval_v2.cpp
     level/kit_shapes_nature.cpp
-    level/kit_shapes_nature_v2.cpp
     level/kit_shapes_nature_plants.cpp
-    level/kit_shapes_nature_plants_v2.cpp
     level/kit_shapes_nature_terrain.cpp
     level/kit_shapes_nature_rocks.cpp
-    level/kit_shapes_nature_rocks_v2.cpp
     level/kit_shapes_roof.cpp
+    level/kit_thumbnails.cpp
+    level/kit_thumbnails.hpp
     level/level_kit_create_menu.cpp
     level/level_kit_create_menu.hpp
     level/level_kit_window.cpp
     level/level_kit_window.hpp
     level/level_kits.cpp
     level/level_kits.hpp
+    level/level_kits_attachment.cpp
     level/level_kits_layout.cpp
     level/level_group.cpp
     level/level_group.hpp
@@ -465,6 +462,8 @@ erhe_target_sources_grouped(
     level/stairs_mesh.hpp
     level/surface_base_frame.cpp
     level/surface_base_frame.hpp
+    level/surface_options.cpp
+    level/surface_options.hpp
     level/surface_settings_ui.cpp
     level/surface_settings_ui.hpp
     main.cpp
@@ -1178,6 +1177,12 @@ set(_config_sources
     ${_config_out}/connector_snap_axis_mode.cpp
     ${_config_out}/connector_snap_orientation.hpp
     ${_config_out}/connector_snap_orientation.cpp
+    ${_config_out}/surface_drag_direction.hpp
+    ${_config_out}/surface_drag_direction.cpp
+    ${_config_out}/surface_snap_rest.hpp
+    ${_config_out}/surface_snap_rest.cpp
+    ${_config_out}/surface_support.hpp
+    ${_config_out}/surface_support.cpp
     ${_config_out}/cpu_mesh_data_retention.hpp
     ${_config_out}/cpu_mesh_data_retention.cpp
     ${_config_out}/developer_config.hpp

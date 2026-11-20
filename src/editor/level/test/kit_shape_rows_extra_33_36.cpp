@@ -7,7 +7,6 @@ auto get_extra_33_36_rows() -> Kit_shape_rows
 {
     Kit_shape_rows rows;
     rows.shapes              = {"light.garland", "traversal.rope_bridge", "ruin.cracked_floor", "harbour.boat"};
-    rows.recreated_originals = {};
     rows.seeded_shapes       = {"traversal.rope_bridge", "ruin.cracked_floor"};
     rows.enum_shapes         = {"light.garland", "harbour.boat"};
     rows.components          = {

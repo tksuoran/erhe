@@ -52,11 +52,14 @@ void Move_tool::imgui(Property_editor& property_editor)
     p.add_entry(Property_row_id::move_snap_enable, "Snap Enable", [this]() { ImGui::Checkbox("##", &get_shared().settings.translate_snap_enable); });
     if (m_context.level_kits != nullptr) {
         p.add_entry(Property_row_id::move_snap_to_surface, "Snap To Surface",   [this]() { surface_snap_checkbox  (*m_context.level_kits, Surface_widget_label::hidden); });
+        p.add_entry(Property_row_id::move_surface_rest, "Surface Rest", [this]() { surface_rest_combo(*m_context.level_kits, Surface_widget_label::hidden); });
         p.add_entry(Property_row_id::move_surface_max_distance, "Surface Max Distance", [this]() { surface_max_distance_input(*m_context.level_kits, Surface_widget_label::hidden); });
         p.add_entry(Property_row_id::move_orient_to_surface, "Orient To Surface", [this]() { surface_orient_checkbox(*m_context.level_kits, Surface_widget_label::hidden); });
+        p.add_entry(Property_row_id::move_surface_drag_direction_mode, "Surface Drag Direction Mode", [this]() { surface_drag_direction_mode_combo(*m_context.level_kits, Surface_widget_label::hidden); });
+        p.add_entry(Property_row_id::move_surface_drag_direction, "Surface Drag Direction", [this]() { surface_drag_direction_input(*m_context.level_kits, Surface_widget_label::hidden); });
         p.add_entry(Property_row_id::move_connector_snap, "Connector Snap", [this]() { connector_snap_distance_input(*m_context.level_kits, Surface_widget_label::hidden); });
         p.add_entry(Property_row_id::move_connector_snap_axis, "Connector Snap On Axis", [this]() { connector_snap_axis_checkbox(*m_context.level_kits, Surface_widget_label::hidden); });
-        p.add_entry(Property_row_id::move_connector_snap_orientation, "Connector Snap Orientation", [this]() { connector_snap_orientation_checkbox(*m_context.level_kits, Surface_widget_label::hidden); });
+        p.add_entry(Property_row_id::move_connector_snap_orientation, "Connector Snap Orientation", [this]() { connector_snap_orientation_combo(*m_context.level_kits, Surface_widget_label::hidden); });
     }
     p.add_entry(Property_row_id::move_bone_ik, "Bone IK", [this]() {
         ImGui::Checkbox("##", &get_shared().settings.translate_ik_enable);

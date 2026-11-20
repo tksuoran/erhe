@@ -3,6 +3,7 @@
 #include "level/kit_shape.hpp"
 #include "level/level_region.hpp"
 #include "level/surface_base_frame.hpp"
+#include "level/surface_options.hpp"
 
 #include "erhe_math/aabb.hpp"
 
@@ -25,27 +26,6 @@ namespace editor {
 class Kit_shape_library;
 class Scene_root;
 
-inline constexpr float c_default_surface_max_distance = 1.0f;
-
-enum class Surface_snap : unsigned int {
-    off = 0,
-    on      // the base moves along the direction to the nearest place where it rests and the piece fits (R5.11, U23, U30)
-};
-
-enum class Surface_orient : unsigned int {
-    off = 0,
-    on      // the up axis takes the surface normal, the heading is kept (R5.11)
-};
-
-class Surface_options
-{
-public:
-    Surface_snap   snap     {Surface_snap::off};
-    Surface_orient orient   {Surface_orient::off};
-    glm::vec3      direction{0.0f, -1.0f, 0.0f}; // unit length
-    float          max_distance{c_default_surface_max_distance}; // meters from the start base, either way along the direction
-};
-
 class Surface_placement
 {
 public:
@@ -54,25 +34,17 @@ public:
     bool         surface_found{false}; // false when no resting place lies within the maximum distance
 };
 
-[[nodiscard]] auto any_surface_option(const Surface_options& options) -> bool;
-
-// Empty when the distance is a finite number >= 0, else why not.
-[[nodiscard]] auto check_surface_max_distance(float distance) -> std::string;
-
 // Bounds of the mesh's primitives in the mesh's own space.
 [[nodiscard]] auto mesh_local_bounds(const erhe::scene::Mesh& mesh) -> erhe::math::Aabb;
 // The same of primitives a mesh is about to take.
 [[nodiscard]] auto mesh_local_bounds(std::span<const erhe::scene::Mesh_primitive> primitives) -> erhe::math::Aabb;
 
-// The base rule of a mesh in the scene: authored_y_up for a kit piece, else from_pose (U48).
-[[nodiscard]] auto get_surface_base_rule(const erhe::scene::Mesh& mesh) -> Surface_base_rule;
-
 // D7.3: finds the nearest resting place along the direction for `local_bounds` placed at `start` through the scene's
-// raytrace scene (committed here); `excluded` meshes are not there. The rule chooses the base face.
+// raytrace scene (committed here); `excluded` meshes are not there. Every mesh rests on its local -Y face (U51); the
+// options' support rule chooses the base lines that support and block without orient (U52).
 [[nodiscard]] auto find_surface_placement(
     Scene_root&                              scene_root,
     const erhe::math::Aabb&                  local_bounds,
-    Surface_base_rule                        base_rule,
     const Surface_pose&                      start,
     const Surface_options&                   options,
     std::span<const erhe::scene::Mesh* const> excluded
@@ -83,11 +55,28 @@ public:
 [[nodiscard]] auto find_surface_placement(
     erhe::raytrace::IScene&                  committed_rt_scene,
     const erhe::math::Aabb&                  local_bounds,
-    Surface_base_rule                        base_rule,
     const Surface_pose&                      start,
     const Surface_options&                   options,
     std::span<const erhe::scene::Mesh* const> excluded
 ) -> Surface_placement;
+
+class Point_surface
+{
+public:
+    bool      found   {false};
+    glm::vec3 position{0.0f};             // the point moved along the direction onto the surface
+    glm::vec3 normal  {0.0f, 1.0f, 0.0f}; // of the surface there, by the tie order of D7.3
+    float     distance{0.0f};             // how far the point moved along the direction; negative when against it
+};
+
+// U51 (Transform tool drags): the nearest surface on one line through the point, up to forward_distance along the options'
+// unit direction and backward_distance against it; a point has no extent, so nothing is tested for fit.
+[[nodiscard]] auto find_point_surface(
+    erhe::raytrace::IScene&                   committed_rt_scene,
+    const glm::vec3&                          point,
+    const Surface_options&                    options,
+    std::span<const erhe::scene::Mesh* const> excluded
+) -> Point_surface;
 
 // The content meshes of the scene that carry a kit piece record, by id.
 void get_kit_piece_meshes(Scene_root& scene_root, std::vector<std::shared_ptr<erhe::scene::Mesh>>& out_meshes);
@@ -120,7 +109,7 @@ public:
 };
 
 // D7.4: the snap rays of D7.3 (down) under each mesh, only the mesh itself passed through; a mesh
-// is supported when a surface lies within tolerance under its base (get_surface_base_rule()). Cleared and filled.
+// is supported when a surface lies within tolerance under its base. Cleared and filled.
 void find_support(
     Scene_root&                                         scene_root,
     std::span<const std::shared_ptr<erhe::scene::Mesh>> meshes,

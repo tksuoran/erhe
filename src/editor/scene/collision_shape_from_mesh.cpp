@@ -1,10 +1,12 @@
 #include "scene/collision_shape_from_mesh.hpp"
 
 #include "erhe_geometry/geometry.hpp"
+#include "erhe_math/aabb.hpp"
 #include "erhe_physics/icollision_shape.hpp"
 #include "erhe_primitive/primitive.hpp"
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/node.hpp"
+#include "erhe_verify/verify.hpp"
 
 #include <geogram/mesh/mesh.h>
 
@@ -52,6 +54,21 @@ auto build_shape_from_mesh(const erhe::scene::Mesh* mesh, const bool convex_hull
         return build_triangle_mesh_shape(geo_mesh, 1.0f);
     }
     return {};
+}
+
+auto build_box_shape(const erhe::math::Aabb& bounds, const float scale) -> std::shared_ptr<erhe::physics::ICollision_shape>
+{
+    ERHE_VERIFY(bounds.is_valid_3d());
+    const glm::vec3 half_extents = (0.5f * scale) * bounds.diagonal();
+    const glm::vec3 center       = scale * bounds.center();
+    erhe::physics::Compound_shape_create_info create_info{};
+    create_info.children.push_back(
+        erhe::physics::Compound_child{
+            .shape     = erhe::physics::ICollision_shape::create_box_shape_shared(half_extents),
+            .transform = erhe::physics::Transform{glm::mat3{1.0f}, center}
+        }
+    );
+    return erhe::physics::ICollision_shape::create_compound_shape_shared(create_info);
 }
 
 auto build_triangle_mesh_shape(const GEO::Mesh& geo_mesh, const float scale) -> std::shared_ptr<erhe::physics::ICollision_shape>

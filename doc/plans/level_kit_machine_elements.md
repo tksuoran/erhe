@@ -66,7 +66,8 @@ diameter is its teeth times the module (16 teeth at 0.03: 0.48 m).
 | `machine.nut` | Nut lying flat, bored through; a cap nut is closed on top | form (`hex`, `square`, `wing`, `cap`), diameter (0.06), height | steel | base, top | hull | prism with a bore, lathe, box | S |
 | `machine.washer` | Washer: flat, a split lock washer, or a toothed one | form (`flat`, `lock`, `toothed`), diameter, thickness, teeth (6 - 16) | steel | base, top | hull | lathe, prism | S |
 
-A bolt's thread is rings, `turns` of them: a ridge to a turn. The bolt's `nut`
+A bolt's thread is a right-hand helix of `turns` turns (`thread_style` `rings`
+gives a ridge to a turn instead; step 84). The bolt's `nut`
 connector faces its tip, a little up the thread; a nut joined to it by its
 `top` sits on the thread's end. `seat` is under the head, facing the tip: the
 surface the head is tightened against.

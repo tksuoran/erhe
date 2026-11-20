@@ -203,6 +203,13 @@ void Brush_preview::make_preview_scene()
     }
 }
 
+void Brush_preview::add_material(const std::shared_ptr<erhe::primitive::Material>& material)
+{
+    const std::shared_ptr<Content_library> content_library = m_scene_root_shared->get_content_library();
+    std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{content_library->mutex};
+    content_library->add(material);
+}
+
 void Brush_preview::release_preview_mesh()
 {
     if (!m_mesh) {
@@ -285,6 +292,41 @@ void Brush_preview::render_preview(
     const Preview_edge_lines_config*                   edge_lines
 )
 {
+    const std::shared_ptr<erhe::primitive::Material>& render_material =
+        material ? material : (headlight_shading ? m_headlight_material : m_material);
+    render_primitives(
+        command_buffer, texture, texture_layer,
+        std::span<const std::shared_ptr<erhe::primitive::Primitive>>{&primitive, 1},
+        std::span<const std::shared_ptr<erhe::primitive::Material>>{&render_material, 1},
+        orientation, headlight_shading ? Preview_lighting::headlight : Preview_lighting::key_and_fill, edge_lines
+    );
+}
+
+void Brush_preview::render_parts_preview(
+    erhe::graphics::Command_buffer&                                    command_buffer,
+    const std::shared_ptr<erhe::graphics::Texture>&                    texture,
+    unsigned int                                                       texture_layer,
+    const std::span<const std::shared_ptr<erhe::primitive::Primitive>> primitives,
+    const std::span<const std::shared_ptr<erhe::primitive::Material>>  materials,
+    const glm::quat&                                                   orientation,
+    const Preview_edge_lines_config*                                   edge_lines
+)
+{
+    render_primitives(command_buffer, texture, texture_layer, primitives, materials, orientation, Preview_lighting::key_and_fill, edge_lines);
+}
+
+void Brush_preview::render_primitives(
+    erhe::graphics::Command_buffer&                                    command_buffer,
+    const std::shared_ptr<erhe::graphics::Texture>&                    texture,
+    unsigned int                                                       texture_layer,
+    const std::span<const std::shared_ptr<erhe::primitive::Primitive>> primitives,
+    const std::span<const std::shared_ptr<erhe::primitive::Material>>  materials,
+    const glm::quat&                                                   orientation,
+    const Preview_lighting                                             lighting,
+    const Preview_edge_lines_config*                                   edge_lines
+)
+{
+    ERHE_VERIFY(!primitives.empty());
     // Edge-line overlay is per-call state (the preview scene is shared by
     // brush thumbnails and graph node previews, each with its own settings
     // group), so enable / color the pass here rather than at construction.
@@ -329,9 +371,10 @@ void Brush_preview::render_preview(
         m_mesh->layer_id = { Mesh_layer_id::brush };
     }
 
-    const std::shared_ptr<erhe::primitive::Material>& render_material =
-        material ? material : (headlight_shading ? m_headlight_material : m_material);
-    m_mesh->add_primitive(primitive, render_material);
+    for (std::size_t i = 0, end = primitives.size(); i < end; ++i) {
+        const bool has_material = (i < materials.size()) && materials[i];
+        m_mesh->add_primitive(primitives[i], has_material ? materials[i] : m_material);
+    }
     erhe::scene::set_mesh_parent(m_mesh, m_node);
 
     // After the persistent mesh's primitives have been re-added, which is
@@ -346,9 +389,16 @@ void Brush_preview::render_preview(
     //const glm::vec3 target_position = world_aabb.center();
     //const float     size            = glm::length(world_aabb.diagonal());
 
-    const erhe::primitive::Buffer_mesh* renderable_mesh = primitive->get_renderable_mesh(erhe::primitive::Mesh_variant::original);
-    ERHE_VERIFY(renderable_mesh != nullptr);
-    const erhe::math::Sphere primitive_local_bounding_sphere = renderable_mesh->bounding_sphere;
+    erhe::math::Sphere primitive_local_bounding_sphere{};
+    for (std::size_t i = 0, end = primitives.size(); i < end; ++i) {
+        const erhe::primitive::Buffer_mesh* renderable_mesh = primitives[i]->get_renderable_mesh(erhe::primitive::Mesh_variant::original);
+        ERHE_VERIFY(renderable_mesh != nullptr);
+        if (i == 0) {
+            primitive_local_bounding_sphere = renderable_mesh->bounding_sphere;
+        } else {
+            primitive_local_bounding_sphere.enclose(renderable_mesh->bounding_sphere);
+        }
+    }
     const erhe::math::Sphere world_sphere    = primitive_local_bounding_sphere.transformed_by(m_node->world_from_node());
     const glm::vec3          target_position = world_sphere.center;
     const float              size            = world_sphere.radius;
@@ -390,7 +440,7 @@ void Brush_preview::render_preview(
     // Light setup is per-call state (the preview scene is shared by brush
     // thumbnails and headlight-shaded graph node previews), so both modes
     // set it fully instead of relying on the constructor pose.
-    if (headlight_shading) {
+    if (lighting == Preview_lighting::headlight) {
         // Key light co-located with the fitted camera: Lambert diffuse
         // then falls off with dot(N, V) (the N.V-dimmed look).
         m_key_light->set_intensity(2.5f);

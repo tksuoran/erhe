@@ -1212,6 +1212,10 @@ void add_extra_25_32_shapes(std::vector<Kit_shape_definition>& shapes)
         shape.triangle_budget = 480;
         shape.collision       = Kit_collision::triangle_mesh;
         shape.generator       = generate_container;
+        // Closed doors leave no way in, so the box is the container's outside (U54).
+        shape.get_collision   = [](const Kit_parameter_values& values) {
+            return (values.get_enum("door") == "closed") ? Kit_collision::box : Kit_collision::triangle_mesh;
+        };
         shape.get_connectors  = [](const Kit_parameter_values&, std::vector<Kit_connector>& out_connectors) {
             add_base_and_top_connectors(out_connectors, container_height);
             add_side_connector(out_connectors, "front", glm::vec3{0.0f, 0.0f,  0.5f * container_width}, glm::vec3{0.0f, 0.0f,  1.0f});
@@ -1243,6 +1247,9 @@ void add_extra_25_32_shapes(std::vector<Kit_shape_definition>& shapes)
         shape.collision       = Kit_collision::convex_hull;
         shape.origin_rule     = Kit_origin_rule::base_contains_origin; // a duct elbow's curb stands behind its mouth
         shape.generator       = generate_vent;
+        shape.get_collision   = [](const Kit_parameter_values& values) {
+            return (values.get_enum("form") == "louvre_box") ? Kit_collision::box : Kit_collision::convex_hull;
+        };
         shape.get_connectors  = [](const Kit_parameter_values&, std::vector<Kit_connector>& out_connectors) {
             out_connectors.push_back(make_base_connector());
         };

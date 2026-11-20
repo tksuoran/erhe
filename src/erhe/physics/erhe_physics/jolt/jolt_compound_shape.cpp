@@ -2,6 +2,8 @@
 #include "erhe_physics/jolt/glm_conversions.hpp"
 #include "erhe_verify/verify.hpp"
 
+#include <string>
+
 namespace erhe::physics {
 
 auto ICollision_shape::create_compound_shape(const Compound_shape_create_info& create_info) -> ICollision_shape*
@@ -46,7 +48,14 @@ auto Jolt_compound_shape::get_shape_settings() -> JPH::ShapeSettings&
 
 auto Jolt_compound_shape::describe() const -> std::string
 {
-    return "Jolt_compound_shape";
+    std::string description = "Jolt_compound_shape(";
+    for (std::size_t i = 0, end = m_children.size(); i < end; ++i) {
+        if (i > 0) {
+            description += ", ";
+        }
+        description += m_children[i].shape ? m_children[i].shape->describe() : std::string{"null"};
+    }
+    return description + ")";
 }
 
 auto Jolt_compound_shape::get_shape_type() const -> Collision_shape_type

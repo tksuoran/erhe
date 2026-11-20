@@ -1208,6 +1208,10 @@ void add_extra_09_16_shapes(std::vector<Kit_shape_definition>& shapes)
         shape.collision         = Kit_collision::triangle_mesh;
         shape.origin_rule       = Kit_origin_rule::base_contains_origin;
         shape.generator         = generate_quay_wall;
+        // An upright face without fenders is a box (U54).
+        shape.get_collision     = [](const Kit_parameter_values& values) {
+            return ((values.get_int("fenders") == 0) && (values.get_float("batter") == 0.0f)) ? Kit_collision::box : Kit_collision::triangle_mesh;
+        };
         shape.mirror_planes     = std::vector<Kit_mirror_plane>{Kit_mirror_plane::x};
         shape.check_walkability = check_quay_walkability;
         shape.get_connectors    = [](const Kit_parameter_values& values, std::vector<Kit_connector>& out_connectors) {

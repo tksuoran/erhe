@@ -1904,6 +1904,10 @@ void Dependency_property_rows::paste_properties()
             if (entry.property->is_read_only()) {
                 continue;
             }
+            // Step 41: an attachment belongs to the piece it was made on; a pasted one would name another owner.
+            if (entry.property == &Kit_piece::attachment_property.get()) {
+                continue;
+            }
             if (registry.find_for_object(item->get_property_owner_type(), registry.qualified_name(*entry.property)) == entry.property) {
                 filtered.set(*entry.property, entry.value);
             }

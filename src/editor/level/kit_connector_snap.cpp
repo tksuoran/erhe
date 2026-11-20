@@ -179,6 +179,9 @@ void Kit_connector_drag_snap::end()
     m_target_world_source.clear();
     m_snapped_moved.reset();
     m_snapped_target.reset();
+    m_twist_moved.reset();
+    m_twist_target.reset();
+    m_latched_twist = 0;
 }
 
 void Kit_connector_drag_snap::clear()
@@ -197,12 +200,13 @@ auto Kit_connector_drag_snap::get_scene_root() const -> const Scene_root*
     return m_active ? m_scene_root : nullptr;
 }
 
-auto Kit_connector_drag_snap::step(const Kit_connector_snap_constraint& constraint, const Connector_snap_orientation orientation) -> std::optional<glm::vec3>
+auto Kit_connector_drag_snap::step(const Kit_connector_snap_constraint& constraint, const Kit_connector_snap_turn& turn) -> std::optional<glm::vec3>
 {
     ERHE_PROFILE_FUNCTION();
 
     m_state = Kit_connector_snap_state{};
     m_state.constraint = constraint;
+    m_state.turn       = turn;
     m_snapped_moved.reset();
     m_snapped_target.reset();
     if (!m_active) {
@@ -269,18 +273,14 @@ auto Kit_connector_drag_snap::step(const Kit_connector_snap_constraint& constrai
     m_state.target_connector = target.name;
     m_snapped_moved          = m_moved_world_source[match.moved];
     m_snapped_target         = m_target_world_source[match.other];
-    if (orientation == Connector_snap_orientation::align) {
-        align_step(moved, target);
+    if (turn.kind != Kit_connector_snap_turn_kind::none) {
+        align_step(moved, target, turn);
     }
     return m_state.offset;
 }
 
-void Kit_connector_drag_snap::align_step(const Moved_point& moved, const Target_point& target)
+void Kit_connector_drag_snap::align_step(const Moved_point& moved, const Target_point& target, const Kit_connector_snap_turn& turn)
 {
-    if (m_state.constraint.kind != Kit_connector_snap_constraint_kind::free) {
-        m_state.alignment = Kit_connector_snap_alignment::on_axis;
-        return;
-    }
     // Both nodes were read by this step's search, which skips expired or hostless ones.
     const std::shared_ptr<erhe::scene::Node> root        = m_roots[moved.root].lock();
     const std::shared_ptr<erhe::scene::Node> target_node = m_target_pieces[target.piece].node.lock();
@@ -292,17 +292,31 @@ void Kit_connector_drag_snap::align_step(const Moved_point& moved, const Target_
         m_state.alignment = Kit_connector_snap_alignment::degenerate; // the snap translates only
         return;
     }
-    const Kit_connector_alignment alignment = align_connector_frames(moved_world.value(), target_world.value());
+    Kit_connector_alignment alignment;
+    if (turn.kind == Kit_connector_snap_turn_kind::about_axis) {
+        if ((m_twist_moved != m_snapped_moved) || (m_twist_target != m_snapped_target)) {
+            m_twist_moved   = m_snapped_moved;
+            m_twist_target  = m_snapped_target;
+            m_latched_twist = choose_twist_about_axis(moved_world.value(), target_world.value(), turn.axis);
+        }
+        alignment = align_connector_frames_about_axis(moved_world.value(), target_world.value(), turn.axis, m_latched_twist);
+    } else {
+        alignment = align_connector_frames(moved_world.value(), target_world.value());
+    }
+    // The turn is about the moved connector; the offset (constrained on an axis or plane) then moves it.
+    const glm::vec3 pivot = moved_world.value().position;
     m_state.alignment   = Kit_connector_snap_alignment::aligned;
-    m_state.motion      = alignment.motion;
-    m_state.twist_steps = alignment.twist_steps;
+    m_state.motion      = Kit_join_pose{.position = pivot + m_state.offset - (alignment.motion.rotation * pivot), .rotation = alignment.motion.rotation};
+    m_state.twist_steps  = alignment.twist_steps;
+    m_state.facing_score = get_facing_score(moved_world.value(), target_world.value(), alignment.twist_steps, alignment.motion.rotation);
 }
 
 void Kit_connector_drag_snap::drop_alignment(const Kit_connector_snap_alignment reason)
 {
     m_state.alignment   = reason;
-    m_state.motion      = Kit_join_pose{};
-    m_state.twist_steps = 0;
+    m_state.motion       = Kit_join_pose{};
+    m_state.twist_steps  = 0;
+    m_state.facing_score = 0.0f;
 }
 
 void Kit_connector_drag_snap::reject_step()

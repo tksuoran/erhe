@@ -19,9 +19,11 @@ public:
     Bounds_side side;
 };
 
-// The tie order of get_surface_base_frame().
-constexpr std::array<Face_candidate, 6> c_face_candidates{
-    Face_candidate{.axis = 1, .side = Bounds_side::min},
+constexpr Face_candidate c_min_y_face{.axis = 1, .side = Bounds_side::min};
+
+// Snap's candidates in tie order: an exact tie keeps the earlier face, -Y first.
+constexpr std::array<Face_candidate, 6> c_snap_faces{
+    c_min_y_face,
     Face_candidate{.axis = 1, .side = Bounds_side::max},
     Face_candidate{.axis = 0, .side = Bounds_side::min},
     Face_candidate{.axis = 0, .side = Bounds_side::max},
@@ -43,44 +45,49 @@ constexpr std::array<Face_candidate, 6> c_face_candidates{
     return normal;
 }
 
-} // anonymous namespace
-
-auto get_surface_base_frame(
-    const Surface_base_rule rule,
-    const glm::quat&        rotation,
-    const glm::vec3&        scale,
-    const glm::vec3&        direction
-) -> Surface_base_frame
+[[nodiscard]] auto make_frame(const Face_candidate& face, const glm::vec3& scale) -> Surface_base_frame
 {
-    // A kit piece chooses between its two Y faces only (the first two candidates), so a mirror of any axis keeps it upright.
-    const std::size_t     count      = (rule == Surface_base_rule::authored_y_up) ? std::size_t{2} : c_face_candidates.size();
-    const Face_candidate* best       = &c_face_candidates[0];
-    float                 best_score = glm::dot(rotation * get_outward_normal(*best, scale), direction);
-    for (std::size_t i = 1; i < count; ++i) {
-        const float score = glm::dot(rotation * get_outward_normal(c_face_candidates[i], scale), direction);
-        if (score > best_score) {
-            best       = &c_face_candidates[i];
-            best_score = score;
-        }
-    }
     Surface_base_frame frame{};
-    frame.axis     = best->axis;
-    frame.side     = best->side;
-    frame.u        = (best->axis == 0) ? 1 : 0;
-    frame.v        = (best->axis == 2) ? 1 : 2;
-    frame.up_local = -get_outward_normal(*best, scale);
+    frame.axis     = face.axis;
+    frame.side     = face.side;
+    frame.u        = (face.axis == 0) ? 1 : 0;
+    frame.v        = (face.axis == 2) ? 1 : 2;
+    frame.up_local = -get_outward_normal(face, scale);
     return frame;
 }
 
-auto get_orient_frame(
-    const Surface_base_rule   rule,
-    const glm::quat&          rotation,
-    const glm::vec3&          scale,
-    const Surface_base_frame& line_frame,
-    const glm::vec3&          normal
-) -> Surface_base_frame
+} // anonymous namespace
+
+auto get_surface_base_frame(const glm::quat& rotation, const glm::vec3& scale, const glm::vec3& direction) -> Surface_base_frame
 {
-    return (rule == Surface_base_rule::from_pose) ? get_surface_base_frame(rule, rotation, scale, -normal) : line_frame;
+    const Face_candidate* best       = &c_snap_faces.front();
+    float                 best_score = glm::dot(rotation * get_outward_normal(*best, scale), direction);
+    for (const Face_candidate& face : c_snap_faces) {
+        const float score = glm::dot(rotation * get_outward_normal(face, scale), direction);
+        if (score > best_score) {
+            best       = &face;
+            best_score = score;
+        }
+    }
+    return make_frame(*best, scale);
+}
+
+namespace {
+
+// Orient's window reference: of the two Y faces the one more along the direction (a tie keeps -Y).
+[[nodiscard]] auto get_leading_y_frame(const glm::quat& rotation, const glm::vec3& scale, const glm::vec3& direction) -> Surface_base_frame
+{
+    const Face_candidate& max_y_face = c_snap_faces[1];
+    const float min_score = glm::dot(rotation * get_outward_normal(c_min_y_face, scale), direction);
+    const float max_score = glm::dot(rotation * get_outward_normal(max_y_face, scale), direction);
+    return make_frame((max_score > min_score) ? max_y_face : c_min_y_face, scale);
+}
+
+} // anonymous namespace
+
+auto get_orient_base_frame(const glm::vec3& scale) -> Surface_base_frame
+{
+    return make_frame(c_min_y_face, scale);
 }
 
 auto get_base_coordinate(const erhe::math::Aabb& local_bounds, const Surface_base_frame& frame) -> float
@@ -153,12 +160,57 @@ auto get_oriented_pose(
 {
     const glm::vec3 base_center_local = get_base_center(local_bounds, frame);
     const glm::vec3 base_center       = get_world_point(start, base_center_local);
-    const glm::vec3 up                = glm::normalize(start.rotation * frame.up_local);
-    const glm::quat rotation          = glm::normalize(shortest_rotation(up, normal) * start.rotation);
+    const glm::quat rotation          = glm::normalize(get_orient_turn(start.rotation, frame, get_orient_half_turn(start.rotation, frame, direction), normal) * start.rotation);
     return Surface_pose{
         .position = (base_center - (height * direction)) - (rotation * (start.scale * base_center_local)),
         .rotation = rotation,
         .scale    = start.scale
+    };
+}
+
+auto get_orient_half_turn(const glm::quat& rotation, const Surface_base_frame& frame, const glm::vec3 direction) -> Orient_half_turn
+{
+    // From the start pose and the direction only, so the turn is the same for every element of a layout whatever normal each
+    // one finds.
+    return (glm::dot(rotation * frame.up_local, direction) > 0.0f) ? Orient_half_turn::on : Orient_half_turn::off;
+}
+
+auto get_orient_turn(
+    const glm::quat&          rotation,
+    const Surface_base_frame& frame,
+    const Orient_half_turn    half_turn,
+    const glm::vec3           normal
+) -> glm::quat
+{
+    glm::vec3 up = glm::normalize(rotation * frame.up_local);
+    glm::quat turn{1.0f, 0.0f, 0.0f, 0.0f};
+    if (half_turn == Orient_half_turn::on) {
+        glm::vec3 u_axis{0.0f};
+        u_axis[frame.u] = 1.0f;
+        turn = glm::angleAxis(glm::pi<float>(), glm::normalize(rotation * u_axis));
+        up   = -up;
+    }
+    return shortest_rotation(up, normal) * turn;
+}
+
+auto get_anchor_rest(
+    const Surface_pose&         start,
+    const glm::vec3             direction,
+    const Surface_line&         line,
+    const Surface_search_window window
+) -> Anchor_rest
+{
+    const Point_rest rest = find_point_rest(start.position, direction, line, window);
+    if (!rest.found) {
+        return Anchor_rest{.found = false, .pose = start, .distance = 0.0f};
+    }
+    if (rest.distance == 0.0f) {
+        return Anchor_rest{.found = true, .pose = start, .distance = 0.0f};
+    }
+    return Anchor_rest{
+        .found    = true,
+        .pose     = Surface_pose{.position = rest.position, .rotation = start.rotation, .scale = start.scale},
+        .distance = rest.distance
     };
 }
 
@@ -175,6 +227,28 @@ auto shortest_rotation(const glm::vec3 from, const glm::vec3 to) -> glm::quat
     const glm::vec3 axis = glm::cross(from, to);
     const float     s    = std::sqrt((1.0f + cos_angle) * 2.0f);
     return glm::normalize(glm::quat{0.5f * s, axis.x / s, axis.y / s, axis.z / s});
+}
+
+auto get_orient_search(
+    const erhe::math::Aabb&     local_bounds,
+    const Surface_pose&         start,
+    const glm::vec3             direction,
+    const Surface_search_window window
+) -> Orient_search
+{
+    Orient_search search{};
+    search.frame = get_orient_base_frame(start.scale);
+    const glm::vec3 base_center_local = get_base_center(local_bounds, search.frame);
+    search.base_center = get_world_point(start, base_center_local);
+    search.span        = glm::length(get_world_point(start, get_top_point(local_bounds, search.frame, base_center_local)) - search.base_center);
+    // 0 when the -Y face leads; the top face's distance along the direction for a piece turned over.
+    const Surface_base_frame lead_frame = get_leading_y_frame(start.rotation, start.scale, direction);
+    const float lead = glm::dot(get_world_point(start, get_base_center(local_bounds, lead_frame)) - search.base_center, direction);
+    search.window = Surface_search_window{
+        .forward_distance  = window.forward_distance + lead,
+        .backward_distance = window.backward_distance - lead
+    };
+    return search;
 }
 
 } // namespace editor

@@ -1505,7 +1505,7 @@ namespace {
 // The optional surface_snap / surface_orient arguments (D4.6): off unless the call states them.
 [[nodiscard]] auto read_surface_arguments(const json& args, Surface_options& out_options, std::string& out_error) -> bool
 {
-    out_options = Surface_options{};
+    out_options = make_surface_options(Surface_snap::off, Surface_orient::off, c_default_surface_direction, c_default_surface_max_distance);
     for (const char* key : {"surface_snap", "surface_orient"}) {
         if (args.contains(key) && !args.at(key).is_boolean()) {
             out_error = std::string{key} + " must be a boolean, not " + args.at(key).dump();
@@ -1520,8 +1520,45 @@ namespace {
             out_error = "surface_max_distance must be a number >= 0, not " + value.dump();
             return false;
         }
-        out_options.max_distance = value.get<float>();
+        out_options.forward_distance  = value.get<float>();
+        out_options.backward_distance = value.get<float>();
     }
+    return true;
+}
+
+// U51, drag_selection: the optional surface_direction (3 finite numbers, not zero; default down) and surface_direction_mode
+// ("explicit_vector", the default, or "camera_ray": from a viewport camera of the active scene through the anchor).
+[[nodiscard]] auto read_surface_drag_direction(
+    const json&             args,
+    Surface_options&        out_options,
+    Surface_drag_direction& out_mode,
+    std::string&            out_error
+) -> bool
+{
+    out_mode = Surface_drag_direction::explicit_vector;
+    if (args.contains("surface_direction_mode")) {
+        const json& value = args.at("surface_direction_mode");
+        if (!value.is_string() || !from_string(value.get<std::string>(), out_mode)) {
+            out_error = "surface_direction_mode must be \"explicit_vector\" or \"camera_ray\", not " + value.dump();
+            return false;
+        }
+    }
+    out_options.direction = c_default_surface_direction;
+    if (!args.contains("surface_direction")) {
+        return true;
+    }
+    const json& value = args.at("surface_direction");
+    if (!value.is_array() || (value.size() != 3) || !value[0].is_number() || !value[1].is_number() || !value[2].is_number()) {
+        out_error = "surface_direction must be an array of 3 numbers, not " + value.dump();
+        return false;
+    }
+    const glm::vec3   direction{value[0].get<float>(), value[1].get<float>(), value[2].get<float>()};
+    const std::string problem = check_surface_direction(direction);
+    if (!problem.empty()) {
+        out_error = problem;
+        return false;
+    }
+    out_options.direction = glm::normalize(direction);
     return true;
 }
 
@@ -1541,16 +1578,16 @@ namespace {
     return true;
 }
 
-// The optional connector_snap_orientation argument (U44): "keep" (the default) or "align".
+// The optional connector_snap_orientation argument (U50): "off" (the default), "rotate" or "full"; "keep" and "align" are former names.
 [[nodiscard]] auto read_connector_snap_orientation(const json& args, Connector_snap_orientation& out_orientation, std::string& out_error) -> bool
 {
-    out_orientation = Connector_snap_orientation::keep;
+    out_orientation = Connector_snap_orientation::off;
     if (!args.contains("connector_snap_orientation")) {
         return true;
     }
     const json& value = args.at("connector_snap_orientation");
     if (!value.is_string() || !from_string(value.get<std::string>(), out_orientation)) {
-        out_error = "connector_snap_orientation must be \"keep\" or \"align\", not " + value.dump();
+        out_error = "connector_snap_orientation must be \"off\", \"rotate\" or \"full\", not " + value.dump();
         return false;
     }
     return true;
@@ -1561,7 +1598,6 @@ namespace {
     switch (alignment) {
         case Kit_connector_snap_alignment::off:     return "off";
         case Kit_connector_snap_alignment::aligned: return "aligned";
-        case Kit_connector_snap_alignment::on_axis: return "on_axis";
         case Kit_connector_snap_alignment::locked:  return "locked";
         case Kit_connector_snap_alignment::shear:   return "shear";
         case Kit_connector_snap_alignment::degenerate: return "degenerate";
@@ -1613,9 +1649,17 @@ namespace {
         reply["target_connector"] = state.target_connector;
         // U44: the rigid motion of an aligned snap (world rotation, then translation); identity otherwise.
         reply["alignment"]        = c_str(state.alignment);
+        reply["turn"]             =
+            (state.turn.kind == Kit_connector_snap_turn_kind::about_axis) ? "about_axis" :
+            (state.turn.kind == Kit_connector_snap_turn_kind::full)       ? "full"       :
+                                                                            "none";
+        reply["turn_axis"]        = {state.turn.axis.x, state.turn.axis.y, state.turn.axis.z};
         reply["rotation_xyzw"]    = {state.motion.rotation.x, state.motion.rotation.y, state.motion.rotation.z, state.motion.rotation.w};
         reply["motion_translation"] = {state.motion.position.x, state.motion.position.y, state.motion.position.z};
         reply["twist_steps"]      = state.twist_steps;
+        if (state.alignment == Kit_connector_snap_alignment::aligned) {
+            reply["facing_score"] = state.facing_score; // U50: 3 = the pair faces exactly
+        }
     }
     return reply;
 }
@@ -1698,7 +1742,11 @@ auto Mcp_server::action_transform_selection(const json& args) -> std::string
     if (!read_surface_arguments(args, surface, parse_error)) {
         return make_error_content("transform_selection: " + parse_error);
     }
-    if (any_surface_option(surface) && (!translation.has_value() || shared.component_mode)) {
+    // U50: surface_orient alone with a rotation or scale only is the Orient To Surface that connector_snap_orientation rotate turns about.
+    if (
+        (any_surface_option(surface) && shared.component_mode) ||
+        ((surface.snap == Surface_snap::on) && !translation.has_value())
+    ) {
         return make_error_content("transform_selection: surface_snap and surface_orient snap moved meshes to the surface; they need a translation of a node selection");
     }
     float connector_snap_distance = 0.0f;
@@ -1708,15 +1756,15 @@ auto Mcp_server::action_transform_selection(const json& args) -> std::string
     if ((connector_snap_distance > 0.0f) && ((!translation.has_value() && !rotation.has_value() && !scale.has_value()) || shared.component_mode)) {
         return make_error_content("transform_selection: connector_snap_distance snaps moved nodes; it needs a translation, rotation or scale of a node selection");
     }
-    Connector_snap_orientation connector_snap_orientation{Connector_snap_orientation::keep};
+    Connector_snap_orientation connector_snap_orientation{Connector_snap_orientation::off};
     if (!read_connector_snap_orientation(args, connector_snap_orientation, parse_error)) {
         return make_error_content("transform_selection: " + parse_error);
     }
-    if (
-        (connector_snap_orientation == Connector_snap_orientation::align) &&
-        (!(connector_snap_distance > 0.0f) || rotation.has_value() || scale.has_value() || skew.has_value())
-    ) {
-        return make_error_content("transform_selection: connector_snap_orientation align turns a translate snap; it needs connector_snap_distance and a translation only");
+    if ((connector_snap_orientation != Connector_snap_orientation::off) && !(connector_snap_distance > 0.0f)) {
+        return make_error_content("transform_selection: connector_snap_orientation turns a connector snap; it needs connector_snap_distance > 0");
+    }
+    if ((surface.orient == Surface_orient::on) && !translation.has_value() && (connector_snap_orientation != Connector_snap_orientation::rotate)) {
+        return make_error_content("transform_selection: surface_orient without a translation only names the axis connector_snap_orientation rotate turns about");
     }
 
     json applied = json::object();
@@ -1737,10 +1785,10 @@ auto Mcp_server::action_transform_selection(const json& args) -> std::string
         applied["skew"] = {skew->x, skew->y, skew->z};
     }
     // After every edit of the call, so the rested transform is the one recorded.
-    const std::size_t surface_found_count = transform_tool->snap_to_surface(surface);
+    const std::size_t surface_found_count = translation.has_value() ? transform_tool->snap_to_surface(surface) : 0;
     // After the rest, as a drag step orders them (doc/editor/level_tools.md "Connector snap").
     if (connector_snap_distance > 0.0f) {
-        static_cast<void>(transform_tool->snap_to_connectors(connector_snap_distance, connector_snap_orientation));
+        static_cast<void>(transform_tool->snap_to_connectors(connector_snap_distance, connector_snap_orientation, surface.orient));
     }
 
     const bool end_edit = args.value("end_edit", true);
@@ -1790,7 +1838,7 @@ auto Mcp_server::action_transform_selection(const json& args) -> std::string
         {"end_edit",            end_edit},
         {"surface_snap",        surface.snap == Surface_snap::on},
         {"surface_orient",      surface.orient == Surface_orient::on},
-        {"surface_max_distance", surface.max_distance},
+        {"surface_max_distance", surface.forward_distance},
         {"surface_found_count", surface_found_count},
         {"connector_snap_distance", connector_snap_distance},
         {"connector_snap_orientation", std::string{to_string(connector_snap_orientation)}},
@@ -1953,11 +2001,19 @@ auto Mcp_server::action_drag_selection(const json& args) -> std::string
             return make_error_content("frames must be at least 1");
         }
         steps.release = args.value("release", true);
-        if (!read_surface_arguments(args, steps.surface, parse_error)) {
+        if (!read_surface_arguments(args, steps.surface, parse_error) || !read_surface_drag_direction(args, steps.surface, steps.surface_direction_mode, parse_error)) {
             return make_error_content("drag_selection: " + parse_error);
         }
-        if (any_surface_option(steps.surface) && (steps.kind != Transform_drag_kind::translate)) {
-            return make_error_content("drag_selection: surface_snap and surface_orient apply to translate drags only");
+        // U60: what the snap rests with orient off; leading_face (the setting's default) unless the call says.
+        if (args.contains("surface_rest")) {
+            const json& value = args.at("surface_rest");
+            if (!value.is_string() || !from_string(value.get<std::string>(), steps.surface.rest)) {
+                return make_error_content("drag_selection: surface_rest must be \"leading_face\" or \"anchor\", not " + value.dump());
+            }
+        }
+        // U50: a rotate or scale drag takes surface_orient alone, as the Orient To Surface that Rotate turns about.
+        if ((steps.surface.snap == Surface_snap::on) && (steps.kind != Transform_drag_kind::translate)) {
+            return make_error_content("drag_selection: surface_snap applies to translate drags only");
         }
         if (!read_connector_snap_distance(args, steps.connector_snap_distance, parse_error)) {
             return make_error_content("drag_selection: " + parse_error);
@@ -1965,11 +2021,8 @@ auto Mcp_server::action_drag_selection(const json& args) -> std::string
         if (!read_connector_snap_orientation(args, steps.connector_snap_orientation, parse_error)) {
             return make_error_content("drag_selection: " + parse_error);
         }
-        if ((steps.connector_snap_orientation == Connector_snap_orientation::align) && (steps.kind != Transform_drag_kind::translate)) {
-            return make_error_content("drag_selection: connector_snap_orientation align applies to translate drags only");
-        }
-        if ((steps.connector_snap_orientation == Connector_snap_orientation::align) && !(steps.connector_snap_distance > 0.0f)) {
-            return make_error_content("drag_selection: connector_snap_orientation align turns a connector snap; it needs connector_snap_distance > 0");
+        if ((steps.connector_snap_orientation != Connector_snap_orientation::off) && !(steps.connector_snap_distance > 0.0f)) {
+            return make_error_content("drag_selection: connector_snap_orientation turns a connector snap; it needs connector_snap_distance > 0");
         }
 
         if (shared.component_mode) {
@@ -1981,7 +2034,7 @@ auto Mcp_server::action_drag_selection(const json& args) -> std::string
         if (!has_center) {
             steps.center = shared.world_from_anchor_initial_state.get_translation();
         }
-        if (!transform_tool->begin_scripted_drag(steps.kind, steps.surface, steps.connector_snap_distance, steps.connector_snap_orientation)) {
+        if (!transform_tool->begin_scripted_drag(steps.kind, steps.surface, steps.surface_direction_mode, steps.connector_snap_distance, steps.connector_snap_orientation)) {
             return make_error_content("Drag refused: a pointer drag is active");
         }
         steps.request = m_current_request;
@@ -2010,7 +2063,10 @@ auto Mcp_server::action_drag_selection(const json& args) -> std::string
         {"released",       finished.release},
         {"surface_snap",   finished.surface.snap == Surface_snap::on},
         {"surface_orient", finished.surface.orient == Surface_orient::on},
-        {"surface_max_distance", finished.surface.max_distance},
+        {"surface_max_distance", finished.surface.forward_distance},
+        {"surface_direction_mode", std::string{to_string(finished.surface_direction_mode)}},
+        {"surface_rest",           std::string{to_string(finished.surface.rest)}},
+        {"surface_direction",    {finished.surface.direction.x, finished.surface.direction.y, finished.surface.direction.z}},
         {"connector_snap_distance", finished.connector_snap_distance},
         {"connector_snap_orientation", std::string{to_string(finished.connector_snap_orientation)}},
         {"connector_snap", connector_snap_json(transform_tool->get_connector_snap())},

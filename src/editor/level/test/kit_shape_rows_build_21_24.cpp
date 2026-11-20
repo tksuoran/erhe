@@ -7,7 +7,6 @@ auto get_build_21_24_rows() -> Kit_shape_rows
 {
     Kit_shape_rows rows;
     rows.shapes              = {"architecture.bridge_deck", "architecture.buttress", "nature.log", "nature.shell", "nature.blocky_tree", "architecture.stone_lantern"};
-    rows.recreated_originals = {};
     rows.seeded_shapes       = {"nature.log", "nature.shell", "nature.blocky_tree"};
     rows.enum_shapes         = {"architecture.bridge_deck", "architecture.buttress", "nature.log", "nature.shell", "nature.blocky_tree", "architecture.stone_lantern"};
     rows.components          = {

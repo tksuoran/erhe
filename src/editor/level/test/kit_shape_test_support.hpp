@@ -5,6 +5,7 @@
 #include "level/kit_shape_library.hpp"
 
 #include <geogram/mesh/mesh.h>
+#include <glm/glm.hpp>
 
 #include <array>
 #include <cstddef>
@@ -23,9 +24,6 @@ constexpr float default_wall_height = 3.0f;
 
 [[nodiscard]] auto get_library() -> const Kit_shape_library&;
 [[nodiscard]] auto get_shape  (const char* id) -> const Kit_shape_definition&;
-
-// The id the tests key a shape's expectations by: a recreated shape shares its original's.
-[[nodiscard]] auto contract_id(const Kit_shape_definition& shape) -> const std::string&;
 
 [[nodiscard]] auto defaults(const Kit_shape_definition& shape) -> Kit_parameter_values;
 [[nodiscard]] auto generate(const Kit_parameter_values& values) -> std::unique_ptr<GEO::Mesh>;
@@ -60,11 +58,14 @@ constexpr int c_derive_sweep_count = 8;
 // Every parameter of the shape at the minimum or the maximum of its range, an empty mask.
 [[nodiscard]] auto range_corner(const Kit_shape_definition& shape, Range_end range_end) -> Kit_parameter_values;
 
-// The recreated shape's mesh checks pass and its bounds are its original's at the two value sets.
-void expect_original_bounds(const Kit_parameter_values& values, const Kit_parameter_values& original_values);
+// The defaults, both range corners and the derived values of four seeds: the value sets a shape's bounds are checked at.
+[[nodiscard]] auto bounds_value_sets(const Kit_shape_definition& shape) -> std::vector<Kit_parameter_values>;
 
-// The recreated shapes of the listed originals keep their originals' bounds at the defaults, the range corners and derived values.
-void expect_recreated_keep_original_bounds(const std::vector<std::string>& originals);
+// The values' mesh passes the checks and its bounds are the given box, within 1e-5 of the box's diagonal.
+void expect_bounds(const Kit_parameter_values& values, const glm::vec3& expected_min, const glm::vec3& expected_max);
+
+// The x and z extents of the n points of get_kit_circle_point() at the radius: {min x, max x, min z, max z}.
+[[nodiscard]] auto circle_extent(int n, float radius) -> std::array<float, 4>;
 
 // What generated_meshes_are_pinned keeps of a mesh: counts and slots exactly, positions within a tolerance.
 class Mesh_pin
@@ -98,25 +99,18 @@ public:
 class Kit_shape_rows
 {
 public:
-    std::vector<std::string>                          shapes;              // ids of the shapes the batch adds, but recreated ones
-    std::vector<std::string>                          recreated_originals; // originals whose recreated shape the batch adds
+    std::vector<std::string>                          shapes;              // ids of the shapes the batch adds
     std::vector<std::string>                          seeded_shapes;       // ids of the batch's shapes of Kit_randomness::seeded
     std::vector<std::string>                          enum_shapes;         // ids whose every enum value is checked
-    std::vector<Kit_component_row>                    components;          // by shape id, else by contract id
-    std::vector<std::string>                          walkability_open;    // contract ids left out of derived walkability at other lengths
+    std::vector<Kit_component_row>                    components;          // by shape id
+    std::vector<std::string>                          walkability_open;    // ids left out of derived walkability at other lengths
     std::vector<std::pair<std::string, unsigned int>> triangle_counts;     // at the defaults
     std::vector<std::pair<std::string, std::string>>  worst_cases;         // shape id, canonical text
     std::vector<Mesh_pin>                             pins;                // "<id> <seed>" at the defaults
 };
 
 // One function per batch, each in its own kit_shape_rows_<batch>.cpp.
-[[nodiscard]] auto get_originals_rows        () -> Kit_shape_rows;
-[[nodiscard]] auto get_basic_v2_rows         () -> Kit_shape_rows;
-[[nodiscard]] auto get_architecture_v2_rows  () -> Kit_shape_rows;
-[[nodiscard]] auto get_medieval_v2_rows      () -> Kit_shape_rows;
-[[nodiscard]] auto get_nature_v2_rows        () -> Kit_shape_rows;
-[[nodiscard]] auto get_nature_plants_v2_rows () -> Kit_shape_rows;
-[[nodiscard]] auto get_nature_rocks_v2_rows  () -> Kit_shape_rows;
+[[nodiscard]] auto get_starter_rows          () -> Kit_shape_rows;
 [[nodiscard]] auto get_build_13_16_rows      () -> Kit_shape_rows;
 [[nodiscard]] auto get_build_17_20_rows      () -> Kit_shape_rows;
 [[nodiscard]] auto get_build_21_24_rows      () -> Kit_shape_rows;

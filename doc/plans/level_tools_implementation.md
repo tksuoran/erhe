@@ -181,7 +181,36 @@ most along the snap direction, a kit piece on its minimum Y face at any
 tilt as before; one `get_surface_base_frame()` with a `Surface_base_rule`
 chosen by each caller, used by the snap, orient and the support report; a
 Z-up mesh under a -90 degree X rotation rests on its world-bottom face; the
-choices listed under U48),
+choices listed under U48), step 77, the recreated shapes under the
+canonical ids (U55: the `.v2` ids are former ids that `find()` resolves, a
+piece that follows the kit records the canonical id), and step 78, the kit
+layout's search direction with forward and backward distances (U51: every
+mesh rests on its local -Y face, `from_pose` removed; orient half-turns only
+when the start's up points along the direction), step 79, the Brush tool's
+kit mode placing along the surface normal under the pointer (U51, U57:
+back faces flipped toward the viewer, one module-snap rule keeping the
+search axis on the surface plane, snap without orient resting the bounds
+face leading along the direction), and step 83, box collision bodies (U54:
+`Kit_collision::box`, boxes by values, a stated kind per shape), step 80,
+Transform drags snapping the transform anchor along an explicit vector or
+the camera ray (U51, U59), and step 13, shape thumbnails in the Level Kit
+window (R4.5; R6.2's live previews already existed), step 87, the Surface
+Rest setting (U60: leading face or anchor for snap without orient, read by
+gizmo drags and the Brush tool; a drag rests the lead root by its
+subtree's bounds), and step 84, the machine kit changes (U53: the cap nut
+covers the tip, gear boundary connectors, the helical thread, the pillow
+block's two or four bolts), step 81, Connector Snap Orientation Off /
+Rotate / Full for every drag kind (U50, U61: Rotate turns only about the
+surface normal, its twist latched per pair per drag; `erhe::codegen` enum
+former names migrate keep / align), and step 85, `get_input_state`
+reporting `active_tool` with `set_active_tool` (U56; the verify script
+gives back the tool each group found), step 82, the support rule of kit
+layouts as a setting (U52: five lines, center blocks, center fallback),
+and step 40, the Brush tool's kit mode placing joined to the hovered
+piece's connector (R5.3), step 41, persistent connector attachments (R5.3:
+a joined piece follows its target in the same undo entry; dormant and
+detach rules), and step 64, viewport handles for line, grid and ring
+layouts,
 are built and described in
 `doc/editor/level_tools.md` and `doc/editor/navigation.md`.
 
@@ -189,73 +218,14 @@ are built and described in
 
 ### Active
 
-The steps the user's rulings of 2026-11-18 ask for (U50 - U56 of
-`doc/plans/level_tools.md`; the order is the orchestrator's), then steps 13,
-40 and 41 (made active by the user, 2026-11-18).
-
-77. Canonical ids (U55): every recreated shape's `.v2` version takes the
-    canonical id, the original definition is removed, and the dropped id
-    becomes a former id of the kept shape that `Kit_shape_library::find()`
-    resolves, so saved pieces and layout item texts of either id keep
-    loading, as `erhe::property` former names do. `recreated_originals()`
-    in `test_kit_shapes.cpp`, `RECREATED_SHAPES` in
-    `scripts/level_tools_verify.py`, `scripts/level_shape_compare.py` and
-    `doc/editor/level_kit_shapes.md` follow.
-78. Snap search direction and distances of kit layout items (U51): the
-    layout values search direction (default (0, -1, 0)), forward distance
-    (1 m) and backward distance (0 m) replace the one `max_distance` searched
-    either way; a non-zero backward distance searches both ways and takes
-    the nearest place. The surface base rule `from_pose` of step 76 goes:
-    every mesh rests on its local -Y face.
-79. The Brush tool's kit mode places along the surface normal under the
-    pointer (U51): the snap and orient direction is the hit's normal.
-80. Transform drag snap of the anchor (U51): a drag snaps the transform
-    anchor (node origin; BBox mode: the bounding box center) along a
-    setting's direction, an explicit vector (default (0, -1, 0)) or the ray
-    from the viewport camera through the anchor; one line, no footprint. A
-    drag along the axis parallel to the direction is not snapped (the axis
-    rule of today, generalized).
-81. Snap orientation modes Off, Rotate and Full (U50) for every drag kind:
-    Rotate turns the moved set only about the surface normal Orient To
-    Surface chose; Full is the alignment as built.
-82. The support rule of kit layout items as a setting (U52): five lines
-    support and block; only the center line blocks; fall back to the
-    surface under the base center when blocked.
-83. Box collision bodies (U54) for every shape that is a box or close to
-    one (blocks, walls, slabs and the like), with a check per shape of
-    which body it states.
-84. Machine kit (U53): the cap nut's dome on the tip side; `pillow_block`
-    `bolts` a choice of two or four; at least four boundary connectors on a
-    gear; a helical bolt thread with a relaxed budget, and whether the
-    thread style becomes a property.
-85. `get_input_state` reports `active_tool`, and
-    `scripts/level_tools_verify.py` restores the tool it found (U56).
-
-13. Shape thumbnails in the Level Kit window (R4.5) and a live preview
-    while a parameter row is dragged (R6.2).
-40. Placing a connected piece from the Brush tool's viewport preview (R5.3):
-    the kit mode preview snaps to the nearest connector of the hovered piece
-    and a click places through `Kit_placement::connect`.
-41. A persistent connector attachment (R5.3): a joined piece remembers its
-    target and connectors and follows a move or parameter change of the
-    target.
+None: every step the user made active on 2026-11-18 is built. The user
+reviews them in the windowed editor before they are pushed (U58).
 
 ### On hold
 
 Every step below is on hold until the user chooses to make it active; none
 is started from this list alone.
 
-64. Viewport handles for line, grid and ring kit layouts (the line's step or
-    length, the grid's spacings, the ring's radius and arc), as the scatter
-    region handles are built (U28 asks for the scatter's only).
-    For the user's review (step 44): the Kit Layouts "selected" rule walks
-    upward only (a selected group above layouts shows no outlines), while
-    the Connectors "selected" rule walks downward; the region handles show
-    whatever the view's Kit Layouts setting, and a handle under the node
-    gizmo's arrow is picked only where it is clear of the arrow; during a
-    drag not along the handle's side (an axis drag of a turned node's
-    handle, tangential motion of a disc handle) the gizmo parts from the
-    handle until the release.
 65. Roofs and navigation (for the user): a roof has a triangle mesh body and
     at pitches of 15 - 45 degrees its slopes are walkable navigation input, a
     walkable island over every roofed room; decide whether a roof is

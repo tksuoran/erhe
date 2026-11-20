@@ -773,6 +773,7 @@ auto Mcp_server::get_dispatch_table() -> std::span<const Mcp_server::Tool_dispat
         { "navigation_find_path",           &Mcp_server::query_navigation_find_path           },
 #endif
         { "level_get_kits",                 &Mcp_server::query_level_kits                     },
+        { "level_get_kit_thumbnails",       &Mcp_server::query_level_kit_thumbnails           },
         { "level_place_pieces",             &Mcp_server::action_level_place_pieces            },
         { "level_group_nodes",              &Mcp_server::action_level_group_nodes             },
         { "level_ungroup",                  &Mcp_server::action_level_ungroup                 },
@@ -791,6 +792,7 @@ auto Mcp_server::get_dispatch_table() -> std::span<const Mcp_server::Tool_dispat
         { "level_get_connectors",           &Mcp_server::query_level_connectors               },
         { "level_connect_pieces",           &Mcp_server::action_level_connect_pieces          },
         { "level_set_piece_connectors",     &Mcp_server::action_level_set_piece_connectors    },
+        { "level_detach_piece",             &Mcp_server::action_level_detach_piece            },
         { "level_set_connector_visualization", &Mcp_server::action_level_set_connector_visualization },
         { "level_get_connector_indicators", &Mcp_server::query_level_connector_indicators     },
         { "level_set_layout_visualization", &Mcp_server::action_level_set_layout_visualization },
@@ -1052,6 +1054,7 @@ auto Mcp_server::get_dispatch_table() -> std::span<const Mcp_server::Tool_dispat
         { "key_press",                      &Mcp_server::action_key_press                     },
         { "type_text",                      &Mcp_server::action_type_text                     },
         { "get_input_state",                &Mcp_server::query_input_state                    },
+        { "set_active_tool",                &Mcp_server::action_set_active_tool               },
         { "list_input_bindings",            &Mcp_server::query_input_bindings                 },
         { "set_command_bindings",           &Mcp_server::action_set_command_bindings          },
         { "reset_command_bindings",         &Mcp_server::action_reset_command_bindings        },

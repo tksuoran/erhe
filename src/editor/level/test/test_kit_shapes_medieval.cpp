@@ -20,7 +20,7 @@
 #include <string>
 #include <vector>
 
-// Tests of the shapes of kit_shapes_medieval_v2.cpp.
+// Tests of the battlement and the tower (kit_shapes_medieval.cpp).
 namespace {
 
 using editor::Kit_agent;
@@ -50,6 +50,7 @@ void expect_valid_with_every_slot(const Kit_parameter_values& values)
     SCOPED_TRACE(values.to_canonical_text());
     const Kit_mesh_report report = editor::check_kit_shape(values);
     EXPECT_TRUE(report.is_valid()) << describe(report);
+    EXPECT_EQ(report.bounds_min.y, 0.0f); // the base is the lowest point
     EXPECT_LE(report.triangle_count, get_library().find_kit("architecture")->triangle_ceiling);
     for (const unsigned int count : slot_triangles(values)) {
         EXPECT_GT(count, 0u);
@@ -70,9 +71,9 @@ void for_each_corner(const Kit_parameter_values& values, const std::vector<std::
     }
 }
 
-TEST(Kit_recreated, battlement_passes_at_the_corners_with_both_slots)
+TEST(Kit_medieval_shapes, battlement_passes_at_the_corners_with_both_slots)
 {
-    const Kit_shape_definition& battlement = get_shape("architecture.battlement.v2");
+    const Kit_shape_definition& battlement = get_shape("architecture.battlement");
     ASSERT_EQ(battlement.material_slots, (std::vector<std::string>{"wall", "trim"}));
     int checked = 0;
     for (const std::string& merlon : battlement.parameters[battlement.find_parameter("merlon").value()].enum_values) {
@@ -88,9 +89,9 @@ TEST(Kit_recreated, battlement_passes_at_the_corners_with_both_slots)
 
 // A run tiles flush: both ends are the breastwork and the sill band alone, equal at every value, so pieces placed end
 // to end share their end faces and join into whole crenels. The copings' top is the stated height at every merlon form.
-TEST(Kit_recreated, battlement_runs_join_at_their_breastwork)
+TEST(Kit_medieval_shapes, battlement_runs_join_at_their_breastwork)
 {
-    const Kit_shape_definition& battlement = get_shape("architecture.battlement.v2");
+    const Kit_shape_definition& battlement = get_shape("architecture.battlement");
     for (const std::string& merlon : {std::string{"square"}, std::string{"swallowtail"}, std::string{"pointed"}}) {
         std::vector<std::array<float, 3>> first_end;
         for (const float length : {1.0f, 2.0f, 5.5f, 24.0f}) {
@@ -128,9 +129,9 @@ TEST(Kit_recreated, battlement_runs_join_at_their_breastwork)
 
 // Every merlon is pierced by its arrow loop: a run has one closed part per merlon of genus one, so the wall slot's
 // Euler characteristic is two for the breastwork and none for a merlon.
-TEST(Kit_recreated, battlement_merlons_have_arrow_loops)
+TEST(Kit_medieval_shapes, battlement_merlons_have_arrow_loops)
 {
-    const Kit_shape_definition& battlement = get_shape("architecture.battlement.v2");
+    const Kit_shape_definition& battlement = get_shape("architecture.battlement");
     for (const float length : {2.0f, 6.0f}) {
         Kit_parameter_values values = explicit_values(battlement, 1);
         ASSERT_TRUE(values.set_float("length", length));
@@ -151,9 +152,9 @@ TEST(Kit_recreated, battlement_merlons_have_arrow_loops)
     }
 }
 
-TEST(Kit_recreated, tower_passes_at_the_corners_with_every_slot)
+TEST(Kit_medieval_shapes, tower_passes_at_the_corners_with_every_slot)
 {
-    const Kit_shape_definition& tower = get_shape("architecture.tower.v2");
+    const Kit_shape_definition& tower = get_shape("architecture.tower");
     ASSERT_EQ(tower.material_slots, (std::vector<std::string>{"wall", "trim", "floor"}));
     int checked = 0;
     for (const std::string& profile : {std::string{"round"}, std::string{"square"}}) {
@@ -172,15 +173,15 @@ TEST(Kit_recreated, tower_passes_at_the_corners_with_every_slot)
             }
         }
     }
-    EXPECT_EQ(checked, 2 * 120); // as the original: a narrow tower with thick walls and a wide doorway, or a low one, is refused
+    EXPECT_EQ(checked, 2 * 120); // a narrow tower with thick walls and a wide doorway, or a low one, is refused
 }
 
 // The doorway keeps its stated clear size at every in-range value: no vertex inside its box in front of the axis, the
 // jamb stones' faces at its sides and the lintel's underside at its head. The floor slot is the walkable top at the
 // height, and the connectors lie on the mesh.
-TEST(Kit_recreated, tower_doorway_is_clear_and_the_top_floor_is_at_the_height)
+TEST(Kit_medieval_shapes, tower_doorway_is_clear_and_the_top_floor_is_at_the_height)
 {
-    const Kit_shape_definition& tower = get_shape("architecture.tower.v2");
+    const Kit_shape_definition& tower = get_shape("architecture.tower");
     for (const std::string& profile : {std::string{"round"}, std::string{"square"}}) {
         for (const std::string& top : {std::string{"battlement"}, std::string{"flat"}}) {
             Kit_parameter_values values = defaults(tower);
@@ -247,9 +248,9 @@ TEST(Kit_recreated, tower_doorway_is_clear_and_the_top_floor_is_at_the_height)
 }
 
 // Arrow slits go through the wall: each makes the wall's shell one handle more, so a row adds triangles and no part.
-TEST(Kit_recreated, tower_slits_cut_through_the_wall)
+TEST(Kit_medieval_shapes, tower_slits_cut_through_the_wall)
 {
-    const Kit_shape_definition& tower = get_shape("architecture.tower.v2");
+    const Kit_shape_definition& tower = get_shape("architecture.tower");
     for (const std::string& profile : {std::string{"round"}, std::string{"square"}}) {
         std::array<Kit_mesh_report, 3> reports;
         for (int rows = 0; rows <= 2; ++rows) {

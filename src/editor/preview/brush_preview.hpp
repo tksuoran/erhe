@@ -6,14 +6,22 @@
 
 #include <glm/gtc/quaternion.hpp>
 
+#include <span>
+
 struct Preview_edge_lines_config;
 
-namespace erhe::primitive { class Primitive; }
+namespace erhe::primitive { class Material; class Primitive; }
 
 namespace editor {
 
 class Brush;
 class Composition_pass;
+
+// The preview scene's lights for one render (Brush_preview::render_preview()).
+enum class Preview_lighting : unsigned int {
+    key_and_fill = 0,
+    headlight         // the key light at the camera, no fill
+};
 
 class Brush_preview : public Scene_preview
 {
@@ -64,6 +72,21 @@ public:
         const Preview_edge_lines_config*                   edge_lines = nullptr
     );
 
+    // Lists the material in the preview scene's content library (R5.2b explicit registration); a listed one stays.
+    void add_material(const std::shared_ptr<erhe::primitive::Material>& material);
+
+    // The parts of a kit piece, part i with materials[i] (null: the preview material), framed by their joint
+    // bounding sphere (doc/editor/level_tools.md "Shape thumbnails").
+    void render_parts_preview(
+        erhe::graphics::Command_buffer&                              command_buffer,
+        const std::shared_ptr<erhe::graphics::Texture>&              texture,
+        unsigned int                                                 texture_layer,
+        std::span<const std::shared_ptr<erhe::primitive::Primitive>> primitives,
+        std::span<const std::shared_ptr<erhe::primitive::Material>>  materials,
+        const glm::quat&                                             orientation,
+        const Preview_edge_lines_config*                             edge_lines
+    );
+
     // The preview mesh keeps the last rendered primitive and its material
     // bound (and listed in the preview scene's Material_set) until the next
     // render. Scene close / items removed: when that material is content of
@@ -73,6 +96,16 @@ public:
     void on_items_removed(const Removed_items& removed);
 
 private:
+    void render_primitives(
+        erhe::graphics::Command_buffer&                              command_buffer,
+        const std::shared_ptr<erhe::graphics::Texture>&              texture,
+        unsigned int                                                 texture_layer,
+        std::span<const std::shared_ptr<erhe::primitive::Primitive>> primitives,
+        std::span<const std::shared_ptr<erhe::primitive::Material>>  materials,
+        const glm::quat&                                             orientation,
+        Preview_lighting                                             lighting,
+        const Preview_edge_lines_config*                             edge_lines
+    );
     void make_preview_scene();
     void release_preview_mesh();
     [[nodiscard]] auto get_preview_material() const -> const erhe::primitive::Material*;

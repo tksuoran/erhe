@@ -3,7 +3,7 @@ from erhe_codegen import *
 # Placement settings of the Level Kit window and the initial values of a new kit layout node
 # (doc/editor/level_tools.md "Level Kit window").
 struct("Level_kit_config",
-    version=8,
+    version=10,
     short_desc="Level Kit",
     long_desc="Placement settings of the Brush tool's kit mode (Level Kit window).",
     developer=False,
@@ -18,7 +18,11 @@ struct("Level_kit_config",
         field("layout_spacing_from_item", Bool,   added_in=5, default="true",  short_desc="Spacing From Item",    long_desc="A new kit layout node's line step and grid spacings are its item's extent, a contiguous run."),
         field("layout_module_snap",       Bool,   added_in=5, default="false", short_desc="Layout Module Snap",   long_desc="A new kit layout node rounds its element positions to the module."),
         field("layout_surface_snap",      Bool,   added_in=5, default="false", short_desc="Layout Surface Snap",  long_desc="A new kit layout node snaps each element to the surface under it."),
-        field("layout_surface_max_distance", Float, added_in=6, default="1.0f", short_desc="Layout Surface Max Distance", long_desc="Meters: a new kit layout node's elements move at most this far to snap to a surface."),
+        field("layout_surface_direction",         Vec3,  added_in=9, default="0.0f, -1.0f, 0.0f", short_desc="Layout Surface Direction", long_desc="The direction, in world space, a new kit layout node's elements search along to snap to a surface; normalized on use."),
+        field("layout_surface_forward_distance",  Float, added_in=6, default="1.0f", renamed_from=[(9, "layout_surface_max_distance")], short_desc="Layout Surface Forward Distance", long_desc="Meters: a new kit layout node's elements move at most this far along the search direction to snap to a surface."),
+        # A version 6 - 8 file's layout_surface_max_distance, searched either way, reads as both distances.
+        field("layout_surface_backward_distance", Float, added_in=6, default="0.0f", renamed_from=[(9, "layout_surface_max_distance")], short_desc="Layout Surface Backward Distance", long_desc="Meters: a new kit layout node's elements move at most this far against the search direction to snap to a surface; 0 searches along it only."),
+        field("layout_surface_support",           EnumRef("Surface_support"), added_in=10, default="Surface_support::five_lines", short_desc="Layout Surface Support", long_desc="Which base lines of a new kit layout node's elements support and block their snap to a surface: all five, all five supporting with only the base center's line blocking, or the nearest place with a refused element resting on the surface under its base center, along the search direction."),
         field("layout_surface_orient",    Bool,   added_in=5, default="false", short_desc="Layout Surface Orient", long_desc="A new kit layout node turns each element's up axis to the surface normal."),
         field("layout_per_piece_seed",    Bool,   added_in=5, default="false", renamed_from=[(7, "layout_random_seeds")], short_desc="Layout Per Piece Seed", long_desc="A new kit layout node gives each element a seed of its own from the layout seed."),
         field("layout_seed",              Int,    added_in=5, default="0",     short_desc="Layout Seed",          long_desc="The layout seed of a new kit layout node."),

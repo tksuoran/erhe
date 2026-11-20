@@ -158,7 +158,8 @@ is one `Level_kits::place()` at the preview's transform (`try_insert_kit_piece()
 `set_kit_brush()` also takes the palette material of each slot; the preview
 shows each part with a preview material of that palette color, and the insert
 places the piece with those slot materials.
-The rotate commands turn the next piece about the up axis by the rotation step.
+The rotate commands turn the next piece about its up axis by the rotation step
+(about the surface normal with Orient To Surface).
 Choosing a palette brush - `set_active_brush()` (hotbar, `set_tool_asset`), a
 drag-and-drop preview or selecting a brush in a content library - or another
 tool leaves kit mode (`leave_kit_mode()`). `level_get_placement_preview` reads

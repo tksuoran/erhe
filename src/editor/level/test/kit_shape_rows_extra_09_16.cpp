@@ -9,7 +9,6 @@ auto get_extra_09_16_rows() -> Kit_shape_rows
     rows.shapes              = {
         "harbour.quay_wall", "industrial.pipe", "prop.pot", "prop.table", "prop.market_stall", "prop.cart", "prop.well", "prop.signpost"
     };
-    rows.recreated_originals = {};
     rows.seeded_shapes       = {"prop.signpost"};
     rows.enum_shapes         = {"industrial.pipe", "prop.pot", "prop.table", "prop.market_stall", "prop.cart", "prop.well"};
     rows.components          = {

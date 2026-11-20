@@ -468,13 +468,16 @@ void generate_rack(const Kit_parameter_values& values, GEO::Mesh& mesh)
 }
 
 //
-// Bolt: a shank standing on its tip, threaded in rings from the tip, under a head.
+// Bolt: a shank standing on its tip, threaded from the tip along a helix or in rings, under a head.
 //
 
 constexpr uint32_t bolt_steel_slot = 0;
 constexpr int      bolt_round      = 10; // points around the shank
 constexpr int      bolt_turn_min   = 4;
 constexpr int      bolt_turn_max   = 40;
+// A helical shank's triangles are four for each point of a turn and each turn, and one turn more; the socket head
+// adds 116, so 1880 for the shank keeps the bolt within the kit's ceiling of 2000.
+constexpr int      bolt_helix_triangles = 1880;
 
 enum class Bolt_head : unsigned int { hex = 0, socket, round, countersunk, none };
 
@@ -508,6 +511,70 @@ enum class Bolt_head : unsigned int { hex = 0, socket, round, countersunk, none 
     return 0.0f;
 }
 
+// Points to a turn of a helical thread: 16, fewer where the turns would pass the kit's ceiling with the largest head.
+[[nodiscard]] auto get_bolt_helix_points(const int turns) -> int
+{
+    return std::clamp(bolt_helix_triangles / (4 * (turns + 1)), 10, 16);
+}
+
+// Two triangles of a quad whose corners need not lie in a plane, the same way around.
+void add_split_quad(Kit_mesh_builder& builder, const uint32_t a, const uint32_t b, const uint32_t c, const uint32_t d)
+{
+    builder.add_triangle(a, b, c);
+    builder.add_triangle(a, c, d);
+}
+
+// The shank from its tip as a right-hand helical thread whose last turn runs out (doc/editor/level_kit_shapes.md "Bolt").
+void add_helical_shank(Kit_mesh_builder& builder, const float r, const float minor, const float thread, const int turns, const float length)
+{
+    const int         points = get_bolt_helix_points(turns);
+    const std::size_t n      = static_cast<std::size_t>(points);
+    const std::size_t steps  = static_cast<std::size_t>(turns - 1) * n; // the ridge's stretches
+    const float       turn   = thread / static_cast<float>(turns);
+    const auto point = [n, points](const std::size_t s, const float radius, const float y) -> glm::vec3 {
+        const glm::vec2 p = get_kit_circle_point(static_cast<int>(s % n), points);
+        return glm::vec3{radius * p.x, y, radius * p.y};
+    };
+    const auto rise = [points, turn](const std::size_t s) -> float {
+        return (turn * static_cast<float>(s)) / static_cast<float>(points);
+    };
+    std::vector<uint32_t> root;  // steps + n + 1 points
+    std::vector<uint32_t> ridge; // steps + 1 points
+    std::vector<uint32_t> tip;
+    std::vector<uint32_t> neck;  // where the plain shank starts
+    std::vector<uint32_t> top;
+    for (std::size_t s = 0; s <= (steps + n); ++s) {
+        root.push_back(builder.add_vertex(point(s, minor, rise(s) + (0.15f * turn))));
+    }
+    for (std::size_t s = 0; s <= steps; ++s) {
+        const float run_out = std::clamp((static_cast<float>(s) - static_cast<float>(steps - n)) / static_cast<float>(points), 0.0f, 1.0f);
+        ridge.push_back(builder.add_vertex(point(s, r + ((minor - r) * run_out), rise(s) + (0.65f * turn))));
+    }
+    for (std::size_t i = 0; i < n; ++i) {
+        tip .push_back(builder.add_vertex(point(i, 0.7f * r, 0.0f)));
+        neck.push_back(builder.add_vertex(point(i, r, thread + (0.5f * turn))));
+        top .push_back(builder.add_vertex(point(i, r, length)));
+    }
+    builder.set_slot(bolt_steel_slot);
+    for (std::size_t s = 0; s < steps; ++s) {
+        add_split_quad(builder, root[s], root[s + 1], ridge[s + 1], ridge[s]);
+        add_split_quad(builder, ridge[s], ridge[s + 1], root[s + n + 1], root[s + n]);
+    }
+    for (std::size_t i = 0; i < n; ++i) {
+        const std::size_t j = (i + 1) % n;
+        add_split_quad(builder, tip[i], tip[j], root[i + 1], root[i]);
+        add_split_quad(builder, root[steps + i], root[steps + i + 1], neck[j], neck[i]);
+        builder.add_quad(neck[i], neck[j], top[j], top[i]);
+    }
+    // The thread's start and end faces, in the plane of +X.
+    builder.add_quad(tip[0], root[0], ridge[0], root[n]);
+    builder.add_triangle(neck[0], root[steps + n], ridge[steps]);
+    builder.add_triangle(neck[0], ridge[steps], root[steps]);
+    const std::vector<uint32_t> tip_cap(tip.rbegin(), tip.rend());
+    builder.add_polygon(tip_cap);
+    builder.add_polygon(top);
+}
+
 void generate_bolt(const Kit_parameter_values& values, GEO::Mesh& mesh)
 {
     const Bolt_head head   = get_bolt_head(values.get_enum("head"));
@@ -519,7 +586,9 @@ void generate_bolt(const Kit_parameter_values& values, GEO::Mesh& mesh)
     const float     thread = 0.88f * values.get_float("thread") * length;
     const float     turn   = thread / static_cast<float>(turns);
     Kit_mesh_builder builder;
-    {
+    if (values.get_enum("thread_style") == "helix") {
+        add_helical_shank(builder, r, minor, thread, turns, length);
+    } else {
         // The shank from its tip: a ridge to a turn, then plain up to the head.
         std::vector<Lathe_ring> rings;
         rings.push_back(Lathe_ring{0.7f * r, 0.0f});
@@ -574,6 +643,23 @@ enum class Nut_form : unsigned int { hex = 0, square, wing, cap };
     return Nut_form::hex;
 }
 
+// A cap nut's dome over the hexagon: the bore goes on as a blind hole past the tip of a bolt of its diameter whose nut
+// connector the cap's bolt connector joins (the tip is a diameter beyond it).
+class Cap_nut_dome
+{
+public:
+    Cap_nut_dome(const float d, const float h)
+        : ceiling{std::max(1.15f * d, h + (0.15f * d))}
+    {
+        base = std::max(ceiling - (0.45f * d), h);
+        top  = base + (0.76f * d);
+    }
+
+    float ceiling{0.0f}; // of the blind hole
+    float base   {0.0f}; // where the dome starts over the sleeve
+    float top    {0.0f};
+};
+
 // The nut's top over its base.
 [[nodiscard]] auto get_nut_top(const Kit_parameter_values& values) -> float
 {
@@ -582,7 +668,7 @@ enum class Nut_form : unsigned int { hex = 0, square, wing, cap };
     if (form == Nut_form::wing) {
         return 1.9f * height;
     }
-    return (form == Nut_form::cap) ? (height + (0.75f * values.get_float("diameter"))) : height;
+    return (form == Nut_form::cap) ? Cap_nut_dome{values.get_float("diameter"), height}.top : height;
 }
 
 void generate_nut(const Kit_parameter_values& values, GEO::Mesh& mesh)
@@ -608,9 +694,17 @@ void generate_nut(const Kit_parameter_values& values, GEO::Mesh& mesh)
     } else {
         add_bored_prism(builder, 6, 0.92f * d, bore, 0.0f, h);
         if (form == Nut_form::cap) {
-            // A dome closes the bore.
-            const std::array<Lathe_ring, 3> rings{{{0.76f * d, 0.96f * h}, {0.7f * d, h + (0.3f * d)}, {0.42f * d, h + (0.62f * d)}}};
-            add_lathe(builder, Placement{}, Lathe{.rings = rings, .segments = 12, .top = Lathe_cap::point, .top_y = h + (0.75f * d), .slot = nut_steel_slot});
+            // A sleeve and a dome around the blind hole, traced from the hole's ceiling down its wall, out and over;
+            // the hole is a little narrower than the bore, so that no point of the two parts meets.
+            const Cap_nut_dome dome{d, h};
+            const float        hole = 0.98f * bore;
+            const std::array<Lathe_ring, 6> rings{{
+                {hole, dome.ceiling}, {hole, h}, {0.76f * d, 0.96f * h}, {0.76f * d, dome.base}, {0.66f * d, dome.base + (0.38f * d)},
+                {0.38f * d, dome.base + (0.66f * d)}
+            }};
+            add_lathe(builder, Placement{}, Lathe{
+                .rings = rings, .segments = 12, .bottom = Lathe_cap::point, .top = Lathe_cap::point, .bottom_y = dome.ceiling, .top_y = dome.top, .slot = nut_steel_slot
+            });
         }
     }
     builder.write(mesh);
@@ -945,6 +1039,11 @@ void generate_cam(const Kit_parameter_values& values, GEO::Mesh& mesh)
 
 } // anonymous namespace
 
+auto get_kit_gear_boundary_direction(const int quarter, const int teeth) -> glm::vec2
+{
+    return get_kit_circle_point((quarter * teeth) / 4, teeth);
+}
+
 void add_machine_01_08_shapes(std::vector<Kit_shape_definition>& shapes)
 {
     {
@@ -955,7 +1054,8 @@ void add_machine_01_08_shapes(std::vector<Kit_shape_definition>& shapes)
         shape.description     =
             "Spur gear lying flat, its axis along Y: teeth around a rim on a solid body, a web or spokes, with a bored "
             "hub that stands over the face. Its pitch diameter is its teeth times the module. Two gears, or a gear and "
-            "a rack, of one module engage when joined by their mesh connectors.";
+            "a rack, of one module engage when joined by their mesh connectors: mesh on +X and mesh_2 - mesh_4 at the "
+            "teeth nearest the other quarter turns.";
         shape.tags            = {"decoration", "obstacle", "machine", "gear", "size:0.5x0.1"};
         shape.parameters      = {
             derive_int  (make_count_parameter ("teeth",      "Teeth", 16, gear_tooth_min, gear_tooth_max), 10, 24),
@@ -976,6 +1076,11 @@ void add_machine_01_08_shapes(std::vector<Kit_shape_definition>& shapes)
             out_connectors.push_back(make_base_connector());
             out_connectors.push_back(Kit_connector{.name = "axis", .position = glm::vec3{0.0f, form.get_top(), 0.0f}, .outward = y_axis, .up = z_axis});
             add_side_connector(out_connectors, "mesh", glm::vec3{form.pitch, 0.5f * form.width, 0.0f}, x_axis);
+            for (int quarter = 1; quarter <= 3; ++quarter) {
+                const glm::vec2 p = get_kit_gear_boundary_direction(quarter, form.teeth);
+                const glm::vec3 out{p.x, 0.0f, p.y};
+                add_side_connector(out_connectors, c_kit_gear_boundary_names[static_cast<std::size_t>(quarter - 1)], (form.pitch * out) + glm::vec3{0.0f, 0.5f * form.width, 0.0f}, out);
+            }
         };
         shapes.push_back(std::move(shape));
     }
@@ -1018,8 +1123,8 @@ void add_machine_01_08_shapes(std::vector<Kit_shape_definition>& shapes)
         shape.kit             = "machine";
         shape.display_name    = "Bolt";
         shape.description     =
-            "Bolt standing on its tip at the origin, its head up: a shank threaded from the tip in rings, a ridge to a "
-            "turn, under a hexagon head, a socket head, a round head or a countersunk head; without a head it is a "
+            "Bolt standing on its tip at the origin, its head up: a shank threaded from the tip along a helix or in "
+            "rings, a ridge to a turn, under a hexagon head, a socket head, a round head or a countersunk head; without a head it is a "
             "stud. The seat connector is under the head, and a nut's bolt connector joins the nut connector, a "
             "diameter over the tip.";
         shape.tags            = {"decoration", "machine", "fastener", "bolt", "size:0.1x0.3"};
@@ -1029,14 +1134,14 @@ void add_machine_01_08_shapes(std::vector<Kit_shape_definition>& shapes)
             derive_float(make_length_parameter("length",   "From the tip to under the head", 0.3f, Kit_default_scale::meters, 0.05f, 4.0f), 0.2f, 0.5f, 0.05f),
             derive_float(make_share_parameter ("thread",   "Share of the length that is threaded", 0.6f, 0.2f, 1.0f), 0.4f, 1.0f, 0.1f),
             derive_int  (make_count_parameter ("turns",    "Ridges of the thread", 10, bolt_turn_min, bolt_turn_max), 8, 16),
+            derive_enum (make_enum_parameter  ("thread_style", "A helical thread, or rings", {"helix", "rings"}, 0)),
             make_seed_parameter()
         };
         shape.material_slots  = {"steel"};
         shape.normal_style    = Kit_normal_style::faceted;
-        shape.triangle_budget = 540;
+        shape.triangle_budget = 760;
         shape.collision       = Kit_collision::convex_hull;
         shape.generator       = generate_bolt;
-        shape.mirror_planes   = std::vector<Kit_mirror_plane>{Kit_mirror_plane::x, Kit_mirror_plane::z};
         shape.get_connectors  = [](const Kit_parameter_values& values, std::vector<Kit_connector>& out_connectors) {
             const float length = values.get_float("length");
             // A diameter over the tip: a nut of the bolt's diameter and its default height joined there clears the tip.
@@ -1054,8 +1159,9 @@ void add_machine_01_08_shapes(std::vector<Kit_shape_definition>& shapes)
         shape.display_name    = "Nut";
         shape.description     =
             "Nut lying flat at its origin, bored along Y for a bolt of its diameter: a hexagon, a square, a round nut "
-            "with two wings toward +X and -X, or a hexagon under a dome that closes the bore. Its bolt connector, on "
-            "the top of its bored body, joins a bolt's nut connector; its top connector is on the whole nut's top.";
+            "with two wings toward +X and -X, or a hexagon under a dome over a blind hole. Its bolt connector joins a "
+            "bolt's nut connector: on the top of its bored body, or on a cap nut's base, so that the dome covers the "
+            "bolt's tip; its top connector is on the whole nut's top.";
         shape.tags            = {"decoration", "machine", "fastener", "nut", "size:0.1x0.05"};
         shape.parameters      = {
             derive_enum (make_enum_parameter  ("form",     "Hexagon, square, wing or cap nut", {"hex", "square", "wing", "cap"}, 0)),
@@ -1071,7 +1177,12 @@ void add_machine_01_08_shapes(std::vector<Kit_shape_definition>& shapes)
         shape.mirror_planes   = std::vector<Kit_mirror_plane>{Kit_mirror_plane::x, Kit_mirror_plane::z};
         shape.get_connectors  = [](const Kit_parameter_values& values, std::vector<Kit_connector>& out_connectors) {
             add_base_and_top_connectors(out_connectors, get_nut_top(values));
-            out_connectors.push_back(Kit_connector{.name = "bolt", .position = glm::vec3{0.0f, values.get_float("height"), 0.0f}, .outward = y_axis, .up = z_axis});
+            // A cap nut joins upside down, its dome over the bolt's tip; the others with the body's top at the connector.
+            if (get_nut_form(values.get_enum("form")) == Nut_form::cap) {
+                out_connectors.push_back(Kit_connector{.name = "bolt", .position = glm::vec3{0.0f}, .outward = -y_axis, .up = z_axis});
+            } else {
+                out_connectors.push_back(Kit_connector{.name = "bolt", .position = glm::vec3{0.0f, values.get_float("height"), 0.0f}, .outward = y_axis, .up = z_axis});
+            }
         };
         shapes.push_back(std::move(shape));
     }

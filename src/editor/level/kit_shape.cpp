@@ -80,6 +80,7 @@ auto c_str(const Kit_collision collision) -> const char*
         case Kit_collision::convex_hull:   return "convex_hull";
         case Kit_collision::triangle_mesh: return "triangle_mesh";
         case Kit_collision::none:          return "none";
+        case Kit_collision::box:           return "box";
         default:                           return "?";
     }
 }
@@ -201,11 +202,6 @@ auto Kit_shape_definition::find_parameter(const std::string_view name) const -> 
         }
     }
     return {};
-}
-
-auto get_contract_id(const Kit_shape_definition& shape) -> const std::string&
-{
-    return shape.recreates.empty() ? shape.id : shape.recreates;
 }
 
 auto Kit_shape_definition::has_tag(const std::string_view tag) const -> bool
@@ -740,6 +736,15 @@ auto parse_canonical_text(const Kit_shape_definition& shape, const std::string_v
     }
     out_values = values;
     return {};
+}
+
+auto get_kit_collision(const Kit_parameter_values& values) -> Kit_collision
+{
+    const Kit_shape_definition* const shape = values.get_shape();
+    if (shape == nullptr) {
+        return Kit_collision::none;
+    }
+    return shape->get_collision ? shape->get_collision(values) : shape->collision;
 }
 
 auto get_kit_geometry_bounds(const Kit_parameter_values& values) -> erhe::math::Aabb

@@ -53,9 +53,9 @@ is the next level tools work.
 14. Triangle classification from walkable sample points: a plan to write,
     then build (`doc/plans/navigation_mesh.md` "Triangle classification from
     walkable sample points"; the navigation mesh it reads is built).
-15. Level tools: the "Active" steps of
-    `doc/plans/level_tools_implementation.md` "Next steps" (77 - 85 from the
-    user's rulings U50 - U56 of `doc/plans/level_tools.md`, then 13, 40, 41).
+15. Level tools: the user's windowed review of the steps built on
+    2026-11-18 (`doc/plans/level_tools_implementation.md` "Built"), then the
+    push (U58).
 16. Level tools and curves: the "On hold" steps of
     `doc/plans/level_tools_implementation.md` "Next steps" and the "Steps" of
     `doc/plans/curves.md` wait for the user to make them active.
@@ -165,6 +165,14 @@ Plans: `doc/plans/prepared_assets_design.md` (D8 per-step "Open" notes),
   object.negative_determinant`. A mirrored kit piece's snap to surface has
   unit tests only until this is fixed (`doc/editor/level_tools.md` "Surface
   placement").
+- A headless Metal Debug editor once stopped in the render thread's "tick:
+  submit + end_frame" (watchdog "Main loop STALLED") during the persistence
+  group of `scripts/level_tools_verify.py` (2026-11-18, step 79 work); the
+  re-run passed. Not reproduced.
+- Importing the same erhe glTF twice into one scene keeps the file's node
+  uids (`resolve_object_uids` in `gltf_fastgltf.cpp`), so two live nodes
+  share each uid; uid-keyed lookups across them are ambiguous (kit
+  attachments treat such a uid as dormant / inert).
 - Collision under scale, what remains (`doc/editor/physics.md` "Collision
   shapes follow the node's scale"): a brush of a density other than the
   default writes the mass of its placed volume, which a later scale change

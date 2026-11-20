@@ -651,23 +651,23 @@ void import_physics(
         }
     }
 
-    // Body root of a collider node: the nearest self-or-ancestor with motion
-    // (the collider belongs to that rigid body); when no self-or-ancestor has
-    // motion, the topmost collider-carrying self-or-ancestor becomes a static
-    // body root and everything below it folds into its compound.
+    // Body root of a collider: the nearest self-or-ancestor with motion or an erhe motion_mode record, else the topmost
+    // collider-carrying one (doc/erhe/khr_physics_rigid_bodies_support.md).
     const auto find_body_root = [&importer](erhe::scene::Node* node) -> erhe::scene::Node* {
         erhe::scene::Node* topmost_collider_node = nullptr;
         erhe::scene::Node* current = node;
         while (current != nullptr) {
             const auto it = importer.description_by_node.find(current);
-            if (it != importer.description_by_node.end()) {
-                const erhe::scene::Physics_node_description* description = it->second;
-                if (description->motion.has_value()) {
-                    return current;
-                }
-                if (description->collider.has_value()) {
-                    topmost_collider_node = current;
-                }
+            const erhe::scene::Physics_node_description* description =
+                (it != importer.description_by_node.end()) ? it->second : nullptr;
+            if ((description != nullptr) && description->motion.has_value()) {
+                return current;
+            }
+            if (current->get_value(Node_physics::motion_mode_property) != erhe::physics::Motion_mode::e_none) {
+                return current;
+            }
+            if ((description != nullptr) && description->collider.has_value()) {
+                topmost_collider_node = current;
             }
             current = current->get_parent_node().get();
         }

@@ -74,14 +74,17 @@ enum class Kit_layout_setting_row : unsigned int {
     surface_orient,
     per_piece_seed,
     seed,
-    surface_max_distance,
+    surface_forward_distance,
     hide_all_connectors,           // U39: path and segments only
     hide_plus_tangent_connectors,
     hide_minus_tangent_connectors,
     hide_plus_normal_connectors,
     hide_minus_normal_connectors,
     hide_plus_binormal_connectors,
-    hide_minus_binormal_connectors
+    hide_minus_binormal_connectors,
+    surface_direction,             // U51
+    surface_backward_distance,
+    surface_support                // U52
 };
 
 // The setting rows the pattern's kind shows: the connector switches for a path or segments layout only.

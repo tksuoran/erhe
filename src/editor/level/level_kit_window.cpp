@@ -4,6 +4,7 @@
 #include "level/kit_piece.hpp"
 #include "level/kit_shape_library.hpp"
 #include "level/kit_shapes.hpp"
+#include "level/kit_thumbnails.hpp"
 #include "level/level_kits.hpp"
 #include "level/level_queries.hpp"
 #include "level/surface_settings_ui.hpp"
@@ -61,6 +62,9 @@ void tooltip(const char* text)
 }
 
 constexpr std::array<int, 3> c_rotation_steps{90, 45, 15};
+
+// The side of a shape row's thumbnail, in text lines.
+constexpr float c_thumbnail_lines{3.0f};
 
 // The effective bindings of a command as display text, else the command's name.
 [[nodiscard]] auto binding_text(const erhe::commands::Commands& commands, const std::string_view command_name) -> std::string
@@ -156,7 +160,7 @@ void Level_kit_window::imgui()
     tooltip("The scene of the last hovered viewport; the shape defaults follow its module and wall height.");
 
     level_settings_imgui(*scene_root);
-    shapes_imgui(*scene_root);
+    shapes_imgui(scene_root);
     place_parameters_imgui(*scene_root);
     placement_settings_imgui();
     selection_imgui(scene_root);
@@ -251,10 +255,14 @@ void Level_kit_window::update_place_hint()
     );
 }
 
-void Level_kit_window::shapes_imgui(const Scene_root& scene_root)
+void Level_kit_window::shapes_imgui(const std::shared_ptr<Scene_root>& scene_root)
 {
     const Kit_shape_library&          library    = m_context.level_kits->get_library();
     const Kit_shape_definition* const kit_shape  = (m_context.brush_tool != nullptr) ? m_context.brush_tool->get_kit_shape() : nullptr;
+    Kit_thumbnails&                   thumbnails = m_context.level_kits->get_thumbnails();
+    thumbnails.follow_scene(scene_root);
+    const float thumbnail_size = c_thumbnail_lines * ImGui::GetTextLineHeightWithSpacing();
+    ImGui::PushStyleVar(ImGuiStyleVar_SelectableTextAlign, ImVec2{0.0f, 0.5f});
     for (const Kit_definition& kit : library.get_kits()) {
         if (!ImGui::CollapsingHeader(kit.display_name.c_str(), ImGuiTreeNodeFlags_DefaultOpen)) {
             continue;
@@ -264,16 +272,24 @@ void Level_kit_window::shapes_imgui(const Scene_root& scene_root)
             if (shape.kit != kit.name) {
                 continue;
             }
-            // Shown chosen while the Brush tool places this shape.
-            if (ImGui::Selectable(shape.display_name.c_str(), kit_shape == &shape)) {
-                select_shape(shape, scene_root);
-            }
+            // The thumbnail chooses the shape as its row does.
+            const bool thumbnail_clicked = thumbnails.draw(shape, thumbnail_size);
             if (ImGui::IsItemHovered()) {
                 ImGui::SetTooltip("%s\n%s", shape.id.c_str(), shape.description.c_str());
+            }
+            ImGui::SameLine();
+            // Shown chosen while the Brush tool places this shape.
+            const bool row_clicked = ImGui::Selectable(shape.display_name.c_str(), kit_shape == &shape, ImGuiSelectableFlags_None, ImVec2{0.0f, thumbnail_size});
+            if (ImGui::IsItemHovered()) {
+                ImGui::SetTooltip("%s\n%s", shape.id.c_str(), shape.description.c_str());
+            }
+            if (thumbnail_clicked || row_clicked) {
+                select_shape(shape, *scene_root);
             }
         }
         ImGui::PopID();
     }
+    ImGui::PopStyleVar();
     if (m_place_hint_dirty) {
         update_place_hint();
     }

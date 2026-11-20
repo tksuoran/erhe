@@ -26,6 +26,7 @@
 #include "erhe_primitive/material.hpp"
 #include "erhe_scene/scene.hpp"
 
+#include <fmt/format.h>
 #include <nlohmann/json.hpp>
 
 #include <filesystem>
@@ -285,10 +286,11 @@ auto Mcp_server::action_set_tool_asset(const json& args) -> std::string
     const std::string scene_name = args.value("scene_name", "");
     const std::string name       = args.value("name", "");
 
-    const bool is_brush_tool          = (tool_text == "brush");
-    const bool is_material_paint_tool = (tool_text == "material_paint");
+    // The tool names are the ones get_input_state and set_active_tool use.
+    const bool is_brush_tool          = (tool_text == c_str(Mcp_tool::brush));
+    const bool is_material_paint_tool = (tool_text == c_str(Mcp_tool::material_paint));
     if (!is_brush_tool && !is_material_paint_tool) {
-        return make_error_content("'tool' must be one of: brush, material_paint");
+        return make_error_content(fmt::format("'tool' must be one of: {}, {}", c_str(Mcp_tool::brush), c_str(Mcp_tool::material_paint)));
     }
     if (is_brush_tool && (m_context.brush_tool == nullptr)) {
         return make_error_content("Brush tool not available");
@@ -327,7 +329,7 @@ auto Mcp_server::action_set_tool_asset(const json& args) -> std::string
         }
         m_context.brush_tool->set_active_brush(brush);
         const json result = {
-            {"tool",     "brush"},
+            {"tool",     c_str(Mcp_tool::brush)},
             {"asset",    brush->get_name()},
             {"asset_id", brush->get_id()}
         };
@@ -348,7 +350,7 @@ auto Mcp_server::action_set_tool_asset(const json& args) -> std::string
     }
     m_context.material_paint_tool->set_material(material);
     const json result = {
-        {"tool",     "material_paint"},
+        {"tool",     c_str(Mcp_tool::material_paint)},
         {"asset",    material->get_name()},
         {"asset_id", material->get_id()}
     };
