@@ -130,6 +130,7 @@ Level_kit_window::Level_kit_window(
     // A connector switch edit, its undo and redo: the Connect rows offer the enabled connectors only (U33).
     m_kit_piece_connectors_changed_subscription = app_message_bus.kit_piece_connectors_changed.subscribe(
         [this](Kit_piece_connectors_changed_message&) {
+            m_piece_editor.mark_dirty(); // an attachment write too: the connection rows
             m_connect_selection_changed = true;
         }
     );
@@ -438,6 +439,7 @@ void Level_kit_window::selection_imgui(const std::shared_ptr<Scene_root>& scene_
             ImGui::PopID();
             kit_stairs_line(m_piece_editor.get_values());
             kit_message_line(m_piece_editor.get_message());
+            connection_rows_imgui();
         }
     } else {
         ImGui::TextUnformatted("No kit piece selected.");
@@ -456,6 +458,75 @@ void Level_kit_window::selection_imgui(const std::shared_ptr<Scene_root>& scene_
     ImGui::EndDisabled();
     replace_imgui(scene_root);
     connect_imgui(scene_root);
+    detach_imgui(scene_root);
+}
+
+void Level_kit_window::connection_rows_imgui()
+{
+    // C6.3: every connection of the selected piece, both ends' records, each with its status and Remove.
+    Kit_connection_rows& connection_rows = m_piece_editor.get_connection_rows();
+    const std::vector<Kit_connection_rows::Row>& rows = connection_rows.get_rows();
+    for (std::size_t i = 0, end = rows.size(); i < end; ++i) {
+        ImGui::PushID(static_cast<int>(i));
+        if (ImGui::SmallButton("Remove")) {
+            connection_rows.remove_connection(rows[i].connector);
+        }
+        tooltip("Removes this connection, whichever piece records it (one undo step); both pieces stay where they are.");
+        ImGui::SameLine();
+        ImGui::TextWrapped("Connection %s: %s", rows[i].connector.c_str(), rows[i].text.c_str());
+        ImGui::PopID();
+    }
+}
+
+void Level_kit_window::detach_imgui(const std::shared_ptr<Scene_root>& scene_root)
+{
+    // C9.2: the connections of every selected kit piece and floor layout of the scene (counted in update_connect_pieces()).
+    ImGui::BeginDisabled(m_detach_node_count == 0);
+    if (ImGui::Button("Detach Selected")) {
+        queue_detach(scene_root);
+    }
+    ImGui::EndDisabled();
+    tooltip("Removes every connection of the selected kit pieces and floor layouts, one undo step; they stay where they are and drag alone.");
+    if (!m_detach_message.empty()) {
+        ImGui::TextWrapped("%s", m_detach_message.c_str());
+    }
+    // C3.13: what the last change's property flow did (level_get_flow_report has it whole).
+    const std::string& flow_summary = m_context.level_kits->get_flow_summary();
+    if (!flow_summary.empty()) {
+        ImGui::TextWrapped("%s", flow_summary.c_str());
+    }
+}
+
+void Level_kit_window::queue_detach(const std::shared_ptr<Scene_root>& scene_root)
+{
+    m_context.imgui_windows->queue(
+        [this, weak_scene_root = std::weak_ptr<Scene_root>{scene_root}]() {
+            const std::shared_ptr<Scene_root> scene = weak_scene_root.lock();
+            if (!scene || !m_context.app_scenes->is_host_registered(scene.get())) {
+                return;
+            }
+            std::vector<std::shared_ptr<erhe::scene::Node>> nodes;
+            for (const std::shared_ptr<erhe::Item_base>& item : m_context.selection->get_selected_items()) {
+                std::shared_ptr<erhe::scene::Node> node = std::dynamic_pointer_cast<erhe::scene::Node>(item);
+                if (node && (node->get_item_host() == scene.get()) && (carries_kit_piece(*node) || is_floor_layout(*node))) {
+                    nodes.push_back(std::move(node));
+                }
+            }
+            if (nodes.empty()) {
+                return;
+            }
+            const Kit_detach_result result = m_context.level_kits->detach_pieces(*scene, nodes);
+            if (!result.error.empty()) {
+                m_detach_message = result.error;
+                log_scene->warn("Level Kit: detach refused: {}", result.error);
+                return;
+            }
+            m_detach_message = result.changed
+                ? fmt::format("Detached {} {}.", nodes.size(), (nodes.size() == 1) ? "node" : "nodes")
+                : std::string{"The selection has no connections."};
+            log_scene->info("Level Kit: {}", m_detach_message);
+        }
+    );
 }
 
 namespace {
@@ -500,6 +571,14 @@ void Level_kit_window::update_connect_pieces(const Scene_root& scene_root)
     m_connect_moved_connectors.clear();
     m_connect_target_label.clear();
     m_connect_moved_label.clear();
+    m_detach_message.clear();
+    m_detach_node_count = 0;
+    for (const std::shared_ptr<erhe::Item_base>& item : m_context.selection->get_selected_items()) {
+        const erhe::scene::Node* const node = dynamic_cast<const erhe::scene::Node*>(item.get());
+        if ((node != nullptr) && (node->get_item_host() == &scene_root) && (carries_kit_piece(*node) || is_floor_layout(*node))) {
+            ++m_detach_node_count;
+        }
+    }
 
     std::shared_ptr<erhe::scene::Node> target;
     std::shared_ptr<erhe::scene::Node> moved;
@@ -760,6 +839,7 @@ void Level_kit_window::queue_replace(const std::shared_ptr<Scene_root>& scene_ro
                         .replaced_count  = result.replaced_count,
                         .unchanged_count = result.pieces.size() - result.replaced_count,
                         .snapped_count   = any_surface_option(surface) ? std::optional<std::size_t>{result.snapped_count} : std::optional<std::size_t>{},
+                        .dropped_connection_count = result.dropped_connection_count,
                         .skipped         = skipped
                     }
                 );
@@ -815,7 +895,11 @@ void Level_kit_window::queue_snap_selected(const std::shared_ptr<Scene_root>& sc
             options.snap   = Surface_snap::on;
             options.orient = orient;
             std::vector<Kit_snap_result> results;
-            static_cast<void>(m_context.level_kits->snap_to_surface(*target, meshes, options, Kit_snap_apply::move, results));
+            std::string refusal;
+            static_cast<void>(m_context.level_kits->snap_to_surface(*target, meshes, options, Kit_snap_apply::move, results, &refusal));
+            if (!refusal.empty()) {
+                log_scene->warn("Level Kit: snap to surface refused: {}", refusal);
+            }
         }
     );
 }

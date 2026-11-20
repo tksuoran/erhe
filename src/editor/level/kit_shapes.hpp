@@ -110,6 +110,11 @@ void add_roof_shapes          (std::vector<Kit_shape_definition>& shapes);
 // Connector builders shared by the kit files (D1.12): "base" at the origin facing -Y, then "top" at top_y facing +Y,
 // both with up +Z; a side connector at the given point, with up +Y. A shape lists first the connector it attaches by.
 void add_base_and_top_connectors(std::vector<Kit_connector>& out_connectors, float top_y);
+// K1.5: a wall that runs along X: "start" and "end" join walls and generic sides, "base" stands only on a floor (L15).
+void type_wall_run_connectors(std::vector<Kit_connector>& out_connectors);
+// C2.2, C3.3: the standard property mappings of a wall run shape and its supply over start and end (thickness, material,
+// height at the wall priority); the wall slot is the shape's slot of that name; thickness_parameter null: no thickness.
+void set_wall_run_flow(Kit_shape_definition& shape, const char* thickness_parameter);
 void add_side_connector         (std::vector<Kit_connector>& out_connectors, const char* name, const glm::vec3& position, const glm::vec3& outward);
 
 // Derive ranges (D1.8): a float's range and step are in the parameter's default scale; an enum derives over all its values.

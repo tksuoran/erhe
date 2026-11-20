@@ -916,6 +916,13 @@ void Dependency_property_rows::row(Property_editor& editor, const Dependency_pro
                     if (!is_session_row(property)) {
                         begin_edit(property); // keyboard edits can change without a separate activation frame
                     }
+                    if (m_edit_hooks_begun) {
+                        for (const Property_edit_hook& hook : m_edit_hooks) {
+                            if (hook.before_write) {
+                                hook.before_write();
+                            }
+                        }
+                    }
                     for (std::size_t i = 0; i < m_items->size(); ++i) {
                         target(i)->set_value(property, merge_components(target(i)->get_value(property), original, value));
                     }

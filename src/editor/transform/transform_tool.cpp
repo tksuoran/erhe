@@ -436,6 +436,10 @@ void Transform_tool::on_node_touched(Node_touched_message& message)
     if (!is_node_selection_driving()) {
         return;
     }
+    // K9.1: this edit's own flow preview moves a dragged node and takes it back; the edit keeps its start.
+    if (m_layout_preview_begun && (m_context.level_kits != nullptr) && m_context.level_kits->is_move_flow_previewing()) {
+        return;
+    }
     update_target_nodes(message.node);
 }
 
@@ -1438,7 +1442,20 @@ void Transform_tool::follow_layout_preview()
         m_context.level_kits->begin_layout_move_preview(*scene_root, m_moved_nodes);
         m_moved_nodes.clear();
     }
-    static_cast<void>(m_context.level_kits->step_layout_preview());
+    // K9.1: the step's snap pair is a new connection of the previewed flow, as the release's (record_transform_operation()).
+    const Kit_connector_snap_state& snap_state = m_connector_snap.get_state();
+    const Kit_snap_pair* snap = nullptr;
+    if (snap_state.snapped) {
+        m_preview_snap.piece            = snap_state.piece.lock();
+        m_preview_snap.connector        = snap_state.connector;
+        m_preview_snap.target           = snap_state.target.lock();
+        m_preview_snap.target_connector = snap_state.target_connector;
+        snap = &m_preview_snap;
+    }
+    static_cast<void>(m_context.level_kits->step_layout_preview(snap));
+    // The preview keeps its own copy of the pair: the tool holds no node between steps.
+    m_preview_snap.piece.reset();
+    m_preview_snap.target.reset();
 }
 
 void Transform_tool::end_layout_preview()
@@ -1446,10 +1463,11 @@ void Transform_tool::end_layout_preview()
     if (!m_layout_preview_begun) {
         return;
     }
-    m_layout_preview_begun = false;
+    // Still begun while the preview's run is taken back (on_node_touched()).
     if (m_context.level_kits != nullptr) {
         m_context.level_kits->end_layout_preview();
     }
+    m_layout_preview_begun = false;
 }
 
 auto Transform_tool::has_moved_ancestor_entry(const erhe::scene::Node& node) const -> bool
@@ -1530,16 +1548,19 @@ auto Transform_tool::find_lead_face_rest(erhe::raytrace::IScene& committed_rt_sc
     }
     const erhe::scene::Node& root      = *lead->node;
     const Trs_transform      world     = root.world_from_node_transform();
-    const glm::mat4          root_from_world = root.node_from_world();
     erhe::math::Aabb         subtree_bounds{};
     static_cast<void>(
         root.for_each_const<erhe::scene::Mesh>(
-            [&subtree_bounds, &root_from_world](const erhe::scene::Mesh& mesh) -> bool {
+            [&subtree_bounds, &root](const erhe::scene::Mesh& mesh) -> bool {
                 const erhe::math::Aabb mesh_bounds = mesh_local_bounds(mesh);
                 if (!mesh_bounds.is_valid_3d()) {
                     return true;
                 }
-                const glm::mat4 root_from_mesh = root_from_world * mesh.world_from_node();
+                // From the local transforms: a step writes the moved roots' world matrices, not their descendants'.
+                glm::mat4 root_from_mesh{1.0f};
+                for (const erhe::scene::Node* i = &mesh; (i != nullptr) && (i != &root); i = i->get_parent_node().get()) {
+                    root_from_mesh = i->parent_from_node() * root_from_mesh;
+                }
                 for (int corner = 0; corner < 8; ++corner) {
                     const glm::vec3 local{
                         ((corner & 1) != 0) ? mesh_bounds.max.x : mesh_bounds.min.x,

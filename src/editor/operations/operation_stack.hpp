@@ -106,6 +106,11 @@ public:
     // evaluation runs in the same frame.
     void execute_now(const std::shared_ptr<Operation>& operation);
 
+    // True during the first execute of a new entry (not undo, redo or an operation a tool runs outside the stack).
+    [[nodiscard]] auto is_recording() const -> bool;
+    // Counts the first executes of new entries (refused ones included).
+    [[nodiscard]] auto get_recording_serial() const -> std::size_t;
+
     void undo();
     void redo();
 
@@ -189,6 +194,8 @@ private:
     void imgui(const char* stack_label, const std::vector<std::shared_ptr<Operation>>& operations);
 
     void verify_main_thread() const;
+    void begin_recording();
+    void end_recording();
 
     App_context&  m_context;
     Undo_command  m_undo_command;
@@ -196,6 +203,8 @@ private:
     Redo_command  m_redo_command;
 
     bool                                    m_executing{false};
+    bool                                    m_recording{false};
+    std::size_t                             m_recording_serial{0};
     std::vector<std::shared_ptr<Operation>> m_executed;
     std::vector<std::shared_ptr<Operation>> m_undone;
     std::vector<std::shared_ptr<Operation>> m_queued;

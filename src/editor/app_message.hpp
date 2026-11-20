@@ -110,6 +110,14 @@ struct Mesh_geometry_changed_message
     std::shared_ptr<erhe::scene::Mesh> mesh{};
 };
 
+// A Mesh_material_assign_operation (execute or undo) gave the mesh's primitives other materials. Sent by the operation,
+// as Mesh_geometry_changed_message is; a kit piece's supplied material changes with it (K9.2).
+class Mesh_materials_changed_message
+{
+public:
+    std::shared_ptr<erhe::scene::Mesh> mesh{};
+};
+
 // The Brush tool's kit values changed without the Level Kit window's rows: it took the next seed after a placed piece
 // ("New Seed Per Piece", doc/editor/level_tools.md). Brush_tool::get_kit_values() holds them.
 class Kit_values_changed_message

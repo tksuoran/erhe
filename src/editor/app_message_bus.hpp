@@ -26,6 +26,7 @@ public:
     erhe::message_bus::Message_bus<Graphics_settings_message,     queue> graphics_settings;
     erhe::message_bus::Message_bus<Node_touched_message,          sync>  node_touched;
     erhe::message_bus::Message_bus<Mesh_geometry_changed_message, sync>  mesh_geometry_changed;
+    erhe::message_bus::Message_bus<Mesh_materials_changed_message, sync> mesh_materials_changed;
     erhe::message_bus::Message_bus<Kit_values_changed_message,    sync>  kit_values_changed;
     erhe::message_bus::Message_bus<Kit_layout_changed_message,    queue> kit_layout_changed;
     erhe::message_bus::Message_bus<Kit_piece_connectors_changed_message, queue> kit_piece_connectors_changed;

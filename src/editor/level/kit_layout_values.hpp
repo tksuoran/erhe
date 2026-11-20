@@ -1,6 +1,7 @@
 #pragma once
 
 #include "level/level_repeat.hpp"
+#include "level/floor_polygon.hpp"
 #include "level/stairs_mesh.hpp"
 
 #include <glm/glm.hpp>
@@ -84,6 +85,9 @@ public:
     float                  yaw_max      {360.0f};                           // scatter
     Stairs_values          stairs;                                          // stairs, along the node's own curve
     std::string            stairs_material;                                 // stairs: a scene or palette material; empty: the stone slot's default
+    Floor_values           floor;                                           // floor, filling the node's own closed curve
+    std::string            floor_material;                                  // floor: a scene or palette material; empty: the floor slot's default
+    std::string            floor_wall_material;                             // floor: the wall.material it supplies; empty: the wall slot's default
 
     [[nodiscard]] auto operator==(const Kit_layout_pattern& other) const -> bool = default;
 };
@@ -107,7 +111,7 @@ void set_layout_spacing_from_extent(Kit_layout_pattern& pattern, const glm::vec3
 // Every layout kind, in the order the Create menu lists them (U47).
 inline constexpr Repeat_pattern_kind c_layout_kinds[] = {
     Repeat_pattern_kind::line, Repeat_pattern_kind::grid, Repeat_pattern_kind::ring, Repeat_pattern_kind::scatter,
-    Repeat_pattern_kind::path, Repeat_pattern_kind::segments, Repeat_pattern_kind::stairs
+    Repeat_pattern_kind::path, Repeat_pattern_kind::segments, Repeat_pattern_kind::stairs, Repeat_pattern_kind::floor
 };
 
 // U47: the Create menu's entry and the new node's name for a layout of the kind ("Line Layout", ..., "Path Stairs").
@@ -165,6 +169,8 @@ public:
 
 // The material slot of a stairs layout's staircase, the one of basic.stairs.
 inline constexpr const char* c_stairs_material_slot = "stone";
+inline constexpr const char* c_floor_material_slot = "floor";
+inline constexpr const char* c_floor_wall_material_slot = "wall";
 
 // seed: the layout seed, a scatter's point stream; items: one entry per layout item (the run refers to them);
 // path_table: a path's, a segments run's or the stairs' curve (the run refers to it), null for the other kinds; out_poses: when given, the run's poses

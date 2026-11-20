@@ -31,8 +31,12 @@ void Compound_operation::execute(App_context& context)
 {
     log_operations->trace("Op Execute Begin {}", describe());
 
-    for (auto& operation : m_parameters.operations) {
-        operation->execute(context);
+    // A refused child undid itself and the earlier ones are undone, so the entry leaves nothing behind.
+    const Operation* const refused = execute_unless_refused(context, m_parameters.operations);
+    if (refused != nullptr) {
+        set_refused(refused->get_error());
+        log_operations->info("Op Execute {} refused: {}", describe(), get_error());
+        return;
     }
 
     log_operations->trace("Op Execute End {}", describe());

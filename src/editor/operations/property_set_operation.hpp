@@ -129,6 +129,7 @@ private:
     };
     void adopt_userships(App_context& context);
     void record_follow_ups(App_context& context);
+    void restore_before(App_context& context);
 
     std::vector<Target>          m_targets;
     erhe::property::Property_set m_values;

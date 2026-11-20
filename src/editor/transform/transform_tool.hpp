@@ -9,6 +9,7 @@
 #include "transform/physics_driven_drag.hpp"
 #include "transform/rotation_inspector.hpp"
 #include "level/kit_connector_snap.hpp"
+#include "level/kit_piece.hpp"
 #include "config/generated/connector_snap_axis_mode.hpp"
 #include "config/generated/connector_snap_orientation.hpp"
 #include "config/generated/surface_drag_direction.hpp"
@@ -623,6 +624,7 @@ private:
     glm::vec3                             m_last_drag_translation{0.0f};
     // Whether this edit began the live layout preview of the moved layouts (Level_kits::begin_layout_move_preview()).
     bool                                m_layout_preview_begun{false};
+    Kit_snap_pair                       m_preview_snap; // K9.1: the step's snap pair, handed to the flow preview
     Rotation_inspector                  m_rotation;
 
     Property_editor                     m_property_editor;

@@ -442,6 +442,10 @@ TEST(Kit_replace, the_summary_names_what_was_replaced_snapped_and_skipped)
         "Replaced 3 pieces with Rock. Snapped 2 of them to the surface."
     );
     EXPECT_EQ(
+        editor::make_replace_summary(Kit_replace_summary{.shape_name = "Pillar", .replaced_count = 1, .dropped_connection_count = 2}),
+        "Replaced 1 piece with Pillar. Dropped 2 connections the new shape cannot keep."
+    );
+    EXPECT_EQ(
         editor::make_replace_summary(Kit_replace_summary{.shape_name = "Block", .replaced_count = 0, .unchanged_count = 2}),
         "The selected pieces are Block already."
     );

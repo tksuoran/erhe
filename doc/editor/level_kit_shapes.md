@@ -294,8 +294,8 @@ mirror planes x and z; every side a seam side; tags `walkable`, `floor` and
 `architecture.wall` (`kit_shapes_architecture.cpp`) is a straight wall along
 X with its faces toward +Z and -Z, its origin at the center of its base.
 Parameters `length` (4 modules), `height` (1 wall height) and `thickness`
-(0.25 m); slot `wall`; connectors start and end (the ends), base, top, front
-and back; a box body; mirror planes x and z; every side a seam side;
+(0.25 m); slot `wall`; connectors start and end (the ends, types `wall` and `generic`),
+base (type `wall-floor`), top, front and back; a box body; mirror planes x and z; every side a seam side;
 tags `obstacle`, `wall` and `tiles`. 12 triangles.
 
 ### Door wall

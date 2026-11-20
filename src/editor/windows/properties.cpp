@@ -127,6 +127,7 @@ Properties::Properties(
     , m_dependency_rows{app_context}
     , m_kit_piece_editor{app_context}
     , m_kit_layout_editor{app_context}
+    , m_floor_connection_rows{app_context}
 {
     // Below the Rest Rotation row of a bone's "IK" group
     // (doc/plans/rigging/ik_settings.md section 5): the same undoable write the
@@ -172,6 +173,11 @@ Properties::Properties(
             .step = [this]() {
                 if (m_context.level_kits != nullptr) {
                     m_context.level_kits->step_layout_transform_preview();
+                }
+            },
+            .before_write = [this]() {
+                if (m_context.level_kits != nullptr) {
+                    m_context.level_kits->prepare_layout_transform_write();
                 }
             },
             .end = [this]() {
@@ -406,18 +412,21 @@ Properties::Properties(
         [this](Selection_message&) {
             m_kit_piece_editor.mark_dirty();
             m_kit_layout_editor.mark_dirty();
+            m_floor_connection_rows.mark_dirty();
         }
     );
     m_active_item_subscription = app_message_bus.active_item.subscribe(
         [this](Active_item_changed_message&) {
             m_kit_piece_editor.mark_dirty();
             m_kit_layout_editor.mark_dirty();
+            m_floor_connection_rows.mark_dirty();
         }
     );
     // A Kit_layout value written by an operation, its undo or redo: the Kit Layout rows read the node again.
     m_kit_layout_changed_subscription = app_message_bus.kit_layout_changed.subscribe(
         [this](Kit_layout_changed_message&) {
             m_kit_layout_editor.mark_dirty();
+            m_floor_connection_rows.mark_dirty();
         }
     );
     // A path layout's run follows its own curve: a curve edit, its undo or redo reads it again.
@@ -437,6 +446,7 @@ Properties::Properties(
     m_kit_piece_connectors_changed_subscription = app_message_bus.kit_piece_connectors_changed.subscribe(
         [this](Kit_piece_connectors_changed_message&) {
             m_kit_piece_editor.mark_dirty();
+            m_floor_connection_rows.mark_dirty();
         }
     );
 
@@ -470,8 +480,10 @@ auto Properties::get_inspected_material() const -> const std::shared_ptr<erhe::p
 void Properties::on_items_removed(const Removed_items& removed)
 {
     m_dependency_rows.release_edit_items([&removed](const erhe::Item_base& item) { return removed.lookup.contains(&item); });
-    // The Attached row of a kit piece names its target, which may have gone.
+    // The connection rows of a kit piece or a floor name the other ends, which may have gone (the undo of the delete
+    // reads them again on Kit_piece_connectors_changed_message).
     m_kit_piece_editor.mark_dirty();
+    m_floor_connection_rows.mark_dirty();
     const std::shared_ptr<erhe::Item_base> target = m_target.lock();
     if (target && removed.lookup.contains(target.get())) {
         m_target.reset();
@@ -1268,19 +1280,8 @@ void Properties::kit_piece_properties(const std::shared_ptr<erhe::scene::Mesh>& 
     if (!m_kit_piece_editor.get_message().empty()) {
         add_entry(Property_row_id::properties_message, "Message", [this]() { kit_message_line(m_kit_piece_editor.get_message()); });
     }
-    // Step 41: the attachment the piece follows, with Detach (doc/editor/level_tools.md "Attachments").
-    if (!m_kit_piece_editor.get_attachment_text().empty()) {
-        add_entry(Property_row_id::properties_kit_attachment, "Attached", [this]() {
-            if (ImGui::SmallButton("Detach")) {
-                m_kit_piece_editor.detach();
-            }
-            if (ImGui::IsItemHovered()) {
-                ImGui::SetTooltip("%s", "The piece stops following its target and stays where it is (one undo entry).");
-            }
-            ImGui::SameLine();
-            ImGui::TextUnformatted(m_kit_piece_editor.get_attachment_text().c_str());
-        });
-    }
+    // C6.3, C9: the piece's connections, each with Remove, and Detach of them all (doc/editor/level_tools.md "Connections").
+    kit_connection_properties(m_kit_piece_editor.get_connection_rows());
     // U33: the piece switch and one switch per connector of the shape (doc/editor/level_tools.md "Connector switches").
     const std::vector<Kit_connector>& connectors = m_kit_piece_editor.get_connectors();
     if (connectors.empty()) {
@@ -1296,8 +1297,9 @@ void Properties::kit_piece_properties(const std::shared_ptr<erhe::scene::Mesh>& 
         }
     });
     for (std::size_t i = 0, end = connectors.size(); i < end; ++i) {
-        const char* const name = connectors[i].name;
-        add_entry({Property_row_id::properties_kit_connector, i}, fmt::format("Connector {}", name), [this, name]() {
+        const char* const         name  = connectors[i].name;
+        const Kit_connector_types types = connectors[i].types;
+        add_entry({Property_row_id::properties_kit_connector, i}, fmt::format("Connector {}", name), [this, name, types]() {
             const Kit_connector_switches& switches = m_kit_piece_editor.get_connector_switches();
             bool enabled = !switches.is_disabled(name);
             ImGui::BeginDisabled(!switches.connectors_enabled);
@@ -1307,6 +1309,44 @@ void Properties::kit_piece_properties(const std::shared_ptr<erhe::scene::Mesh>& 
             ImGui::EndDisabled();
             if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
                 ImGui::SetTooltip("%s", "The connector joins and snaps when this and Connectors are both on.");
+            }
+            // C1.7: the connector types it accepts, one word each (no per-frame text building).
+            for (unsigned int t = 0; t < c_connector_type_count; ++t) {
+                if (types.contains(static_cast<Kit_connector_type>(t))) {
+                    ImGui::SameLine();
+                    ImGui::TextDisabled("%s", c_str(static_cast<Kit_connector_type>(t)));
+                }
+            }
+        });
+    }
+}
+
+void Properties::kit_connection_properties(Kit_connection_rows& connection_rows)
+{
+    const std::vector<Kit_connection_rows::Row>& rows = connection_rows.get_rows();
+    for (std::size_t i = 0, end = rows.size(); i < end; ++i) {
+        add_entry({Property_row_id::properties_kit_attachment, i}, fmt::format("Connection {}", rows[i].connector), [&connection_rows, i]() {
+            const std::vector<Kit_connection_rows::Row>& current = connection_rows.get_rows();
+            if (i >= current.size()) {
+                return;
+            }
+            if (ImGui::SmallButton("Remove")) {
+                connection_rows.remove_connection(current[i].connector);
+            }
+            if (ImGui::IsItemHovered()) {
+                ImGui::SetTooltip("%s", "Removes this connection, whichever piece records it (one undo entry); both pieces stay where they are.");
+            }
+            ImGui::SameLine();
+            ImGui::TextUnformatted(current[i].text.c_str());
+        });
+    }
+    if (!rows.empty()) {
+        add_entry(Property_row_id::properties_kit_connectors_detach, "Detach", [&connection_rows]() {
+            if (ImGui::SmallButton("Detach")) {
+                connection_rows.detach();
+            }
+            if (ImGui::IsItemHovered()) {
+                ImGui::SetTooltip("%s", "Removes every connection of the node (one undo entry); it stays where it is and drags alone.");
             }
         });
     }
@@ -1334,7 +1374,7 @@ void Properties::kit_layout_properties(const std::shared_ptr<erhe::scene::Node>&
     }
     add_entry(Property_row_id::properties_kit_layout_run, "Run", [&editor]() { editor.run_line(); });
     // A stairs layout places no item: its staircase is generated from the curve.
-    const bool stairs = (editor.get_pattern().kind == Repeat_pattern_kind::stairs);
+    const bool stairs = (editor.get_pattern().kind == Repeat_pattern_kind::stairs) || (editor.get_pattern().kind == Repeat_pattern_kind::floor);
     const std::span<const Kit_layout_item_rows> items = stairs ? std::span<const Kit_layout_item_rows>{} : editor.get_items();
     for (std::size_t i = 0, end = items.size(); i < end; ++i) {
         push_group({Property_row_id::properties_kit_layout_item, i}, std::string{items[i].label}, ImGuiTreeNodeFlags_DefaultOpen, m_indent);
@@ -1361,6 +1401,11 @@ void Properties::kit_layout_properties(const std::shared_ptr<erhe::scene::Node>&
     add_entry(Property_row_id::properties_kit_layout_lock, "Lock", [&editor]() { editor.lock_buttons(); });
     if (!editor.get_message().empty()) {
         add_entry(Property_row_id::properties_kit_layout_message, "Message", [&editor]() { editor.message_line(); });
+    }
+    // C6.3, C9.2: a floor layout is a connection end: its connections, each with Remove, and Detach.
+    if (is_floor_layout(*layout)) {
+        m_floor_connection_rows.update(layout);
+        kit_connection_properties(m_floor_connection_rows);
     }
 }
 

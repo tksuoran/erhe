@@ -875,9 +875,10 @@ the starter set.
     path's points and the layout's values. A polyline is a curve of corner
     points.
   - R5.12.10 A kit layout along a curve can instead hold one piece per
-    segment between two neighbouring control points, each scaled along one
-    axis to fill the segment (U37), so a wall's length follows its room's
-    corner points.
+    segment between two neighbouring control points (U37), each taking the
+    segment's length through its `child.length` property, never scaled
+    (L24 of `doc/plans/level_kit_connections.md`), so a wall's length
+    follows its room's corner points.
   - R5.12.11 Each segment of such a layout is a handle in the viewport: a
     drag moves the segment parallel to itself along its normal, its two
     control points sliding along the neighbouring segments' lines (U38).

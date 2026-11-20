@@ -458,6 +458,12 @@ erhe_target_sources_grouped(
     level/level_repeat.hpp
     level/stairs_fit.cpp
     level/stairs_fit.hpp
+    level/floor_polygon.cpp
+    level/kit_standard_property.cpp
+    level/kit_standard_property.hpp
+    level/kit_connection_flow.cpp
+    level/kit_connection_flow.hpp
+    level/floor_polygon.hpp
     level/stairs_mesh.cpp
     level/stairs_mesh.hpp
     level/surface_base_frame.cpp

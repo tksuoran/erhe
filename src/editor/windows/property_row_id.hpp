@@ -35,6 +35,7 @@ enum class Property_row_id : uint32_t
     properties_kit_connectors,
     properties_kit_connector,
     properties_kit_attachment,
+    properties_kit_connectors_detach,
     properties_kit_layout_state,
     properties_kit_layout_problem,
     properties_kit_layout_pattern,

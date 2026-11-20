@@ -317,8 +317,8 @@ pattern expanded from a start transform into one pose per element.
 `Repeat_pattern` (kind `Repeat_pattern_kind` line, grid, ring, path,
 scatter ("Scatter layouts") or segments and the fields of each) and `expand_repeat(pattern, start, out_poses)`, which
 returns the poses of the run with element 0 at the start, or a refusal and no
-poses. A pose is a position, a rotation and a scale, which only segments
-sets (to (s, 1, 1)); the other kinds keep 1. A kit layout node expands from its own origin
+poses. A pose is a position, a rotation and a scale, which every kind keeps
+at 1. A kit layout node expands from its own origin
 (`resolve_layout_pattern()` turns its values into a `Repeat_pattern`); the
 axes are the start rotation's.
 
@@ -356,13 +356,17 @@ axes are the start rotation's.
   spans the straight chord from point i to point i + 1; handles and point
   kinds do not bend it (`make_segment_pose()`). With `upright` its x axis is
   the chord's heading in the start frame's xz plane and its up axis the start
-  frame's, its scale (s, 1, 1) with s the chord's plan length over
-  `max_x - min_x`, and its origin placed so that the scaled `min_x` lands on
-  point i: the piece stands upright at point i's height and its scaled
-  `max_x` lands above or below point i + 1 by the chord's rise. With
-  `tangent` its x axis is the chord itself, its up axis the start frame's up
-  made perpendicular to it, and s the chord's length over the extent, so both
-  ends land on the points.
+  frame's, its scale 1, and its origin placed so that the item's x bounds
+  are centred on the chord's plan midpoint at point i's height. With
+  `tangent` its x axis is the chord itself and its up axis the start frame's
+  up made perpendicular to it, centred on the chord's midpoint. The layout
+  gives each piece whose shape maps `child.length` the span's length (the
+  chord's plan length, or the chord's with `tangent`) before the pose is
+  made, so such a piece spans the chord end to end (L24). Every segments
+  piece has its own values, so preparing a segments layout (each generation,
+  and each step of a live drag of its curve) builds each element's geometry
+  bounds. A segments layout saved with scaled pieces keeps them until it is
+  laid out again, which replaces them with unscaled ones.
 
 A count below 1, a run of more than `c_max_repeat_count` (1024) elements, a
 zero spacing along a repeated axis, a radius that is not positive, an arc
@@ -873,9 +877,13 @@ edited directly; unlocked, it leaves them alone and they are ordinary pieces.
 - Segment layouts (U37, R5.12.10): a segments layout is a Curve prim like a
   path layout - one node carrying the values with the pieces as its children
   and its own curve - that puts one piece on each segment between two
-  neighbouring control points, scaled along the piece's x axis alone so that
-  its item's x extent fills the chord ("Pattern expansion" has the pose); a
-  wall's length follows its room's corner points. Everything "Path layouts"
+  neighbouring control points, unscaled: a piece whose shape maps
+  `child.length` takes the segment's length (the chord's plan length, or the
+  chord's with tangent orientation) as that parameter, and every piece's x
+  extent is centred on the chord ("Pattern expansion" has the pose;
+  `doc/plans/level_kit_connections.md` L24), so a wall's length follows its
+  room's corner points and a piece without the mapping stands at its own
+  size at the segment's middle. Everything "Path layouts"
   states holds for it: the curve tool shows and drags its points and
   handles (a handle changes no piece), each curve edit is one
   `Curve_set_operation` whose follow-up lays the layout out again (only the
@@ -884,8 +892,9 @@ edited directly; unlocked, it leaves them alone and they are ordinary pieces.
   rigidly. Points the curve tool and `curve_add_point` add between corner
   points are corners. Each segment is a handle as well: a drag moves a wall
   along its normal ("Segment handles").
-  - The pieces carry their scale as their local scale (s, 1, 1); the layout
-    node itself keeps world scale 1. Module snap is not applied (the pieces
+  - Each piece keeps scale 1 and has its own parameter values (its length;
+    with per-element seeds its seed too); the layout node keeps world scale
+    1. Module snap is not applied (the pieces
     stand on the control points) and neither is surface orient (it would tilt
     a piece off its points); surface snap moves each piece along the
     downward direction by the bounds of its scaled geometry, which keeps its
@@ -965,6 +974,8 @@ edited directly; unlocked, it leaves them alone and they are ordinary pieces.
     from the children before the drag as a step builds them. A drag the
     window gives up (a selection change, the window hidden) restores the
     nodes' transforms and their children and records nothing.
+  - A move preview's step also runs the property flow of the step after the
+    generations ("Flow preview").
   - A step logs the `editor.scene` trace line "layout preview step: N
     layouts, M pieces: T ms". Release build: a value drag of a 12-pillar line
     (each step a new pillar brush) about 1.7 ms, a Transform drag of a
@@ -1227,10 +1238,10 @@ outline in the viewport, and a drag of one sets the values it stands for
 
 ## Segment handles
 
-A segments layout that is the curve tool's target (the only selected item;
-a piece of a locked layout selects the node) has a handle per segment beside
-its control point handles, and a drag of one moves that segment parallel to
-itself along its normal (U38, R5.12.11). The curve tool
+A segments layout or a floor layout that is the curve tool's target (the only
+selected item; a piece of a locked layout selects the node) has a handle per
+segment (a floor's edge) beside its control point handles, and a drag of one
+moves that segment parallel to itself along its normal (U38, R5.12.11, L25). The curve tool
 (`tools/curve_tool.hpp`) holds them as further entries of its point set
 (`doc/editor/point_set_editing.md`): after the three entries of every
 control point, entry 3n + i is segment i. A layout of either lock state has
@@ -1251,7 +1262,7 @@ its target changes and at each `Kit_layout_changed_message` of it).
   segment stays selected through its drags and their undo and redo; like
   the point selection, its index is kept across point inserts and removals
   and dropped only when it is out of range, or when the target changes or
-  stops being a segments layout. Delete (`Curve.remove_points`) with a
+  stops being a segments or floor layout. Delete (`Curve.remove_points`) with a
   segment selected does nothing.
 - The normal: horizontal in the node's frame (perpendicular to the chord
   and to the node's y axis), the right of the segment's direction from point
@@ -1288,13 +1299,15 @@ its target changes and at each `Kit_layout_changed_message` of it).
   the node the only selected item and selects the segment (`index` omitted
   clears it); `level_get_segment_handles {}` returns the target `layout`
   (`id`, `name`, `scene_name`; null when the curve tool's target is not a
-  segments layout), its `handles` (`index`, `points`, world `position` and
+  segments or floor layout), its `handles` (`index`, `points`, world `position` and
   unit world `normal`), `selected` and `gizmo_on_handle`;
   `level_move_segment {scene_name, layout_id, segment, offset}` moves a
   segment by a signed offset along its normal through the same
   `move_curve_segment()`, as one undo entry; it is refused while a curve
-  tool drag of the same curve is held. A script drags a handle with
-  `get_transform_handles` and `mouse_drag` as a user does.
+  tool drag of the same curve is held; its reply carries `flow` ("Flow
+  report"). A script drags a handle with `get_transform_handles` and
+  `mouse_drag` as a user does, or holds it with `transform_selection`
+  (`end_edit` false) after `level_select_segment_handle`.
 
 ## Wrap with Path
 
@@ -1575,12 +1588,88 @@ to a height profile) and `level/stairs_mesh.hpp` (the staircase mesh along a
   the mesh and its normals and the rest the brush, its render and ray
   tracing meshes and the body.
 
+## Floor layouts
+
+A floor kit layout (`Repeat_pattern_kind::floor`,
+`doc/plans/level_kit_connections.md` C8) is a closed curve node of corner
+points with one generated child, "Floor": a slab filling the curve's outline
+(`level/floor_polygon.{hpp,cpp}`), built the way a stairs layout builds its
+staircase (`Level_kits::build_floor_generation()`,
+`make_generated_child_insert()`).
+
+- The outline is the plan (x, z) of the curve's control points; handles are
+  not used. The slab runs from the node's origin (y = 0) up to `thickness`,
+  its caps triangulated by ear clipping, so a concave outline fills.
+- Its values (`Kit_layout_pattern::floor`, `Floor_values`, and two material
+  names): `thickness` (0.2 m), `wall_thickness` (0.25 m), `room_height`
+  (3 m), `floor_material` (empty: the floor slot's default) and
+  `floor_wall_material` (empty: the wall slot's default). They are rows of the
+  Properties window and the Level Kit window, the `floor` object of a pattern
+  over MCP, and saved in the pattern text (left out at their defaults).
+- Refusals: an open curve, a scaled or tilted node, values out of range, a
+  floor material name that is neither a scene nor a palette material, and an
+  outline `check_floor_outline()` refuses: fewer than three or more than 64
+  corners, an edge shorter than 1 cm, two edges crossing, no area. The wall
+  material is not checked until something reads it.
+- Creating: "Add Polygon Floor" in the Level Kit window, "Polygon Floor" in
+  the Create menu's Level Kit submenu, and `level_create_layout` with
+  `pattern.kind` `floor` (with `points` and `closed`, or `curve_id`); without
+  points the floor starts as a square four modules on a side.
+- Edge connectors (C2.4): `get_floor_connectors()` gives edge i (from corner i
+  to corner i + 1) the connector `edge_<i>`, type `wall-floor`, at the edge's
+  midpoint on the top, inset by half `wall_thickness`, facing up with its up
+  axis toward the inside, so a wall joined to it with no twist faces the room
+  with its outer face flush with the floor's edge. They are targets of every
+  join path ("Connections").
+- A floor value edit (`level_set_layout`, the Properties rows) ends with the
+  connection follow-up, so a thickness change raises or lowers its walls
+  and a wall thickness change moves their inset, in the same entry. A live
+  drag of a floor's corner, of an edge handle or of a floor value previews
+  it: each step of the layout preview runs the follow-ups the release runs
+  (`append_curve_follow_ups()`: the edge renames, the shared corners of
+  connected floors, moved from where they stood at the drag's begin, and the
+  connection follow-up) and undoes them before the next step (K9.3).
+- Floor connectors: each edge also has `floor_<i>`, type `floor`, on the
+  edge's midpoint at the top, facing out, level. Two floors sharing an edge
+  connect there (a drag snap, Auto-connect; a floor layout node keeps
+  connection records like a kit piece). Connected floors share corners: an
+  outline edit that moves a corner moves the corner of each connected floor
+  that stood in the same place (within 1 mm), and that edit's own
+  follow-ups carry it on through further connected floors
+  (`Level_kits::append_shared_corner_moves()`, given the path before the
+  edit by `Curve_set_operation`); a floor join is never followed rigidly.
+  Not with the flow mask's `floor` off; an edit adding or removing corners
+  moves no shared corner.
+- Edge handles (L25): the curve tool gives a floor's edges the segment
+  handles of a segments layout ("Segment handles"). A drag of one, or
+  `level_move_segment`, moves the edge's two corners along its normal, each
+  sliding along its neighbouring edge's line; the walls and the corners
+  connected floors share follow live as for a corner drag, and the release is
+  one curve edit that moves them the same (the shared corners above).
+- An outline edit that adds or removes corners renumbers the edges; the
+  same edit moves each connection naming one of the floor's connectors to
+  the edge nearest the other end's connector when its recorded edge is gone
+  or clearly farther, before the other ends follow
+  (`Level_kits::append_floor_edge_renames()`). The two families rename apart,
+  each one connection per edge: `edge_<i>` (walls) and `floor_<i>` (other
+  floors), on the records naming the floor and on the floor's own records; a
+  connection whose new edge already holds another of its family is dropped,
+  with a warning.
+- A curve edit that makes an outline the floor refuses - crossing edges, a
+  curved span (a smooth or free point), a corner off the node's plane - is
+  recorded; the slab stays as it was and the layout's run reports the problem
+  (`read_floor_outline()`, `check_floor_outline()`), as a stairs layout does.
+
 ## Parameter changes
 
 `Level_kits::set_parameters(node, values)` gives a placed piece new parameter
 values as one undo entry. It refuses, changing nothing, a node that is not a
-mesh carrying `Kit_piece`, values of another shape and values out of range
-(the message names the parameter and its range). Values equal to the piece's
+mesh carrying `Kit_piece`, values of another shape and values a parameter
+cannot take (the message names the parameter). A float parameter takes any
+finite value of its declared range's sign - above zero where the range starts
+above zero, zero or more where it starts at zero - and the declared range is
+where the UI's drags run (`doc/plans/level_kit_connections.md` L23); an
+integer or enum parameter keeps its range. Values equal to the piece's
 record change nothing and record no entry. Otherwise it gets the brush of the
 new values from the cache and executes one `Kit_piece_parameters_operation`
 (`kit_piece_operation.hpp`), which swaps, under the scene's item host mutex:
@@ -1672,6 +1761,17 @@ brush, collision shape, body, navigation flag and transform exactly.
 - Material slots (`match_material_slots()`): a new slot keeps the material of
   the old slot of the same name (a tree's foliage on a bush), the others take
   their palette default; a given material per slot overrides both.
+- Connections (C6.5, K11.2, `append_replace_connection_drops()`): a
+  connection of a replaced piece, recorded on it or on the other end, is kept
+  when the new shape has a connector of the same name whose types meet the
+  other end's connector (another replaced piece of the call at its new
+  values); every other one is removed in the same entry and reported:
+  `Kit_replaced_piece::dropped_connections` (the piece's connector, the
+  other end, its connector and why: no such connector, or types that no
+  longer meet) and `Kit_replace_result::dropped_connection_count`. A
+  connection whose other end is not in the scene, or lacks its own connector
+  already, is kept as it was. The kept ones join again at the new connectors
+  and the new shape's values flow ("Property flow").
 - Skipped (U24), the other nodes replaced: a kit layout node (its items'
   shapes are its own values, "Kit layout nodes"; a selected one is not
   replaced through), a child of a locked kit layout node (the layout
@@ -1740,6 +1840,34 @@ space, computed from its current parameter values
 shapes and their connectors are listed in D1.12 of
 `doc/plans/level_tools_design.md`; the nature shapes have none.
 
+Each connector accepts a set of connector types (`Kit_connector_types`,
+`Kit_connector_type`: `generic`, `wall`, `wall-floor`, `floor`;
+`doc/plans/level_kit_connections.md` C1); two connectors are compatible when
+their sets share a type (`is_compatible()`). Every connector is `generic`
+except on the wall run shapes (`architecture.wall`, `architecture.door_wall`,
+the window wall and the timber bay; `type_wall_run_connectors()`): their
+`start` and `end` accept `wall` and `generic` (a wall still meets a tower's or
+a pillar's side) and their `base` accepts `wall-floor` only, so a wall stands
+on nothing but a floor's wall connector. The types ride every
+local, world and in-root frame of the connector.
+
+- A join the author names (`resolve_connect()`: `connect_piece()`, the Level
+  Kit window's Connect rows, `level_connect_pieces`, a placement with
+  `connect`) of connectors that share no type is refused: "connector '<a>'
+  (<types>) of <shape> and connector '<b>' (<types>) of target '<target>'
+  share no connector type". The drag's connector indicators show a target
+  connector only when a moved connector in reach is compatible with it.
+- Every search for a partner skips an incompatible pair silently, with no
+  message or log line: the connector snap (`find_connector_snap()`) and the
+  Brush tool's connector join preview (a target connector no connector of the
+  new piece accepts is no candidate, and the new piece's connector is chosen
+  among the compatible ones).
+- Loaded attachments are not tested: a record that joins connectors no longer
+  compatible keeps working.
+- The types are listed by `level_get_kits` and `level_get_connectors`
+  (`types`, an array of names) and shown beside each connector switch in the
+  Properties window.
+
 A join (D3.12, `join_connectors()`) puts connector A of a piece on connector
 B of a target piece: the positions coincide, A's outward axis opposes B's, and
 A's up axis agrees with B's up turned by `twist_steps` quarter turns about B's
@@ -1785,6 +1913,31 @@ to a top connector tips the piece over; the twist chooses its heading.
   mirror image exactly for a piece of a declared symmetry plane, with a pair
   of names across that plane (start and end, left and right, front and back)
   changing sides.
+
+### Standard properties and supply
+
+Standard properties (`level/kit_standard_property.hpp`,
+`doc/plans/level_kit_connections.md` C2) name a value with one meaning across
+shapes: `room.height`, `floor.thickness`, `wall.thickness`, `child.length`
+(lengths in meters) and `floor.material`, `wall.material`.
+
+- A shape maps the ones it takes onto its own parameters or material slots
+  (`Kit_shape_definition::property_mappings`, listed by `level_get_kits` as
+  `property_mappings`). The four wall run shapes map `room.height` to
+  `height`, `child.length` to `length`, `wall.material` to slot `wall` and,
+  but for the timber bay (no thickness parameter), `wall.thickness` to
+  `thickness` (`set_wall_run_flow()`).
+- A shape states what a piece supplies over each connector
+  (`Kit_shape_definition::get_supply`, into a fixed-size `Kit_supply_list`):
+  a wall run shape over `start` and `end` supplies its thickness, its height
+  and its `wall` slot's material at priority 1.
+- A floor layout supplies over each edge connector
+  (`get_floor_supply()`) at priority 2: the edge's length minus its
+  `wall_thickness` (so walls on neighbouring edges meet at their center
+  lines; none when that is under 0.1 m, the walls' least length), the wall
+  thickness, the room height and its wall material (a resolved name; the
+  caller gives the wall slot's default for an empty `floor_wall_material`).
+- The property flow reads them ("Property flow").
 
 ### Connector switches
 
@@ -1952,6 +2105,354 @@ last child follow them only for the connector facing their neighbour.
   reply, and `level_get_connectors` reports each child's direction and
   reason ("MCP").
 
+### Connections
+
+A connection (`doc/plans/level_kit_connections.md` C3.1, K6) is a join a
+piece remembers on one of its connectors. A piece keeps one connection per
+connector, any number in all, in its `Kit_piece.attachment` record: one
+object when it has one connection (the form every older scene has), an array
+sorted by connector when it has more (`make_attachments_text()`,
+`parse_attachments_text()`, `read_kit_attachments()`). Each entry is an
+attachment as described below, followed as one ("Attachments").
+
+- Ends: a kit piece or a floor layout node (`is_floor_layout()`,
+  `get_floor_layout_connectors()`): a floor's edge connectors are targets of
+  `level_connect_pieces`, connected placements, the connector snap and the
+  Brush tool's connector join (hovering the floor's slab targets its layout
+  node), `level_get_connectors` lists them, and the connector indicators
+  draw them (cached per floor, read again when its curve's revision or its
+  slab child changes, and on a write of its layout value). The Brush tool
+  asks the same cache whether the hovered slab's parent is a floor
+  (`Kit_connector_indicators::is_floor_layout()`), so a hover parses no
+  layout value in the steady state, and a joined preview stays on the floor
+  at its edge's new frame when the floor's outline or values change with the
+  pointer still (`refresh_kit_join()` on the curve and layout messages).
+- One connection per connector, counting both ends
+  (`Level_kits::check_one_connection_per_connector()`,
+  `find_connection_end()`): an explicit join or a connected placement onto a
+  target connector that is connected to anything but this same pair - another
+  piece, or another connector of the joining piece - is refused, naming the
+  piece holding it; so is a join of a connector of the piece that a record
+  of another piece names, other than this same pair; so are two placements
+  of one `place()` call (one `level_place_pieces` call) that connect with
+  `attach` to the same target connector, naming both indices, and nothing is
+  placed; a snapped release records nothing there. A join on the piece's own
+  connector replaces the piece's record of that connector and keeps the
+  others; a join of a pair the target records moves the record to the piece,
+  so the connection is kept once. A record whose target is not in the scene
+  holds its connector no longer: the next connection made there (a join,
+  Auto-connect) replaces it.
+- Where a connection is recorded (K6.1): on the piece that was connected (the
+  joined piece, the snapped piece, the changed piece of Auto-connect), but a
+  `wall-floor` connection always on its wall: a floor snapped or
+  auto-connected onto a wall writes the record on the wall with the ends
+  swapped (`is_floor_end_of_wall_floor_join()`,
+  `make_reversed_attachment()`; the twist and the gap read the same from
+  both ends). So the floor fits and the wall's return to its edge behave the
+  same whichever piece was moved to make the join, and the wall takes the
+  edge's values. A raw record written with the floor as the owner of a
+  `wall-floor` join is followed in the stored direction (the floor follows
+  the wall); the editor writes such a join on the wall.
+- A record list that does not read (a raw write: two entries of one
+  connector, a malformed entry) gives the node no connection; its write and
+  the load of a scene holding it log one error of the `editor.scene` log
+  naming the node.
+- A move that takes a piece off one of its joins removes that connection only
+  (`make_connection_removal_operation()`). A join no end follows - two `wall`
+  or two `floor` connectors, or a type the flow mask switched off - is judged
+  the same whichever of its ends the change moved and whichever end records
+  it: the change that takes its connectors apart removes it (C3.9, C3.14).
+- Joined: one rule per connection kind (`Level_kits::is_connection_joined()`,
+  used by the following, the apart report and `level_get_connections`): a
+  join of two `wall` or two `floor` connectors is joined while the two
+  connectors share a place (within 1 mm; their directions may differ, a room
+  corner), any other while the piece's pose is the join's, twist and gap
+  included.
+- Connected groups (C6.2, `Level_kits::get_connected_groups()`, MCP
+  `level_get_connected_groups`): the components of the graph of the records
+  with both ends in the scene, dormant ones included, in scene order; with a
+  node, the group holding it.
+- The Properties window's "Kit Piece" group, its "Kit Layout" group of a
+  floor layout, and the Level Kit window's Selection section list the node's
+  connections, its own records and the records naming it, one "Connection
+  <connector>" row each with Remove: the other end, its connector, the twist
+  and gap, and "not followed" with the reason for a dormant entry
+  (`Kit_connection_rows`, `level/kit_parameter_rows.hpp`;
+  `get_attachment_statuses()`, one `Kit_attachment_status` per entry); the
+  Properties groups end with a Detach row. They are read again on an
+  attachment write, a removed or inserted node, a renamed piece, a selection
+  change and a floor's layout write.
+- Status: `Level_kits::get_attachment_statuses()` gives every entry of a
+  piece's record its state (`active` or `dormant` with the reason,
+  "Attachments"); `level_get_pieces` reports them as `attachments` and the
+  first as `attachment`.
+- Replace keeps a connection whose connector the new shape has with a type
+  that meets the other end's and drops the others ("Replace").
+- Save and load: the entries ride the node's `ERHE_node` properties and name
+  their ends by glTF uid, so every connection, its status and the joined
+  frames come back after a save and a load.
+- Detach (`Level_kits::detach_pieces()`, MCP `level_detach_pieces`; the
+  Properties window's Detach row, the Level Kit window's Detach Selected,
+  the Scene hierarchy context menu's Detach Connections for the clicked node
+  or the selection, and `level_detach_piece` for one piece) removes
+  every connection with an end in the pieces, the records other pieces keep
+  naming them included, as one undo entry, with no other change.
+- `level_get_connections` lists a node's connections, its own records and
+  the records naming it, each with its other end and whether it is joined;
+  `level_remove_connection` removes the one at a connector, whichever end
+  records it.
+
+### Property flow
+
+When a connection is made, and when a connected piece changes, values flow
+over the connections (`Level_kits::build_connection_flow()`,
+`doc/plans/level_kit_connections.md` C3, C4):
+
+- It runs in the operation that ends every kit change
+  (`Kit_attachment_follow_operation`), after the floor fits and the wall
+  fits, so it is part of the change's undo entry and the following then
+  joins the pieces at their new connectors.
+- Who takes values: the piece of a new connection (an explicit join with an
+  attachment, a connected placement, a snapped release), and the neighbours
+  of the pieces the change edited (a parameter edit, a material edit, a
+  replace, a floor outline edit), on through the connected pieces in rounds
+  (at most the Connection Step Limit setting, 64 by default). A piece the
+  author edited keeps its values, also in the flow after Auto-connect; a
+  floor takes none; a child of a locked kit layout node takes none.
+- What it takes: for each standard property its shape maps, the value of the
+  highest priority among the supplies of all its connections ("Standard
+  properties and supply"); on equal priority the neighbour that changed in
+  this change wins, then a new connection, then the piece's connector earlier
+  in its shape's order (`choose_supply()`, `level/kit_connection_flow.hpp`,
+  scene free and unit tested). A length is taken as given (L23), clamped to the
+  parameter's declared range only where the shape refuses it (a combination
+  check), and its parameter stops deriving from the seed; a material is resolved by name (a
+  scene material, else a palette material).
+- So a wall placed on a floor's edge takes the edge's length minus the
+  floor's wall thickness, the floor's wall thickness, room height and wall
+  material; a wall joined to a wall's end takes its thickness, height and
+  material; an edit of a wall's thickness spreads along the walls joined end
+  to end.
+- Older scenes whose walls are attached end to end change on edit too: a
+  parameter edit, a replace or a snapped drag of one such wall now gives its
+  joined walls (or itself, for the snapped wall) the thickness, height and
+  wall material over the joins, in the same undo entry.
+- A snapped release takes part only where it records its connection.
+- Floor fit (C3.15, K5.3, `Level_kits::build_floor_fits()`, run first in
+  the same operation): a wall the change moved (the wall or a node above it,
+  `Level_kits::is_moved()`, the rule of the wall fits and of the return to
+  the edge too) that stands on a floor's edge, the floor not moved with it,
+  gives that edge its base line in plan, half a wall thickness toward the
+  floor's outside (the side the outline's winding gives, whichever way the
+  wall faces). All the changed edges of one floor are solved together: a
+  corner between two changed edges goes to their lines' crossing, a corner
+  between a changed and an unchanged edge slides along the unchanged edge's
+  line (straight along the new line's normal where the two are within 15
+  degrees of parallel). Two changed edges within 15 degrees of parallel meet
+  at their lines' crossing when it lies within twice the farther line's
+  distance from the old corner, keep the corner on their line when they are
+  one line, and otherwise refuse the change naming both walls (one corner
+  cannot meet both lines). It is one curve edit of the floor, whose follow-ups
+  regenerate the slab and make the other walls follow and take their new
+  lengths. A turned wall turns its edge's line with it; a wall turned half a
+  turn or joined with a twist slid along its run changes no line. The
+  operation brings the scene's world matrices up to date before the fits (a
+  move writes the moved node's world matrix alone), so the fits, the return
+  to the edge and the detach pass read the poses of nodes below the moved
+  ones (a wall in a moved group) as moved. A fit that would make
+  an invalid outline refuses the whole change (K0.3) on every route that
+  moves the wall (a Transform tool release, `set_node_transform`, a
+  Properties transform row, `set_item_property` of a transform value, a
+  pasted transform, `level_connect_pieces`, snap to surface, a group
+  mirror): the follow operation refuses its first execute, every host above
+  it takes its own write back and is refused with it
+  (`Operation::set_refused()`, `doc/editor/operations.md`), nothing is
+  recorded and the redo history stays. The flow report states the refusal
+  only. The `Level_kits` entry points return it as their error, the MCP
+  tools that record at once (`set_node_transform`, the join, edit and curve
+  tools, `level_snap_to_surface`) reply an error naming it, and a queued
+  change (`set_item_property`, `transform_selection`, the UI) is logged as a
+  warning and read with `level_get_flow_report`; a Transform tool release so
+  refused leaves the pieces where the drag started.
+- The moved wall goes back onto its edge (K5.5, L20): when the change is
+  recorded, a wall the author moved that stands on a floor edge (its
+  `wall-floor` join let through the flow mask) joins that edge again after
+  the floor fitted it, at the edge's midpoint and upright; so a slide along
+  its run, a lift and a tilt, which change no line, put it back where it
+  was. A live drag shows it there at every step ("Flow preview").
+- Wall fit (C3.16, L22, `Level_kits::build_wall_fits()`, run next): a wall
+  joined by a `wall` connector to a moved wall, standing on no floor, keeps
+  its far end where it is; its near end goes onto the moved wall's
+  connector, so it takes the new length and turns about its up axis,
+  upright at its far end's height (a tilt is dropped); a wall whose partners
+  at both ends moved spans the two; a scaled wall is not fitted, nor one whose
+  partners' connectors still sit on its ends (a value edit that moved no
+  end). Its length
+  parameter is the one its `child.length` maps. The following of the same
+  change leaves that join alone and moves the pieces attached to the fitted
+  wall. Joins of generic connectors (an arch's ends) follow
+  rigidly as attachments do.
+
+### Flow report
+
+Every recorded change that runs the flow fills a report (C3.13, design K7.6;
+`Kit_flow_report`, `level/kit_connection_flow.hpp`), cold and allocating,
+through `Level_kits::get_flow_report()`. It is filled only during the first
+execute of a new undo entry (`Operation_stack::is_recording()`), never by a
+preview, an undo or a redo; the first fill of a new entry
+(`get_recording_serial()`) clears the previous report.
+
+- `taken`: per piece and property the value it took, its supplier, the
+  supplier's connector, the priority and the tie rule that decided among
+  equal priorities (`none`, `changed_in_change`, `new_connection`,
+  `connector_order`: the rule that beat the closest equal candidate).
+- `not_taken`: values supplied and not taken, with the supplier, priority and
+  reason: `higher_priority`, `tie_changed`, `tie_new_connection`,
+  `tie_connector_order`, `no_mapping` (the shape maps nothing to the
+  property), `locked_layout_child`, `author_edit` (the author edited the
+  piece in this change), `floor` (a floor takes no values) and
+  `shape_refuses`. One entry per piece, property and supplier: the latest
+  round's.
+- `responses`: `follow` (a rigid re-join, from its target), `floor_fit` (the
+  floor, from the moved wall) and `wall_fit` (the wall, from its moved
+  partner).
+- `new_connections` (explicit joins, snapped releases, Auto-connect),
+  `removed_connections` (moves that took a piece off its join) and
+  `apart_connections` (kept with their connectors apart: a cycle that does
+  not close, a join whose flow is masked off).
+- `refusal`, `limit_reached`, `rounds` (the most rounds of the change's
+  value flows) and `pending` (the pieces still changing at the step limit,
+  the author's edited pieces left out).
+
+The MCP replies of `level_connect_pieces`, `level_place_pieces`,
+`level_set_piece_parameters`, `level_set_piece_material`,
+`level_replace_pieces`, `level_set_layout`, `level_move_segment`,
+`set_curve`, `curve_add_point`, `curve_remove_points` and
+`curve_set_point_kind` carry it as `flow` (null when their entry ran no flow).
+A change recorded later by its tool (`set_node_transform`,
+`transform_selection`, a viewport drag) is read with
+`level_get_flow_report {}` (`flow`, `recording_serial` and `latest`). The
+Level Kit window shows the one-line summary of the last report under Detach
+Selected (`Level_kits::get_flow_summary()`, made at the end of each follow
+operation's first execute and cleared by an undo, a redo, the recording of
+the next entry and a closed scene). One MCP call that records several
+entries replies the report of the last of them that ran a flow.
+
+### Flow preview
+
+A Transform tool drag (pointer or scripted: `drag_selection`,
+`transform_selection`) and a Properties transform row drag of kit pieces or
+floors show the flow their release records, live (`doc/plans/level_kit_connections.md`
+C3.10, design K9; `Level_kits::step_layout_preview()`, `run_flow_preview()`):
+
+- A move of nodes with kit pieces or floors at or below them has a flow
+  preview; a move of other nodes has none.
+- Each step of the move preview runs the follow operation the release
+  appends (`make_attachment_follow_operation()` with the moved nodes and the
+  step's connector snap pair, the floor fits, the wall fits, the value flow,
+  the following, the K5.5 return and Auto-connect) on the step's poses, after
+  the moved layouts' generations, and keeps it applied; the next step undoes
+  it first (the moved nodes keep the poses the drag gave them) and runs again.
+  A moved node the run moved (a K5.5 return) that still stands at the run's
+  output, bit for bit, was not written by the drag since: its drag pose is
+  the run's input; any other moved node's drag pose is its pose. The moved
+  nodes may include a node and its descendant (both selected), so the rule
+  reads poses, not write serials (a transform pass gives a descendant its
+  parent's serial). A
+  Properties row writes one component of a moved node, so the row first takes
+  the run back (`Property_edit_hook::before_write`,
+  `prepare_layout_transform_write()`) and writes over the drag's own pose.
+  So a free wall snapped onto a floor's edge connector shows the edge's
+  length, thickness, height and material; a connected wall dragged shows the
+  floor fitting and the other walls following and taking their lengths; a
+  wall slid along its edge stays on the edge.
+- Unsnapped, or snapped to another pair, the step runs without the pair: the
+  values the snap gave come back (L10).
+- A step whose flow is refused (an outline the floor refuses, K0.3) shows the
+  last valid run again, the moved nodes where the drag has them, and reports
+  the refusal; its release is refused as any refused move is ("Property
+  flow").
+- The release ends the preview (the run undone, the moved nodes at the
+  drag's last poses) and records the move; the follow operation's first
+  execute recomputes from the committed state the same inputs, so the entry
+  equals the last step.
+- No undo entry and no flow report: the preview executes its operations
+  outside the stack, and while a preview runs them or takes them back
+  `get_flow_report()` gives none and the flow's log lines drop to trace.
+  While the Transform tool's own edit's flow preview runs or is taken back
+  (`Level_kits::is_move_flow_previewing()`), the tool keeps its drag start
+  when the run moves a dragged node (`Transform_tool::on_node_touched()`);
+  other touches, the runs of a Properties row drag among them, move the
+  gizmo anchor as any edit does.
+- Snap targets: the pieces the drag's flow moves are no connector snap
+  targets ("Connector snap").
+- A cancel (Escape, `cancel_transform_drag`) ends the preview before the
+  moved nodes go back, so every flowed value, fit and follower is as before
+  the drag and nothing is recorded; a Properties row edit the window gives up
+  ends it the same way. A tool switch leaves a scripted drag and its preview
+  held. A scene closed mid-drag drops the preview without touching the
+  scene; the preview holds no node of it afterwards.
+- Cost: a moving step builds a new follow operation and runs the release's
+  whole flow (gathering the scene's connection records, the fits, the value
+  flow with brush and collision shape swaps, the following and Auto-connect),
+  allocating as a recorded change does: about 5 ms for a wall of a four-wall
+  room in the headless Debug build (the `editor.scene` trace line "flow
+  preview step: N moved nodes, snapped S: T ms"). Only held steps are free of
+  allocations (K9.4): a step whose moved nodes stand where the run shown
+  started (per matrix element within 1e-6 of the element's magnitude, at
+  least 1e-6) with the same snap pair runs nothing, and the moved nodes take
+  the run's poses again. Nothing runs between steps.
+- `level_get_flow_preview {}` reports `active`, the counters `steps`, `runs`,
+  `held_steps` and `refused_steps`, `refusal` (of the last step) and `snap`
+  (the pair of the run shown, by id and name); they stay readable after the
+  drag.
+
+A live parameter drag (`preview_parameters()`) still only joins the attached
+pieces again ("Attachments"); it previews no value flow.
+
+### Auto-connect and the connection settings
+
+- Auto-connect (C5, `Level_kits::build_auto_connections()`, last in the
+  operation that ends every kit change): a free enabled connector of a piece
+  the change moved, edited, placed connected, snapped or flowed into, that
+  sits within 0.1 mm of a free enabled connector of another kit piece or
+  floor layout sharing a typed connector type with it (`wall`,
+  `wall-floor`; generic connectors never auto-connect, so touching tiles do
+  not chain into rigid groups), is connected, the record on the changed
+  piece (a `wall-floor` connection on its wall, "Connections"). The two connectors must face each other (outward axes opposed),
+  except two `wall` connectors, which meet at a room corner at an angle but
+  not pointing the same way (a duplicate in place); up axes are not
+  compared (L7). A piece joined with `attach` false in the change is left
+  alone: the follow operations made while `connect_piece()` builds that join
+  keep the piece (`Kit_attachment_follow_operation`), and nothing is left set
+  for a later change. Auto-connect runs once per change, whether the scene had
+  connections or not; the new connections' pieces then take their values
+  (one more flow). So the walls placed on a floor's edges at the lengths it
+  supplies connect at the corners. Each pass gathers the scene's connector
+  frames and looks up each candidate's connections by scanning the records,
+  a cost that grows with the scene.
+- A join of two `wall` connectors is never followed rigidly: the floor and
+  wall fits move it (a wall fits a partner that moved or changed), and it is
+  removed only when its two connectors come apart (more than 1 mm). A
+  connection of flow-masked types is not followed; a move of either end that
+  takes its connectors apart removes it.
+- One call's overrides (C6.2): `level_connect_pieces` and
+  `level_place_pieces` take `flow_mask` and `auto_connect`, which every flow
+  of the call's entry reads instead of the settings
+  (`Level_kits::set_flow_overrides()`, `get_effective_flow_mask()`,
+  `get_effective_auto_connect()`); the settings stay as they were. The
+  follow operations made during the call carry the overrides and apply them
+  around their first execute, so an entry a held stack defers (a scene save)
+  still flows with them.
+- Settings (`Surface_snap_config` v9, the connection rows of the surface
+  settings, MCP `set_surface_snap_settings`): Auto-connect (on by default),
+  the flow mask (`flow_mask`, one switch per connector type, all on: values
+  and poses flow over a connection only where a type both connectors accept
+  is on; with `wall-floor` off no floor fits, with `wall` off no wall fits)
+  and the Connection Step Limit (the most rounds of a change's flow, 64 by
+  default). `Level_kits::set_connector_auto_connect()` takes a
+  `Connector_auto_connect`.
+
 ### Attachments
 
 An attachment (R5.3, plan step 41) is a join a piece remembers: the piece's
@@ -1988,9 +2489,12 @@ parameter changes of the target (`level/level_kits_attachment.cpp`).
   already records only the attachment, one entry.
 - What does not: a child of a locked kit layout node, on either side - its
   layout owns its pose and regenerates its children. Such a join is made
-  without an attachment and the reply's `not_attached` says why. A join whose
-  target follows the piece, directly or through a chain of attachments, would
-  close a cycle and is refused (`check_attach()`, `Kit_attach_refusal`).
+  without an attachment and the reply's `not_attached` says why
+  (`check_attach()`, `Kit_attach_refusal`). Cycles are allowed (C3.2): a
+  join whose target follows the piece, directly or through a chain, is made;
+  closed in place (four blocks round a square) the cycle moves rigidly, and
+  where the join moves the piece the followers move with it and the new
+  connection is kept apart (C3.7, "Flow report").
 - Following: every change that moves a node or changes a piece's values ends
   its undo entry with a `Kit_attachment_follow_operation`, whose first execute
   calls `build_attachment_follow_ups()` with the change's moved nodes (moved by
@@ -2000,7 +2504,12 @@ parameter changes of the target (`level/level_kits_attachment.cpp`).
   (its own connector moved). They join again (the same pair, twist and gap,
   the piece's own scale kept) in dependency order: a follower waits while a
   pending follower is its target, above its target or above the piece itself.
-  Each piece joins once per change. The moves are `Node_transform_operation`s
+  A cycle in which every pending follower waits for another is ordered by
+  `Kit_follow_order` (`level/kit_connection_flow.hpp`, scene free): it gives
+  up first an entry of a piece joined already in this change, then one of a
+  piece the change edited (the change's origin keeps its pose), and else
+  joins the cycle's first entry; a given-up entry is kept, apart when its
+  connectors no longer meet. The moves are `Node_transform_operation`s
   inside that operation, so the change, the followers and the detaches are
   one undo entry and undo and redo restore all of them. The changes that end
   so: the move hook `append_layout_move_operations()` (a Transform tool drag
@@ -2011,19 +2520,19 @@ parameter changes of the target (`level/level_kits_attachment.cpp`).
   corner turn, which turns at once instead of in 0.25 s in a scene with
   attachments), a group mirror, `snap_to_surface()` of placed pieces,
   `set_parameters()`, a raw or pasted write of `Kit_piece.parameters` or
-  `Kit_piece.shape` (`append_kit_piece_record_follow_ups()`) and
-  `replace_shape()` (a replaced piece's connector of the same name; a name the
-  new shape lacks leaves the attachment dormant). A scene without attachment
+  `Kit_piece.shape` (`append_kit_piece_record_follow_ups()`; a name the new
+  shape lacks leaves the attachment dormant) and `replace_shape()` (a
+  replaced piece's connector of the same name; a connection Replace cannot
+  keep is removed, "Replace"). A scene without attachment
   values adds no operation.
 - The user's own moves: a piece at or below a moved node is never joined
   again, live or at the release, also when its target moved in the same
   change. Moved rigidly with its target (both selected) it stays on its join
   and attached; moved off its join it detaches, unless the release snapped it
   onto a join, which attaches it there.
-- Live drags: a Transform tool drag and a Properties transform row drag
-  gather the scene's attached pieces when the drag's layout preview begins
-  (`begin_layout_move_preview()`) and join the followers again at each step
-  (`step_layout_preview()`). A live parameter drag (`preview_parameters()`)
+- Live drags: a Transform tool drag and a Properties transform row drag run
+  the release's follow operation at each step ("Flow preview"), so the
+  followers join again as the release joins them. A live parameter drag (`preview_parameters()`)
   gathers them at its first step and at each step reads only the dragged
   piece's connectors from the step's values (its switches read once). The end
   of the preview, a cancel, an undo or redo during it and the release give the
@@ -2032,7 +2541,10 @@ parameter changes of the target (`level/level_kits_attachment.cpp`).
 - Detaching: in the same entry, with an `editor.scene` info line, the change
   removes the attachment of a piece it moved off its join without joining it
   - moved by the user, or riding below a follower (a child of a follower
-  attached elsewhere). A dormant piece moved together with its target keeps
+  attached elsewhere) - unless its target followed this piece in the same
+  change, directly or through a chain of followers (a cycle closing on the
+  moved piece), which keeps it (C3.14); a target that followed another
+  piece does not keep it. A dormant piece moved together with its target keeps
   its record; moved without it, it loses the record. `detach_piece()` (the
   Properties window's Detach, `level_detach_piece`) removes it as one entry.
 - Dormant: the record stays while the target is not in the piece's scene (it
@@ -2040,17 +2552,15 @@ parameter changes of the target (`level/level_kits_attachment.cpp`).
   ambiguous, either connector is missing from the shape or disabled
   (switches, a layout's hiding), or a side is a child of a locked kit layout
   node; a dormant attachment is not followed, and the piece stays where it
-  is. `get_attachment_status()` reports `none`, `active` or `dormant` with the
-  reason.
+  is. `get_attachment_status()` reports one entry `active` or `dormant` with
+  the reason, `get_attachment_statuses()` every entry of a piece.
 - Not followed (the attached piece stays until the target's next followed
   change): a kit layout regeneration. The followers' locked surface-snapped
   kit layouts below them are not laid out again.
-- Viewing: the Properties window's Kit Piece group shows the row "Attached"
-  (target name, connectors, twist and gap, and "not followed" with the reason
-  when dormant) with a Detach button, read again on an attachment write, a
-  removed or inserted node and a renamed piece; `level_get_pieces` reports
-  `uid` and `attachment` (`state`, `reason`, `target_uid`, `target_id`,
-  `target_name`, `connector`, `target_connector`, `twist_steps`, `gap`).
+- Viewing: the connection rows ("Connections"); `level_get_pieces` reports
+  `uid` and per entry (`attachments`) `state`, `reason`, `target_uid`,
+  `target_id`, `target_name`, `connector`, `target_connector`, `twist_steps`
+  and `gap`.
 
 ## Parameter rows
 
@@ -2461,8 +2971,9 @@ zero step the drag-start pose exactly), `apply_drag_surface_step()` runs
 Surface Rest `leading_face` (the default; U60) the lead - the first moved
 target (the active node is moved to the front of the targets), the same
 lead orient turns by - rests as "Surface placement" places a piece, by the
-combined bounds of every mesh of its subtree taken into its own frame (the
-face leading along the direction flush, the five lines and their fit test,
+combined bounds of every mesh of its subtree taken into its own frame
+through the local transforms, since a step writes the moved roots' world
+matrices and not their descendants' (the face leading along the direction flush, the five lines and their fit test,
 every moved mesh excluded): a level group's empty `Xform`, a Curve kit
 layout node or an import root rests by its pieces, and a mesh rests by its
 child meshes too. The whole moved set and the anchor move by the lead's
@@ -2577,7 +3088,15 @@ another kit piece when the two are within the distance (R5.13, D3.13, U27,
   and scale included, and the children a locked layout regenerates during
   the live preview snap by their pre-drag positions.
 - Targets: the enabled connectors of every kit piece of the scene that is not a drag target or below
-  one, children of locked kit layout nodes included. A selected piece locked
+  one, children of locked kit layout nodes included, except what the drag's
+  flow moves (`Level_kits::collect_flow_moved()`, by the follow operation's
+  rules: the floors under the moved walls' wall-floor joins, the walls a
+  wall fit fits, and the followers of all of them and of the moved nodes by
+  record direction, `mark_followers()`; with the flow mask's types) and the
+  nodes below them, since a snap to one would meet a pose it leaves, and the
+  one joined connector of each partner of a piece of the drag that does not
+  move (a dragged record owner leaves its target, C3.14), which would hold
+  the dragged piece where it was. A selected piece locked
   against viewport transforms is neither moved nor a target.
 - Every piece's connectors are taken through its full world matrix, so
   scaled moved pieces, scaled targets and pieces under scaled or sheared
@@ -2848,9 +3367,13 @@ so a connector on a face stays visible. A disabled connector is not drawn
   distances of a moved one and, in its own color, the pair the step snapped
   by; the highlight ends with the drag.
 - Colors and size: Settings > Debug Visualizations Style > Connectors
-  (`connector_color`, `connector_chosen_color`, `connector_moved_color`,
+  (`connector_color`, `connector_wall_color`, `connector_wall_floor_color`,
+  `connector_chosen_color`, `connector_moved_color`,
   `connector_target_color`, `connector_snapped_color`, `connector_size`,
-  `connector_width`).
+  `connector_width`). A shown connector that accepts the `wall` type takes
+  the wall color, one that accepts `wall-floor` the wall-floor color, the
+  others the plain color (C1.8; `get_connector_indicator_color()`); the
+  chosen, moved, target and snapped roles take their own colors.
 - Cost: the enabled local frames are cached per piece and read again only after a
   change of its record or switches (parameters, replace, a switch edit, undo of each, a raw
   write) or of its parent (an entry keeps the parent it was read under, as no
@@ -2922,6 +3445,17 @@ the ones that do not. `Level_kits::check_piece()` reports per piece
 `Brush_placement.brush` the cached brush of its record) and the `problem`;
 `level_get_pieces` returns both.
 
+Connections and floor layouts load as they were saved. A piece's or a floor
+layout node's connections are its `Kit_piece.attachment` record, each end
+named by its glTF uid; its connector switches are the
+`Kit_piece.connectors_enabled` and `Kit_piece.disabled_connectors` values. A
+floor layout is its Curve node: the outline is the curve's points, the
+values the layout's pattern text, and its slab child is saved as its mesh
+with its materials. After the load the connections are followed as before
+the save: an outline edit moves the walls and the shared corners of
+connected floors, a wall move makes the floor fit, and the slab is
+navigation input.
+
 ## Level settings
 
 `Level_settings {module = 1.0, wall_height = 3.0}`
@@ -2984,15 +3518,18 @@ Top to bottom:
   material of that slot's mesh primitive; a choice queues
   `Level_kits::set_slot_material()` with the palette material, one undo entry
   at the edit (`Imgui_windows::queue()`). The combos show only while the
-  piece's mesh has one primitive per slot. Snap Selected To Surface and
+  piece's mesh has one primitive per slot. Below them, one row per
+  connection of the piece ("Connections"), as the Properties window lists
+  them, each with Remove. Snap Selected To Surface and
   Orient Selected To Surface run `Level_kits::snap_to_surface()` - the code
   path of `level_snap_to_surface` - over the selected meshes of the scene, one
   undo entry. Replace With (a combo of every shape, shown as
   `<display name> (<id>)`) and Replace Selected: the press queues
   `Level_kits::replace_shape()` ("Replace") for the selected nodes of the
   scene with the Snap To Surface and Orient To Surface settings and shows the
-  result (`make_replace_summary()`: the replaced count, how many snapped, and
-  each skipped node by name with its reason) or the refusal under the
+  result (`make_replace_summary()`: the replaced count, how many snapped, how
+  many connections were dropped, and each skipped node by name with its
+  reason) or the refusal under the
   button, logged as a `Level Kit:` line; the button is disabled, its reason shown, while no kit
   piece of the scene is selected or no shape is chosen. The count of selected
   pieces is taken again on the selection and active item messages, which
@@ -3011,7 +3548,11 @@ Top to bottom:
   read again on the selection, active item and mesh messages, the new piece's
   names when a shape is chosen; a join the press refuses (a sheared local
   transform) shows its message. The chosen target and moved connectors are
-  drawn highlighted ("Connector indicators").
+  drawn highlighted ("Connector indicators"). Detach Selected queues
+  `Level_kits::detach_pieces()` for the selected kit pieces and floor
+  layouts of the scene ("Connections"), one undo entry, and shows the result
+  as a `Level Kit:` line; it is disabled while none is selected (counted
+  again on the selection and active item messages).
 - Layout (R5.12.9, `Kit_layout_initial_editor` in `kit_layout_editor.hpp`):
   the initial values of a kit layout node the author adds to the scene. They
   edit no node: a selected layout node's values are edited in the Properties
@@ -3180,6 +3721,18 @@ surface placement.
   target's most, both read in their pieces' own frames, the first in the
   shape's order on a tie: a wall's `end` takes a new wall's `start`, a top
   takes a `base`, a stairs `top` a stairs `bottom`, `front` a `back`.
+- Values (K9.2): the preview takes the values the target supplies over the
+  join, as the placement's flow gives them (`Level_kits::get_join_supplied_values()`:
+  for a wall on a floor edge the edge's length minus the floor's wall
+  thickness, its wall thickness, room height and wall material; a flow mask
+  without the join's types, a locked layout child as target and Place As
+  Layout take none); the preview mesh shows the brush of those values with
+  the preview materials of the supplied names, and the join pose uses its
+  connector at those values. The values are read again when the pair, the
+  kit values or the target change (a move, an outline or value edit of a
+  floor, a parameter change of a piece, `Mesh_materials_changed_message`
+  of its material assignment). A click places the kit values; the
+  placement's flow then gives the piece the shown values.
 - Pose: the join of `Kit_placement::connect` (`join_connectors()`, no gap):
   the frames face, whatever Connector Snap Orientation says (that setting
   is the Transform tool's: the join defines the whole pose); module snap and
@@ -3201,8 +3754,8 @@ surface placement.
   `set_node_transform`); when a piece's connector switches change
   (`Kit_piece_connectors_changed_message`) or the target is removed, the pair
   is kept while its target connector is still enabled, and the preview
-  places as without it otherwise. A parameter change of the target is taken
-  at the next pointer motion.
+  places as without it otherwise. A parameter change of the target
+  (`Mesh_geometry_changed_message`) reads the join again at once.
 - Indicator: the pair is drawn in the snapped color while the preview is
   joined, the target connector and the preview's own, in every view of the
   scene and whatever the Connectors setting ("Connector indicators").
@@ -3260,7 +3813,9 @@ surface placement.
   `rotation_xyzw`, `surface_found` (false also without a surface option),
   `world_aabb`, `triangle_count`, `materials` (slot name to material name),
   `brush_id` and `mesh_key`;
-  pieces of equal `brush_id` share one mesh.
+  pieces of equal `brush_id` share one mesh. `flow_mask` and `auto_connect`
+  at the top level override the settings for the call ("Auto-connect and the
+  connection settings"), and the reply carries `flow` ("Flow report").
 - `level_group_nodes {scene_name, node_ids, name}` ("Groups"): `group()`;
   `name` defaults to "Group". The reply: the group's `id`, `name`,
   `position`, `parent_id`, `count`, `piece_count` and `nodes`, the group and
@@ -3377,14 +3932,17 @@ surface placement.
   piece's values, `materials` read as `level_place_pieces` reads them, and
   the surface keys as `level_place_pieces` reads its call-wide ones
   (default off). One undo entry, none when nothing is replaced. The reply:
-  `replaced_count`, `snapped_count`, `skipped_count`, `skipped` (per skipped
+  `replaced_count`, `snapped_count`, `dropped_connection_count`,
+  `skipped_count`, `skipped` (per skipped
   node `id`, `name`, `reason` - `kit_layout_node`, `locked_layout_child`,
   `group`, `not_a_kit_piece`, `unreadable_record` or `loaded_mesh` - and
   `message`) and per replaced or unchanged piece `id`, `name`, `old_shape`,
   `shape`, `replaced`, the effective `parameters`, the parameter names
   `carried`, `clamped`, `defaulted` and `given`, `materials`,
   `kept_materials` (the slots that kept the same-named slot's material),
-  `world_aabb`, `collision_shape`, `snapped` and, for a replaced piece of a
+  `world_aabb`, `collision_shape`, `snapped`, `dropped_connections` (per
+  connection Replace removed: `connector`, `other_id`, `other_name`,
+  `other_connector`, `reason`; "Replace") and, for a replaced piece of a
   snapping call, `surface_found` and `snap_distance`. A refusal names the
   piece's index and id.
 - `level_place_pieces` piece key `connect {connector, to_piece_id,
@@ -3403,11 +3961,15 @@ surface placement.
   `hidden_by_layout` and `layout_hide_reason` (`shown`, `hide_all`,
   `direction`).
 - `level_connect_pieces {scene_name, node_id, connector, to_piece_id,
-  to_connector, twist_steps, gap, attach}`: `connect_piece()`, `attach`
-  (default true) recording the attachment ("Attachments"); the reply gives the
+  to_connector, twist_steps, gap, attach, flow_mask, auto_connect}`:
+  `connect_piece()`, `attach` (default true) recording the attachment
+  ("Attachments"), `flow_mask` and `auto_connect` overriding the settings for
+  the call ("Auto-connect and the connection settings"); the reply gives the
   new world `position` and `rotation_xyzw`, `changed`, `world_aabb`, the
-  piece's world `connectors` (each with `enabled`), `attachment` and
-  `not_attached`.
+  piece's world `connectors` (each with `enabled`), `attachment`,
+  `not_attached` and `flow` ("Flow report").
+- `level_get_flow_report {}`: "Flow report".
+- `level_get_flow_preview {}`: "Flow preview".
 - `level_detach_piece {scene_name, node_id}`: `detach_piece()`, one undo
   entry; the reply gives `changed`.
 - `level_set_piece_connectors {scene_name, node_id, connectors_enabled,
@@ -3480,7 +4042,9 @@ surface placement.
   join), `connector_join_suspended` (the suspend key was held at the last
   preview update) and `connector_join`: null, or the join the preview shows
   (`target_piece_id`, `target_connector`, `connector` of the new piece,
-  `twist_steps`, `distance` from the hover point to the target connector);
+  `twist_steps`, `distance` from the hover point to the target connector,
+  `flowed`, and with it the supplied `parameters` and `materials` the
+  preview shows, "Placing in the viewport");
   `level_place_pieces` with that `connect` places the same pose.
 - `get_surface_snap_settings {}` and `set_surface_snap_settings {snap, orient}`:
   the shared pair ("Surface settings").
@@ -3497,7 +4061,9 @@ surface placement.
   `slope_degrees`: the layout their values produce, R3.5); `light_frames` (the
   shape's at the piece's values) and `lights` (its kit light nodes: `id`,
   `name`, `frame`, local `position` and `direction`, and the light's own
-  values, "Lights on pieces").
+  values, "Lights on pieces"); `uid`, `attachments` (one status per
+  connection the piece records, "Connections") and `attachment` (the first
+  of them, null for none).
 
 ## Walkable area reads
 
@@ -3744,12 +4310,11 @@ Kit window and the MCP tools both call; their scene-free parts are in
   pitched, a vertical span keeping the heading, a closed square and a path
   from a turned start pose, the refusals (with the counts and the limit in the messages);
   segments: a closed room of four corners with two items of other x bounds,
-  each element's scale (s, 1, 1) and its scaled bounds ending on its two
-  corners, an open curve one segment fewer, a slope upright (plan length at
+  each element unscaled with its x bounds centred on its chord, an open curve one segment fewer, a slope upright (plan length at
   the first point's height) and tangent (the chord, pitched), a start pose,
   and the refusals (no curve, one point, a zero-length segment naming it, a
-  vertical segment in both orientations, an item without x extent, no
-  item); the `segments` pattern text, the default pattern's canonical text
+  vertical segment in both orientations, no item; an item without x extent
+  is centred); the `segments` pattern text, the default pattern's canonical text
   pinned as written before segments, `resolve_layout_pattern()` of a closed
   triangle (count, chord sum, per item x bounds) and `is_curve_layout_kind()`.
   Replace: a parameter of the same name and type carried and clamped to
@@ -4209,7 +4774,8 @@ Kit window and the MCP tools both call; their scene-free parts are in
   every step with no entry until the release, one entry, its undo and redo
   exact for the follower; a length change of the target followed in one
   entry; a chain a <- b <- c following a move of a in one entry; attaching a
-  to c refused as a cycle with nothing changed; a move of b detaching it in
+  to c made (b and c follow a, the new connection kept and reported apart),
+  undo giving a its pose back; a move of b detaching it in
   the same entry while c follows b, its undo giving the attachment back; a
   deleted target leaving the attachment dormant and the undo of the delete
   making it active (a later move followed); a disabled target connector
@@ -4227,6 +4793,82 @@ Kit window and the MCP tools both call; their scene-free parts are in
   dependency order in one entry, and a rider below the follower detached; the
   saved file imported twice into one scene, the copies' attachments dormant
   as ambiguous and nothing following.
+  Property flow (`--only-property-flow`), in a scene of its own: a wall on a
+  floor's edge taking its values and the placement's report naming them; a
+  wall joined to a wall's end; a thickness edit spreading along a run of
+  three walls and, with the step limit at 1, stopping with the limit and the
+  piece still changing reported; W1 / W2 / F taking the floor's values over
+  the wall's, reported as not taken (`higher_priority`); the overrides of one
+  call (`flow_mask` without `wall-floor`, `auto_connect` false) leaving the
+  settings as they were; a room of four walls: a wall moved outward, turned,
+  slid, lifted and tilted (the floor fits, the wall returns to its edge), a
+  move into an invalid outline refused with nothing recorded, a corner edit
+  and an edge handle (`level_move_segment` and a held `transform_selection`
+  with the walls following live), a connected neighbour floor's shared
+  corner moving with the edge, and wall-floor masked off moving a wall alone
+  and removing its connection; two free walls end to end fitting; a locked
+  layout's child taking nothing; four blocks closing a cycle in place and
+  moving rigidly; undo and redo of each.
+  Flow preview (`--only-flow-preview`, also running the Brush tool's floor
+  join and connector join of the Level Kit window steps), in a scene of its own: a held
+  `drag_selection` snapping a free wall onto a floor's edge connector
+  showing the flowed values with no undo entry and no flow report, its own
+  values back when it unsnaps and the flowed ones when it snaps again; five
+  steps of a held snap running no flow (`held_steps`, `runs` of
+  `level_get_flow_preview`); the release equal to the last step; a room's
+  wall dragged 1 m out showing the floor fit live, a move into an invalid
+  outline keeping the last valid preview with the refusal reported and its
+  release refused, a release at 1 m equal to its last step; a wall slid
+  along its edge staying on it while held; a held edge handle edit moving a
+  connected floor's shared corner live, its release equal; a cancel of a
+  snapped, flowed drag and of a connected wall's drag giving every value,
+  fit and pose back with no entry; a tool switch mid-drag keeping the
+  preview, its release one entry; a block dragged so its free connector
+  reaches where its follower's connector was at the begin snapping nothing
+  and drawing nothing there; a block dragged off the block it is attached
+  to snapping to that block's other connector and joining there; with
+  wall-floor masked off a wall on a floor snapping to another edge of it;
+  the scene closed with nothing leaked, and
+  closed mid-drag with nothing leaked and a drag in a new scene previewing
+  again; a held Properties Rotation.y row drag of a wall on a floor edge
+  putting it on the turned edge's midpoint with the gizmo anchor there, and
+  a selection change giving it up with nothing changed; the Brush tool's
+  joined preview taking a floor edge's length, thickness and height, a new
+  wall thickness of the floor and a target wall's new material with the
+  pointer still.
+  Connection fixes (`--only-connection-fixes`), each in a scene of its own:
+  two corner edits of a room keeping a neighbour floor's floor connection,
+  the shared corners and every wall's connections; two adjacent walls moved
+  out together fitting both edges and their corner in one entry; a
+  wall-floor connection Auto-connect made with the floor changed recorded
+  on the wall, a wall move then fitting the floor and a floor move carrying
+  the wall; an author's height edit kept through the flow after
+  Auto-connect; a wall joined with twist 2 slid along its run changing no
+  edge line; a wall in a moved group fitting its floor; a stale record
+  (target deleted) replaced by Auto-connect, and a raw record list with two
+  entries of one connector logged as an error; second connections of one
+  connector refused on both ends; with `wall` masked off, moving either end
+  of a wall join apart removing it; room corners reporting joined and
+  `level_get_connected_groups`; a floor's Properties connection rows, Remove
+  and Detach; an attach-none join that did not move leaving no Auto-connect
+  exclusion; a floor snapped under a free wall giving the wall the edge's
+  values, undo and redo; a wall in a moved group making the wall joined to
+  its end fit; two near-parallel changed edges meeting at their crossing,
+  and refused naming both walls when their lines move apart; a floor's
+  connection row gone at a wall's delete and back at its undo.
+  Connection persistence (`--only-connection-persistence`), in a scene of
+  its own: a room of a 6 x 4 m polygon floor with values off their defaults
+  and a floor material, four walls on its edges joined at the corners, a
+  second floor sharing its +x edge and one wall connector switched off,
+  saved, closed and loaded: both floors' outlines, values, slab child,
+  bounds and materials, every connection record on both ends, the connector
+  types and switches, the walls' flowed values and materials as they were;
+  then in the loaded room a corner edit lengthening the side walls and
+  moving the shared corners of the second floor, a wall moved out making the
+  floor fit, Detach freeing a wall that then moves alone, undo and redo of
+  each; its navigation mesh walkable and reachable on the floor's top inside
+  the walls, the reachable area the inside less the agent radius, and the
+  second floor beyond the wall an unreachable island.
   Connector switches, in a scene of their own: a new piece with every
   connector enabled; one connector switched off in one entry, again no entry,
   undo and redo exact; a join naming it as target or moved connector and a
@@ -4835,3 +5477,5 @@ Kit window and the MCP tools both call; their scene-free parts are in
 - [Level tools: requirements](../plans/level_tools.md)
 - [Level tools: design](../plans/level_tools_design.md)
 - [Level tools: implementation steps](../plans/level_tools_implementation.md)
+- [Level kit connections: implementation steps](../plans/level_kit_connections_implementation.md)
+- [Kit layout composition: plan](../plans/kit_layout_composition.md)

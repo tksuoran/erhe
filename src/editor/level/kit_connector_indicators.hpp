@@ -63,9 +63,12 @@ public:
     // The cached enabled local frames of a kit piece (U33, U39); parsed again on the first read after a change of its
     // record, switches or parent.
     [[nodiscard]] auto get_local_connectors(const erhe::scene::Node& node) -> const std::vector<Kit_connector>&;
+    // Whether the node is a floor layout (K6), from the same cache entry: its layout value is parsed on a cache miss only.
+    [[nodiscard]] auto is_floor_layout(const erhe::scene::Node& node) -> bool;
 
     // The record or connector switches of the piece may have changed: its enabled local frames are read again when next drawn.
     void forget_piece(const erhe::scene::Node& node);
+    void forget_node (std::uint64_t node_id);
     // The layout's connector switches, lock, children or curve may have changed (U39): its children are read again.
     void forget_children_of(std::uint64_t layout_id);
     void forget_all  ();
@@ -73,6 +76,8 @@ public:
     [[nodiscard]] auto get_cached_piece_count() const -> std::size_t;
 
 private:
+    class Cached_piece;
+    [[nodiscard]] auto get_cached_piece(const erhe::scene::Node& node) -> const Cached_piece&;
     void add_piece(const erhe::scene::Node& node, std::vector<Kit_connector_indicator>& out_indicators);
     void collect_pieces(
         const Scene_root&                     scene_root,
@@ -97,6 +102,10 @@ private:
         const erhe::Item_base*     item{nullptr}; // compared with removal sets only, never dereferenced
         std::uint64_t              parent_id{0};  // when cached
         std::vector<Kit_connector> connectors;
+        // A floor layout (a Curve with a kit layout): read again when its curve's revision or its slab child changes.
+        bool                       floor        {false};
+        std::uint64_t              revision     {0};
+        std::uint64_t              first_child_id{0};
     };
     std::unordered_map<std::uint64_t, Cached_piece>              m_local_connectors; // by node id
     std::vector<Kit_connector>                                   m_world_connectors;
@@ -116,7 +125,7 @@ private:
 };
 
 // The style color of an indicator of the role.
-[[nodiscard]] auto get_connector_indicator_color(const Debug_visualizations_style& style, Kit_connector_indicator_role role) -> const glm::vec4&;
+[[nodiscard]] auto get_connector_indicator_color(const Debug_visualizations_style& style, Kit_connector_indicator_role role, Kit_connector_types types) -> const glm::vec4&;
 
 // The reach, in snap distances, within which a drag shows the target connectors around its moved ones.
 constexpr float c_connector_indicator_reach = 4.0f;

@@ -22,7 +22,8 @@ enum class Repeat_pattern_kind : unsigned int {
     path,
     scatter,
     segments, // one piece per curve segment, scaled along x to span its chord
-    stairs    // one generated staircase along the curve (doc/editor/level_tools.md "Stairs layouts")
+    stairs,   // one generated staircase along the curve (doc/editor/level_tools.md "Stairs layouts")
+    floor     // one generated slab filling the closed curve (doc/plans/level_kit_connections.md C8)
 };
 
 [[nodiscard]] auto c_str(Repeat_pattern_kind kind) -> const char*;
@@ -64,7 +65,7 @@ class Repeat_pose
 public:
     glm::vec3   position{0.0f};
     glm::quat   rotation{1.0f, 0.0f, 0.0f, 0.0f};
-    glm::vec3   scale   {1.0f}; // segments scale x; the other kinds keep 1
+    glm::vec3   scale   {1.0f}; // every kind keeps 1 (L24: segments set child.length instead of scaling)
     std::size_t item    {0}; // the item a scatter picked for the element; the other kinds leave 0
 };
 
@@ -119,8 +120,12 @@ public:
 // The item of a scatter candidate's pick draw: an exact integer pick over the weights, total_weight their sum (> 0).
 [[nodiscard]] auto pick_scatter_item(std::span<const Repeat_scatter_item> items, uint64_t total_weight, uint32_t draw) -> std::size_t;
 
-// The pose of one segment's piece from point p0 to point p1 (start frame) spanning the item's x bounds; returns the
-// refusal naming the segment, empty when made.
+// The length a segments child spans: the chord's plan length (upright) or the chord's (tangent).
+[[nodiscard]] auto get_segment_span_length(const glm::vec3& p0, const glm::vec3& p1, Repeat_path_orientation orientation) -> float;
+
+// The pose of one segment's piece from point p0 to point p1 (start frame), scale 1, the item's x bounds centred on the
+// chord (L24); returns the refusal naming the segment, empty when made.
+
 [[nodiscard]] auto make_segment_pose(
     std::size_t                 segment,
     const glm::vec3&            p0,

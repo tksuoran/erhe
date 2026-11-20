@@ -3,8 +3,9 @@ from erhe_codegen import *
 # The shared surface pair, the rest rule, the drag search direction, the connector snap distance, its axis mode and its orientation (doc/editor/level_tools.md
 # "Surface settings"): kit placement, the Level Kit window, the viewport toolbar and
 # the Transform tool's Move settings read and write it. v8: connector_snap_orientation off | rotate | full (keep and align read as off and full).
+# v9: the connection settings of doc/plans/level_kit_connections.md: auto-connect, the flow mask and the step limit.
 struct("Surface_snap_config",
-    version=8,
+    version=9,
     short_desc="Surface Snap",
     long_desc="Snap To Surface and Orient To Surface: kit placement snaps placed pieces and the Transform tool's translate drags snap the transform anchor to a surface.",
     developer=False,
@@ -18,5 +19,8 @@ struct("Surface_snap_config",
         field("connector_snap_distance", Float, added_in=2, default="0.0f", short_desc="Connector Snap", long_desc="Meters: a Transform tool drag (translate, rotate or scale) snaps the moved nodes so that a connector of theirs within this distance of another kit piece's connector meets it; 0 disables."),
         field("connector_snap_axis_mode", EnumRef("Connector_snap_axis_mode"), added_in=4, default="Connector_snap_axis_mode::full_offset", short_desc="Connector Snap On Axis", long_desc="An axis or plane drag applies the full connector snap offset, or only its part along the dragged axis or in the dragged plane."),
         field("connector_snap_orientation", EnumRef("Connector_snap_orientation"), added_in=5, default="Connector_snap_orientation::off", short_desc="Connector Snap Orientation", long_desc="Off: a Transform tool drag's connector snap translates only. Full: it also turns the moved nodes about the moved connector so the two connector frames face each other, as a connector join does. Rotate: with Orient To Surface on it turns them only about their up axis, the surface normal; without it as Full."),
+        field("connector_auto_connect", Bool, added_in=9, default="true", short_desc="Auto-connect", long_desc="After a change, a connector of a changed kit piece that sits on a free compatible connector of another piece (within 0.1 mm, facing it) is connected (L1)."),
+        field("connector_flow_off", Int, added_in=9, default="0", short_desc="Connector Flow Off", long_desc="One bit per connector type switched off (generic 1, wall 2, wall-floor 4, floor 8): values and poses flow over a connection only when a type both connectors accept is on (L17, L21); a type added later starts on."),
+        field("connection_step_limit", Int, added_in=9, default="64", short_desc="Connection Step Limit", long_desc="The most rounds a change's property flow runs (L13); Auto-connect runs once per change."),
     ],
 )

@@ -87,6 +87,7 @@ public:
     std::size_t                               replaced_count {0};
     std::size_t                               unchanged_count{0}; // pieces of the shape already
     std::optional<std::size_t>                snapped_count;      // none when the replace did not snap
+    std::size_t                               dropped_connection_count{0}; // K11.2
     std::span<const Kit_replace_skipped_name> skipped;
 };
 

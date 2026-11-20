@@ -282,6 +282,8 @@ enum class Curve_reply_points : unsigned int
 
 auto Mcp_server::action_curve_add_point(const json& args) -> std::string
 {
+    const char* const tool_name = "curve_add_point";
+    const std::size_t serial = get_recording_serial();
     const std::optional<std::string> unknown = find_unknown_key(args, {"scene_name", "curve_id", "curve_name", "at", "point", "position", "distance"});
     if (unknown.has_value()) {
         return make_error_content(fmt::format("curve_add_point: unknown argument '{}'", unknown.value()));
@@ -366,8 +368,12 @@ auto Mcp_server::action_curve_add_point(const json& args) -> std::string
         return make_error_content("curve_add_point: " + error);
     }
     m_context.operation_stack->execute_now(operation);
+    if (operation->is_refused()) {
+        return make_error_content(std::string{tool_name} + ": refused: " + operation->get_error() + "; nothing was changed");
+    }
     json reply = curve_to_json(*curve, *scene_root, Curve_reply_points::local);
     reply["changed"] = true;
+    reply["flow"]    = make_flow_reply(serial);
     reply["index"]   = index;
     if (!location_json.is_null()) {
         reply["location"] = std::move(location_json);
@@ -377,6 +383,8 @@ auto Mcp_server::action_curve_add_point(const json& args) -> std::string
 
 auto Mcp_server::action_curve_remove_points(const json& args) -> std::string
 {
+    const char* const tool_name = "curve_remove_points";
+    const std::size_t serial = get_recording_serial();
     const std::optional<std::string> unknown = find_unknown_key(args, {"scene_name", "curve_id", "curve_name", "indices"});
     if (unknown.has_value()) {
         return make_error_content(fmt::format("curve_remove_points: unknown argument '{}'", unknown.value()));
@@ -406,8 +414,12 @@ auto Mcp_server::action_curve_remove_points(const json& args) -> std::string
         return make_error_content("curve_remove_points: " + error);
     }
     m_context.operation_stack->execute_now(operation);
+    if (operation->is_refused()) {
+        return make_error_content(std::string{tool_name} + ": refused: " + operation->get_error() + "; nothing was changed");
+    }
     json reply = curve_to_json(*curve, *scene_root, Curve_reply_points::local);
     reply["changed"] = true;
+    reply["flow"]    = make_flow_reply(serial);
     return make_json_content(reply).dump();
 }
 
@@ -594,6 +606,7 @@ auto Mcp_server::query_get_curve(const json& args) -> std::string
 
 auto Mcp_server::action_set_curve(const json& args) -> std::string
 {
+    const std::size_t serial = get_recording_serial();
     const std::optional<std::string> unknown = find_unknown_key(args, {"scene_name", "curve_id", "curve_name", "points", "closed"});
     if (unknown.has_value()) {
         return make_error_content(fmt::format("set_curve: unknown argument '{}'", unknown.value()));
@@ -623,17 +636,21 @@ auto Mcp_server::action_set_curve(const json& args) -> std::string
     }
     const bool changed = !paths_equal(path, curve->get_path());
     if (changed) {
-        m_context.operation_stack->execute_now(
-            std::make_shared<Curve_set_operation>(curve, curve->get_path(), path, "set")
-        );
+        const std::shared_ptr<Curve_set_operation> operation = std::make_shared<Curve_set_operation>(curve, curve->get_path(), path, "set");
+        m_context.operation_stack->execute_now(operation);
+        if (operation->is_refused()) {
+            return make_error_content("set_curve: refused: " + operation->get_error() + "; nothing was changed");
+        }
     }
     json reply = curve_to_json(*curve, *scene_root, Curve_reply_points::local);
     reply["changed"] = changed;
+    reply["flow"]    = make_flow_reply(serial);
     return make_json_content(reply).dump();
 }
 
 auto Mcp_server::action_curve_set_point_kind(const json& args) -> std::string
 {
+    const std::size_t serial = get_recording_serial();
     const std::optional<std::string> unknown = find_unknown_key(args, {"scene_name", "curve_id", "curve_name", "index", "kind"});
     if (unknown.has_value()) {
         return make_error_content(fmt::format("curve_set_point_kind: unknown argument '{}'", unknown.value()));
@@ -667,12 +684,16 @@ auto Mcp_server::action_curve_set_point_kind(const json& args) -> std::string
     erhe::math::set_curve_point_kind(after.points, static_cast<std::size_t>(index), after.closure, kind);
     const bool changed = !paths_equal(after, before);
     if (changed) {
-        m_context.operation_stack->execute_now(
-            std::make_shared<Curve_set_operation>(curve, before, after, fmt::format("point {} kind = {}", index, erhe::scene::c_str(kind)))
-        );
+        const std::shared_ptr<Curve_set_operation> operation =
+            std::make_shared<Curve_set_operation>(curve, before, after, fmt::format("point {} kind = {}", index, erhe::scene::c_str(kind)));
+        m_context.operation_stack->execute_now(operation);
+        if (operation->is_refused()) {
+            return make_error_content("curve_set_point_kind: refused: " + operation->get_error() + "; nothing was changed");
+        }
     }
     json reply = curve_to_json(*curve, *scene_root, Curve_reply_points::local);
     reply["changed"] = changed;
+    reply["flow"]    = make_flow_reply(serial);
     return make_json_content(reply).dump();
 }
 

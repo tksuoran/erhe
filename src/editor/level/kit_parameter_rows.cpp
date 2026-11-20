@@ -13,8 +13,11 @@
 #include "erhe_imgui/imgui_item_recorder.hpp"
 #include "erhe_imgui/imgui_windows.hpp"
 #include "erhe_scene/mesh.hpp"
+#include "erhe_scene/scene.hpp"
 
 #include <fmt/format.h>
+
+#include <array>
 #include <imgui/imgui.h>
 
 #include <algorithm>
@@ -239,7 +242,8 @@ void kit_message_line(const std::string& message)
 }
 
 Kit_piece_editor::Kit_piece_editor(App_context& context)
-    : m_context{context}
+    : m_context        {context}
+    , m_connection_rows{context}
 {
 }
 
@@ -272,20 +276,73 @@ void Kit_piece_editor::update(const std::shared_ptr<erhe::scene::Mesh>& piece)
         m_connectors.clear();
     }
     m_connector_switches = read_piece_connector_switches(*piece);
-    const Kit_attachment_status attachment = m_context.level_kits->get_attachment_status(*piece);
-    if (attachment.state == Kit_attachment_state::none) {
-        m_attachment_text.clear();
-    } else {
-        const Kit_attachment& record = attachment.attachment;
-        m_attachment_text = fmt::format(
-            "'{}' {} to {}{}{}", attachment.target ? attachment.target->get_name() : std::string{"(missing)"}, record.connector, record.target_connector,
+    // C6.3: the connections, both ends' records, each with its status (read when the piece is read; a cold path).
+    m_connection_rows.read(piece);
+}
+
+Kit_connection_rows::Kit_connection_rows(App_context& context)
+    : m_context{context}
+{
+}
+
+void Kit_connection_rows::update(const std::shared_ptr<erhe::scene::Node>& node)
+{
+    if (node && (node->get_id() == m_node_id) && !m_dirty) {
+        return;
+    }
+    read(node);
+}
+
+void Kit_connection_rows::mark_dirty()
+{
+    m_dirty = true;
+}
+
+void Kit_connection_rows::read(const std::shared_ptr<erhe::scene::Node>& node)
+{
+    m_node    = node;
+    m_node_id = node ? node->get_id() : 0;
+    m_dirty   = false;
+    m_rows.clear();
+    // Scene items are hosted by their Scene_root.
+    const Scene_root* const scene_root = node ? static_cast<const Scene_root*>(node->get_item_host()) : nullptr;
+    if (scene_root == nullptr) {
+        return;
+    }
+    std::vector<Kit_attachment_status> statuses;
+    const auto add_row = [this](const std::string& connector, const std::string& other_name, const Kit_attachment_status& status, const std::string& other_connector) {
+        const Kit_attachment& record = status.attachment;
+        std::string text = fmt::format(
+            "'{}' {}{}{}", other_name, other_connector,
             (record.twist_steps != 0) ? fmt::format(", twist {}", record.twist_steps) : std::string{},
             (record.gap != 0.0f) ? fmt::format(", gap {:.3f} m", record.gap) : std::string{}
         );
-        if (attachment.state == Kit_attachment_state::dormant) {
-            m_attachment_text += fmt::format(" - not followed: {}", attachment.reason);
+        if (status.state == Kit_attachment_state::dormant) {
+            text += fmt::format(" - not followed: {}", status.reason);
         }
+        m_rows.push_back(Row{connector, std::move(text)});
+    };
+    m_context.level_kits->get_attachment_statuses(*node, statuses);
+    for (const Kit_attachment_status& own : statuses) {
+        add_row(own.attachment.connector, own.target ? own.target->get_name() : std::string{"(missing)"}, own, own.attachment.target_connector);
     }
+    const std::string uid = node->get_gltf_uid();
+    scene_root->get_scene().for_each_node([&](const std::shared_ptr<erhe::scene::Node>& other) -> bool {
+        if ((other.get() != node.get()) && other->has_local_value(Kit_piece::attachment_property.get())) {
+            m_context.level_kits->get_attachment_statuses(*other, statuses);
+            for (const Kit_attachment_status& record : statuses) {
+                if (record.attachment.target == uid) {
+                    add_row(record.attachment.target_connector, other->get_name(), record, record.attachment.connector);
+                }
+            }
+        }
+        return true;
+    });
+}
+
+auto Kit_connection_rows::get_rows() const -> const std::vector<Row>&
+{
+    return m_rows;
 }
 
 void Kit_piece_editor::on_edit(const Kit_row_edit edit)
@@ -373,24 +430,42 @@ void Kit_piece_editor::set_connector(const char* const connector_name, const Kit
     );
 }
 
-auto Kit_piece_editor::get_attachment_text() const -> const std::string&
+auto Kit_piece_editor::get_connection_rows() -> Kit_connection_rows&
 {
-    return m_attachment_text;
+    return m_connection_rows;
 }
 
-void Kit_piece_editor::detach()
+void Kit_connection_rows::remove_connection(const std::string& connector)
 {
     m_context.imgui_windows->queue(
-        [this, weak_piece = m_piece]() {
-            const std::shared_ptr<erhe::scene::Mesh> mesh = weak_piece.lock();
-            if (!mesh || !m_context.app_scenes->is_host_registered(mesh->get_item_host())) {
+        [&context = m_context, weak_node = m_node, connector]() {
+            const std::shared_ptr<erhe::scene::Node> node = weak_node.lock();
+            if (!node || !context.app_scenes->is_host_registered(node->get_item_host())) {
+                return;
+            }
+            Scene_root& scene_root = *static_cast<Scene_root*>(node->get_item_host());
+            const Kit_remove_connection_result result = context.level_kits->remove_connection(scene_root, node, connector);
+            if (!result.error.empty()) {
+                log_scene->warn("Kit piece: removing the connection of '{}' {} failed: {}", node->get_name(), connector, result.error);
+            }
+        }
+    );
+}
+
+void Kit_connection_rows::detach()
+{
+    m_context.imgui_windows->queue(
+        [&context = m_context, weak_node = m_node]() {
+            const std::shared_ptr<erhe::scene::Node> node = weak_node.lock();
+            if (!node || !context.app_scenes->is_host_registered(node->get_item_host())) {
                 return;
             }
             // Scene items are hosted by their Scene_root.
-            Scene_root& scene_root = *static_cast<Scene_root*>(mesh->get_item_host());
-            const Kit_detach_result result = m_context.level_kits->detach_piece(scene_root, mesh);
+            Scene_root& scene_root = *static_cast<Scene_root*>(node->get_item_host());
+            const std::array<std::shared_ptr<erhe::scene::Node>, 1> nodes{node};
+            const Kit_detach_result result = context.level_kits->detach_pieces(scene_root, nodes);
             if (!result.error.empty()) {
-                log_scene->warn("Kit piece: detach of '{}' failed: {}", mesh->get_name(), result.error);
+                log_scene->warn("Kit piece: detach of '{}' failed: {}", node->get_name(), result.error);
             }
         }
     );

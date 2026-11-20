@@ -2,6 +2,7 @@
 
 #include "level/kit_connector_snap.hpp"
 #include "app_message.hpp"
+#include "level/kit_layout.hpp"
 #include "level/kit_piece.hpp"
 #include "level/level_kits.hpp"
 #include "scene/scene_root.hpp"
@@ -10,6 +11,7 @@
 #include "config/generated/debug_visualizations_style.hpp"
 
 #include "erhe_profile/profile.hpp"
+#include "erhe_scene/curve.hpp"
 #include "erhe_scene/node.hpp"
 #include "erhe_scene/scene.hpp"
 
@@ -36,23 +38,52 @@ Kit_connector_indicators::Kit_connector_indicators(const Level_kits& level_kits)
 {
 }
 
+namespace {
+
+// A Curve carrying a kit layout: a floor layout's frames come from the cache (a path or stairs layout caches none).
+[[nodiscard]] auto is_floor_candidate(const erhe::scene::Node& node) -> bool
+{
+    return (dynamic_cast<const erhe::scene::Curve*>(&node) != nullptr) && carries_kit_layout(node);
+}
+
+} // anonymous namespace
+
 auto Kit_connector_indicators::get_local_connectors(const erhe::scene::Node& node) -> const std::vector<Kit_connector>&
+{
+    return get_cached_piece(node).connectors;
+}
+
+auto Kit_connector_indicators::is_floor_layout(const erhe::scene::Node& node) -> bool
+{
+    return is_floor_candidate(node) && get_cached_piece(node).floor;
+}
+
+auto Kit_connector_indicators::get_cached_piece(const erhe::scene::Node& node) -> const Cached_piece&
 {
     const std::uint64_t id = static_cast<std::uint64_t>(node.get_id());
     const std::shared_ptr<erhe::scene::Node> parent = node.get_parent_node();
     const std::uint64_t parent_id = parent ? static_cast<std::uint64_t>(parent->get_id()) : 0;
     // A reparent sends no message (erhe::Hierarchy::set_parent()), so the entry keeps the parent it was read under:
     // under another parent its layout's switches may hide other connectors (U39).
+    // A floor layout's frames follow its outline (the curve's revision) and its values (a new slab child).
+    const erhe::scene::Curve* const curve = dynamic_cast<const erhe::scene::Curve*>(&node);
+    const std::uint64_t revision = (curve != nullptr) ? curve->get_revision() : 0;
+    const std::vector<std::shared_ptr<erhe::Hierarchy>>& children = node.get_children();
+    const std::uint64_t first_child_id = children.empty() ? 0 : static_cast<std::uint64_t>(children.front()->get_id());
     const std::unordered_map<std::uint64_t, Cached_piece>::const_iterator i = m_local_connectors.find(id);
-    if ((i != m_local_connectors.end()) && (i->second.parent_id == parent_id)) {
-        return i->second.connectors;
+    if ((i != m_local_connectors.end()) && (i->second.parent_id == parent_id) &&
+        (!i->second.floor || ((i->second.revision == revision) && (i->second.first_child_id == first_child_id)))) {
+        return i->second;
     }
     Cached_piece& piece = m_local_connectors[id];
-    piece.item      = &node;
-    piece.parent_id = parent_id;
+    piece.item           = &node;
+    piece.parent_id      = parent_id;
+    piece.floor          = (curve != nullptr) && editor::is_floor_layout(node);
+    piece.revision       = revision;
+    piece.first_child_id = first_child_id;
     // An unreadable record caches no frames, as get_world_connectors() refuses it; a disabled or layout-hidden connector is not drawn (U33, U39).
     static_cast<void>(m_level_kits.get_local_connectors(node, piece.connectors, Kit_connector_set::enabled));
-    return piece.connectors;
+    return piece;
 }
 
 void Kit_connector_indicators::add_piece(const erhe::scene::Node& node, std::vector<Kit_connector_indicator>& out_indicators)
@@ -107,7 +138,7 @@ void Kit_connector_indicators::collect_pieces(
     if (mode == Visualization_mode::all) {
         scene_root.get_scene().for_each_node(
             [this, &out_indicators](const std::shared_ptr<erhe::scene::Node>& node) -> bool {
-                if (node && carries_kit_piece(*node)) {
+                if (node && (carries_kit_piece(*node) || is_floor_candidate(*node))) {
                     add_piece(*node, out_indicators);
                 }
                 return true;
@@ -126,7 +157,7 @@ void Kit_connector_indicators::collect_pieces(
         static_cast<void>(
             node->for_each<erhe::scene::Node>(
                 [this, &out_indicators](erhe::scene::Node& visited) -> bool {
-                    if (carries_kit_piece(visited)) {
+                    if (carries_kit_piece(visited) || is_floor_candidate(visited)) {
                         add_piece(visited, out_indicators);
                     }
                     return true;
@@ -214,6 +245,11 @@ void Kit_connector_indicators::forget_piece(const erhe::scene::Node& node)
     m_local_connectors.erase(static_cast<std::uint64_t>(node.get_id()));
 }
 
+void Kit_connector_indicators::forget_node(const std::uint64_t node_id)
+{
+    m_local_connectors.erase(node_id);
+}
+
 void Kit_connector_indicators::forget_children_of(const std::uint64_t layout_id)
 {
     std::erase_if(
@@ -224,8 +260,17 @@ void Kit_connector_indicators::forget_children_of(const std::uint64_t layout_id)
     );
 }
 
-auto get_connector_indicator_color(const Debug_visualizations_style& style, const Kit_connector_indicator_role role) -> const glm::vec4&
+auto get_connector_indicator_color(const Debug_visualizations_style& style, const Kit_connector_indicator_role role, const Kit_connector_types types) -> const glm::vec4&
 {
+    // C1.8: a shown connector takes its first typed type's color; the roles of a drag or the Connect rows win.
+    if (role == Kit_connector_indicator_role::piece) {
+        if (types.contains(Kit_connector_type::wall)) {
+            return style.connector_wall_color;
+        }
+        if (types.contains(Kit_connector_type::wall_floor)) {
+            return style.connector_wall_floor_color;
+        }
+    }
     switch (role) {
         case Kit_connector_indicator_role::chosen:  return style.connector_chosen_color;
         case Kit_connector_indicator_role::moved:   return style.connector_moved_color;

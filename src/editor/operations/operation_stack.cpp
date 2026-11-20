@@ -119,16 +119,47 @@ void Operation_stack::queue(const std::shared_ptr<Operation>& operation)
     // illegal, so a follow-up queued BY an executing operation keeps the
     // deferred semantics (and lands outside the group).
     if (m_grouping && !m_executing && !is_held()) {
-        m_executing = true;
+        begin_recording();
         operation->execute(m_context);
-        m_executing = false;
-        m_group_collected.push_back(operation);
+        end_recording();
+        if (operation->is_refused()) {
+            log_operations->warn("Operation {} refused, not recorded: {}", operation->describe(), operation->get_error());
+        } else {
+            m_group_collected.push_back(operation);
+        }
         return;
     }
 
     // Legal also while an operation is executing (m_executing); the queued
     // operation runs later in the same update() pass.
     m_queued.push_back(operation);
+}
+
+void Operation_stack::begin_recording()
+{
+    m_executing = true;
+    m_recording = true;
+    ++m_recording_serial;
+    // The Level Kit window's flow summary describes the last change; this entry's flow (if it runs one) makes it again.
+    if (m_context.level_kits != nullptr) {
+        m_context.level_kits->clear_flow_summary();
+    }
+}
+
+void Operation_stack::end_recording()
+{
+    m_executing = false;
+    m_recording = false;
+}
+
+auto Operation_stack::is_recording() const -> bool
+{
+    return m_recording;
+}
+
+auto Operation_stack::get_recording_serial() const -> std::size_t
+{
+    return m_recording_serial;
 }
 
 void Operation_stack::queue_from_thread(const std::shared_ptr<Operation>& operation)
@@ -154,9 +185,13 @@ void Operation_stack::execute_now(const std::shared_ptr<Operation>& operation)
         return;
     }
 
-    m_executing = true;
+    begin_recording();
     operation->execute(m_context);
-    m_executing = false;
+    end_recording();
+    if (operation->is_refused()) {
+        log_operations->warn("Operation {} refused, not recorded: {}", operation->describe(), operation->get_error());
+        return;
+    }
     if (m_grouping) {
         m_group_collected.push_back(operation);
         return;
@@ -247,15 +282,24 @@ void Operation_stack::update()
 
     // Index loop with a per-iteration copy: an executing operation may
     // queue() follow-up operations, growing (and reallocating) m_queued.
+    bool recorded = false;
     for (std::size_t i = 0; i < m_queued.size(); ++i) {
         std::shared_ptr<Operation> operation = m_queued[i];
-        m_executing = true;
+        begin_recording();
         operation->execute(m_context);
-        m_executing = false;
+        end_recording();
+        if (operation->is_refused()) {
+            log_operations->warn("Operation {} refused, not recorded: {}", operation->describe(), operation->get_error());
+            continue;
+        }
         m_executed.push_back(std::move(operation));
+        recorded = true;
     }
     m_queued.clear();
-    m_undone.clear();
+    // A refused change leaves the redo history as it was.
+    if (recorded) {
+        m_undone.clear();
+    }
 }
 
 auto Operation_stack::get_undo_block_reason() const -> const char*
@@ -309,6 +353,7 @@ void Operation_stack::undo()
     if (m_context.level_kits != nullptr) {
         m_context.level_kits->cancel_parameter_preview();
         m_context.level_kits->end_layout_preview();
+        m_context.level_kits->clear_flow_summary();
     }
     auto operation = m_executed.back(); // intentionally not a reference, otherwise pop_back() below will invalidate
     m_executed.pop_back();
@@ -419,6 +464,7 @@ void Operation_stack::redo()
     if (m_context.level_kits != nullptr) {
         m_context.level_kits->cancel_parameter_preview();
         m_context.level_kits->end_layout_preview();
+        m_context.level_kits->clear_flow_summary();
     }
     auto operation = m_undone.back(); // intentionally not a reference, otherwise pop_back() below will invalidate
     m_undone.pop_back();

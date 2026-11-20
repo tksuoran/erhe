@@ -143,6 +143,9 @@ auto level_kit_create_menu(App_context& context, const std::shared_ptr<Scene_roo
                         : (kind == Repeat_pattern_kind::stairs)
                             ? "A staircase generated along a curve (a stairs kit layout): a flight rising along +x at the\n"
                               "Level Kit window's stairs values; edit the curve's points to shape it; one undo step; selected."
+                        : (kind == Repeat_pattern_kind::floor)
+                            ? "A polygon floor (a floor kit layout): a closed curve of four corners four modules apart filled\n"
+                              "with a slab; edit the curve's points to shape it; one undo step; selected."
                             : "A kit layout node of this kind with the Level Kit window's initial values and a basic block\n"
                               "as its item, at the parent's origin; one undo step; selected."
                 );

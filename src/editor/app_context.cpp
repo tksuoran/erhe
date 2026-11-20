@@ -3,6 +3,7 @@
 #include "app_message_bus.hpp"
 #include "app_scenes.hpp"
 #include "assets/asset_manager.hpp"
+#include "editor_log.hpp"
 #include "level/kit_layout.hpp"
 #include "level/kit_piece.hpp"
 #include "level/level_kits.hpp"
@@ -87,6 +88,16 @@ void App_context::on_item_property_changed(erhe::Item_base& item, const erhe::pr
     // Attached row) reads the piece rows again too.
     const erhe::scene::Node* const renamed_node = (&property == &erhe::Item_base::name_property.get()) ? dynamic_cast<const erhe::scene::Node*>(&item) : nullptr;
     const bool renamed_piece = (renamed_node != nullptr) && carries_kit_piece(*renamed_node);
+    // K6.2: a connection record list that does not read (a raw write) is named once, at its write.
+    if (&property == &Kit_piece::attachment_property.get()) {
+        const erhe::scene::Node* const node = dynamic_cast<const erhe::scene::Node*>(&item);
+        const std::optional<std::string> text = (node != nullptr) ? node->read_local_value(Kit_piece::attachment_property) : std::optional<std::string>{};
+        std::vector<Kit_attachment> attachments;
+        const std::string problem = (text.has_value() && !text.value().empty()) ? parse_attachments_text(text.value(), attachments) : std::string{};
+        if (!problem.empty()) {
+            log_scene->error("Kit piece '{}' (id {}): its connections do not read ({}); none is followed", node->get_name(), node->get_id(), problem);
+        }
+    }
     if ((app_message_bus != nullptr) && (connector_switch || renamed_piece || (&property == &Kit_piece::attachment_property.get()))) {
         app_message_bus->kit_piece_connectors_changed.queue_message(Kit_piece_connectors_changed_message{});
     }

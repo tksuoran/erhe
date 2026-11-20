@@ -1,5 +1,6 @@
 #pragma once
 
+#include "level/kit_connection_flow.hpp"
 #include "level/kit_connector.hpp"
 #include "level/kit_connector_indicators.hpp"
 #include "level/kit_layout_indicators.hpp"
@@ -32,6 +33,7 @@
 #include <glm/gtc/quaternion.hpp>
 
 #include <cstddef>
+#include <cstdint>
 #include <functional>
 #include <map>
 #include <memory>
@@ -41,6 +43,7 @@
 #include <string_view>
 #include <vector>
 
+namespace spdlog::level  { enum level_enum : int; }
 namespace erhe           { class Hierarchy; class Item_base; class Item_host; }
 namespace erhe::geometry { class Geometry; }
 namespace erhe::property { class Dependency_property; }
@@ -53,6 +56,7 @@ namespace editor {
 class App_context;
 class App_message_bus;
 class Brush;
+class Kit_connection_end;
 class Operation;
 class Scene_root;
 
@@ -102,8 +106,7 @@ public:
 // Why a join records no attachment (step 41).
 enum class Kit_attach_refusal : unsigned int {
     none = 0,
-    locked_layout, // a child of a locked kit layout node on either side: the join is made without an attachment
-    cycle          // the target's chain of attachments leads back to the piece: the call is refused
+    locked_layout // a child of a locked kit layout node on either side: the join is made without an attachment
 };
 
 class Kit_attach_check
@@ -119,6 +122,8 @@ public:
     bool        changed{false}; // an undo entry was recorded
     std::string error;          // empty on success; with an error nothing changed
 };
+
+using Kit_remove_connection_result = Kit_detach_result;
 
 
 // Which of a piece's connectors a query returns (U33).
@@ -353,6 +358,16 @@ public:
     std::vector<Kit_slot_material>      materials; // per slot of the new shape; an empty entry: the same-named slot's material, else the default
 };
 
+// K11.2 (C6.5): a connection of a replaced piece that Replace removed.
+class Kit_dropped_connection
+{
+public:
+    std::string                        connector;       // of the replaced piece
+    std::shared_ptr<erhe::scene::Node> other;           // the other end; null when it is not in the scene
+    std::string                        other_connector;
+    std::string                        reason;
+};
+
 class Kit_replaced_piece
 {
 public:
@@ -365,6 +380,7 @@ public:
     std::vector<std::shared_ptr<erhe::primitive::Material>> materials;       // per new slot
     Surface_placement                                       surface;         // the snap of a replaced piece when the replace snapped
     bool                                                    snapped{false};  // the snap moved the piece
+    std::vector<Kit_dropped_connection>                     dropped_connections; // the others are kept (K11.2)
 };
 
 // A node replace_shape() left out (U24).
@@ -383,6 +399,7 @@ public:
     std::vector<Kit_replace_skipped> skipped;        // per skipped node, in the order given
     std::size_t                      replaced_count{0};
     std::size_t                      snapped_count {0};
+    std::size_t                      dropped_connection_count{0}; // each dropped connection once
     std::optional<std::size_t>       failed_index;   // the replacement the error names
     std::string                      error;          // empty on success; with an error nothing changed
 };
@@ -486,6 +503,54 @@ enum class Kit_brush_use : unsigned int {
 class Kit_thumbnails;
 
 // The level kit editor part (D2.2): the shape library, the kit brush cache and piece placement.
+// C5.5 (K10.1): the Auto-connect setting's value.
+enum class Connector_auto_connect : unsigned int { off, on };
+
+// C3.8: the most rounds a connection flow runs (the Connection Step Limit setting's default).
+inline constexpr std::size_t c_connection_step_limit = 64;
+
+// The other end of a connection at a connector: the node and its connector.
+class Kit_connection_end_at
+{
+public:
+    std::shared_ptr<erhe::scene::Node> node;
+    std::string                        connector;
+};
+
+// K6: a floor kit layout node (a Curve carrying a floor layout), a connection end like a kit piece.
+[[nodiscard]] auto is_floor_layout(const erhe::scene::Node& node) -> bool;
+// K6.1: a wall-floor connection is recorded on its wall: true when the node is the floor end of such a join.
+[[nodiscard]] auto is_floor_end_of_wall_floor_join(const erhe::scene::Node& node, const Kit_connector& own, const erhe::scene::Node& other, const Kit_connector& other_connector) -> bool;
+// The record of the same connection kept on its other end (the join's twist and gap read the same from both ends).
+[[nodiscard]] auto make_reversed_attachment(const Kit_attachment& attachment) -> Kit_attachment;
+// Its edge connectors in its local frame (get_floor_connectors()); the refusal when its outline or values do not read.
+[[nodiscard]] auto get_floor_layout_connectors(const erhe::scene::Node& node, std::vector<Kit_connector>& out_connectors) -> std::string;
+
+// The snap pair of a flow preview's run, by id and name: the state outlives the drag and holds no node.
+class Kit_flow_preview_pair
+{
+public:
+    std::uint64_t piece_id {0};
+    std::string   piece;
+    std::string   connector;
+    std::uint64_t target_id{0};
+    std::string   target;
+    std::string   target_connector;
+};
+
+// K9.1 (C3.10): the flow preview of the current or last Transform drag (doc/editor/level_tools.md "Flow preview").
+class Kit_flow_preview_state
+{
+public:
+    bool                         active       {false};
+    std::size_t                  steps        {0}; // preview steps of the drag
+    std::size_t                  runs         {0}; // steps that ran the flow again
+    std::size_t                  held_steps   {0}; // steps whose inputs were the shown run's: nothing ran
+    std::size_t                  refused_steps{0}; // steps whose flow was refused: the last valid run kept
+    std::string                  refusal;          // of the last step; empty when it stood
+    std::optional<Kit_flow_preview_pair> snap;     // the snap pair of the run shown
+};
+
 class Level_kits
 {
 public:
@@ -528,6 +593,36 @@ public:
     void set_connector_snap_axis_mode(Connector_snap_axis_mode mode);
     // U44: whether a translate drag's connector snap also turns the moved nodes so the connector frames face each other.
     [[nodiscard]] auto get_connector_snap_orientation() const -> Connector_snap_orientation;
+    // C5.5 (L1): Auto-connect, on by default.
+    [[nodiscard]] auto get_connector_auto_connect() const -> bool;
+    void set_connector_auto_connect(Connector_auto_connect auto_connect);
+    // C3.9 (L17, L21): the connector types values and poses flow over; all by default.
+    [[nodiscard]] auto get_connector_flow_mask() const -> Kit_connector_types;
+    void set_connector_flow_mask(Kit_connector_types mask);
+    // C3.8 (L13): the most rounds of a change's flow and auto-connection; 64 by default.
+    [[nodiscard]] auto get_connection_step_limit() const -> std::size_t;
+    void set_connection_step_limit(std::size_t limit);
+    // C6.2: the overrides every flow reads until cleared (one MCP call); nullopt clears them.
+    void set_flow_overrides(const std::optional<Kit_flow_overrides>& overrides);
+    [[nodiscard]] auto get_flow_overrides() const -> const std::optional<Kit_flow_overrides>&;
+    // The settings with the call's overrides: what the flows read.
+    [[nodiscard]] auto get_effective_flow_mask() const -> Kit_connector_types;
+    [[nodiscard]] auto get_effective_auto_connect() const -> bool;
+    // C3.13: the report the flows of the entry being recorded fill (cold, allocates); null outside the recording of an
+    // entry (a preview, undo, redo). The first fill of a new entry clears it.
+    [[nodiscard]] auto get_flow_report() -> Kit_flow_report*;
+    // The report of the last recorded entry that ran a flow, and Operation_stack::get_recording_serial() of that entry.
+    [[nodiscard]] auto get_last_flow_report() const -> const Kit_flow_report&;
+    [[nodiscard]] auto get_last_flow_report_serial() const -> std::size_t;
+    // The one-line summary of the last report, for the Level Kit window: made at the end of each follow operation's first execute.
+    void update_flow_summary();
+    // An undo, a redo, a new entry or a closed scene makes the summary stale.
+    void clear_flow_summary();
+    [[nodiscard]] auto get_flow_summary() const -> const std::string&;
+    [[nodiscard]] static auto make_flow_piece(const erhe::scene::Node& node) -> Kit_flow_piece;
+    // Executes the entry now; returns the refusal of a refused entry (nothing recorded), empty otherwise.
+    [[nodiscard]] auto execute_entry(const std::shared_ptr<Operation>& operation) -> std::string;
+    void report_new_connection(const Kit_new_connection& connection);
     void set_connector_snap_orientation(Connector_snap_orientation orientation);
 
     // D4.4, U51: the origin at the point (module-rounded), upright, turned by yaw_steps rotation steps about the
@@ -543,6 +638,25 @@ public:
 
     // A material of the palette material's color, outside every content library; null for a name not in the palette.
     [[nodiscard]] auto get_preview_material(std::string_view palette_name) -> std::shared_ptr<erhe::primitive::Material>;
+    // The scene's material of the name; null when its content library has none.
+    [[nodiscard]] static auto find_scene_material(const Scene_root& scene_root, std::string_view name) -> std::shared_ptr<erhe::primitive::Material>;
+    // K9.2: the values and slot material names a new piece joined to the target's connector takes from its supply, as the
+    // placement's flow gives them; returns whether any changed. Allocates.
+    [[nodiscard]] auto get_join_supplied_values(
+        const erhe::scene::Node&  target,
+        std::string_view          target_connector,
+        std::string_view          connector,
+        Kit_parameter_values&     io_values,
+        std::vector<std::string>& io_slot_materials
+    ) -> bool;
+    // K9.1: the pieces a move of the nodes' subtrees moves through its flow (the floors it fits, the walls it fits and the
+    // followers of all of them, by the follow operation's rules), and the joined connectors of the partners that stay. Allocates.
+    void collect_flow_moved(
+        const Scene_root&                                   scene_root,
+        std::span<const std::shared_ptr<erhe::scene::Node>> nodes,
+        std::vector<std::shared_ptr<erhe::scene::Node>>&    out_moved,
+        std::vector<Kit_connection_end>&                    out_joined
+    ) const;
 
     // The default palette material names of the shape's slots, in slot order.
     void get_default_slot_materials(const Kit_shape_definition& shape, std::vector<std::string>& out_names) const;
@@ -622,19 +736,50 @@ public:
     ) -> Kit_connector_switch_result;
 
     // D3.12: moves the piece, its children riding with it, so its connector meets the target's; one undo entry. With
-    // attach the piece also records the attachment (step 41); an attachment that would close a cycle refuses the call.
+    // attach the piece also records the attachment (step 41); a cycle of connections is allowed (C3.2).
     [[nodiscard]] auto connect_piece(Scene_root& scene_root, const std::shared_ptr<erhe::scene::Node>& node, const Kit_connect& connect) -> Kit_connect_result;
 
-    // Step 41 (doc/editor/level_tools.md "Attachments"): the node's attachment, its target and whether it is followed.
-    [[nodiscard]] auto get_attachment_status(const erhe::scene::Node& node) const -> Kit_attachment_status;
+    // K6.0 (doc/editor/level_tools.md "Connections"): one status per connection the node records, in record order. Allocates.
+    void get_attachment_statuses(const erhe::scene::Node& node, std::vector<Kit_attachment_status>& out_statuses) const;
+    // The status of one entry of the node's record: its target and whether it is followed.
+    [[nodiscard]] auto get_attachment_status(const erhe::scene::Node& node, const Kit_attachment& attachment) const -> Kit_attachment_status;
     // Whether the node may record an attachment to the target.
     [[nodiscard]] auto check_attach(const erhe::scene::Node& node, const erhe::scene::Node& target) const -> Kit_attach_check;
     // The record of the join, owned by the node.
     [[nodiscard]] static auto make_connect_attachment(const erhe::scene::Node& node, const Kit_connect& connect) -> Kit_attachment;
     // The write of the node's attachment (none: removed) as an operation; null when the node has it already.
     [[nodiscard]] static auto make_attachment_operation(const std::shared_ptr<erhe::scene::Node>& node, const std::optional<Kit_attachment>& attachment) -> std::shared_ptr<Operation>;
+    // K6.1: the node's connection of the connector removed, the others kept; none when it has no such connection.
+    [[nodiscard]] static auto make_connection_removal_operation(const std::shared_ptr<erhe::scene::Node>& node, std::string_view connector) -> std::shared_ptr<Operation>;
+    // The node's whole list of connections written; none when it is the list there already.
+    [[nodiscard]] static auto make_attachments_operation(const std::shared_ptr<erhe::scene::Node>& node, const std::vector<Kit_attachment>& attachments) -> std::shared_ptr<Operation>;
     // Removes the node's attachment as one undo entry; none when it has none.
     [[nodiscard]] auto detach_piece(Scene_root& scene_root, const std::shared_ptr<erhe::scene::Node>& node) -> Kit_detach_result;
+    // C9: removes every connection with an end in the nodes (kit pieces or floor layouts) as one undo entry.
+    [[nodiscard]] auto detach_pieces(Scene_root& scene_root, std::span<const std::shared_ptr<erhe::scene::Node>> nodes) -> Kit_detach_result;
+    // C6.2: removes the connection at the node's connector, whichever end records it, as one undo entry.
+    [[nodiscard]] auto remove_connection(Scene_root& scene_root, const std::shared_ptr<erhe::scene::Node>& node, const std::string& connector) -> Kit_remove_connection_result;
+    // K6.2: the other end of the connection at the node's connector, from either end's record; null when it is free (a record
+    // of the node whose target is gone leaves it free). Allocates.
+    [[nodiscard]] auto find_connection_at(const Scene_root& scene_root, const erhe::scene::Node& node, std::string_view connector) const -> std::shared_ptr<erhe::scene::Node>;
+    // K6.7, C6.2: the scene's connected groups, the components of the graph of the records with both ends in the scene (dormant
+    // ones included), in scene order of their first node; a node without a connection is in none. Cold, allocates.
+    void get_connected_groups(const Scene_root& scene_root, std::vector<std::vector<std::shared_ptr<erhe::scene::Node>>>& out_groups) const;
+    // K6.7: whether the record's two connectors are joined now, by the one rule of the connection's kind (a wall or floor
+    // join: the connectors share a place; another: the pose is the join's). Allocates.
+    [[nodiscard]] auto is_connection_joined(const erhe::scene::Node& owner, const Kit_attachment& attachment, const erhe::scene::Node& target) const -> bool;
+    // The same with the other end's connector; nullopt when the connector is free. Allocates.
+    [[nodiscard]] auto find_connection_end(const Scene_root& scene_root, const erhe::scene::Node& node, std::string_view connector) const -> std::optional<Kit_connection_end_at>;
+    // K6.2 (C3.1): why joining the node's connector to the target's would give a connector a second connection, empty when it
+    // would not. Each end must be free or held by this same pair, but for a record of the node's own on its connector, which
+    // the join replaces. Allocates.
+    [[nodiscard]] auto check_one_connection_per_connector(
+        const Scene_root&        scene_root,
+        const erhe::scene::Node& node,
+        const std::string&       connector,
+        const erhe::scene::Node& target,
+        const std::string&       target_connector
+    ) const -> std::string;
     // Whether any node of the scene carries an attachment value.
     [[nodiscard]] static auto has_attachments(const Scene_root& scene_root) -> bool;
     // The operation, appended last to a change's entry, whose first execute records the followers' moves, the detaches
@@ -643,7 +788,9 @@ public:
         Scene_root&                                         scene_root,
         std::span<const std::shared_ptr<erhe::scene::Node>> moved_nodes,
         std::span<const std::shared_ptr<erhe::scene::Node>> changed_pieces,
-        const Kit_snap_pair*                                snap = nullptr
+        const Kit_snap_pair*                                snap = nullptr,
+        std::span<const std::shared_ptr<erhe::scene::Node>> requesting = {},
+        std::span<const Kit_new_connection>                 new_connections = {}
     ) -> std::shared_ptr<Operation>;
     // The follow operation of each scene of the nodes, whose moves are earlier operations of the same entry.
     void append_attachment_follow_ups(std::span<const std::shared_ptr<erhe::scene::Node>> moved_nodes, std::vector<std::shared_ptr<Operation>>& out_operations);
@@ -657,6 +804,46 @@ public:
     // joins again, in dependency order, each attached piece whose target is at or below one of them or a follower,
     // applied, one Node_transform_operation each; removes the attachment of a piece the change moved off its join; with
     // a snap pair the moved piece attaches when it now sits on a join of the pair (doc/editor/level_tools.md "Attachments").
+    // C3 value flow (design K7, step 5): the pieces of new connections (requesting) and the neighbours of the edited
+    // pieces take the values their neighbours supply, by priority, propagating in rounds; the operations and the pieces
+    // they change. A floor takes no values; an edited piece keeps its own.
+    void build_connection_flow(
+        Scene_root&                                         scene_root,
+        std::span<const std::shared_ptr<erhe::scene::Node>> edited,
+        std::span<const std::shared_ptr<erhe::scene::Node>> requesting,
+        const Kit_snap_pair*                                snap,
+        std::vector<std::shared_ptr<Operation>>&            out_operations,
+        std::vector<std::shared_ptr<erhe::scene::Node>>&    out_changed
+    );
+    // Whether the node is at or below one of the moved nodes: the one "moved" rule of the floor fits, the wall fits and the
+    // re-join of K5.5 (follow_attachments() keeps it as the pieces the user moved).
+    [[nodiscard]] static auto is_moved(const erhe::scene::Node* node, std::span<const std::shared_ptr<erhe::scene::Node>> moved_nodes) -> bool;
+    // C3.15, K5.3: one outline edit per floor under moved walls standing on its edges, all its changed edges solved together
+    // (not executed); returns the refusal of an outline the floor refuses (K0.3), with no operations.
+    [[nodiscard]] auto build_floor_fits(
+        Scene_root&                                         scene_root,
+        std::span<const std::shared_ptr<erhe::scene::Node>> moved_nodes,
+        std::vector<std::shared_ptr<Operation>>&            out_operations
+    ) -> std::string;
+    // C3.16: the length and pose change of each wall joined end to end to a moved wall (not executed); the following of
+    // the same change leaves the pairs it fits alone (m_fitted_pairs, cleared by clear_fitted_pairs()).
+    void build_wall_fits(
+        Scene_root&                                         scene_root,
+        std::span<const std::shared_ptr<erhe::scene::Node>> moved_nodes,
+        std::vector<std::shared_ptr<Operation>>&            out_operations
+    );
+    // C5: the connections of co-located free compatible connectors of the pieces (not executed); their owners.
+    void build_auto_connections(
+        Scene_root&                                         scene_root,
+        std::span<const std::shared_ptr<erhe::scene::Node>> pieces,
+        std::span<const std::shared_ptr<erhe::scene::Node>> excluded, // pieces of an attach-none join: they declined a record
+        std::vector<std::shared_ptr<Operation>>&            out_operations,
+        std::vector<std::shared_ptr<erhe::scene::Node>>&    out_owners
+    );
+    void clear_fitted_pairs() { m_fitted_pairs.clear(); m_fitted_walls.clear(); }
+    [[nodiscard]] auto get_fitted_walls() const -> const std::vector<std::shared_ptr<erhe::scene::Node>>& { return m_fitted_walls; }
+    // The parameter change of set_parameters() as an operation, not executed; null when the values are the piece's.
+    [[nodiscard]] auto make_parameters_operation(const std::shared_ptr<erhe::scene::Node>& node, const Kit_parameter_values& values, std::string& out_error) -> std::shared_ptr<Operation>;
     void build_attachment_follow_ups(
         Scene_root&                                         scene_root,
         std::span<const std::shared_ptr<erhe::scene::Node>> moved_nodes,
@@ -703,7 +890,8 @@ public:
         std::span<const std::shared_ptr<erhe::scene::Mesh>> meshes,
         const Surface_options&                              options,
         Kit_snap_apply                                      apply,
-        std::vector<Kit_snap_result>&                       out_results
+        std::vector<Kit_snap_result>&                       out_results,
+        std::string*                                        out_refusal = nullptr // a refused entry's reason (K0.3); then 0 is returned
     ) -> std::size_t;
 
     // D3.6: shows the values' mesh on the piece without an operation; the first call of a drag
@@ -846,7 +1034,13 @@ public:
 
     // D3.9: the regeneration of the curve when it is a locked path layout and its path has just changed; appended to the
     // curve edit's operations (Curve_set_operation). A layout the new curve refuses keeps its children (a warning).
-    void append_curve_follow_ups(const erhe::scene::Curve& curve, std::vector<std::shared_ptr<Operation>>& out_operations);
+    // before: the curve's path before the edit (a floor's shared corners move with it in its connected floors).
+    void append_curve_follow_ups(const erhe::scene::Curve& curve, const erhe::math::Curve_path& before, std::vector<std::shared_ptr<Operation>>& out_operations);
+    // The corner edits of the floors connected to the floor by floor connectors: each corner that shared a moved corner's
+    // place moves with it (not executed; each edit's own follow-ups carry it on through the connected floors).
+    void append_shared_corner_moves(Scene_root& scene_root, const erhe::scene::Curve& curve, const erhe::math::Curve_path& before, std::vector<std::shared_ptr<Operation>>& out_operations);
+    // C8.4: the renames of the floor's edge connections an outline edit's renumbering needs (not executed).
+    void append_floor_edge_renames(Scene_root& scene_root, const erhe::scene::Curve& curve, std::vector<std::shared_ptr<Operation>>& out_operations);
 
     // The live layout preview of a drag (doc/editor/level_tools.md "Live layout preview"): begin with the layouts,
     // step at each change of the drag, end before the gesture's commit, which then records one entry.
@@ -862,10 +1056,17 @@ public:
         const erhe::property::Dependency_property&        property
     );
     void step_layout_transform_preview();
+    // Before a row writes one transform component: the flow preview's run is taken back, so the write goes over the drag's
+    // own pose and not over a pose the run gave a moved node (K5.5).
+    void prepare_layout_transform_write();
     void end_layout_transform_preview();
 
-    // Lays every previewed layout out again from its live values, transform and curve; returns the first refusal.
-    auto step_layout_preview() -> std::string;
+    // Lays every previewed layout out again from its live values, transform and curve; returns the first refusal. A move
+    // preview also runs the property flow of the step (K9.1) with the step's connector snap pair.
+    auto step_layout_preview(const Kit_snap_pair* snap = nullptr) -> std::string;
+    [[nodiscard]] auto get_flow_preview_state() const -> const Kit_flow_preview_state&;
+    // A move preview's flow runs or is taken back now: its writes to the moved nodes are transient, not edits of them.
+    [[nodiscard]] auto is_move_flow_previewing() const -> bool { return m_move_flow_previewing; }
 
     // Gives the layout the values without an entry (beginning its preview) and lays it out; refused values keep the last
     // valid step and are not written. Returns the refusal; the result holds the run of shown values.
@@ -982,6 +1183,39 @@ private:
 
     // The refusal of a stairs material name: neither a scene material nor a palette material.
     [[nodiscard]] auto check_stairs_material(const Scene_root& scene_root, const std::string& material_name) const -> std::string;
+    // The same for any slot's palette default (empty name) or a named material; what names the value in the message.
+    [[nodiscard]] auto check_slot_material_name(const Scene_root& scene_root, const char* slot, const std::string& material_name, const char* what) const -> std::string;
+
+    // A generated layout child (the staircase, a floor's slab): its node name, its material slot and its crease angle.
+    class Generated_child
+    {
+    public:
+        const char* name          {""};
+        const char* slot          {""};
+        const char* what          {""};
+        float       crease_degrees{0.0f};
+    };
+    [[nodiscard]] auto make_generated_child_insert(
+        const Generated_child&                           child,
+        Scene_root&                                      scene_root,
+        const std::shared_ptr<erhe::scene::Node>&        layout,
+        const glm::mat4&                                 world_from_layout,
+        const std::shared_ptr<erhe::geometry::Geometry>& geometry,
+        const std::string&                               material_name,
+        const std::string&                               source,
+        std::vector<std::shared_ptr<Operation>>&         out_operations
+    ) -> std::string;
+
+    // C8: the generation of a floor layout: the one generated slab the closed curve and the values make.
+    [[nodiscard]] auto build_floor_generation(
+        Scene_root&                               scene_root,
+        const std::shared_ptr<erhe::scene::Node>& node,
+        const Kit_layout_data&                    data,
+        const glm::mat4&                          world_from_layout,
+        Kit_layout_reuse                          reuse,
+        std::vector<std::shared_ptr<Operation>>&  out_operations,
+        Kit_layout_result&                        result
+    ) -> std::string;
 
     // The regeneration of each locked layout of the list, warned about and skipped where its values refuse.
     void append_layout_regenerations(
@@ -1017,6 +1251,8 @@ private:
         const char*                        target_dormant{nullptr}; // the target's connector missing or disabled
         bool                               affected{false};
         bool                               done    {false};
+        bool                               rigid   {true};  // followed by a rigid join (not a wall join, not masked off)
+        bool                               joined  {false}; // moved onto its join in this change
 
         // Why it is not followed; null when it is.
         [[nodiscard]] auto dormant() const -> const char*
@@ -1036,6 +1272,8 @@ private:
     {
     public:
         std::shared_ptr<erhe::scene::Node> node;
+        std::shared_ptr<erhe::scene::Node> target;
+        std::string                        connector; // the piece's connection that came apart
         const char*                        reason{""};
     };
     // The live following of a drag: the attached pieces gathered at its begin and the followers' poses from before it.
@@ -1049,8 +1287,32 @@ private:
         std::vector<Follow_move>                        moves;
         Kit_connector_switches                          changed_switches; // a parameter drag's piece, read at its begin
     };
+    // K9.2: the shape's mapped properties take the supply (lengths by take_supplied_length(), slot materials by name).
+    [[nodiscard]] static auto apply_join_supply(
+        const Kit_shape_definition& shape,
+        const Kit_supply_list&      supply,
+        Kit_parameter_values&       io_values,
+        std::vector<std::string>&   io_slot_materials
+    ) -> bool;
+    // A join followed by a rigid re-join: not a join of two wall connectors, a type the mask lets through.
+    [[nodiscard]] static auto is_rigid_join(const Attached_piece& piece, Kit_connector_types mask) -> bool;
+    // Marks transitively every rigid follower whose target is at or below a dirty node (none at or below a user node) and
+    // appends it to dirty.
+    static void mark_followers(std::span<Attached_piece> attached, const std::vector<const erhe::scene::Node*>& user, std::vector<const erhe::scene::Node*>& dirty);
+    // C3.16: the wall the entry's join of two wall connectors fits when exactly one end moved: the other end, joined by its
+    // start or end, standing on no floor; null otherwise.
+    [[nodiscard]] static auto get_wall_fit_wall(
+        const Attached_piece&                                 entry,
+        const std::function<bool(const erhe::scene::Node*)>& is_moved,
+        std::span<const Attached_piece>                       attached
+    ) -> const std::shared_ptr<erhe::scene::Node>*;
+    // C3.15: a join onto a floor layout's edge connector.
+    [[nodiscard]] static auto is_floor_edge_join(const erhe::scene::Node& target, std::string_view target_connector) -> bool;
     // The attached pieces of the scene with their connectors resolved from their records (uids looked up once).
     void gather_attachments(const Scene_root& scene_root, std::vector<Attached_piece>& out_attached) const;
+    // K11.2 (C6.5): the record writes (not executed) dropping each connection of a replaced piece (at its new values) whose
+    // connector the new shape lacks or whose types no longer meet the other end's; each drop is listed on its pieces.
+    void append_replace_connection_drops(const Scene_root& scene_root, Kit_replace_result& result, std::vector<std::shared_ptr<Operation>>& out_operations) const;
     // The connector of the piece's values by name, enabled by the switches; the dormant reason otherwise. No allocation at capacity.
     auto resolve_connector_of_values(
         const Kit_parameter_values&   values,
@@ -1072,14 +1334,27 @@ private:
     [[nodiscard]] auto find_snap_attachment(const Kit_snap_pair& snap) const -> std::optional<Kit_attachment>;
     // Gives the preview's followers their poses from before it; forgets them.
     void restore_follow_preview(Follow_preview& preview);
-    void step_move_follow_preview();
     void step_parameter_follow_preview(const std::shared_ptr<erhe::scene::Node>& node, const Kit_parameter_values& values);
-    Follow_preview                        m_move_follow_preview;      // a Transform tool drag, a Properties transform row drag
+    Kit_connector_types m_follow_flow_mask{Kit_connector_types::all()}; // C3.9: read at each following
+    // The piece of the attach-none join connect_piece() is building; each follow operation made meanwhile keeps a copy.
+    std::vector<std::shared_ptr<erhe::scene::Node>> m_auto_connect_excluded;
+    std::vector<std::pair<const erhe::scene::Node*, const erhe::scene::Node*>> m_fitted_pairs; // C3.16: (attached piece, target) entries a wall fit set
+    std::vector<std::shared_ptr<erhe::scene::Node>>                            m_fitted_walls; // C3.16: the walls it fitted (changed pieces of the following)
     Follow_preview                        m_parameter_follow_preview; // a live parameter drag
     std::vector<const erhe::scene::Node*> m_follow_user;              // the change's moved nodes: moved by the user
     std::vector<const erhe::scene::Node*> m_follow_dirty;             // nodes whose connectors move in this change
     std::vector<const erhe::scene::Node*> m_follow_joined;            // the followers joined in this change
     std::vector<Kit_connector>            m_follow_connectors;        // scratch of resolve_connector_of_values()
+    std::vector<Kit_follow_entry>         m_follow_entries;           // scratch of follow_attachments()
+    Kit_follow_order                      m_follow_order;
+    std::optional<Kit_flow_overrides>     m_flow_overrides;
+    bool                                  m_flow_previewing     {false}; // a preview runs a flow: no report, trace logs
+    bool                                  m_move_flow_previewing{false}; // of those, a move preview's run (K9.1)
+    // A flow's log line runs at every preview step: trace while a preview runs it.
+    [[nodiscard]] auto flow_log_level(spdlog::level::level_enum level) const -> spdlog::level::level_enum;
+    std::size_t                           m_flow_report_serial{0};
+    std::string                           m_flow_summary;
+    Kit_flow_report                       m_flow_report;
 
     App_context&                                m_context;
     Kit_shape_library                           m_library;
@@ -1114,7 +1389,37 @@ private:
         Kit_layout_result                                       result;
         std::string                                             refusal;
         bool                                                    built{false};
+        std::optional<erhe::math::Curve_path>                   curve_before; // a floor's path at the begin (shared corners)
     };
+    // K9.1: the property flow of a move preview (a Transform tool drag, a Properties transform row drag). Each step runs
+    // the release's follow operation on the step's poses and keeps it applied until the next step undoes it.
+    class Flow_preview
+    {
+    public:
+        Scene_root*                                     scene_root{nullptr};
+        std::vector<std::shared_ptr<erhe::scene::Node>> moved;
+        std::vector<erhe::scene::Trs_transform>         inputs;     // the moved nodes' poses the applied run started from
+        std::vector<erhe::scene::Trs_transform>         outputs;    // their poses after it
+        std::vector<erhe::scene::Trs_transform>         tool_poses; // per step: the poses the drag gave them
+        std::optional<Kit_snap_pair>                    snap;       // of the applied run
+        std::shared_ptr<Operation>                      run;        // the last valid run; null when it had nothing to do
+        bool                                            applied{false}; // run is executed in the scene
+        bool                                            ran    {false}; // inputs, outputs and snap describe a run
+    };
+    // The drag's poses of the moved nodes into tool_poses: a node the run moved that stands at the run's output keeps the
+    // run's input. No allocation at capacity.
+    void read_flow_preview_tool_poses();
+    [[nodiscard]] auto is_flow_preview_held(const Kit_snap_pair* snap) const -> bool;
+    // Undoes the applied run; the moved nodes take tool_poses.
+    void undo_flow_preview_run();
+    void run_flow_preview(const Kit_snap_pair* snap);
+    // Undoes the applied run, gives the moved nodes the last step's poses and forgets the preview.
+    void end_flow_preview();
+    // Drops the preview without touching the scene (its scene closes).
+    void forget_flow_preview();
+    void set_flow_preview_poses(std::span<const erhe::scene::Trs_transform> poses);
+    Flow_preview                                    m_flow_preview;
+    Kit_flow_preview_state                          m_flow_preview_state;
     // One step of every entry; the values, when given, are the given node's instead of its own.
     auto step_layout_preview_entries(const erhe::scene::Node* values_node, const Kit_layout_data* values) -> std::string;
     void collect_moved_layouts(

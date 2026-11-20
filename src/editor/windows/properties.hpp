@@ -128,6 +128,7 @@ private:
     void texture_properties           (const std::shared_ptr<erhe::graphics::Texture>& texture);
     void kit_piece_properties         (const std::shared_ptr<erhe::scene::Mesh>& piece);
     void kit_layout_properties        (const std::shared_ptr<erhe::scene::Node>& layout);
+    void kit_connection_properties    (Kit_connection_rows& connection_rows);
     void curve_properties             (const std::shared_ptr<erhe::scene::Curve>& curve);
     // One curve edit: a widget edit applies live; its end records one Curve_set_operation from the path at its start.
     void curve_edit(const std::shared_ptr<erhe::scene::Curve>& curve, const erhe::math::Curve_path& after, const char* what);
@@ -191,6 +192,7 @@ private:
     Kit_piece_editor m_kit_piece_editor;
     // The "Kit Layout" group of a single selected kit layout node (doc/editor/level_tools.md "Kit layout rows").
     Kit_layout_editor m_kit_layout_editor;
+    Kit_connection_rows m_floor_connection_rows; // a selected floor layout's connections (C6.3)
 
     // Issue #252: the explicit pinned target (weak_ptr so a deleted item
     // reverts the window to selection mode), and the reused single-element

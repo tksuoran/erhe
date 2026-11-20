@@ -73,13 +73,15 @@ namespace {
     return glm::quat_cast(glm::mat3{normal, up, glm::cross(normal, up)});
 }
 
-[[nodiscard]] auto is_segments_layout(const erhe::scene::Curve& curve) -> bool
+// Segment handles: a segments layout's segments and a floor layout's edges (L25: an edge drag moves its two corners).
+[[nodiscard]] auto has_segment_kind(const erhe::scene::Curve& curve) -> bool
 {
     if (!carries_kit_layout(curve)) {
         return false;
     }
     Kit_layout_data data;
-    return read_kit_layout(curve, data).empty() && (data.pattern.kind == Repeat_pattern_kind::segments);
+    return read_kit_layout(curve, data).empty() &&
+           ((data.pattern.kind == Repeat_pattern_kind::segments) || (data.pattern.kind == Repeat_pattern_kind::floor));
 }
 
 [[nodiscard]] auto part_of(const std::size_t index) -> Curve_point_part
@@ -345,7 +347,7 @@ void Curve_tool::set_target(const std::shared_ptr<erhe::scene::Curve>& curve)
 void Curve_tool::update_segment_handles()
 {
     const std::shared_ptr<erhe::scene::Curve> curve = m_target.lock();
-    m_segment_handles = curve && is_segments_layout(*curve);
+    m_segment_handles = curve && has_segment_kind(*curve);
     if (m_selected_segment.has_value() && (m_selected_segment.value() >= get_segment_count())) {
         m_selected_segment.reset();
     }

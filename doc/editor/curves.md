@@ -86,8 +86,9 @@ A path or segments kit layout is a curve node itself: the Curve prim carries
 the kit layout values and has the pieces as its children
 (`doc/editor/level_tools.md` "Path layouts", R5.12.8, and "Segment layouts",
 R5.12.10). A path layout's pieces are laid out along its own path in its own
-frame; a segments layout puts one piece, scaled along its x axis, on the
-straight chord between each two neighbouring control points (handles do not
+frame; a segments layout puts one piece, of the chord's length
+(`child.length`, never scaled), on the straight chord between each two
+neighbouring control points (handles do not
 bend it). A stairs kit layout is a curve node the same way, with one
 generated child: a staircase that follows the curve in plan and in height,
 handles included (`doc/editor/level_tools.md` "Stairs layouts", R5.12.13).

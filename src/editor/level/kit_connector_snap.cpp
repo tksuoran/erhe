@@ -11,6 +11,7 @@
 
 #include <glm/gtc/quaternion.hpp>
 
+#include <algorithm>
 #include <cmath>
 
 namespace editor {
@@ -56,7 +57,7 @@ void Kit_connector_drag_snap::begin(
         static_cast<void>(
             root->for_each<erhe::scene::Node>(
                 [this, &level_kits, root_index, &root_from_world](erhe::scene::Node& node) -> bool {
-                    if (!carries_kit_piece(node)) {
+                    if (!carries_kit_piece(node) && !is_floor_layout(node)) {
                         return true;
                     }
                     if (!level_kits.get_local_connectors(node, m_local_connectors, Kit_connector_set::all).empty()) {
@@ -86,6 +87,7 @@ void Kit_connector_drag_snap::begin(
                                 .up_in_root       = in_root.up,
                                 .piece            = shared_node,
                                 .piece_id         = static_cast<std::uint64_t>(node.get_id()),
+                                .types            = m_local_connectors[k].types,
                                 .connector_index  = k,
                                 .name             = m_local_connectors[k].name
                             }
@@ -99,16 +101,21 @@ void Kit_connector_drag_snap::begin(
     if (m_moved.empty()) {
         return;
     }
+    // K9.1: what the drag's flow moves (followers, fitted floors and walls) is no target, as the drag's own pieces are not:
+    // a snap to it would meet a pose it leaves; a staying partner's joined connector would hold the dragged piece.
+    level_kits.collect_flow_moved(scene_root, excluded, m_flow_moved, m_joined_ends);
 
     // Every kit piece of the scene outside the moved subtrees is a target, locked layout children included.
     scene_root.get_scene().for_each_node(
         [this, &level_kits, excluded](const std::shared_ptr<erhe::scene::Node>& node) -> bool {
-            if (!node || !carries_kit_piece(*node)) {
+            if (!node || !(carries_kit_piece(*node) || is_floor_layout(*node))) {
                 return true;
             }
-            for (const std::shared_ptr<erhe::scene::Node>& moved : excluded) {
-                if (moved && ((node.get() == moved.get()) || node->is_ancestor(moved.get()))) {
-                    return true;
+            for (const std::span<const std::shared_ptr<erhe::scene::Node>> set : {excluded, std::span<const std::shared_ptr<erhe::scene::Node>>{m_flow_moved}}) {
+                for (const std::shared_ptr<erhe::scene::Node>& moved : set) {
+                    if (moved && ((node.get() == moved.get()) || node->is_ancestor(moved.get()))) {
+                        return true;
+                    }
                 }
             }
             if (!level_kits.get_local_connectors(*node, m_local_connectors, Kit_connector_set::all).empty() || m_local_connectors.empty()) {
@@ -127,12 +134,20 @@ void Kit_connector_drag_snap::begin(
                 if (!switches.is_enabled(m_local_connectors[k].name, k)) {
                     continue;
                 }
+                const char* const name = m_local_connectors[k].name;
+                const bool joined = std::any_of(m_joined_ends.begin(), m_joined_ends.end(), [&node, name](const Kit_connection_end& end) {
+                    return (end.node == node.get()) && (end.connector == name);
+                });
+                if (joined) {
+                    continue;
+                }
                 m_target_points.push_back(
                     Target_point{
                         .local_position  = m_local_connectors[k].position,
                         .local_outward   = m_local_connectors[k].outward,
                         .local_up        = m_local_connectors[k].up,
                         .piece           = piece_index,
+                        .types           = m_local_connectors[k].types,
                         .connector_index = k,
                         .name            = m_local_connectors[k].name
                     }
@@ -151,6 +166,8 @@ void Kit_connector_drag_snap::begin(
             return true;
         }
     );
+    m_flow_moved.clear();
+    m_joined_ends.clear();
     if (m_target_points.empty()) {
         m_moved.clear();
         return;
@@ -230,7 +247,8 @@ auto Kit_connector_drag_snap::step(const Kit_connector_snap_constraint& constrai
             Kit_connector_point{
                 .position        = position.value(),
                 .piece_id        = point.piece_id,
-                .connector_index = point.connector_index
+                .connector_index = point.connector_index,
+                .types           = point.types
             }
         );
         m_moved_world_source.push_back(i);
@@ -250,7 +268,8 @@ auto Kit_connector_drag_snap::step(const Kit_connector_snap_constraint& constrai
                 Kit_connector_point{
                     .position        = glm::vec3{world_from_node * glm::vec4{point.local_position, 1.0f}},
                     .piece_id        = piece.piece_id,
-                    .connector_index = point.connector_index
+                    .connector_index = point.connector_index,
+                    .types           = point.types
                 }
             );
             m_target_world_source.push_back(k);
@@ -284,8 +303,8 @@ void Kit_connector_drag_snap::align_step(const Moved_point& moved, const Target_
     // Both nodes were read by this step's search, which skips expired or hostless ones.
     const std::shared_ptr<erhe::scene::Node> root        = m_roots[moved.root].lock();
     const std::shared_ptr<erhe::scene::Node> target_node = m_target_pieces[target.piece].node.lock();
-    const Kit_connector in_root{.name = moved.name, .position = moved.position_in_root, .outward = moved.outward_in_root, .up = moved.up_in_root};
-    const Kit_connector local  {.name = target.name, .position = target.local_position, .outward = target.local_outward, .up = target.local_up};
+    const Kit_connector in_root{.name = moved.name, .position = moved.position_in_root, .outward = moved.outward_in_root, .up = moved.up_in_root, .types = moved.types};
+    const Kit_connector local  {.name = target.name, .position = target.local_position, .outward = target.local_outward, .up = target.local_up, .types = target.types};
     const std::optional<Kit_connector> moved_world  = transform_connector(in_root, root->world_from_node());
     const std::optional<Kit_connector> target_world = transform_connector(local, target_node->world_from_node());
     if (!moved_world.has_value() || !target_world.has_value()) {
@@ -361,7 +380,7 @@ void Kit_connector_drag_snap::collect_indicators(const float reach_factor, std::
         if (!root || !is_hosted(*root)) {
             continue;
         }
-        const Kit_connector in_root{.name = point.name, .position = point.position_in_root, .outward = point.outward_in_root, .up = point.up_in_root};
+        const Kit_connector in_root{.name = point.name, .position = point.position_in_root, .outward = point.outward_in_root, .up = point.up_in_root, .types = point.types};
         const std::optional<Kit_connector> frame = transform_connector(in_root, root->world_from_node());
         if (!frame.has_value()) {
             continue;
@@ -389,14 +408,15 @@ void Kit_connector_drag_snap::collect_indicators(const float reach_factor, std::
             const glm::vec3     position = glm::vec3{world_from_node * glm::vec4{point.local_position, 1.0f}};
             const bool          snapped  = m_snapped_target.has_value() && (m_snapped_target.value() == k);
             bool                in_reach = snapped;
+            // C1.9: only a moved connector it is compatible with makes a target a candidate.
             for (std::size_t m = moved_begin; !in_reach && (m < moved_end); ++m) {
                 const glm::vec3 d = out_indicators[m].frame.position - position;
-                in_reach = (glm::dot(d, d) <= reach_squared);
+                in_reach = (glm::dot(d, d) <= reach_squared) && out_indicators[m].frame.types.intersects(point.types);
             }
             if (!in_reach) {
                 continue;
             }
-            const Kit_connector local{.name = point.name, .position = point.local_position, .outward = point.local_outward, .up = point.local_up};
+            const Kit_connector local{.name = point.name, .position = point.local_position, .outward = point.local_outward, .up = point.local_up, .types = point.types};
             const std::optional<Kit_connector> frame = transform_connector(local, world_from_node);
             if (!frame.has_value()) {
                 continue;

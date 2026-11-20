@@ -5,6 +5,7 @@
 #include "level/kit_shape_library.hpp"
 
 #include "erhe_imgui/imgui_item_recorder.hpp"
+#include "erhe_scene/node.hpp"
 
 #include <fmt/format.h>
 #include <imgui/imgui.h>
@@ -97,6 +98,37 @@ template <typename Current_name>
     return changed;
 }
 
+// C6.3, C9.2: one row per connection of a kit piece or a floor layout node (its own records and the records naming it): its
+// connector and a text naming the other end, the twist and gap and, when not followed, why; with Remove and Detach.
+class Kit_connection_rows
+{
+public:
+    explicit Kit_connection_rows(App_context& context);
+
+    class Row
+    {
+    public:
+        std::string connector;
+        std::string text;
+    };
+
+    // Reads the node's connections (a cold path): read() at once, update() when another node is given or after mark_dirty().
+    void read(const std::shared_ptr<erhe::scene::Node>& node);
+    void update(const std::shared_ptr<erhe::scene::Node>& node);
+    void mark_dirty();
+    [[nodiscard]] auto get_rows() const -> const std::vector<Row>&;
+    // Queue Level_kits::remove_connection() of one connector and Level_kits::detach_pieces() of the node: one undo entry each.
+    void remove_connection(const std::string& connector);
+    void detach();
+
+private:
+    App_context&                     m_context;
+    std::weak_ptr<erhe::scene::Node> m_node;
+    std::size_t                      m_node_id{0};
+    bool                             m_dirty{true};
+    std::vector<Row>                 m_rows;
+};
+
 // The parameter rows of one placed piece (doc/editor/level_tools.md "Parameter rows"): the values
 // read from its record, and an edit that ends with valid values queued as one set_parameters().
 class Kit_piece_editor
@@ -128,10 +160,8 @@ public:
     void set_piece_connectors(Kit_connector_state state);
     void set_connector       (const char* connector_name, Kit_connector_state state);
 
-    // Step 41: the piece's attachment as one line (target, connectors, state), empty when it has none; read with the record.
-    [[nodiscard]] auto get_attachment_text() const -> const std::string&;
-    // Queues Level_kits::detach_piece(): one undo entry.
-    void detach();
+    // C6.3: the piece's connection rows, read with the record.
+    [[nodiscard]] auto get_connection_rows() -> Kit_connection_rows&;
 
 private:
     App_context&                     m_context;
@@ -145,7 +175,7 @@ private:
     std::string                      m_message;
     std::vector<Kit_connector>       m_connectors;
     Kit_connector_switches           m_connector_switches;
-    std::string                      m_attachment_text;
+    Kit_connection_rows              m_connection_rows;
 };
 
 } // namespace editor

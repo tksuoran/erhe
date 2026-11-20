@@ -293,7 +293,7 @@ TEST(Level_repeat, segments_span_each_chord_of_a_closed_room)
 {
     const std::vector<glm::vec3> corners{{0.0f, 0.0f, 0.0f}, {6.0f, 0.0f, 0.0f}, {6.0f, 0.0f, 4.0f}, {0.0f, 0.0f, 4.0f}};
     const erhe::math::Curve_path_table room = corner_table(corners, erhe::math::Curve_closure::closed);
-    // Two items with other x bounds: element i takes item i modulo 2 and spans by its own bounds.
+    // Two items with other x bounds: element i takes item i modulo 2, unscaled, its x bounds centred on the chord (L24).
     const std::vector<editor::Repeat_segment_item> items{{.min_x = -0.5f, .max_x = 0.5f}, {.min_x = 0.0f, .max_x = 2.0f}};
     std::vector<Repeat_pose> poses;
     ASSERT_EQ(editor::expand_repeat(segments_pattern(room, items, Repeat_path_orientation::upright), Repeat_pose{}, poses), "");
@@ -302,11 +302,9 @@ TEST(Level_repeat, segments_span_each_chord_of_a_closed_room)
     for (std::size_t i = 0; i < 4; ++i) {
         const editor::Repeat_segment_item& item = items[i % 2];
         EXPECT_EQ(poses[i].item, i % 2);
-        EXPECT_NEAR(poses[i].scale.x, lengths[i] / (item.max_x - item.min_x), c_tolerance);
-        EXPECT_EQ(poses[i].scale.y, 1.0f);
-        EXPECT_EQ(poses[i].scale.z, 1.0f);
-        expect_near(pose_point(poses[i], item.min_x), corners[i]);
-        expect_near(pose_point(poses[i], item.max_x), corners[(i + 1) % 4]);
+        EXPECT_EQ(poses[i].scale, glm::vec3{1.0f});
+        expect_near(pose_point(poses[i], 0.5f * (item.min_x + item.max_x)), 0.5f * (corners[i] + corners[(i + 1) % 4]));
+        expect_near(pose_point(poses[i], 0.5f * lengths[i]) - pose_point(poses[i], -0.5f * lengths[i]), corners[(i + 1) % 4] - corners[i]);
         // Upright: the up axis stays the start frame's.
         expect_near(poses[i].rotation * glm::vec3{0.0f, 1.0f, 0.0f}, glm::vec3{0.0f, 1.0f, 0.0f});
     }
@@ -324,20 +322,20 @@ TEST(Level_repeat, segments_on_a_slope_and_from_a_start_pose)
     // Upright spans the plan length at the first point's height.
     ASSERT_EQ(editor::expand_repeat(segments_pattern(slope, items, Repeat_path_orientation::upright), Repeat_pose{}, poses), "");
     ASSERT_EQ(poses.size(), 1u);
-    EXPECT_NEAR(poses[0].scale.x, 3.0f, c_tolerance);
-    expect_near(pose_point(poses[0], 1.0f), glm::vec3{3.0f, 0.0f, 0.0f});
+    EXPECT_NEAR(poses[0].scale.x, 1.0f, c_tolerance);
+    expect_near(pose_point(poses[0], 0.5f), glm::vec3{1.5f, 0.0f, 0.0f});
     expect_rotation(poses[0], glm::quat{1.0f, 0.0f, 0.0f, 0.0f});
     // Tangent spans the chord itself and pitches with it.
     ASSERT_EQ(editor::expand_repeat(segments_pattern(slope, items, Repeat_path_orientation::tangent), Repeat_pose{}, poses), "");
-    EXPECT_NEAR(poses[0].scale.x, 5.0f, c_tolerance);
-    expect_near(pose_point(poses[0], 1.0f), glm::vec3{3.0f, 4.0f, 0.0f});
+    EXPECT_NEAR(poses[0].scale.x, 1.0f, c_tolerance);
+    expect_near(pose_point(poses[0], 0.5f), glm::vec3{1.5f, 2.0f, 0.0f});
     expect_near(poses[0].rotation * glm::vec3{0.0f, 1.0f, 0.0f}, glm::vec3{-0.8f, 0.6f, 0.0f});
     // A start pose moves and turns the run; the scale stays the local one.
     const Repeat_pose start{.position = glm::vec3{1.0f, 2.0f, 3.0f}, .rotation = yaw(90.0f)};
     ASSERT_EQ(editor::expand_repeat(segments_pattern(slope, items, Repeat_path_orientation::upright), start, poses), "");
-    expect_position(poses[0], glm::vec3{1.0f, 2.0f, 3.0f});
+    expect_near(pose_point(poses[0], 0.5f), glm::vec3{1.0f, 2.0f, 3.0f} + (yaw(90.0f) * glm::vec3{1.5f, 0.0f, 0.0f}));
     expect_rotation(poses[0], yaw(90.0f));
-    EXPECT_NEAR(poses[0].scale.x, 3.0f, c_tolerance);
+    EXPECT_NEAR(poses[0].scale.x, 1.0f, c_tolerance);
 }
 
 TEST(Level_repeat, segments_refusals_name_the_segment)
@@ -366,8 +364,9 @@ TEST(Level_repeat, segments_refusals_name_the_segment)
     EXPECT_NE(refusal(segments_pattern(riser, items, Repeat_path_orientation::tangent)).find("vertical"), std::string::npos);
 
     const erhe::math::Curve_path_table line = corner_table({{0.0f, 0.0f, 0.0f}, {2.0f, 0.0f, 0.0f}}, erhe::math::Curve_closure::open);
+    // L24: an item of no x extent is centred, not refused.
     const std::vector<editor::Repeat_segment_item> flat{{.min_x = 0.5f, .max_x = 0.5f}};
-    EXPECT_NE(refusal(segments_pattern(line, flat, Repeat_path_orientation::upright)).find("no extent along x"), std::string::npos);
+    EXPECT_EQ(refusal(segments_pattern(line, flat, Repeat_path_orientation::upright)), "");
     EXPECT_NE(refusal(segments_pattern(line, {}, Repeat_path_orientation::upright)).find("item"), std::string::npos);
 }
 

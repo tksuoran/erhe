@@ -3,8 +3,10 @@
 
 #include "erhe_property/attached_group.hpp"
 #include "erhe_property/property_metadata.hpp"
+#include "erhe_scene/curve.hpp"
 #include "erhe_scene/node.hpp"
 
+#include <algorithm>
 #include <nlohmann/json.hpp>
 
 #include <cmath>
@@ -151,9 +153,11 @@ auto is_connector_switch_property(const erhe::property::Dependency_property& pro
     return (&property == &Kit_piece::connectors_enabled_property.get()) || (&property == &Kit_piece::disabled_connectors_property.get());
 }
 
-auto make_attachment_text(const Kit_attachment& attachment) -> std::string
+namespace {
+
+[[nodiscard]] auto attachment_json(const Kit_attachment& attachment) -> nlohmann::json
 {
-    const nlohmann::json object{
+    return nlohmann::json{
         {"connector",        attachment.connector},
         {"gap",              format_hexfloat(attachment.gap)},
         {"owner",            attachment.owner},
@@ -161,12 +165,10 @@ auto make_attachment_text(const Kit_attachment& attachment) -> std::string
         {"target_connector", attachment.target_connector},
         {"twist_steps",      attachment.twist_steps}
     };
-    return object.dump();
 }
 
-auto parse_attachment_text(const std::string_view text, Kit_attachment& out_attachment) -> std::string
+[[nodiscard]] auto parse_attachment_object(const nlohmann::json& object, Kit_attachment& out_attachment) -> std::string
 {
-    const nlohmann::json object = nlohmann::json::parse(text, nullptr, false);
     if (!object.is_object()) {
         return "the attachment is not a JSON object";
     }
@@ -199,21 +201,91 @@ auto parse_attachment_text(const std::string_view text, Kit_attachment& out_atta
     return {};
 }
 
-auto read_kit_attachment(const erhe::scene::Node& node) -> std::optional<Kit_attachment>
+} // anonymous namespace
+
+auto make_attachment_text(const Kit_attachment& attachment) -> std::string
 {
-    if (!carries_kit_piece(node)) {
+    return attachment_json(attachment).dump();
+}
+
+auto parse_attachment_text(const std::string_view text, Kit_attachment& out_attachment) -> std::string
+{
+    return parse_attachment_object(nlohmann::json::parse(text, nullptr, false), out_attachment);
+}
+
+auto make_attachments_text(std::vector<Kit_attachment> attachments) -> std::string
+{
+    if (attachments.empty()) {
         return {};
+    }
+    if (attachments.size() == 1) {
+        return make_attachment_text(attachments.front()); // the form a piece of one connection always had
+    }
+    std::sort(attachments.begin(), attachments.end(), [](const Kit_attachment& a, const Kit_attachment& b) { return a.connector < b.connector; });
+    nlohmann::json array = nlohmann::json::array();
+    for (const Kit_attachment& attachment : attachments) {
+        array.push_back(attachment_json(attachment));
+    }
+    return array.dump();
+}
+
+auto parse_attachments_text(const std::string_view text, std::vector<Kit_attachment>& out_attachments) -> std::string
+{
+    out_attachments.clear();
+    const nlohmann::json value = nlohmann::json::parse(text, nullptr, false);
+    if (value.is_object()) {
+        Kit_attachment attachment;
+        std::string error = parse_attachment_object(value, attachment);
+        if (error.empty()) {
+            out_attachments.push_back(std::move(attachment));
+        }
+        return error;
+    }
+    if (!value.is_array()) {
+        return "the connections are neither a JSON object nor an array";
+    }
+    for (const nlohmann::json& object : value) {
+        Kit_attachment attachment;
+        std::string error = parse_attachment_object(object, attachment);
+        if (!error.empty()) {
+            out_attachments.clear();
+            return error;
+        }
+        for (const Kit_attachment& other : out_attachments) {
+            if (other.connector == attachment.connector) {
+                out_attachments.clear();
+                return "two connections of one connector '" + attachment.connector + "'";
+            }
+        }
+        out_attachments.push_back(std::move(attachment));
+    }
+    return {};
+}
+
+auto read_kit_attachments(const erhe::scene::Node& node) -> std::vector<Kit_attachment>
+{
+    std::vector<Kit_attachment> attachments;
+    // A kit piece, or a floor layout (a Curve node; floors connect to floors, K6).
+    if (!carries_kit_piece(node) && (dynamic_cast<const erhe::scene::Curve*>(&node) == nullptr)) {
+        return attachments;
     }
     // The local value only: a style or an inherited value never supplies an attachment.
     const std::optional<std::string> text = node.read_local_value(Kit_piece::attachment_property);
-    if (!text.has_value() || text.value().empty()) {
+    if (!text.has_value() || text.value().empty() || !parse_attachments_text(text.value(), attachments).empty()) {
+        attachments.clear();
+        return attachments;
+    }
+    std::erase_if(attachments, [&node](const Kit_attachment& attachment) { return attachment.owner != node.get_gltf_uid(); });
+    return attachments;
+}
+
+auto read_kit_attachment(const erhe::scene::Node& node) -> std::optional<Kit_attachment>
+{
+    const std::vector<Kit_attachment> attachments = read_kit_attachments(node);
+    if (attachments.empty()) {
         return {};
     }
-    Kit_attachment attachment;
-    if (!parse_attachment_text(text.value(), attachment).empty() || (attachment.owner != node.get_gltf_uid())) {
-        return {};
-    }
-    return attachment;
+    return attachments.front();
 }
 
 } // namespace editor

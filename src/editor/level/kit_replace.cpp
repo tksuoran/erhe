@@ -148,6 +148,12 @@ auto make_replace_summary(const Kit_replace_summary& summary) -> std::string
         if (summary.snapped_count.has_value()) {
             text += fmt::format(" Snapped {} of them to the surface.", summary.snapped_count.value());
         }
+        if (summary.dropped_connection_count > 0) {
+            text += fmt::format(
+                " Dropped {} {} the new shape cannot keep.",
+                summary.dropped_connection_count, (summary.dropped_connection_count == 1) ? "connection" : "connections"
+            );
+        }
     } else if (summary.unchanged_count > 0) {
         text = fmt::format("The selected pieces are {} already.", summary.shape_name);
     } else {

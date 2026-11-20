@@ -238,8 +238,12 @@ void Property_set_operation::execute(App_context& context)
             }
         }
     }
-    for (const std::shared_ptr<Operation>& follow_up : m_follow_ups) {
-        follow_up->execute(context);
+    const Operation* const refused = execute_unless_refused(context, m_follow_ups);
+    if (refused != nullptr) {
+        // A follow-up refused the change (a floor fit, K0.3): the write is taken back and the operation refused with it.
+        m_follow_ups.clear();
+        static_cast<void>(apply(context, m_before));
+        set_refused(refused->get_error());
     }
 }
 
@@ -356,8 +360,23 @@ void Property_set_apply_operation::execute(App_context& context)
         m_follow_ups_recorded = true;
         record_follow_ups(context);
     }
-    for (const std::shared_ptr<Operation>& follow_up : m_follow_ups) {
-        follow_up->execute(context);
+    const Operation* const refused = execute_unless_refused(context, m_follow_ups);
+    if (refused != nullptr) {
+        // A follow-up refused the change (a floor fit, K0.3): the targets take their values back.
+        m_follow_ups.clear();
+        restore_before(context);
+        set_refused(refused->get_error());
+    }
+}
+
+void Property_set_apply_operation::restore_before(App_context& context)
+{
+    for (const Target& target : m_targets) {
+        const erhe::property::Dependency_object::Change_batch batch{*target.item};
+        const std::vector<erhe::property::Property_set::Entry>& entries = m_values.entries();
+        for (std::size_t i = 0, end = entries.size(); i < end; ++i) {
+            apply_item_property(context, *target.item, *entries[i].property, to_local_state(target.before[i]));
+        }
     }
 }
 
@@ -396,13 +415,7 @@ void Property_set_apply_operation::undo(App_context& context)
     for (auto i = m_follow_ups.rbegin(), end = m_follow_ups.rend(); i != end; ++i) {
         (*i)->undo(context);
     }
-    for (const Target& target : m_targets) {
-        const erhe::property::Dependency_object::Change_batch batch{*target.item};
-        const std::vector<erhe::property::Property_set::Entry>& entries = m_values.entries();
-        for (std::size_t i = 0, end = entries.size(); i < end; ++i) {
-            apply_item_property(context, *target.item, *entries[i].property, to_local_state(target.before[i]));
-        }
-    }
+    restore_before(context);
 }
 
 void Property_set_apply_operation::collect_item_references(std::unordered_set<const erhe::Item_base*>& out_items) const

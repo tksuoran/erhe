@@ -17,8 +17,9 @@ an empty scene and checks over MCP:
   reuse the catalog row's mesh; the reply echoes the given parameters over the
   defaults;
 - undo removes the batch in one step and redo restores it;
-- a value outside its range fails the call naming the piece index, the
-  parameter and its range, and places nothing; so do an unknown key in a
+- a value a parameter cannot take (a negative width; L23 takes any value of
+  the range's sign) fails the call naming the piece index and the
+  parameter, and places nothing; so do an unknown key in a
   piece, an unknown top-level key, an unknown parameter and an unknown shape;
 - snap "module" rounds positions to the module;
 - after set_scene_settings level.module / wall_height, the catalog defaults and
@@ -235,7 +236,7 @@ layout.
 Usage: python3 scripts/level_tools_verify.py [--editor <binary>] [--image <png path>] [--surface-image <png path>]
        [--walkable-image <png path>] [--window-image <png path>] [--properties-image <png path>] [--queries-image <png path>]
        [--layout-image <png path>] [--group-image <png path>] [--path-image <png path>] [--only-walkable] [--only-transform] [--only-layouts]
-       [--only-path-layouts] [--only-window-layout] [--only-replace] [--only-layout-selection] [--only-scatter] [--only-connectors] [--only-attachments] [--only-connector-snap]
+       [--only-path-layouts] [--only-window-layout] [--only-replace] [--only-layout-selection] [--only-scatter] [--only-connectors] [--only-attachments] [--only-connector-types] [--only-polygon-floor] [--only-connection-records] [--only-property-flow] [--only-flow-preview] [--only-connector-snap]
        [--only-layout-indicators] [--only-region-handles] [--only-layout-handles] [--only-segment-handles] [--only-more-shapes] [--only-former-ids] [--only-layout-connectors] [--only-stairs-layout] [--only-stairs-drag-uploads]
        [--only-piece-lights] [--piece-lights-shape <shape id>] [--only-wrap-with-path] [--only-create-menu]
        [--only-thumbnails] [--thumbnails-image <png path>] [--only-machine-kit]
@@ -574,9 +575,9 @@ def check_rejections(editor, scene):
     count_before = len(pieces(editor, scene))
     good = {"shape": "basic.block", "position": [0.0, 0.0, -14.0]}
 
-    error = call_error(editor, "level_place_pieces", {"scene_name": scene, "pieces": [good, {"shape": "basic.block", "parameters": {"width": 100.0}}]})
-    check("a value outside its range fails naming the piece index, the parameter and its range",
-          (error is not None) and ("pieces[1]" in error) and ("'width'" in error) and ("0.05 - 64" in error), error or "succeeded")
+    error = call_error(editor, "level_place_pieces", {"scene_name": scene, "pieces": [good, {"shape": "basic.block", "parameters": {"width": -1.0}}]})
+    check("a negative width fails naming the piece index and the parameter (L23: any positive width is taken)",
+          (error is not None) and ("pieces[1]" in error) and ("'width'" in error) and ("above zero" in error), error or "succeeded")
     error = call_error(editor, "level_place_pieces", {"scene_name": scene, "pieces": [good, {"shape": "basic.block", "colour": "red"}]})
     check("an unknown key in a piece fails naming the piece and the key", (error is not None) and ("pieces[1]" in error) and ("colour" in error), error or "succeeded")
     error = call_error(editor, "level_place_pieces", {"scene_name": scene, "pieces": [good], "snapping": "module"})
@@ -2292,7 +2293,7 @@ def check_layout_patterns(editor):
         ("the removed polyline kind", {"items": block, "pattern": {"kind": "polyline"}}, "kind"),
         ("the removed pattern points key", {"items": block, "pattern": {"kind": "path", "points": [[1.0, 0.0, 0.0]]}}, "points"),
         ("an unknown argument", {"items": block, "pattern": {"kind": "line"}, "count": 2}, "count"),
-        ("a value out of range", {"items": [{"shape": "basic.block", "parameters": {"width": 100.0}}], "pattern": {"kind": "line"}}, "width"),
+        ("a negative width (L23 takes any positive one)", {"items": [{"shape": "basic.block", "parameters": {"width": -1.0}}], "pattern": {"kind": "line"}}, "width"),
         ("from_piece_id with items", {"from_piece_id": source["id"], "items": block, "pattern": {"kind": "line"}}, "not both"),
         ("from_piece_id with a position", {"from_piece_id": source["id"], "position": [0.0, 0.0, 0.0], "pattern": {"kind": "line"}}, "not both"),
         ("a from_piece_id naming no node", {"from_piece_id": source["id"] + 100000, "pattern": {"kind": "line"}}, "no mesh node"),
@@ -2750,10 +2751,26 @@ def check_path_layouts(editor, directory, image_path):
     editor.close(name)
 
 
+def child_length(child):
+    """A layout child's length parameter (L24: a segments child takes its segment's length through child.length); None without one."""
+    parameters = child.get("parameters")
+    if isinstance(parameters, dict) and isinstance(parameters.get("length"), (int, float)):
+        return float(parameters["length"])
+    text = child.get("parameters_text")
+    if text:
+        value = json.loads(text).get("length")
+        if isinstance(value, str):
+            return float.fromhex(value)
+        if isinstance(value, (int, float)):
+            return float(value)
+    return None
+
+
 def segment_ends(child, min_x, max_x):
-    """The world points of a segments piece's scaled x bounds (its parent keeps scale 1)."""
-    scale_x = child["scale"][0]
-    return [[child["position"][i] + q_rotate(child["rotation_xyzw"], [scale_x * x, 0.0, 0.0])[i] for i in range(3)] for x in (min_x, max_x)]
+    """The world points of a segments piece's x bounds: a wall of its own length centred on its origin (L24: never scaled)."""
+    length = child_length(child)
+    ends = (-0.5 * length, 0.5 * length) if length is not None else (min_x, max_x)
+    return [[child["position"][i] + q_rotate(child["rotation_xyzw"], [x, 0.0, 0.0])[i] for i in range(3)] for x in ends]
 
 
 def segment_snapshot(layout):
@@ -2763,7 +2780,7 @@ def segment_snapshot(layout):
 
 
 def spans_points(layout, points, min_x, max_x, origin=(0.0, 0.0, 0.0), closed=True, tolerance=TOLERANCE):
-    """Child i is scaled along x alone and its x bounds end on points i and i + 1 (world: origin + point)."""
+    """Child i keeps scale 1, its length is the chord and its x bounds end on points i and i + 1 (world: origin + point; L24)."""
     children = layout["children"]
     count = len(points) if closed else len(points) - 1
     if len(children) != count:
@@ -2775,7 +2792,7 @@ def spans_points(layout, points, min_x, max_x, origin=(0.0, 0.0, 0.0), closed=Tr
         ends = segment_ends(child, min_x, max_x)
         if not (close(ends[0], start, tolerance) and close(ends[1], end, tolerance)):
             return False
-        if not (close(child["scale"], [length / (max_x - min_x), 1.0, 1.0], tolerance)):
+        if not (close(child["scale"], [1.0, 1.0, 1.0], tolerance) and (abs((child_length(child) or 0.0) - length) <= tolerance)):
             return False
     return True
 
@@ -2806,7 +2823,7 @@ def check_segment_layouts(editor, directory, image_path):
     check("a segments layout of a 4 m wall on a closed curve of 4 corners is one Curve node with 4 pieces, one per segment",
           (room["type"] == "Curve") and (room["child_count"] == 4) and (room["pattern"]["kind"] == "segments") and (room["run"]["count"] == 4) and
           (abs(room["run"]["space"] - 28.0) < TOLERANCE), f"type {room['type']}, {room['child_count']} pieces, run {room['run']}")
-    check("each piece is scaled (s, 1, 1) with s = chord / 4 m and its scaled x bounds end on the segment's two corners",
+    check("each piece keeps scale 1, takes the chord as its length and its x bounds end on the segment's two corners (L24)",
           spans_points(room, corners, min_x, max_x), json.dumps([(c["position"], c["scale"]) for c in room["children"]])[:400])
 
     # The body's shape takes the piece's scale: a block inside the scaled wall's far end overlaps it, which the unscaled 4 m shape would not reach.
@@ -2987,6 +3004,1843 @@ def check_segment_layouts(editor, directory, image_path):
         check("render_scene_image of the segments room is written", os.path.isfile(image_path) and (reply.get("width") == IMAGE_WIDTH), image_path)
         print(f"segments layout image: {image_path}", flush=True)
     editor.close(name)
+
+
+@gives_back_tool_settings
+def check_connection_records(editor, directory):
+    """doc/plans/level_kit_connections.md C3.1, C6.3 - C6.5, C9 (step 4): a floor layout is a connection end with four
+    wall-floor edge connectors; a wall joined by its base to an edge records the connection; a second wall onto the same edge
+    connector is refused (one connection per connector), also two placements of one call; a piece keeps several connections and
+    level_get_pieces reports a status per connection; level_get_connections lists both ends' records; Replace keeps a
+    compatible connection and drops the others; save and load keep the connections; Detach removes every connection with an
+    end in the piece, other pieces' records included, as one undo entry; undo restores; level_remove_connection removes one
+    from the other end."""
+    scene = create_scene(editor)
+    editor.call("set_active_scene", {"scene_name": scene})
+    floor = editor.call("level_create_layout", {"scene_name": scene, "name": "rec floor", "position": [0.0, 0.0, 0.0], "pattern": {"kind": "floor"}})
+    editor.wait_idle()
+    frames = connectors_of(editor, scene, floor["id"])
+    edges = {n: c for n, c in frames.items() if n.startswith("edge_")}
+    floor_frames = {n: c for n, c in frames.items() if n.startswith("floor_")}
+    check("a floor layout lists four wall-floor edge connectors and four floor connectors facing out, all at its top",
+          (sorted(edges) == ["edge_0", "edge_1", "edge_2", "edge_3"]) and all(c["types"] == ["wall-floor"] and abs(c["position"][1] - 0.2) < 1.0e-5 for c in edges.values()) and
+          (sorted(floor_frames) == ["floor_0", "floor_1", "floor_2", "floor_3"]) and all(c["types"] == ["floor"] and abs(c["outward"][1]) < 1.0e-5 for c in floor_frames.values()),
+          json.dumps(frames)[:300])
+
+    def place(name, connect):
+        reply = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [{"shape": "architecture.wall", "name": name, "connect": connect}]})["pieces"][0]
+        editor.wait_idle()
+        return reply
+
+    def connections(node_id):
+        return editor.call("level_get_connections", {"scene_name": scene, "node_id": node_id})["connections"]
+
+    import curve_verify as cv  # noqa: E402 - the viewport of the scene
+    title = cv.viewport_of(editor, scene)["title"]
+    editor.call("level_set_connector_visualization", {"mode": "all", "viewport": title})
+    editor.wait_idle()
+    shown = [i for i in editor.call("level_get_connector_indicators", {"viewport": title})["indicators"] if (i["piece_id"] == floor["id"]) and i["name"].startswith("edge_")]
+    editor.call("level_set_connector_visualization", {"mode": "off", "viewport": title})
+    editor.wait_idle()
+    check("with Connectors 'all' a floor layout's four edge connectors are drawn in the wall-floor color (C1.8)",
+          (sorted(i["name"] for i in shown) == ["edge_0", "edge_1", "edge_2", "edge_3"]) and
+          all([round(c, 3) for c in i["color"]] == [0.2, 0.75, 1.0, 1.0] for i in shown), json.dumps(shown)[:300])
+    w1 = place("rec w1", {"connector": "base", "to_piece_id": floor["id"], "to_connector": "edge_0"})
+    floor_list = connections(floor["id"])
+    check("a wall joined by its base to edge_0 records the connection: the floor lists it, joined",
+          (len(floor_list) == 1) and (floor_list[0]["connector"] == "edge_0") and (floor_list[0]["other_id"] == w1["id"]) and floor_list[0]["joined"],
+          json.dumps(floor_list))
+    error = call_error(editor, "level_place_pieces", {"scene_name": scene, "pieces": [{"shape": "architecture.wall", "name": "rec w2",
+                       "connect": {"connector": "base", "to_piece_id": floor["id"], "to_connector": "edge_0"}}]})
+    check("a second wall onto the same edge connector is refused naming the connected piece (one connection per connector)",
+          (error is not None) and ("connected to 'rec w1' already" in error), str(error))
+    w3 = place("rec w3", {"connector": "start", "to_piece_id": w1["id"], "to_connector": "end"})
+    w1_list = connections(w1["id"])
+    check("a piece keeps several connections: w1 has its base on the floor and its end joined by w3's start",
+          sorted((c["connector"], c["other_connector"]) for c in w1_list) == [("base", "edge_0"), ("end", "start")], json.dumps(w1_list))
+
+    # K6.2: two placements of one call onto one target connector refuse the call; nothing is placed.
+    count = len(pieces(editor, scene))
+    depth = undo_depth(editor)
+    error = call_error(editor, "level_place_pieces", {"scene_name": scene, "pieces": [
+        {"shape": "architecture.wall", "name": "rec twin a", "connect": {"connector": "base", "to_piece_id": floor["id"], "to_connector": "edge_1"}},
+        {"shape": "architecture.wall", "name": "rec twin b", "connect": {"connector": "base", "to_piece_id": floor["id"], "to_connector": "edge_1"}}]})
+    editor.wait_idle()
+    check("two placements of one level_place_pieces call onto the floor's edge_1 refuse the call naming both; nothing is placed",
+          (error is not None) and ("placements 0 and 1 both connect to connector 'edge_1'" in error) and
+          (len(pieces(editor, scene)) == count) and (undo_depth(editor) == depth), str(error))
+
+    # C6.3: the piece status per connection: on a second floor, a wall placed on edge_1 next to one on edge_0 auto-connects at
+    # their corner, so it records two connections.
+    room = editor.call("level_create_layout", {"scene_name": scene, "name": "rec room", "position": [20.0, 0.0, 0.0], "pattern": {"kind": "floor"}})
+    editor.wait_idle()
+    place("rec r0", {"connector": "base", "to_piece_id": room["id"], "to_connector": "edge_0"})
+    r1 = place("rec r1", {"connector": "base", "to_piece_id": room["id"], "to_connector": "edge_1"})
+    p1 = piece_by_id(editor, scene, r1["id"])
+    own1 = sorted((c["connector"], c["other_connector"]) for c in connections(r1["id"]) if c["recorded_on"] == r1["id"])
+    statuses = p1.get("attachments", [])
+    check("level_get_pieces reports one status per connection the piece records (not the first only), all active; 'attachment' is the first",
+          (len(statuses) == 2) and (sorted((a["connector"], a["target_connector"]) for a in statuses) == own1) and
+          all(a["state"] == "active" for a in statuses) and (p1.get("attachment") == statuses[0]), json.dumps(statuses)[:600])
+
+    # C6.5, K11.2: Replace keeps a connection whose connector the new shape has with a type that meets, drops the others.
+    depth = undo_depth(editor)
+    kept = editor.call("level_replace_pieces", {"scene_name": scene, "shape": "architecture.door_wall", "node_ids": [w1["id"]]})
+    editor.wait_idle()
+    kept_list = sorted((c["connector"], c["other_connector"]) for c in connections(w1["id"]))
+    check("Replace of w1 by a door wall (the same wall-run connectors) keeps both connections and reports no drop",
+          (kept["dropped_connection_count"] == 0) and (kept["pieces"][0]["dropped_connections"] == []) and
+          (("base", "edge_0") in kept_list) and (("end", "start") in kept_list), json.dumps(kept_list))
+    dropped = editor.call("level_replace_pieces", {"scene_name": scene, "shape": "architecture.pillar", "node_ids": [w1["id"]]})
+    editor.wait_idle()
+    reasons = {d["connector"]: d for d in dropped["pieces"][0]["dropped_connections"]}
+    check("Replace of w1 by a pillar drops its base (a generic base on a wall-floor edge) and its end (no such connector), reported, "
+          "and the records on both ends are gone",
+          (dropped["dropped_connection_count"] == 2) and (sorted(reasons) == ["base", "end"]) and
+          ("no longer meet" in reasons.get("base", {}).get("reason", "")) and ("no connector 'end'" in reasons.get("end", {}).get("reason", "")) and
+          (reasons.get("end", {}).get("other_id") == w3["id"]) and (connections(w1["id"]) == []) and (connections(floor["id"]) == []),
+          json.dumps(dropped["pieces"][0]["dropped_connections"]))
+    editor.call("undo")
+    editor.wait_idle()
+    editor.call("undo")
+    editor.wait_idle()
+    check("undo of both replaces gives w1 back its wall shape and both connections",
+          (piece_by_id(editor, scene, w1["id"])["shape"] == "architecture.wall") and (undo_depth(editor) == depth) and
+          (sorted((c["connector"], c["other_connector"]) for c in connections(w1["id"])) == [("base", "edge_0"), ("end", "start")]),
+          json.dumps(connections(w1["id"])))
+    depth = undo_depth(editor)
+    detached = editor.call("level_detach_pieces", {"scene_name": scene, "node_ids": [w1["id"]]})
+    editor.wait_idle()
+    check("Detach of w1 removes its connection and w3's record naming it as one undo entry",
+          detached["changed"] and (connections(w1["id"]) == []) and (connections(floor["id"]) == []) and (connections(w3["id"]) == []) and
+          (undo_depth(editor) == depth + 1), json.dumps(connections(w1["id"])))
+    editor.call("undo")
+    editor.wait_idle()
+    check("undo of the Detach restores both connections", len(connections(w1["id"])) == 2, json.dumps(connections(w1["id"])))
+    removed = editor.call("level_remove_connection", {"scene_name": scene, "node_id": floor["id"], "connector": "edge_0"})
+    editor.wait_idle()
+    check("level_remove_connection at the floor's edge_0 removes the record w1 keeps", removed["changed"] and (connections(floor["id"]) == []) and
+          (len(connections(w1["id"])) == 1), json.dumps(connections(w1["id"])))
+    editor.call("undo")
+    editor.wait_idle()
+
+    # C6.4, K11.1: save and load keep every connection (the records ride the nodes, the ends named by glTF uid).
+    def connection_table(scene_name):
+        by_name = {p["name"]: p for p in pieces(editor, scene_name)}
+        by_name["rec floor"] = {"id": next(l["id"] for l in editor.call("level_get_layouts", {"scene_name": scene_name})["layouts"] if l["name"] == "rec floor")}
+        table = {}
+        for name in ("rec floor", "rec w1", "rec w3"):
+            reply = editor.call("level_get_connections", {"scene_name": scene_name, "node_id": by_name[name]["id"]})["connections"]
+            table[name] = sorted((c["connector"], c["other_name"], c["other_connector"], c["joined"]) for c in reply)
+        states = sorted((p["name"], a["connector"], a["state"]) for p in by_name.values() if "attachments" in p for a in p["attachments"])
+        return table, states
+    before = connection_table(scene)
+    path = os.path.join(directory, "connection_records.gltf")
+    editor.save(scene, path)
+    editor.close(scene)
+    loaded = editor.load(path)
+    after = connection_table(loaded)
+    check("save and load keep every connection of the floor and both walls, joined, with the same statuses (C6.4)",
+          (after == before) and (len(before[0]["rec w1"]) == 2) and all(c[3] for c in before[0]["rec w1"]), json.dumps(after)[:600])
+    editor.close(loaded)
+
+
+def check_property_flow(editor):
+    """doc/plans/level_kit_connections.md C3 value flow (step 5): a wall placed on a floor's edge connector takes the edge's
+    length minus the wall thickness, the floor's wall thickness, room height and wall material in the same undo entry; a wall
+    joined to that wall's end takes its thickness, height and material (priority 1); an edit of the first wall's thickness
+    spreads to the joined wall; a floor outline edit gives the floor's wall its new length; undo restores."""
+    scene = create_scene(editor)
+    editor.call("set_active_scene", {"scene_name": scene})
+    floor = editor.call("level_create_layout", {"scene_name": scene, "name": "flow floor", "position": [0.0, 0.0, 0.0],
+                                                "pattern": {"kind": "floor", "floor": {"wall_thickness": 0.3, "room_height": 2.5, "wall_material": "Kit Stone"}}})
+    editor.wait_idle()
+    depth = undo_depth(editor)
+    w1_reply = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [{"shape": "architecture.wall", "name": "flow w1",
+                           "connect": {"connector": "base", "to_piece_id": floor["id"], "to_connector": "edge_0"}}]})
+    w1 = w1_reply["pieces"][0]
+    editor.wait_idle()
+    p1 = piece_by_id(editor, scene, w1["id"])
+    check("a wall placed on edge_0 of a 4 m floor takes length 3.7, thickness 0.3, height 2.5 and Kit Stone in one undo entry (C3.3)",
+          close([p1["parameters"]["length"], p1["parameters"]["thickness"], p1["parameters"]["height"]], [3.7, 0.3, 2.5], 1.0e-4) and
+          (p1["materials"].get("wall") == "Kit Stone") and (undo_depth(editor) == depth + 1), json.dumps(p1["parameters"]) + json.dumps(p1["materials"]))
+    flow = w1_reply.get("flow") or {}
+    taken = {(t["property"], t["supplier"]["name"], t["supplier_connector"], t["priority"]) for t in flow.get("taken", []) if t["piece"]["id"] == w1["id"]}
+    check("the placement's flow report (C3.13) names the four values taken from the floor's edge_0 at priority 2 and the new connection",
+          (taken == {(p, "flow floor", "edge_0", 2) for p in ("child.length", "wall.thickness", "room.height", "wall.material")}) and
+          any((c["piece"]["id"] == w1["id"]) and (c["connector"] == "base") and (c["other_connector"] == "edge_0") for c in flow.get("new_connections", [])) and
+          (flow.get("refusal") is None) and not flow.get("limit_reached"), json.dumps(flow)[:600])
+    w3 = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [{"shape": "architecture.wall", "name": "flow w3",
+                     "connect": {"connector": "start", "to_piece_id": w1["id"], "to_connector": "end"}}]})["pieces"][0]
+    editor.wait_idle()
+    p3 = piece_by_id(editor, scene, w3["id"])
+    check("a wall joined to that wall's end takes its thickness, height and material, and keeps its own length (no length over wall ends)",
+          close([p3["parameters"]["thickness"], p3["parameters"]["height"], p3["parameters"]["length"]], [0.3, 2.5, 4.0], 1.0e-4) and
+          (p3["materials"].get("wall") == "Kit Stone"), json.dumps(p3["parameters"]))
+    editor.call("level_set_piece_parameters", {"scene_name": scene, "node_id": w1["id"], "parameters": {"thickness": 0.4}})
+    editor.wait_idle()
+    p1 = piece_by_id(editor, scene, w1["id"])
+    p3 = piece_by_id(editor, scene, w3["id"])
+    check("an edit of the first wall's thickness is kept on it and spreads to the joined wall (C3.6, C4.3)",
+          close([p1["parameters"]["thickness"], p3["parameters"]["thickness"]], [0.4, 0.4], 1.0e-4), f"{p1['parameters']['thickness']} {p3['parameters']['thickness']}")
+    wide = [[-3.0, 0.0, -2.0], [-3.0, 0.0, 2.0], [3.0, 0.0, 2.0], [3.0, 0.0, -2.0]]
+    editor.call("set_curve", {"scene_name": scene, "curve_id": floor["id"], "closed": True, "points": [{"position": p} for p in wide]})
+    editor.wait_idle()
+    p1 = piece_by_id(editor, scene, w1["id"])
+    check("a floor outline edit gives the wall on edge_0 (now 4 m long, as before) its length again, and on the 6 m edge the walls follow",
+          abs(p1["parameters"]["length"] - 3.7) < 1.0e-4, json.dumps(p1["parameters"]))
+    editor.call("undo")
+    editor.wait_idle()
+    editor.call("undo")
+    editor.wait_idle()
+    p1 = piece_by_id(editor, scene, w1["id"])
+    p3 = piece_by_id(editor, scene, w3["id"])
+    check("undo of the thickness edit restores both walls' thickness", close([p1["parameters"]["thickness"], p3["parameters"]["thickness"]], [0.3, 0.3], 1.0e-4),
+          f"{p1['parameters']['thickness']} {p3['parameters']['thickness']}")
+
+    # C3.15: a room of four walls on a 4 m square floor; the wall on edge_2 (x = +2) moved 1 m outward makes the floor fit.
+    room = editor.call("level_create_layout", {"scene_name": scene, "name": "fit floor", "position": [20.0, 0.0, 0.0], "pattern": {"kind": "floor"}})
+    editor.wait_idle()
+    walls = {}
+    for k in range(4):
+        walls[k] = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [{"shape": "architecture.wall", "name": f"fit w{k}",
+                               "connect": {"connector": "base", "to_piece_id": room["id"], "to_connector": f"edge_{k}"}}]})["pieces"][0]
+        editor.wait_idle()
+    corner_links = sorted((c["connector"], c["other_name"]) for c in editor.call("level_get_connections", {"scene_name": scene, "node_id": walls[0]["id"]})["connections"])
+    check("the four walls auto-connect at the corners: wall 0 joins the floor by its base and walls 1 and 3 by its ends (C5, L9)",
+          corner_links == [("base", "fit floor"), ("end", "fit w3"), ("start", "fit w1")], json.dumps(corner_links))
+    moved = walls[2]
+    depth = undo_depth(editor)
+    target = [moved["position"][0] + 1.0, moved["position"][1], moved["position"][2]]
+    editor.call("set_node_transform", {"scene_name": scene, "node_id": moved["id"], "translation": target, "rotation_xyzw": moved["rotation_xyzw"]})
+    editor.wait_idle()
+    corners = [p["position"] for p in editor.call("get_curve", {"scene_name": scene, "curve_id": room["id"]})["points"]]
+    lengths = {k: piece_by_id(editor, scene, walls[k]["id"])["parameters"]["length"] for k in range(4)}
+    check("moving the wall on edge_2 1 m outward moves the floor's corners 2 and 3 to x = 3 and the side walls take length 4.75, one undo entry (C3.15)",
+          close([corners[2][0], corners[3][0]], [3.0, 3.0], 1.0e-3) and close([lengths[1], lengths[3]], [4.75, 4.75], 1.0e-3) and
+          (undo_depth(editor) == depth + 1), f"corners {corners}, lengths {lengths}, depth {undo_depth(editor)} vs {depth + 1}")
+    editor.call("undo")
+    editor.wait_idle()
+    corners = [p["position"] for p in editor.call("get_curve", {"scene_name": scene, "curve_id": room["id"]})["points"]]
+    check("undo restores the floor and the walls", close([corners[2][0], corners[3][0]], [2.0, 2.0], 1.0e-3) and
+          abs(piece_by_id(editor, scene, walls[1]["id"])["parameters"]["length"] - 3.75) < 1.0e-3, json.dumps(corners))
+
+    # A floor value edit moves its edge connectors: a thicker floor raises its walls.
+    depth = undo_depth(editor)
+    thicker = editor.call("level_set_layout", {"scene_name": scene, "layout_id": room["id"], "pattern": {"kind": "floor", "floor": {"thickness": 0.5}}})
+    editor.wait_idle()
+    check("level_set_layout's reply carries the flow report: the four walls follow the thicker floor",
+          len({r["piece"]["name"] for r in (thicker.get("flow") or {}).get("responses", []) if (r["kind"] == "follow") and (r["from"]["name"] == "fit floor")}) == 4,
+          json.dumps(thicker.get("flow"))[:300])
+    heights = [round(piece_by_id(editor, scene, walls[k]["id"])["position"][1], 4) for k in range(4)]
+    check("a floor thickness edit (0.2 -> 0.5 m) raises the four walls onto its top in the same undo entry",
+          (heights == [0.5, 0.5, 0.5, 0.5]) and (undo_depth(editor) == depth + 1), f"{heights}, depth {undo_depth(editor)} vs {depth + 1}")
+    editor.call("undo")
+    editor.wait_idle()
+    heights = [round(piece_by_id(editor, scene, walls[k]["id"])["position"][1], 4) for k in range(4)]
+    check("undo puts the walls back at 0.2 m", heights == [0.2, 0.2, 0.2, 0.2], str(heights))
+
+    # C8.4: a corner added in the middle of edge 1 renumbers the later edges; the walls' records follow their edges.
+    added = editor.call("curve_add_point", {"scene_name": scene, "curve_id": room["id"], "at": "curve", "distance": 6.0})
+    editor.wait_idle()
+    check("curve_add_point's reply carries the flow report: the walls on the later edges follow the floor",
+          any((r["kind"] == "follow") and (r["from"]["name"] == "fit floor") for r in (added.get("flow") or {}).get("responses", [])), json.dumps(added.get("flow"))[:300])
+    def floor_edge(wall_id):
+        for c in editor.call("level_get_connections", {"scene_name": scene, "node_id": wall_id})["connections"]:
+            if c["other_name"] == "fit floor":
+                return c["other_connector"]
+        return None
+    edges_after = [floor_edge(walls[k]["id"]) for k in range(4)]
+    check("a corner added on edge 1 moves the connections of the walls on the later edges to edge_3 and edge_4 (C8.4)",
+          edges_after == ["edge_0", "edge_1", "edge_3", "edge_4"], json.dumps(edges_after))
+    editor.call("undo")
+    editor.wait_idle()
+    check("undo of the added corner gives the walls their edges back", [floor_edge(walls[k]["id"]) for k in range(4)] == ["edge_0", "edge_1", "edge_2", "edge_3"], "")
+
+    # C3.16: two free walls end to end; the first moved 1 m sideways: the second keeps its far end, its near end follows.
+    wa = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [{"shape": "architecture.wall", "name": "fit a", "position": [40.0, 0.0, 0.0]}]})["pieces"][0]
+    editor.wait_idle()
+    wb = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [{"shape": "architecture.wall", "name": "fit b",
+                     "connect": {"connector": "start", "to_piece_id": wa["id"], "to_connector": "end"}}]})["pieces"][0]
+    editor.wait_idle()
+    far_before = connectors_of(editor, scene, wb["id"])["end"]["position"]
+    depth = undo_depth(editor)
+    editor.call("set_node_transform", {"scene_name": scene, "node_id": wa["id"], "translation": [40.0, 0.0, 1.0], "rotation_xyzw": [0.0, 0.0, 0.0, 1.0]})
+    editor.wait_idle()
+    b_frames = connectors_of(editor, scene, wb["id"])
+    a_end = connectors_of(editor, scene, wa["id"])["end"]["position"]
+    b_length = piece_by_id(editor, scene, wb["id"])["parameters"]["length"]
+    check("moving a wall 1 m sideways makes the wall joined to its end keep its far end, meet the moved end and take length sqrt(17) (C3.16)",
+          close(b_frames["end"]["position"], far_before, 1.0e-3) and close(b_frames["start"]["position"], a_end, 1.0e-3) and
+          (abs(b_length - math.sqrt(17.0)) < 1.0e-3) and (undo_depth(editor) == depth + 1), f"b {b_frames['start']['position']} {b_frames['end']['position']} length {b_length}")
+    editor.call("undo")
+    editor.wait_idle()
+    check("undo of that move gives the joined wall its length 4 back", abs(piece_by_id(editor, scene, wb["id"])["parameters"]["length"] - 4.0) < 1.0e-3, "")
+    editor.call("redo")
+    editor.wait_idle()
+    check("redo of that move gives the joined wall length sqrt(17) again", abs(piece_by_id(editor, scene, wb["id"])["parameters"]["length"] - math.sqrt(17.0)) < 1.0e-3, "")
+    editor.call("undo")
+    editor.wait_idle()
+
+    def flow_report():
+        """The flow report of the last recorded entry (for the queued set_item_property and transform_selection); {} when the
+        last recorded entry ran no flow."""
+        reply = editor.call("level_get_flow_report", {})
+        return (reply["flow"] or {}) if reply["latest"] else {}
+
+    def connected_to(node_id, other_name):
+        return [(c["connector"], c["other_connector"], c["joined"]) for c in
+                editor.call("level_get_connections", {"scene_name": scene, "node_id": node_id})["connections"] if c["other_name"] == other_name]
+
+    def taken_by(flow, node_id):
+        return {t["property"]: t for t in flow.get("taken", []) if t["piece"]["id"] == node_id}
+
+    settings_before = editor.call("get_surface_snap_settings", {})
+    all_types = ["generic", "wall", "wall-floor", "floor"]
+
+    # C4.2 (W1 / W2 / F): a wall joined end to end to a 0.4 m thick wall, then joined onto the floor's edge_2, takes the floor's
+    # values (priority 2) over its wall neighbour's (priority 1).
+    wb2 = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [{"shape": "architecture.wall", "name": "flow w2", "position": [10.0, 0.0, 10.0],
+                      "parameters": {"thickness": 0.4}}]})["pieces"][0]
+    editor.wait_idle()
+    wf = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [{"shape": "architecture.wall", "name": "flow wf",
+                     "connect": {"connector": "start", "to_piece_id": wb2["id"], "to_connector": "end"}}]})["pieces"][0]
+    editor.wait_idle()
+    wf_before = piece_by_id(editor, scene, wf["id"])
+    depth = undo_depth(editor)
+    joined_reply = editor.call("level_connect_pieces", {"scene_name": scene, "node_id": wf["id"], "connector": "base", "to_piece_id": floor["id"], "to_connector": "edge_2"})
+    editor.wait_idle()
+    pf = piece_by_id(editor, scene, wf["id"])
+    flow = joined_reply.get("flow") or {}
+    took = taken_by(flow, wf["id"])
+    skipped = {(n["property"], n["supplier"]["name"], n["reason"]) for n in flow.get("not_taken", []) if n["piece"]["id"] == wf["id"]}
+    check("W1 / W2 / F (C4.2): the wall joined to a 0.4 m wall and then onto the floor's edge_2 takes length 3.7, thickness 0.3 and height 2.5 from the floor, one entry",
+          close([pf["parameters"]["length"], pf["parameters"]["thickness"], pf["parameters"]["height"]], [3.7, 0.3, 2.5], 1.0e-4) and
+          (abs(wf_before["parameters"]["thickness"] - 0.4) < 1.0e-4) and (undo_depth(editor) == depth + 1),
+          json.dumps(pf["parameters"]) + " before " + json.dumps(wf_before["parameters"]))
+    check("its flow report: child.length and wall.thickness taken from the floor at priority 2; the wall's thickness and height not taken (higher_priority)",
+          (took.get("child.length", {}).get("supplier", {}).get("name") == "flow floor") and (took.get("child.length", {}).get("priority") == 2) and
+          (took.get("wall.thickness", {}).get("supplier", {}).get("name") == "flow floor") and
+          {("wall.thickness", "flow w2", "higher_priority"), ("room.height", "flow w2", "higher_priority")} <= skipped,
+          json.dumps(flow)[:900])
+    editor.call("undo")
+    editor.wait_idle()
+    undone = piece_by_id(editor, scene, wf["id"])
+    check("undo of the join gives the wall its 0.4 m thickness, 4 m length and pose back",
+          (undone["parameters"] == wf_before["parameters"]) and close(undone["position"], wf_before["position"], 1.0e-4), json.dumps(undone["parameters"]))
+    editor.call("redo")
+    editor.wait_idle()
+    check("redo of the join gives it the floor's values again", piece_by_id(editor, scene, wf["id"])["parameters"] == pf["parameters"], "")
+
+    # C6.2: the join tools' overrides hold for one call: wall-floor masked off, a wall placed on edge_3 takes nothing.
+    masked = editor.call("level_place_pieces", {"scene_name": scene, "flow_mask": ["generic", "wall", "floor"], "pieces": [{"shape": "architecture.wall", "name": "flow masked",
+                         "connect": {"connector": "base", "to_piece_id": floor["id"], "to_connector": "edge_3"}}]})
+    editor.wait_idle()
+    pm = piece_by_id(editor, scene, masked["pieces"][0]["id"])
+    check("C6.2: a placement with flow_mask without wall-floor connects to edge_3 but takes no values (length 4, the default height); the setting is unchanged",
+          (abs(pm["parameters"]["length"] - 4.0) < 1.0e-4) and (abs(pm["parameters"]["height"] - 2.5) > 1.0e-3) and
+          not taken_by(masked.get("flow") or {}, pm["id"]) and
+          (connected_to(pm["id"], "flow floor") == [("base", "edge_3", True)]) and
+          (editor.call("get_surface_snap_settings", {})["flow_mask"] == settings_before["flow_mask"]),
+          json.dumps(pm["parameters"]) + json.dumps(masked.get("flow"))[:300])
+    editor.call("undo")
+    editor.wait_idle()
+    # auto_connect false: the wall placed on edge_1 meets the free ends of the walls on edges 0 and 2 but connects only its base.
+    lone = editor.call("level_place_pieces", {"scene_name": scene, "auto_connect": False, "pieces": [{"shape": "architecture.wall", "name": "flow lone",
+                       "connect": {"connector": "base", "to_piece_id": floor["id"], "to_connector": "edge_1"}}]})
+    editor.wait_idle()
+    lone_links = sorted(c["connector"] for c in editor.call("level_get_connections", {"scene_name": scene, "node_id": lone["pieces"][0]["id"]})["connections"])
+    check("C6.2: auto_connect false places the wall on edge_1 with its base connection alone (its ends meet the corner walls), no new corner connections reported",
+          (lone_links == ["base"]) and (len((lone.get("flow") or {}).get("new_connections", [])) == 1), json.dumps(lone_links) + json.dumps((lone.get("flow") or {}).get("new_connections")))
+    editor.call("undo")
+    editor.wait_idle()
+    joined_corners = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [{"shape": "architecture.wall", "name": "flow corners",
+                                 "connect": {"connector": "base", "to_piece_id": floor["id"], "to_connector": "edge_1"}}]})
+    editor.wait_idle()
+    corner_links = sorted(c["connector"] for c in editor.call("level_get_connections", {"scene_name": scene, "node_id": joined_corners["pieces"][0]["id"]})["connections"])
+    check("with the setting (Auto-connect on) the same placement also connects both ends at the corners",
+          (corner_links == ["base", "end", "start"]) and (editor.call("get_surface_snap_settings", {})["auto_connect"] == settings_before["auto_connect"]), json.dumps(corner_links))
+    editor.call("undo")
+    editor.wait_idle()
+
+    # The room: the move of wall 2 outward redone, with its flow report.
+    def room_state():
+        corners = [p["position"] for p in editor.call("get_curve", {"scene_name": scene, "curve_id": room["id"]})["points"]]
+        placed = {k: piece_by_id(editor, scene, walls[k]["id"]) for k in range(4)}
+        return {"corners": corners, "walls": {k: (placed[k]["parameters"]["length"], placed[k]["position"], placed[k]["rotation_xyzw"]) for k in range(4)}}
+
+    def room_close(a, b, tolerance=1.0e-3):
+        return all(close(p, q, tolerance) for p, q in zip(a["corners"], b["corners"])) and all(
+            (abs(a["walls"][k][0] - b["walls"][k][0]) < tolerance) and close(a["walls"][k][1], b["walls"][k][1], tolerance) and
+            same_xyzw(a["walls"][k][2], b["walls"][k][2], tolerance) for k in range(4))
+
+    start = room_state()
+    editor.call("set_node_transform", {"scene_name": scene, "node_id": moved["id"], "translation": target, "rotation_xyzw": moved["rotation_xyzw"]})
+    editor.wait_idle()
+    outward = room_state()
+    flow = flow_report()
+    kinds = {(r["kind"], r["piece"]["name"], r["from"]["name"]) for r in flow.get("responses", [])}
+    check("the move's flow report: the floor fits the moved wall, the walls follow the floor, walls 1 and 3 take their 4.75 m lengths from it",
+          {("floor_fit", "fit floor", "fit w2"), ("follow", "fit w1", "fit floor"), ("follow", "fit w3", "fit floor")} <= kinds and
+          (abs(taken_by(flow, walls[1]["id"]).get("child.length", {}).get("value", 0.0) - 4.75) < 1.0e-3), json.dumps(flow)[:700])
+    editor.call("undo")
+    editor.wait_idle()
+    editor.call("redo")
+    editor.wait_idle()
+    check("redo of the outward move gives the fitted floor and walls again", room_close(room_state(), outward), json.dumps(room_state())[:300])
+    editor.call("undo")
+    editor.wait_idle()
+
+    # K5.5 (C3.15, L20): a wall slid along its run and lifted, or tilted, goes back onto its edge's midpoint, upright; the floor keeps its lines.
+    m_pos, m_rot = moved["position"], moved["rotation_xyzw"]
+    depth = undo_depth(editor)
+    editor.call("set_node_transform", {"scene_name": scene, "node_id": moved["id"], "translation": [m_pos[0], m_pos[1] + 0.5, m_pos[2] + 0.7], "rotation_xyzw": m_rot})
+    editor.wait_idle()
+    check("a wall slid 0.7 m along its run and lifted 0.5 m returns to its edge's midpoint; the floor and the other walls unchanged, its connections kept, one entry",
+          room_close(room_state(), start) and (connected_to(moved["id"], "fit floor") == [("base", "edge_2", True)]) and (undo_depth(editor) == depth + 1),
+          json.dumps(room_state())[:400])
+    tilt = q_mul(m_rot, [math.sin(math.radians(5.0)), 0.0, 0.0, math.cos(math.radians(5.0))])
+    editor.call("set_node_transform", {"scene_name": scene, "node_id": moved["id"], "translation": m_pos, "rotation_xyzw": tilt})
+    editor.wait_idle()
+    check("a wall tilted 10 degrees about its run returns upright onto its edge", room_close(room_state(), start), json.dumps(room_state()["walls"][2]))
+    editor.call("undo")
+    editor.wait_idle()
+    editor.call("undo")
+    editor.wait_idle()
+    check("undo of the slide and the tilt leaves the room as it was", room_close(room_state(), start) and (undo_depth(editor) == depth), "")
+    editor.call("redo")
+    editor.wait_idle()
+    check("redo of the slide gives the same room (the wall back on its edge)", room_close(room_state(), start), "")
+    editor.call("undo")
+    editor.wait_idle()
+
+    # C3.15: a wall turned 10 degrees about its up axis turns the floor's edge with it; corners 2 and 3 slide along edges 1 and 3.
+    depth = undo_depth(editor)
+    editor.call("set_node_transform", {"scene_name": scene, "node_id": moved["id"], "translation": m_pos, "rotation_xyzw": q_mul(q_yaw(10.0), m_rot)})
+    editor.wait_idle()
+    turned = room_state()
+    c = turned["corners"]
+    check("a wall turned 10 degrees makes the floor fit: corners 2 and 3 move apart along x on edges 1 and 3 (z kept), walls 1 and 3 take different lengths, one entry",
+          (abs(c[2][2] - 2.0) < 1.0e-4) and (abs(c[3][2] + 2.0) < 1.0e-4) and (abs(c[2][0] - c[3][0]) > 0.5) and
+          (abs(turned["walls"][1][0] - turned["walls"][3][0]) > 0.5) and (connected_to(moved["id"], "fit floor") == [("base", "edge_2", True)]) and
+          (connected_to(walls[1]["id"], "fit floor") == [("base", "edge_1", True)]) and (undo_depth(editor) == depth + 1),
+          json.dumps(turned)[:500])
+    editor.call("undo")
+    editor.wait_idle()
+    check("undo of the turn restores the floor and the walls", room_close(room_state(), start), "")
+    editor.call("redo")
+    editor.wait_idle()
+    check("redo of the turn gives the same fitted room", room_close(room_state(), turned), "")
+    editor.call("undo")
+    editor.wait_idle()
+
+    # K0.3, C8.3: a wall moved past the opposite edge would turn the floor inside out: the whole change is refused, nothing recorded.
+    # A redo entry made before stays: the turn undone above is redone after the refusals.
+    depth = undo_depth(editor)
+    refused = call_error(editor, "set_node_transform", {"scene_name": scene, "node_id": moved["id"], "translation": [m_pos[0] - 7.0, m_pos[1], m_pos[2]], "rotation_xyzw": m_rot})
+    editor.wait_idle()
+    report = flow_report()
+    check("set_node_transform into an invalid outline fails naming the refusal: the wall goes back, the room unchanged, no undo entry, the report states the refusal only",
+          (refused is not None) and ("cannot fit" in refused) and room_close(room_state(), start) and (undo_depth(editor) == depth) and
+          ("cannot fit" in (report.get("refusal") or "")) and not report.get("responses") and not report.get("new_connections") and not report.get("taken"),
+          f"{refused} | {json.dumps(report)[:300]}")
+    serial_before = editor.call("level_get_flow_report", {})["recording_serial"]
+    editor.call("set_item_property", {"item_id": moved["id"], "property": "translation", "value": [m_pos[0] - 7.0, m_pos[1], m_pos[2]]})
+    editor.wait_idle()
+    serial_after = editor.call("level_get_flow_report", {})["recording_serial"]
+    report = flow_report()
+    # The recording serial moved on: the report is this call's refused entry, not the set_node_transform refusal above.
+    check("the same move through set_item_property's translation is refused the same way: the wall back, the room unchanged, no undo entry, its own refusal reported",
+          room_close(room_state(), start) and (undo_depth(editor) == depth) and (serial_after > serial_before) and
+          ("cannot fit" in (report.get("refusal") or "")), f"serial {serial_before} -> {serial_after} | {json.dumps(report)[:300]}")
+    editor.call("redo")
+    editor.wait_idle()
+    check("the refused changes left the redo history as it was: redo gives the turned room", room_close(room_state(), turned) and (undo_depth(editor) == depth + 1),
+          json.dumps(room_state())[:300])
+    editor.call("undo")
+    editor.wait_idle()
+
+    # A floor corner edit moves the walls on its two edges and sets their lengths, reported as taken values.
+    corner_points = [[-2.0, 0.0, -2.0], [-2.0, 0.0, 2.0], [3.0, 0.0, 3.0], [2.0, 0.0, -2.0]]
+    corner_reply = editor.call("set_curve", {"scene_name": scene, "curve_id": room["id"], "closed": True, "points": [{"position": p} for p in corner_points]})
+    editor.wait_idle()
+    edited = room_state()
+    expected_length = math.sqrt(26.0) - 0.25
+    flow = corner_reply.get("flow") or {}
+    check("a floor corner edit (corner 2 to (3, 3)) gives walls 1 and 2 length sqrt(26) - 0.25 on their edges; set_curve's flow names both taken lengths",
+          (abs(edited["walls"][1][0] - expected_length) < 1.0e-3) and (abs(edited["walls"][2][0] - expected_length) < 1.0e-3) and
+          (connected_to(walls[1]["id"], "fit floor") == [("base", "edge_1", True)]) and (connected_to(walls[2]["id"], "fit floor") == [("base", "edge_2", True)]) and
+          (abs(taken_by(flow, walls[1]["id"]).get("child.length", {}).get("value", 0.0) - expected_length) < 1.0e-3) and
+          (abs(taken_by(flow, walls[2]["id"]).get("child.length", {}).get("value", 0.0) - expected_length) < 1.0e-3),
+          json.dumps(edited["walls"]) + json.dumps(flow)[:400])
+    editor.call("undo")
+    editor.wait_idle()
+    check("undo of the corner edit restores the room", room_close(room_state(), start), "")
+    editor.call("redo")
+    editor.wait_idle()
+    check("redo of the corner edit gives the same walls", room_close(room_state(), edited), "")
+    editor.call("undo")
+    editor.wait_idle()
+
+    # C3.9: with wall-floor off in the flow mask the wall moves alone and its floor connection is removed.
+    editor.call("set_surface_snap_settings", {"flow_mask": ["generic", "wall", "floor"]})
+    depth = undo_depth(editor)
+    editor.call("set_node_transform", {"scene_name": scene, "node_id": moved["id"], "translation": [m_pos[0] + 1.0, m_pos[1], m_pos[2]], "rotation_xyzw": m_rot})
+    editor.wait_idle()
+    alone = room_state()
+    removed = {(r["piece"]["name"], r["connector"], r["other"]["name"]) for r in flow_report().get("removed_connections", [])}
+    check("with wall-floor off a wall moved 1 m outward moves alone (the floor keeps its corners) and its base connection is removed, reported, one entry",
+          close(alone["corners"][2], start["corners"][2], 1.0e-4) and close(alone["walls"][2][1], [m_pos[0] + 1.0, m_pos[1], m_pos[2]], 1.0e-4) and
+          (connected_to(moved["id"], "fit floor") == []) and (("fit w2", "base", "fit floor") in removed) and (undo_depth(editor) == depth + 1),
+          json.dumps(sorted(removed)))
+    editor.call("set_surface_snap_settings", {"flow_mask": settings_before["flow_mask"]})
+    editor.call("undo")
+    editor.wait_idle()
+    check("undo gives the wall its place and its floor connection back", room_close(room_state(), start) and (connected_to(moved["id"], "fit floor") == [("base", "edge_2", True)]), "")
+    editor.call("redo")
+    editor.wait_idle()
+    check("redo moves it alone again, its floor connection removed", (connected_to(moved["id"], "fit floor") == []) and close(room_state()["walls"][2][1], alone["walls"][2][1], 1.0e-4), "")
+    editor.call("undo")
+    editor.wait_idle()
+
+    # L25: a floor edge handle moves the edge's two corners along its normal; the walls follow.
+    select(editor, scene, [room["id"]])
+    handles = editor.call("level_select_segment_handle", {"scene_name": scene, "layout_id": room["id"], "index": 2})
+    check("a floor layout has 4 edge handles (segment handles), edge 2's at x = 22 with its normal +x",
+          (len(handles["handles"]) == 4) and close(handles["handles"][2]["position"], [22.0, 0.0, 0.0], 1.0e-4) and
+          close(handles["handles"][2]["normal"], [1.0, 0.0, 0.0], 1.0e-4) and (handles["selected"] == 2), json.dumps(handles)[:400])
+    depth = undo_depth(editor)
+    edge_reply = editor.call("level_move_segment", {"scene_name": scene, "layout_id": room["id"], "segment": 2, "offset": 1.0})
+    editor.wait_idle()
+    edge_moved = room_state()
+    check("level_move_segment of the floor's edge 2 by 1 m moves corners 2 and 3 to x = 3: walls 1 and 3 take 4.75 m, wall 2 stands on the moved edge, one entry, reported",
+          close([edge_moved["corners"][2][0], edge_moved["corners"][3][0]], [3.0, 3.0], 1.0e-4) and room_close(edge_moved, outward) and
+          (abs(taken_by(edge_reply.get("flow") or {}, walls[3]["id"]).get("child.length", {}).get("value", 0.0) - 4.75) < 1.0e-3) and
+          (undo_depth(editor) == depth + 1), json.dumps(edge_moved)[:400])
+    editor.call("undo")
+    editor.wait_idle()
+    check("undo of the edge move restores the room", room_close(room_state(), start), "")
+    editor.call("redo")
+    editor.wait_idle()
+    check("redo of the edge move gives the same room", room_close(room_state(), edge_moved), "")
+    editor.call("undo")
+    editor.wait_idle()
+    # The handle held by a scripted gizmo edit: the walls follow live as for a corner drag; the release is one entry.
+    editor.call("level_select_segment_handle", {"scene_name": scene, "layout_id": room["id"], "index": 2})
+    editor.wait_idle()
+    editor.wait_idle()
+    handle = editor.call("level_get_segment_handles")["handles"][2]["position"]
+    editor.call("transform_selection", {"translation": [handle[0] + 1.0, handle[1], handle[2]], "end_edit": False})
+    editor.wait_idle()
+    live = room_state()
+    check("a held edge handle edit moves the corners and the walls live (wall 2 on the moved edge, walls 1 and 3 4.75 m), no undo entry",
+          room_close(live, outward) and (undo_depth(editor) == depth), json.dumps(live)[:400])
+    editor.call("transform_selection", {"translation": [handle[0] + 1.0, handle[1], handle[2]], "end_edit": True})
+    editor.wait_idle()
+    check("its release records one entry with the same room", room_close(room_state(), outward) and (undo_depth(editor) == depth + 1), "")
+    editor.call("undo")
+    editor.wait_idle()
+    editor.call("level_select_segment_handle", {"scene_name": scene, "layout_id": room["id"]})
+    select(editor, scene, [])
+    # Connected floors share corners (L25): edge 1 of the room moved 1 m outward carries the neighbour's shared corner with it.
+    neighbour = editor.call("level_create_layout", {"scene_name": scene, "name": "fit neighbour", "position": [24.0, 0.0, 0.0], "pattern": {"kind": "floor"}})
+    editor.wait_idle()
+    editor.call("set_node_transform", {"scene_name": scene, "node_id": neighbour["id"], "translation": [24.0, 0.0, 0.0], "rotation_xyzw": [0.0, 0.0, 0.0, 1.0]})
+    editor.wait_idle()
+    editor.call("level_move_segment", {"scene_name": scene, "layout_id": room["id"], "segment": 1, "offset": 1.0})
+    editor.wait_idle()
+    room_corners = room_state()["corners"]
+    shared = editor.call("get_curve", {"scene_name": scene, "curve_id": neighbour["id"]})["points"]
+    check("moving the room's edge 1 by 1 m moves its corners 1 and 2 to z = 3 and the connected neighbour floor's shared corner (local (-2, 3)) with them",
+          close([room_corners[1][2], room_corners[2][2]], [3.0, 3.0], 1.0e-4) and close(shared[1]["position"], [-2.0, 0.0, 3.0], 1.0e-3) and
+          close(shared[0]["position"], [-2.0, 0.0, -2.0], 1.0e-3), json.dumps([p["position"] for p in shared]))
+    editor.call("undo")
+    editor.wait_idle()
+    check("undo puts the shared corner back", close(editor.call("get_curve", {"scene_name": scene, "curve_id": neighbour["id"]})["points"][1]["position"], [-2.0, 0.0, 2.0], 1.0e-3), "")
+    editor.call("redo")
+    editor.wait_idle()
+    check("redo moves the room's edge and the shared corner again", close(editor.call("get_curve", {"scene_name": scene, "curve_id": neighbour["id"]})["points"][1]["position"], [-2.0, 0.0, 3.0], 1.0e-3) and
+          close([room_state()["corners"][1][2], room_state()["corners"][2][2]], [3.0, 3.0], 1.0e-4), "")
+    editor.call("undo")
+    editor.wait_idle()
+
+    # A thickness edit spreads along a run of three free walls; with the step limit at 1 it stops after one round, reported.
+    r1 = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [{"shape": "architecture.wall", "name": "run r1", "position": [60.0, 0.0, 0.0]}]})["pieces"][0]
+    editor.wait_idle()
+    r2 = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [{"shape": "architecture.wall", "name": "run r2",
+                     "connect": {"connector": "start", "to_piece_id": r1["id"], "to_connector": "end"}}]})["pieces"][0]
+    editor.wait_idle()
+    r3 = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [{"shape": "architecture.wall", "name": "run r3",
+                     "connect": {"connector": "start", "to_piece_id": r2["id"], "to_connector": "end"}}]})["pieces"][0]
+    editor.wait_idle()
+
+    def run_thickness():
+        return [round(piece_by_id(editor, scene, r["id"])["parameters"]["thickness"], 4) for r in (r1, r2, r3)]
+
+    before_run = run_thickness()
+    spread = editor.call("level_set_piece_parameters", {"scene_name": scene, "node_id": r1["id"], "parameters": {"thickness": 0.35}})
+    editor.wait_idle()
+    flow = spread.get("flow") or {}
+    check("a thickness edit of the first of three walls end to end spreads along the run, r2 taking it from r1 and r3 from r2 (C4.3: the changed neighbour)",
+          (run_thickness() == [0.35, 0.35, 0.35]) and (taken_by(flow, r2["id"]).get("wall.thickness", {}).get("supplier", {}).get("name") == "run r1") and
+          (taken_by(flow, r3["id"]).get("wall.thickness", {}).get("supplier", {}).get("name") == "run r2") and (flow.get("rounds", 0) >= 2),
+          f"{run_thickness()} {json.dumps(flow)[:500]}")
+    editor.call("undo")
+    editor.wait_idle()
+    check("undo of the spread thickness restores the three walls", run_thickness() == before_run, str(run_thickness()))
+    editor.call("redo")
+    editor.wait_idle()
+    check("redo spreads it again", run_thickness() == [0.35, 0.35, 0.35], str(run_thickness()))
+    editor.call("undo")
+    editor.wait_idle()
+    editor.call("set_surface_snap_settings", {"connection_step_limit": 1})
+    limited = editor.call("level_set_piece_parameters", {"scene_name": scene, "node_id": r1["id"], "parameters": {"thickness": 0.45}})
+    editor.wait_idle()
+    flow = limited.get("flow") or {}
+    check("with the Connection Step Limit at 1 the edit reaches r2 alone and the report says the limit was reached with r3 still changing (C3.8)",
+          (run_thickness() == [0.45, 0.45, before_run[2]]) and flow.get("limit_reached") and ([p["name"] for p in flow.get("pending", [])] == ["run r3"]) and
+          ("step limit reached" in flow.get("summary", "")), f"{run_thickness()} {json.dumps(flow)[:400]}")
+    editor.call("set_surface_snap_settings", {"connection_step_limit": settings_before["connection_step_limit"]})
+    editor.call("undo")
+    editor.wait_idle()
+    check("undo of the limited edit restores the run", run_thickness() == before_run, str(run_thickness()))
+
+    def block(name, connect=None, position=None):
+        piece = {"shape": "basic.block", "name": name, "parameters": {"width": 1.0, "depth": 1.0, "height": 1.0}}
+        if connect is not None:
+            piece["connect"] = connect
+        else:
+            piece["position"] = position
+        made = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [piece]})["pieces"][0]
+        editor.wait_idle()
+        return made
+
+    # level_set_piece_material: r1's wall material flows to r2 (wall.material over the wall join), in the reply's report.
+    painted = editor.call("level_set_piece_material", {"scene_name": scene, "node_id": r1["id"], "slot": "wall", "material": "Kit Stone"})
+    editor.wait_idle()
+    check("level_set_piece_material's reply carries the flow report: r2 takes r1's wall material",
+          (taken_by(painted.get("flow") or {}, r2["id"]).get("wall.material", {}).get("value") == "Kit Stone") and
+          (piece_by_id(editor, scene, r2["id"])["materials"].get("wall") == "Kit Stone"), json.dumps(painted.get("flow"))[:400])
+    editor.call("undo")
+    editor.wait_idle()
+    # level_replace_pieces: r3 replaced by a block drops its wall connection, and the reply carries the report.
+    replaced = editor.call("level_replace_pieces", {"scene_name": scene, "node_ids": [r3["id"]], "shape": "basic.block"})
+    editor.wait_idle()
+    check("level_replace_pieces' reply carries the flow report (a report, its summary set)",
+          isinstance(replaced.get("flow"), dict) and replaced["flow"].get("summary", "").startswith("Flow"), json.dumps(replaced.get("flow"))[:300])
+    editor.call("undo")
+    editor.wait_idle()
+
+    # C3.14: a piece the user moved off its join whose target followed another piece (not it) loses that connection: blocks
+    # x0 <- t1 <- p2, x0 and p2 scaled together, t1 following x0.
+    x0 = block("keep x0", position=[110.0, 0.0, 0.0])
+    t1 = block("keep t1", {"connector": "left", "to_piece_id": x0["id"], "to_connector": "right"})
+    p2 = block("keep p2", {"connector": "left", "to_piece_id": t1["id"], "to_connector": "right"})
+    select(editor, scene, [x0["id"], p2["id"]])
+    depth = undo_depth(editor)
+    editor.call("drag_selection", {"scale": [2.0, 1.0, 1.0], "frames": 4})
+    editor.wait_idle()
+    p2_links = [c["connector"] for c in editor.call("level_get_connections", {"scene_name": scene, "node_id": p2["id"]})["connections"]]
+    t1_links = sorted(c["connector"] for c in editor.call("level_get_connections", {"scene_name": scene, "node_id": t1["id"]})["connections"])
+    check("x0 and p2 scaled together: t1 follows x0, p2 (off its join with t1, which followed x0 and not p2) loses its connection, one entry (C3.14)",
+          (p2_links == []) and (t1_links == ["left"]) and (undo_depth(editor) == depth + 1), f"p2 {p2_links} t1 {t1_links}")
+    editor.call("undo")
+    editor.wait_idle()
+    select(editor, scene, [])
+
+    # C3.11: a child of a locked kit layout node takes no values: a free wall joined to it records nothing, and its edit leaves the child alone.
+    locked = editor.call("level_create_layout", {"scene_name": scene, "name": "locked walls", "position": [80.0, 0.0, 20.0],
+                                                  "items": [{"shape": "architecture.wall", "parameters": {"length": 4.0}}],
+                                                  "pattern": {"kind": "segments"}, "points": [{"position": p} for p in ([0.0, 0.0, 0.0], [8.0, 0.0, 0.0], [8.0, 0.0, 6.0])]})
+    editor.wait_idle()
+    child = layouts_by_id(editor, scene)[locked["id"]]["children"][0]
+    child_before = piece_by_id(editor, scene, child["id"])["parameters"]
+    free = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [{"shape": "architecture.wall", "name": "locked neighbour", "position": [70.0, 0.0, 30.0]}]})["pieces"][0]
+    editor.wait_idle()
+    joined_child = editor.call("level_connect_pieces", {"scene_name": scene, "node_id": free["id"], "connector": "start", "to_piece_id": child["id"], "to_connector": "end"})
+    editor.wait_idle()
+    editor.call("level_set_piece_parameters", {"scene_name": scene, "node_id": free["id"], "parameters": {"thickness": 0.5}})
+    editor.wait_idle()
+    check("a wall joined to a locked layout's child records no connection (not_attached) and its thickness edit leaves the child's values as they were (C3.11)",
+          bool(joined_child.get("not_attached")) and (piece_by_id(editor, scene, child["id"])["parameters"] == child_before),
+          json.dumps(joined_child.get("not_attached")) + json.dumps(piece_by_id(editor, scene, child["id"])["parameters"]))
+
+    # C3.2: a cycle of rigid connections: four blocks round a square, the last join closing it in place; moving one block moves all.
+    b0 = block("ring b0", position=[90.0, 0.0, 0.0])
+    b1 = block("ring b1", {"connector": "left", "to_piece_id": b0["id"], "to_connector": "right"})
+    b2 = block("ring b2", {"connector": "back", "to_piece_id": b1["id"], "to_connector": "front"})
+    b3 = block("ring b3", {"connector": "right", "to_piece_id": b2["id"], "to_connector": "left"})
+    ring = (b0, b1, b2, b3)
+    depth = undo_depth(editor)
+    closing = editor.call("level_connect_pieces", {"scene_name": scene, "node_id": b0["id"], "connector": "front", "to_piece_id": b3["id"], "to_connector": "back"})
+    editor.wait_idle()
+
+    def ring_positions():
+        return [piece_by_id(editor, scene, b["id"])["position"] for b in ring]
+
+    def ring_joined():
+        return all(c["joined"] for b in ring for c in editor.call("level_get_connections", {"scene_name": scene, "node_id": b["id"]})["connections"])
+
+    ring_before = ring_positions()
+    check("a join closing a cycle of four blocks is made in place (C3.2): b0 unmoved, the connection recorded and reported new, none apart, one entry",
+          close(ring_before[0], [90.0, 0.0, 0.0], 1.0e-4) and ring_joined() and (undo_depth(editor) == depth + 1) and
+          any((c["piece"]["id"] == b0["id"]) and (c["connector"] == "front") for c in (closing.get("flow") or {}).get("new_connections", [])) and
+          not (closing.get("flow") or {}).get("apart_connections"), json.dumps(closing)[:500])
+    editor.call("set_node_transform", {"scene_name": scene, "node_id": b0["id"], "translation": [95.0, 0.0, 0.0], "rotation_xyzw": [0.0, 0.0, 0.0, 1.0]})
+    editor.wait_idle()
+    ring_after = ring_positions()
+    flow = flow_report()
+    check("moving b0 5 m moves the whole ring rigidly: every block 5 m along x, every connection joined, the report lists three follows and nothing apart",
+          all(close(a, [b[0] + 5.0, b[1], b[2]], 1.0e-3) for a, b in zip(ring_after, ring_before)) and ring_joined() and
+          (len([r for r in flow.get("responses", []) if r["kind"] == "follow"]) == 3) and not flow.get("apart_connections"),
+          json.dumps(ring_after) + json.dumps(flow)[:300])
+    editor.call("undo")
+    editor.wait_idle()
+    check("undo of the ring move restores the four blocks", all(close(a, b, 1.0e-4) for a, b in zip(ring_positions(), ring_before)), json.dumps(ring_positions()))
+    editor.call("redo")
+    editor.wait_idle()
+    check("redo moves the ring again", all(close(a, b, 1.0e-3) for a, b in zip(ring_positions(), ring_after)) and ring_joined(), "")
+    editor.call("undo")
+    editor.wait_idle()
+    editor.call("undo")
+    editor.wait_idle()
+    check("undo of the closing join removes only that connection", not any(c["connector"] == "front" for c in editor.call("level_get_connections", {"scene_name": scene, "node_id": b0["id"]})["connections"]), "")
+    editor.close(scene)
+
+
+def check_flow_preview(editor):
+    """doc/plans/level_kit_connections.md C3.10, design K9 (step 7): a Transform drag previews the flow its release records.
+    A free wall snapped onto a floor's edge connector shows the flowed length while snapped and its own length when it
+    unsnaps; a held snap runs nothing again (K9.4); a drag of a connected wall shows the floor fit live and the release
+    equals the last step; a drag into an invalid outline keeps the last valid preview and its release is refused; a wall
+    slid along its edge stays on the edge (K5.5); a held floor edge handle moves a connected floor's shared corner live
+    (K9.3). No preview step records an undo entry or fills a flow report."""
+    scene = create_scene(editor)
+    editor.call("set_active_scene", {"scene_name": scene})
+
+    def flow_preview():
+        return editor.call("level_get_flow_preview", {})
+
+    def report_serial():
+        return editor.call("level_get_flow_report", {})["recording_serial"]
+
+    def wall_state(node_id):
+        p = piece_by_id(editor, scene, node_id)
+        return {"parameters": p["parameters"], "position": p["position"], "rotation_xyzw": p["rotation_xyzw"], "materials": p["materials"]}
+
+    def same_wall(a, b, tolerance=1.0e-4):
+        return (all(abs(a["parameters"][k] - b["parameters"][k]) <= tolerance if isinstance(a["parameters"][k], float) else a["parameters"][k] == b["parameters"][k]
+                    for k in a["parameters"]) and close(a["position"], b["position"], tolerance) and same_xyzw(a["rotation_xyzw"], b["rotation_xyzw"], tolerance) and
+                (a["materials"] == b["materials"]))
+
+    # A free wall dragged onto a floor's edge_0 connector, the frames turned to face (orientation full).
+    floor = editor.call("level_create_layout", {"scene_name": scene, "name": "preview floor", "position": [0.0, 0.0, 0.0],
+                                                "pattern": {"kind": "floor", "floor": {"wall_thickness": 0.3, "room_height": 2.5, "wall_material": "Kit Stone"}}})
+    editor.wait_idle()
+    free = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [{"shape": "architecture.wall", "name": "preview free", "position": [0.0, 0.0, -8.0]}]})["pieces"][0]
+    editor.wait_idle()
+    own = wall_state(free["id"])
+    edge = connectors_of(editor, scene, floor["id"])["edge_0"]["position"]
+    base = connectors_of(editor, scene, free["id"])["base"]["position"]
+    onto = [edge[0] - base[0] + 0.2, edge[1] - base[1] + 0.1, edge[2] - base[2] - 0.1]
+    select(editor, scene, [free["id"]])
+    depth = undo_depth(editor)
+    serial = report_serial()
+    dragged = editor.call("drag_selection", {"translation": onto, "frames": 4, "release": False, "connector_snap_distance": 0.5, "connector_snap_orientation": "full"})
+    snapped = wall_state(free["id"])
+    preview = flow_preview()
+    check("a held drag snapping a free wall's base onto the floor's edge_0 shows the flowed values: length 3.7, thickness 0.3, height 2.5, Kit Stone (C3.10)",
+          dragged["connector_snap"]["snapped"] and (dragged["connector_snap"].get("target_id") == floor["id"]) and
+          close([snapped["parameters"]["length"], snapped["parameters"]["thickness"], snapped["parameters"]["height"]], [3.7, 0.3, 2.5], 1.0e-4) and
+          (snapped["materials"].get("wall") == "Kit Stone") and preview["active"] and (preview["snap"] or {}).get("target_connector") == "edge_0",
+          json.dumps(snapped["parameters"]) + " " + json.dumps(preview))
+    check("the preview records no undo entry and fills no flow report", (undo_depth(editor) == depth) and (report_serial() == serial),
+          f"depth {undo_depth(editor) - depth}, serial {serial} -> {report_serial()}")
+    away = [onto[0] + 3.0, onto[1], onto[2] + 3.0]
+    unsnapped = editor.call("drag_selection", {"action": "move", "translation": away})
+    left = wall_state(free["id"])
+    check("moved out of reach the drag unsnaps and the wall shows its own values again (L10)",
+          (not unsnapped["connector_snap"]["snapped"]) and (left["parameters"] == own["parameters"]) and (left["materials"] == own["materials"]) and
+          (flow_preview()["snap"] is None), json.dumps(left["parameters"]))
+    editor.call("drag_selection", {"action": "move", "translation": onto})
+    again = wall_state(free["id"])
+    check("moved back the drag snaps again and shows the flowed values", same_wall(again, snapped), json.dumps(again["parameters"]))
+    # K9.4: steps of the same pose and pair run nothing; the frames between them run nothing either (change-driven).
+    held_before = flow_preview()
+    for _ in range(5):
+        editor.call("drag_selection", {"action": "move", "translation": onto})
+        editor.wait_frames(3)
+    held_after = flow_preview()
+    check("a held snap (5 steps of the same pose, 3 frames each) runs no flow again: runs unchanged, 5 held steps, the shown state kept (K9.4)",
+          (held_after["runs"] == held_before["runs"]) and (held_after["held_steps"] == held_before["held_steps"] + 5) and
+          (held_after["steps"] == held_before["steps"] + 5) and same_wall(wall_state(free["id"]), snapped),
+          json.dumps(held_before) + " -> " + json.dumps(held_after))
+    last_step = wall_state(free["id"])
+    editor.call("drag_selection", {"action": "release"})
+    editor.wait_idle()
+    released = wall_state(free["id"])
+    joined = [(c["connector"], c["other_name"], c["other_connector"]) for c in editor.call("level_get_connections", {"scene_name": scene, "node_id": free["id"]})["connections"]]
+    check("the release equals the last step: the wall's values and pose, the connection base -> edge_0 recorded, one undo entry, a flow report",
+          same_wall(released, last_step) and (("base", "preview floor", "edge_0") in joined) and (undo_depth(editor) == depth + 1) and (report_serial() > serial),
+          json.dumps(released) + " vs " + json.dumps(last_step) + " " + json.dumps(joined))
+    check("after the release the preview is not active", not flow_preview()["active"], json.dumps(flow_preview()))
+    editor.call("undo")
+    editor.wait_idle()
+    check("undo gives the wall its own values and pose back", same_wall(wall_state(free["id"]), own), json.dumps(wall_state(free["id"])))
+
+    # A room of four walls on a 4 m floor; the wall on edge_2 (x = +2) dragged 1 m outward shows the floor fit live.
+    room = editor.call("level_create_layout", {"scene_name": scene, "name": "preview room", "position": [20.0, 0.0, 0.0], "pattern": {"kind": "floor"}})
+    editor.wait_idle()
+    walls = {}
+    for k in range(4):
+        walls[k] = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [{"shape": "architecture.wall", "name": f"preview w{k}",
+                               "connect": {"connector": "base", "to_piece_id": room["id"], "to_connector": f"edge_{k}"}}]})["pieces"][0]
+        editor.wait_idle()
+
+    def room_state():
+        corners = [p["position"] for p in editor.call("get_curve", {"scene_name": scene, "curve_id": room["id"]})["points"]]
+        return {"corners": corners, "walls": {k: wall_state(walls[k]["id"]) for k in range(4)}}
+
+    def room_close(a, b, tolerance=1.0e-4):
+        return all(close(p, q, tolerance) for p, q in zip(a["corners"], b["corners"])) and all(same_wall(a["walls"][k], b["walls"][k], tolerance) for k in range(4))
+
+    start = room_state()
+    select(editor, scene, [walls[2]["id"]])
+    depth = undo_depth(editor)
+    serial = report_serial()
+    editor.call("drag_selection", {"translation": [1.0, 0.0, 0.0], "frames": 4, "release": False})
+    live = room_state()
+    check("a held drag of the wall on edge_2 1 m outward shows the floor fit live: corners 2 and 3 at x = 3, walls 1 and 3 4.75 m, no entry, no report (C3.15)",
+          close([live["corners"][2][0], live["corners"][3][0]], [3.0, 3.0], 1.0e-3) and
+          close([live["walls"][1]["parameters"]["length"], live["walls"][3]["parameters"]["length"]], [4.75, 4.75], 1.0e-3) and
+          (undo_depth(editor) == depth) and (report_serial() == serial), json.dumps(live["corners"]) + " " + str([live["walls"][k]["parameters"]["length"] for k in range(4)]))
+    # K0.3: past the opposite edge the floor would turn inside out: the step keeps the last valid preview.
+    editor.call("drag_selection", {"action": "move", "translation": [-7.0, 0.0, 0.0]})
+    refused = room_state()
+    preview = flow_preview()
+    check("moved into an invalid outline the step keeps the last valid preview (the floor and walls 0, 1 and 3 as at +1 m) and reports the refusal",
+          all(close(p, q, 1.0e-4) for p, q in zip(refused["corners"], live["corners"])) and
+          all(same_wall(refused["walls"][k], live["walls"][k]) for k in (0, 1, 3)) and ("cannot fit" in (preview.get("refusal") or "")) and
+          (preview["refused_steps"] >= 1), json.dumps(preview))
+    refused_release = editor.call("drag_selection", {"action": "release"})
+    editor.wait_idle()
+    check("its release is refused: the room as before the drag, no undo entry", room_close(room_state(), start) and (undo_depth(editor) == depth),
+          json.dumps(refused_release.get("connector_snap")) + " " + json.dumps(room_state()["corners"]))
+    editor.call("drag_selection", {"translation": [1.0, 0.0, 0.0], "frames": 4, "release": False})
+    last_step = room_state()
+    editor.call("drag_selection", {"action": "release"})
+    editor.wait_idle()
+    check("a drag released at +1 m records one entry that equals its last step (floor corners, the four walls' values and poses)",
+          room_close(room_state(), last_step) and room_close(last_step, live) and (undo_depth(editor) == depth + 1), json.dumps(room_state()["corners"]))
+    editor.call("undo")
+    editor.wait_idle()
+    check("undo restores the room", room_close(room_state(), start), "")
+    # K5.5: a wall slid along its edge goes back onto the edge's midpoint at the release; the preview shows it there.
+    editor.call("drag_selection", {"translation": [0.0, 0.0, 0.5], "frames": 3, "release": False})
+    slid = room_state()
+    editor.call("drag_selection", {"action": "release"})
+    editor.wait_idle()
+    check("a wall slid 0.5 m along its edge stays on the edge's midpoint while held (K5.5 previewed), and the release changes nothing",
+          room_close(slid, start) and room_close(room_state(), start), json.dumps(slid["walls"][2]["position"]) + " " + json.dumps(room_state()["walls"][2]["position"]))
+    while undo_depth(editor) > depth:
+        editor.call("undo")
+        editor.wait_idle()
+
+    # K9.3: a held edge handle edit of the room moves the shared corner of a connected floor live; the release equals it.
+    neighbour = editor.call("level_create_layout", {"scene_name": scene, "name": "preview neighbour", "position": [24.0, 0.0, 0.0], "pattern": {"kind": "floor"}})
+    editor.wait_idle()
+    editor.call("set_node_transform", {"scene_name": scene, "node_id": neighbour["id"], "translation": [24.0, 0.0, 0.0], "rotation_xyzw": [0.0, 0.0, 0.0, 1.0]})
+    editor.wait_idle()
+    shared_start = [p["position"] for p in editor.call("get_curve", {"scene_name": scene, "curve_id": neighbour["id"]})["points"]]
+    select(editor, scene, [room["id"]])
+    editor.call("level_select_segment_handle", {"scene_name": scene, "layout_id": room["id"], "index": 1})
+    editor.wait_idle()
+    handle = editor.call("level_get_segment_handles")["handles"][1]["position"]
+    depth = undo_depth(editor)
+    editor.call("transform_selection", {"translation": [handle[0], handle[1], handle[2] + 1.0], "end_edit": False})
+    editor.wait_idle()
+    shared_live = [p["position"] for p in editor.call("get_curve", {"scene_name": scene, "curve_id": neighbour["id"]})["points"]]
+    room_live = room_state()
+    check("a held edge handle edit moving the room's edge 1 by 1 m moves the connected neighbour's shared corner (local (-2, 3)) live, no entry (K9.3)",
+          close(shared_live[1], [-2.0, 0.0, 3.0], 1.0e-3) and close(shared_live[0], shared_start[0], 1.0e-4) and (undo_depth(editor) == depth),
+          json.dumps(shared_live))
+    editor.call("transform_selection", {"translation": [handle[0], handle[1], handle[2] + 1.0], "end_edit": True})
+    editor.wait_idle()
+    shared_end = [p["position"] for p in editor.call("get_curve", {"scene_name": scene, "curve_id": neighbour["id"]})["points"]]
+    check("the handle edit's release records one entry equal to the live state (the room, its walls and the shared corner)",
+          all(close(p, q, 1.0e-4) for p, q in zip(shared_end, shared_live)) and room_close(room_state(), room_live) and (undo_depth(editor) == depth + 1),
+          json.dumps(shared_end))
+    editor.call("undo")
+    editor.wait_idle()
+    check("undo puts the room and the shared corner back",
+          close(editor.call("get_curve", {"scene_name": scene, "curve_id": neighbour["id"]})["points"][1]["position"], shared_start[1], 1.0e-4) and room_close(room_state(), start), "")
+    editor.call("level_select_segment_handle", {"scene_name": scene, "layout_id": room["id"]})
+    select(editor, scene, [])
+
+    # Teardown: a cancel of a flow-previewed drag gives back every flowed value, fit and follower; no entry.
+    select(editor, scene, [free["id"]])
+    depth = undo_depth(editor)
+    editor.call("drag_selection", {"translation": onto, "frames": 3, "release": False, "connector_snap_distance": 0.5, "connector_snap_orientation": "full"})
+    mid = wall_state(free["id"])
+    cancelled = editor.call("cancel_transform_drag", {})
+    editor.wait_idle()
+    check("cancel_transform_drag of a snapped, flowed drag gives the free wall its own values and pose back, no undo entry, the preview ended",
+          cancelled["cancelled"] and (abs(mid["parameters"]["length"] - 3.7) < 1.0e-4) and same_wall(wall_state(free["id"]), own) and
+          (undo_depth(editor) == depth) and not flow_preview()["active"], json.dumps(wall_state(free["id"])["parameters"]))
+    select(editor, scene, [walls[2]["id"]])
+    editor.call("drag_selection", {"translation": [1.0, 0.0, 0.0], "frames": 3, "release": False})
+    fitted = room_state()
+    editor.call("cancel_transform_drag", {})
+    editor.wait_idle()
+    check("cancel_transform_drag of a held drag of a connected wall gives back the floor fit and the walls' lengths and poses, no undo entry",
+          close([fitted["corners"][2][0]], [3.0], 1.0e-3) and room_close(room_state(), start) and (undo_depth(editor) == depth), json.dumps(room_state()["corners"]))
+    # A tool switch mid-drag leaves the scripted drag and its preview held; its release records the fit as one entry.
+    tool = editor.call("get_input_state", {}).get("active_tool")
+    gizmo = {k: v for k, v in editor.call("set_gizmo_visibility", {}).items() if k in Saved_tool_settings.GIZMO_KEYS}
+    editor.call("drag_selection", {"translation": [1.0, 0.0, 0.0], "frames": 3, "release": False})
+    editor.call("set_active_tool", {"tool": "rotate" if tool != "rotate" else "move"})
+    editor.wait_idle()
+    switched = room_state()
+    editor.call("drag_selection", {"action": "release"})
+    editor.wait_idle()
+    editor.call("set_active_tool", {"tool": tool})
+    editor.call("set_gizmo_visibility", gizmo)
+    editor.wait_idle()
+    check("a tool switch during a held drag of a connected wall keeps its preview; the release records the same fit as one entry",
+          room_close(switched, live) and room_close(room_state(), live) and (undo_depth(editor) == depth + 1), json.dumps(room_state()["corners"]))
+    editor.call("undo")
+    editor.wait_idle()
+
+    # K9.1: pieces the drag's flow moves are no snap targets. Block B follows block A rigidly (B.back on A.front); A dragged so
+    # that its free back connector comes to where B.front was at the begin: no snap there, nothing drawn there.
+    a = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [{"shape": "basic.block", "name": "ghost a", "position": [0.0, 0.0, 30.0]}]})["pieces"][0]
+    editor.wait_idle()
+    b = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [{"shape": "basic.block", "name": "ghost b",
+                    "connect": {"connector": "back", "to_piece_id": a["id"], "to_connector": "front"}}]})["pieces"][0]
+    editor.wait_idle()
+    editor.call("level_place_pieces", {"scene_name": scene, "pieces": [{"shape": "basic.block", "name": "ghost c", "position": [6.0, 0.0, 30.0]}]})
+    editor.wait_idle()
+    stale = connectors_of(editor, scene, b["id"])["front"]["position"]
+    a_back = connectors_of(editor, scene, a["id"])["back"]["position"]
+    shift = [stale[0] - a_back[0] + 0.1, stale[1] - a_back[1], stale[2] - a_back[2]]
+    select(editor, scene, [a["id"]])
+    depth = undo_depth(editor)
+    ghost = editor.call("drag_selection", {"translation": shift, "frames": 3, "release": False, "connector_snap_distance": 0.5})
+    b_live = connectors_of(editor, scene, b["id"])
+    a_live = connectors_of(editor, scene, a["id"])
+    drawn = [i for i in editor.call("level_get_connector_indicators", {}).get("indicators", []) if close(i["position"], stale, 0.05)]
+    check("a drag of block A whose back reaches where its follower B's front was at the begin snaps nothing (B is moved by the drag's flow), "
+          "B follows live, and no indicator is drawn at B's old front",
+          (not ghost["connector_snap"]["snapped"]) and close(b_live["back"]["position"], a_live["front"]["position"], 1.0e-4) and not drawn,
+          json.dumps(ghost["connector_snap"]) + " " + json.dumps(drawn))
+    editor.call("drag_selection", {"action": "release"})
+    editor.wait_idle()
+    check("its release records one entry with B still joined to A and no new connection on A's back",
+          (undo_depth(editor) == depth + 1) and
+          not any(c["connector"] == "back" for c in editor.call("level_get_connections", {"scene_name": scene, "node_id": a["id"]})["connections"]),
+          json.dumps(editor.call("level_get_connections", {"scene_name": scene, "node_id": a["id"]})["connections"]))
+    # Following is by record direction: a dragged record owner leaves its target, which stays a target (C3.14). Block p1,
+    # attached by left to p0's right, dragged so its back comes 0.14 m from p0's front: it snaps there and joins there.
+    p0 = editor.call("level_place_pieces", {"scene_name": scene, "auto_connect": False, "pieces": [{"shape": "basic.block", "name": "owner p0", "position": [0.0, 0.0, 40.0]}]})["pieces"][0]
+    editor.wait_idle()
+    p1 = editor.call("level_place_pieces", {"scene_name": scene, "auto_connect": False, "pieces": [{"shape": "basic.block", "name": "owner p1",
+                     "connect": {"connector": "left", "to_piece_id": p0["id"], "to_connector": "right"}}]})["pieces"][0]
+    editor.wait_idle()
+    front = connectors_of(editor, scene, p0["id"])["front"]["position"]
+    back = connectors_of(editor, scene, p1["id"])["back"]["position"]
+    select(editor, scene, [p1["id"]])
+    owner = editor.call("drag_selection", {"translation": [front[0] - back[0] + 0.1, front[1] - back[1], front[2] - back[2] + 0.1], "frames": 4,
+                                           "release": False, "connector_snap_distance": 0.5})
+    editor.call("drag_selection", {"action": "release"})
+    editor.wait_idle()
+    owner_links = [(c["connector"], c["other_name"], c["other_connector"]) for c in editor.call("level_get_connections", {"scene_name": scene, "node_id": p1["id"]})["connections"]]
+    check("a block dragged off the block it is attached to (its record's target, which does not follow) snaps its back to that block's front, "
+          "and the release joins it there (the old join removed)",
+          owner["connector_snap"]["snapped"] and (owner["connector_snap"].get("target_id") == p0["id"]) and
+          (owner["connector_snap"].get("target_connector") == "front") and (owner_links == [("back", "owner p0", "front")]),
+          json.dumps(owner["connector_snap"]) + " " + json.dumps(owner_links))
+    select(editor, scene, [])
+    close_without_leak(editor, scene, "flow preview")
+
+    # With wall-floor off in the flow mask a wall on a floor moves alone: its floor does not fit, and the floor's other edge
+    # connectors stay targets (only its own joined edge_2 is not one).
+    scene = create_scene(editor)
+    editor.call("set_active_scene", {"scene_name": scene})
+    masked_floor = editor.call("level_create_layout", {"scene_name": scene, "name": "masked floor", "position": [0.0, 0.0, 0.0], "pattern": {"kind": "floor"}})
+    editor.wait_idle()
+    masked_wall = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [{"shape": "architecture.wall", "name": "masked wall",
+                              "connect": {"connector": "base", "to_piece_id": masked_floor["id"], "to_connector": "edge_2"}}]})["pieces"][0]
+    editor.wait_idle()
+    mask_before = editor.call("get_surface_snap_settings", {})["flow_mask"]
+    editor.call("set_surface_snap_settings", {"flow_mask": ["generic", "wall", "floor"]})
+    edge1 = connectors_of(editor, scene, masked_floor["id"])["edge_1"]["position"]
+    base = connectors_of(editor, scene, masked_wall["id"])["base"]["position"]
+    select(editor, scene, [masked_wall["id"]])
+    masked = editor.call("drag_selection", {"translation": [edge1[0] - base[0] + 0.1, edge1[1] - base[1], edge1[2] - base[2] - 0.1], "frames": 4,
+                                            "release": False, "connector_snap_distance": 0.5, "connector_snap_orientation": "full"})
+    editor.call("cancel_transform_drag", {})
+    editor.wait_idle()
+    editor.call("set_surface_snap_settings", {"flow_mask": mask_before})
+    check("with wall-floor masked off a wall on a floor's edge_2 dragged near edge_1 snaps to edge_1",
+          masked["connector_snap"]["snapped"] and (masked["connector_snap"].get("target_id") == masked_floor["id"]) and
+          (masked["connector_snap"].get("target_connector") == "edge_1"), json.dumps(masked["connector_snap"]))
+    select(editor, scene, [])
+    editor.close(scene)
+
+    # A scene closed mid-drag: the preview goes with it (no node kept alive), and a drag in a new scene previews again.
+    scene = create_scene(editor)
+    editor.call("set_active_scene", {"scene_name": scene})
+    room = editor.call("level_create_layout", {"scene_name": scene, "name": "closing room", "position": [0.0, 0.0, 0.0], "pattern": {"kind": "floor"}})
+    editor.wait_idle()
+    wall = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [{"shape": "architecture.wall", "name": "closing wall",
+                       "connect": {"connector": "base", "to_piece_id": room["id"], "to_connector": "edge_2"}}]})["pieces"][0]
+    editor.wait_idle()
+    select(editor, scene, [wall["id"]])
+    editor.call("drag_selection", {"translation": [1.0, 0.0, 0.0], "frames": 3, "release": False})
+    close_without_leak(editor, scene, "flow preview closed mid-drag")
+    editor.call("drag_selection", {"action": "release"})
+    editor.wait_idle()
+    check("after the close the preview is not active", not flow_preview()["active"], json.dumps(flow_preview()))
+    scene = create_scene(editor)
+    editor.call("set_active_scene", {"scene_name": scene})
+    room = editor.call("level_create_layout", {"scene_name": scene, "name": "next room", "position": [0.0, 0.0, 0.0], "pattern": {"kind": "floor"}})
+    editor.wait_idle()
+    wall = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [{"shape": "architecture.wall", "name": "next wall",
+                       "connect": {"connector": "base", "to_piece_id": room["id"], "to_connector": "edge_2"}}]})["pieces"][0]
+    editor.wait_idle()
+    select(editor, scene, [wall["id"]])
+    editor.call("drag_selection", {"translation": [1.0, 0.0, 0.0], "frames": 3, "release": False})
+    renewed = flow_preview()
+    corners = [p["position"] for p in editor.call("get_curve", {"scene_name": scene, "curve_id": room["id"]})["points"]]
+    editor.call("cancel_transform_drag", {})
+    editor.wait_idle()
+    check("a drag in a new scene after it previews the floor fit again (corners 2 and 3 at x = 3, an active preview of 3 runs)",
+          close([corners[2][0], corners[3][0]], [3.0, 3.0], 1.0e-3) and renewed["active"] and (renewed["runs"] == 3), json.dumps(corners) + " " + json.dumps(renewed))
+    select(editor, scene, [])
+    editor.close(scene)
+
+
+def check_flow_preview_rows(editor):
+    """K9.1 through the Properties window's transform rows: a held Rotation.y row drag of a wall on a floor edge turns the edge;
+    the flow preview puts the wall on the turned edge's midpoint (K5.5) and the gizmo anchor follows it there; a selection
+    change gives the drag up with the wall and the floor as before and no entry."""
+    properties = "Properties"
+    windows = shown_windows(editor, editor.scene_names())
+    scene = create_scene(editor)
+    editor.call("set_active_scene", {"scene_name": scene})
+    room = editor.call("level_create_layout", {"scene_name": scene, "name": "row room", "position": [0.0, 0.0, 0.0], "pattern": {"kind": "floor"}})
+    editor.wait_idle()
+    wall = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [{"shape": "architecture.wall", "name": "row wall",
+                       "connect": {"connector": "base", "to_piece_id": room["id"], "to_connector": "edge_2"}}]})["pieces"][0]
+    editor.wait_idle()
+    editor.call("set_window_visibility", {"title": properties, "visible": True, "focus": True})
+    editor.wait_idle()
+    for other in editor.scene_names():
+        if other != scene:
+            editor.call("select_items", {"scene_name": other, "ids": []})
+    select(editor, scene, [wall["id"]])
+    open_property_groups(editor, ["Local Transform"])
+    start = piece_by_id(editor, scene, wall["id"])
+    corners_start = [p["position"] for p in editor.call("get_curve", {"scene_name": scene, "curve_id": room["id"]})["points"]]
+
+    def row_item(name):
+        items = editor.call("get_imgui_items", {"window": properties, "limit": 3000, "visible_only": False}).get("items", [])
+        first = next(k for k, i in enumerate(items) if i.get("display_label") == "Local Transform")
+        return next(i for i in items[first + 1:] if (i.get("display_label") or "").lstrip("* ") == name)
+
+    def hold_drag(name, pixels):
+        target = row_item(name)
+        editor.call("imgui_scroll_to_item", {"window": properties, "id": target["id"]})
+        rect = editor.call("get_imgui_item_rect", {"window": properties, "id": target["id"]})
+        editor.call("mouse_drag", {"from": [rect["center_x"], rect["center_y"]], "to": [rect["center_x"] + pixels, rect["center_y"]], "frames": 10, "hold": True})
+        editor.wait_idle()
+
+    depth = undo_depth(editor)
+    hold_drag("Rotation.y", 40.0)
+    held = piece_by_id(editor, scene, wall["id"])
+    rows_preview = editor.call("level_get_flow_preview", {})
+    anchor = editor.call("get_transform_state", {})["anchor_frame"]["translation"]
+    check("a held Properties Rotation.y row drag of a wall on a floor edge turns the edge; the flow preview puts the wall on the turned edge's "
+          "midpoint (K5.5), and the gizmo anchor follows it there; no entry",
+          rows_preview["active"] and (rows_preview["runs"] > 0) and
+          (not close(held["position"], start["position"], 1.0e-3)) and close(anchor, held["position"], 1.0e-3) and (undo_depth(editor) == depth),
+          f"wall {held['position']} start {start['position']} anchor {anchor} {json.dumps(rows_preview)}")
+    editor.call("select_items", {"scene_name": scene, "ids": []})
+    editor.wait_idle()
+    editor.call("mouse_release", {})
+    editor.wait_idle()
+    after = piece_by_id(editor, scene, wall["id"])
+    check("a selection change gives the row drag up: the wall and the floor as before, no undo entry",
+          close(after["position"], start["position"], 1.0e-5) and (undo_depth(editor) == depth) and
+          ([p["position"] for p in editor.call("get_curve", {"scene_name": scene, "curve_id": room["id"]})["points"]] == corners_start),
+          f"{after['position']} undo {undo_depth(editor) - depth}")
+    editor.close(scene)
+    hide_windows_shown_since(editor, windows)
+
+def check_connection_persistence(editor, directory):
+    """doc/plans/level_kit_connections.md C7 (step 9), design K11: a room - a 6 x 4 m polygon floor with non-default values, four
+    walls on its edges joined at the corners, a second floor sharing its +x edge (L25), a wall with a connector switch off - saved,
+    closed and loaded keeps the floor's outline, values and slab, every connection record on both ends, the connector types, the
+    flowed wall values and the materials; the loaded room still behaves (a corner edit moves the walls, the shared corner and the
+    lengths; a wall moved out makes the floor fit; Detach frees a wall; undo and redo); its navigation mesh walks the floor's top
+    inside the walls and leaves the second floor beyond the wall an unreachable island."""
+    scene = create_scene(editor)
+    editor.call("set_active_scene", {"scene_name": scene})
+    outline = [[-3.0, 0.0, -2.0], [-3.0, 0.0, 2.0], [3.0, 0.0, 2.0], [3.0, 0.0, -2.0]]
+    floor_values = {"thickness": 0.25, "wall_thickness": 0.3, "room_height": 2.5, "material": "Kit Wood", "wall_material": "Kit Stone"}
+    room = editor.call("level_create_layout", {"scene_name": scene, "name": "persist floor", "position": [0.0, 0.0, 0.0], "closed": True,
+                                               "pattern": {"kind": "floor", "floor": floor_values}, "points": [{"position": p} for p in outline]})
+    editor.wait_idle()
+    walls = {}
+    for k in range(4):
+        walls[k] = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [{"shape": "architecture.wall", "name": f"persist w{k}",
+                               "connect": {"connector": "base", "to_piece_id": room["id"], "to_connector": f"edge_{k}"}}]})["pieces"][0]
+        editor.wait_idle()
+    neighbour = editor.call("level_create_layout", {"scene_name": scene, "name": "persist neighbour", "position": [5.0, 0.0, 0.0],
+                                                    "pattern": {"kind": "floor", "floor": {"thickness": 0.25}}})
+    editor.wait_idle()
+    # A move onto its own place runs Auto-connect of the floor connectors (as in the polygon floor group).
+    editor.call("set_node_transform", {"scene_name": scene, "node_id": neighbour["id"], "translation": [5.0, 0.0, 0.0], "rotation_xyzw": [0.0, 0.0, 0.0, 1.0]})
+    editor.wait_idle()
+    free_connector = next(n for n in sorted(connectors_of(editor, scene, walls[0]["id"])) if n not in ("base", "start", "end"))
+    editor.call("level_set_piece_connectors", {"scene_name": scene, "node_id": walls[0]["id"], "connectors": {free_connector: False}})
+    editor.wait_idle()
+    wall_ids = {f"persist w{k}": walls[k]["id"] for k in range(4)}
+
+    def snapshot(scene_name):
+        layouts = {l["name"]: l for l in editor.call("level_get_layouts", {"scene_name": scene_name})["layouts"]}
+        by_name = {p["name"]: p for p in pieces(editor, scene_name)}
+        ids = {name: by_name[name]["id"] for name in wall_ids}
+        ids.update({name: layouts[name]["id"] for name in ("persist floor", "persist neighbour")})
+        state = {"connections": {}, "types": {}, "switches": {}, "parameters": {}, "materials": {}, "floors": {}}
+        for name, node_id in ids.items():
+            reply = editor.call("level_get_connections", {"scene_name": scene_name, "node_id": node_id})["connections"]
+            state["connections"][name] = sorted((c["connector"], c["other_name"], c["other_connector"], c["joined"]) for c in reply)
+            state["types"][name] = {n: c["types"] for n, c in connectors_of(editor, scene_name, node_id).items()}
+        for name in wall_ids:
+            enabled, disabled, _ = connector_switches(editor, scene_name, ids[name])
+            state["switches"][name] = (enabled, disabled)
+            state["parameters"][name] = {k: (round(v, 5) if isinstance(v, float) else v) for k, v in by_name[name]["parameters"].items()}
+            state["materials"][name] = by_name[name]["materials"]
+        for name in ("persist floor", "persist neighbour"):
+            layout = layouts[name]
+            child = layout["children"][0] if layout.get("children") else {}
+            box = (editor.call("get_node_details", {"scene_name": scene_name, "node_id": child.get("id", 0)}).get("mesh") or {}).get("world_aabb", {}) if child else {}
+            points = [[round(x, 5) for x in p["position"]] for p in editor.call("get_curve", {"scene_name": scene_name, "curve_id": ids[name]})["points"]]
+            state["floors"][name] = {"pattern": layout["pattern"], "points": points, "child_count": layout["child_count"],
+                                     "generated": bool(child.get("generated")), "materials": child.get("materials"),
+                                     "box": [[round(x, 4) for x in box.get("min", [])], [round(x, 4) for x in box.get("max", [])]],
+                                     "problem": (layout.get("run") or {}).get("problem")}
+        return state, ids
+
+    before, _ = snapshot(scene)
+    params = before["parameters"]
+    check("the room before the save: the walls took the floor's lengths (3.7, 5.7, 3.7, 5.7), thickness 0.3, height 2.5 and Kit Stone",
+          ([params[f"persist w{k}"]["length"] for k in range(4)] == [3.7, 5.7, 3.7, 5.7]) and
+          all((params[n]["thickness"] == 0.3) and (params[n]["height"] == 2.5) and (before["materials"][n].get("wall") == "Kit Stone") for n in wall_ids),
+          json.dumps(params) + json.dumps(before["materials"]))
+    links = before["connections"]
+    check("the room before the save: each wall joins the floor by its base and both neighbours by its ends; the two floors share edge 2 / edge 0; "
+          "wall 0 has one connector switched off; the slab has Kit Wood",
+          all(sorted(c[0] for c in links[f"persist w{k}"]) == ["base", "end", "start"] for k in range(4)) and
+          (("floor_2", "persist neighbour", "floor_0", True) in links["persist floor"]) and
+          (sorted(c[0] for c in links["persist floor"]) == ["edge_0", "edge_1", "edge_2", "edge_3", "floor_2"]) and
+          (before["switches"]["persist w0"] == (True, [free_connector])) and ("Kit Wood" in json.dumps(before["floors"]["persist floor"]["materials"])),
+          json.dumps(links)[:900])
+    path = os.path.join(directory, "connection_persistence.gltf")
+    editor.save(scene, path)
+    editor.close(scene)
+    loaded = editor.load(path)
+    after, ids = snapshot(loaded)
+    for key, label in (("floors", "both floors' outlines, values (pattern), slab child, slab bounds and slab materials"),
+                       ("connections", "every connection record on both ends, each with its joined state"),
+                       ("types", "every connector's types"),
+                       ("switches", "the connector switches (one off on wall 0)"),
+                       ("parameters", "the walls' flowed parameter values"),
+                       ("materials", "the walls' slot materials")):
+        check(f"save and load keep {label} (C6.4, K11.1)", after[key] == before[key],
+              f"before {json.dumps(before[key])[:400]} after {json.dumps(after[key])[:400]}")
+
+    # The loaded room still behaves. A corner edit moving edge 2 out to x = 4: the side walls take 6.7, the shared corners of the
+    # neighbour floor move with it, one undo entry.
+    floor_id = ids["persist floor"]
+    def lengths():
+        return [round(piece_by_id(editor, loaded, ids[f"persist w{k}"])["parameters"]["length"], 4) for k in range(4)]
+    def corners(node_id):
+        return [p["position"] for p in editor.call("get_curve", {"scene_name": loaded, "curve_id": node_id})["points"]]
+    depth = undo_depth(editor)
+    wide = [[-3.0, 0.0, -2.0], [-3.0, 0.0, 2.0], [4.0, 0.0, 2.0], [4.0, 0.0, -2.0]]
+    editor.call("set_curve", {"scene_name": loaded, "curve_id": floor_id, "closed": True, "points": [{"position": p} for p in wide]})
+    editor.wait_idle()
+    w2 = piece_by_id(editor, loaded, ids["persist w2"])
+    shared = corners(ids["persist neighbour"])
+    check("after the load a corner edit moving edge 2 to x = 4 gives the side walls length 6.7, moves wall 2 onto the new edge and the "
+          "neighbour floor's shared corners to local x = -1, one undo entry",
+          (lengths() == [3.7, 6.7, 3.7, 6.7]) and (abs(w2["position"][0] - 3.85) < 1.0e-3) and
+          close([shared[0][0], shared[1][0]], [-1.0, -1.0], 1.0e-3) and (undo_depth(editor) == depth + 1),
+          f"lengths {lengths()} w2 {w2['position']} shared {shared} depth {undo_depth(editor) - depth}")
+    editor.call("undo")
+    editor.wait_idle()
+    shared = corners(ids["persist neighbour"])
+    check("undo of the corner edit restores the walls' lengths and both floors' corners",
+          (lengths() == [3.7, 5.7, 3.7, 5.7]) and close([shared[0][0], shared[1][0]], [-2.0, -2.0], 1.0e-3) and (undo_depth(editor) == depth),
+          f"lengths {lengths()} shared {shared}")
+    editor.call("redo")
+    editor.wait_idle()
+    check("redo of the corner edit gives the side walls 6.7 again", lengths() == [3.7, 6.7, 3.7, 6.7], str(lengths()))
+    editor.call("undo")
+    editor.wait_idle()
+
+    # A wall moved 1 m out (wall 0 on the x = -3 edge, to -x) makes the floor fit: corners 0 and 1 at x = -4, side walls 6.7.
+    w0 = piece_by_id(editor, loaded, ids["persist w0"])
+    depth = undo_depth(editor)
+    editor.call("set_node_transform", {"scene_name": loaded, "node_id": w0["id"], "translation": [w0["position"][0] - 1.0, w0["position"][1], w0["position"][2]],
+                                       "rotation_xyzw": w0["rotation_xyzw"]})
+    editor.wait_idle()
+    moved_corners = corners(floor_id)
+    check("after the load wall 0 moved 1 m out makes the floor fit: corners 0 and 1 at x = -4, the side walls length 6.7, one undo entry (C3.15)",
+          close([moved_corners[0][0], moved_corners[1][0]], [-4.0, -4.0], 1.0e-3) and (lengths() == [3.7, 6.7, 3.7, 6.7]) and (undo_depth(editor) == depth + 1),
+          f"corners {moved_corners} lengths {lengths()}")
+    editor.call("undo")
+    editor.wait_idle()
+    check("undo of the wall move restores the floor and the lengths", close([corners(floor_id)[0][0]], [-3.0], 1.0e-3) and (lengths() == [3.7, 5.7, 3.7, 5.7]),
+          f"{corners(floor_id)} {lengths()}")
+
+    # Detach frees wall 0: no record names it; moved away it drags alone, the floor stays; undo restores its three connections.
+    depth = undo_depth(editor)
+    detached = editor.call("level_detach_pieces", {"scene_name": loaded, "node_ids": [w0["id"]]})
+    editor.wait_idle()
+    def records_naming(node_id):
+        return [(name, c["connector"]) for name, other in ids.items() if other != node_id
+                for c in editor.call("level_get_connections", {"scene_name": loaded, "node_id": other})["connections"] if c["other_id"] == node_id]
+    check("after the load Detach of wall 0 removes its three connections and every record naming it, one undo entry",
+          detached["changed"] and (editor.call("level_get_connections", {"scene_name": loaded, "node_id": w0["id"]})["connections"] == []) and
+          (records_naming(w0["id"]) == []) and (undo_depth(editor) == depth + 1), json.dumps(records_naming(w0["id"])))
+    editor.call("set_node_transform", {"scene_name": loaded, "node_id": w0["id"], "translation": [w0["position"][0] - 3.0, w0["position"][1], w0["position"][2]],
+                                       "rotation_xyzw": w0["rotation_xyzw"]})
+    editor.wait_idle()
+    check("the detached wall moved 3 m away drags alone: the floor's corners and the other walls' lengths stay",
+          close([corners(floor_id)[0][0], corners(floor_id)[1][0]], [-3.0, -3.0], 1.0e-3) and (lengths()[1:] == [5.7, 3.7, 5.7]),
+          f"{corners(floor_id)} {lengths()}")
+    editor.call("undo")
+    editor.wait_idle()
+    editor.call("undo")
+    editor.wait_idle()
+    restored, _ = snapshot(loaded)
+    check("undo of the move and of the Detach gives wall 0 its three connections back and the room its loaded state",
+          (restored["connections"] == before["connections"]) and (restored["floors"] == before["floors"]), json.dumps(restored["connections"].get("persist w0")))
+    editor.call("redo")
+    editor.wait_idle()
+    check("redo of the Detach frees wall 0 again", records_naming(w0["id"]) == [], json.dumps(records_naming(w0["id"])))
+    editor.call("undo")
+    editor.wait_idle()
+
+    # Navigation (doc/editor/navigation.md): the floor's top is walkable inside the walls; the neighbour floor beyond wall 2 is not reachable.
+    floor_top = floor_values["thickness"]
+    seed_point = [0.0, floor_top + 0.05, 0.0]
+    node = editor.call("create_node", {"scene_name": loaded, "name": "persist seed", "position": seed_point})
+    editor.wait_idle()
+    editor.call("navigation_set_seed", {"scene_name": loaded, "node_id": node.get("node_id", node.get("id"))})
+    editor.set_export_settings(loaded, {})
+    editor.wait_idle()
+    job = build_navigation(editor, loaded)
+    status = editor.call("get_navigation_status", {"scene_name": loaded})
+    check("the loaded room's navigation mesh builds from the two floor slabs and the four walls",
+          (job.get("state") == "done") and (status.get("input_mesh_count") == 6) and not status.get("stale"),
+          f"{job.get('state')} {job.get('error', '')} meshes {status.get('input_mesh_count')} - {status.get('status_text')}")
+    inside = [editor.call("navigation_find_point", {"scene_name": loaded, "position": p}) for p in
+              ([0.0, floor_top, 0.0], [-2.2, floor_top, -1.2], [2.2, floor_top, 1.2], [-2.2, floor_top, 1.2], [2.2, floor_top, -1.2])]
+    check("the floor's top is walkable and reachable inside the walls: its center and points near each corner are on the mesh at the slab's top",
+          all(p.get("found") and p.get("reachable") and (abs(p["point"][1] - floor_top) < 0.15) for p in inside), json.dumps(inside)[:600])
+    # Inside the walls (6 x 4 m less 0.3 m walls) eroded by agent_radius 0.3 m: 4.8 x 2.8 m; the voxels lose at most a 0.15 m cell per side.
+    reachable_area = status.get("reachable_area", 0.0)
+    check("the reachable area is the floor's top inside the walls less the agent radius: between 4.5 x 2.5 and 4.8 x 2.8 m2",
+          (4.5 * 2.5) <= reachable_area <= (4.8 * 2.8), f"{reachable_area} m2")
+    beyond = editor.call("navigation_find_point", {"scene_name": loaded, "position": [5.0, floor_top, 0.0]})
+    check("the neighbour floor beyond wall 2 is walkable area but not reachable from inside the room",
+          beyond.get("found") and (not beyond.get("reachable")) and (abs(beyond["point"][1] - floor_top) < 0.15), json.dumps(beyond)[:300])
+    editor.close(loaded)
+
+ROOM_OUTLINE = [[-3.0, 0.0, -2.0], [-3.0, 0.0, 2.0], [3.0, 0.0, 2.0], [3.0, 0.0, -2.0]]
+
+
+def make_room(editor, scene, name, twists=(0, 0, 0, 0)):
+    """A 6 x 4 m polygon floor at the origin with a wall joined by its base on each edge (wall k on edge_k, with its twist)."""
+    floor = editor.call("level_create_layout", {"scene_name": scene, "name": f"{name} floor", "position": [0.0, 0.0, 0.0], "closed": True,
+                                                "pattern": {"kind": "floor"}, "points": [{"position": p} for p in ROOM_OUTLINE]})
+    editor.wait_idle()
+    walls = []
+    for k in range(4):
+        walls.append(editor.call("level_place_pieces", {"scene_name": scene, "pieces": [{"shape": "architecture.wall", "name": f"{name} w{k}",
+                     "connect": {"connector": "base", "to_piece_id": floor["id"], "to_connector": f"edge_{k}", "twist_steps": twists[k]}}]})["pieces"][0])
+        editor.wait_idle()
+    return floor, walls
+
+
+def curve_points(editor, scene, node_id):
+    return [p["position"] for p in editor.call("get_curve", {"scene_name": scene, "curve_id": node_id})["points"]]
+
+
+def connections_of(editor, scene, node_id):
+    return editor.call("level_get_connections", {"scene_name": scene, "node_id": node_id})["connections"]
+
+
+def connection_pairs(editor, scene, node_id):
+    return sorted((c["connector"], c["other_name"], c["other_connector"]) for c in connections_of(editor, scene, node_id))
+
+
+def wall_lengths(editor, scene, walls):
+    return [round(piece_by_id(editor, scene, w["id"])["parameters"]["length"], 4) for w in walls]
+
+
+def check_fix_floor_floor_renames(editor):
+    """Finding 1 (C8.4, L25): outline edits of a room keep a neighbour floor's floor-to-floor connection and the walls' edge connections."""
+    scene = create_scene(editor)
+    editor.call("set_active_scene", {"scene_name": scene})
+    room, walls = make_room(editor, scene, "ff")
+    neighbour = editor.call("level_create_layout", {"scene_name": scene, "name": "ff neighbour", "position": [5.0, 0.0, 0.0], "pattern": {"kind": "floor"}})
+    editor.wait_idle()
+    editor.call("set_node_transform", {"scene_name": scene, "node_id": neighbour["id"], "translation": [5.0, 0.0, 0.0], "rotation_xyzw": [0.0, 0.0, 0.0, 1.0]})
+    editor.wait_idle()
+    expected = [("floor_0", "ff floor", "floor_2")]
+    check("the neighbour floor connects its floor_0 to the room's floor_2", connection_pairs(editor, scene, neighbour["id"]) == expected,
+          json.dumps(connection_pairs(editor, scene, neighbour["id"])))
+    # Each edit moves one side of the room along its normal, so its corners stay right angles.
+    for label, corners, z, local_corner in (("first", (1, 2), 2.5, 1), ("second", (3, 0), -2.5, 0)):
+        points = curve_points(editor, scene, room["id"])
+        for corner in corners:
+            points[corner] = [points[corner][0], 0.0, z]
+        editor.call("set_curve", {"scene_name": scene, "curve_id": room["id"], "closed": True, "points": [{"position": p} for p in points]})
+        editor.wait_idle()
+        shared = curve_points(editor, scene, neighbour["id"])[local_corner]
+        wall_links = [sorted(c[0] for c in connection_pairs(editor, scene, w["id"])) for w in walls]
+        check(f"the {label} corner edit of the room moves the neighbour's shared corner to z = {z}, keeps its floor_0 - floor_2 connection "
+              "and every wall's base, start and end connections",
+              close(shared, [-2.0, 0.0, z], 1.0e-3) and (connection_pairs(editor, scene, neighbour["id"]) == expected) and
+              all(links == ["base", "end", "start"] for links in wall_links),
+              f"shared {shared} neighbour {connection_pairs(editor, scene, neighbour['id'])} walls {wall_links}")
+    editor.close(scene)
+
+
+def check_fix_two_walls_fit(editor):
+    """Finding 2 (C3.15, K5.3): two adjacent walls moved out in one edit make one floor fit solving both edges and their corner."""
+    scene = create_scene(editor)
+    editor.call("set_active_scene", {"scene_name": scene})
+    room, walls = make_room(editor, scene, "tw")
+    select(editor, scene, [walls[0]["id"], walls[1]["id"]])
+    anchor = editor.call("get_transform_state", {})["anchor_frame"]["translation"]
+    depth = undo_depth(editor)
+    editor.call("transform_selection", {"translation": [anchor[0] - 1.0, anchor[1], anchor[2] + 1.0], "end_edit": True})
+    editor.wait_idle()
+    corners = curve_points(editor, scene, room["id"])
+    expected = [[-4.0, 0.0, -2.0], [-4.0, 0.0, 3.0], [3.0, 0.0, 3.0], [3.0, 0.0, -2.0]]
+    check("moving the walls on edge_0 and edge_1 1 m outward together fits both edges in one floor edit: corners "
+          "(-4, -2), (-4, 3), (3, 3), (3, -2), wall lengths 4.75, 6.75, 4.75, 6.75, one undo entry",
+          all(close(c, e, 1.0e-3) for c, e in zip(corners, expected)) and (wall_lengths(editor, scene, walls) == [4.75, 6.75, 4.75, 6.75]) and
+          (undo_depth(editor) == depth + 1), f"corners {corners} lengths {wall_lengths(editor, scene, walls)} depth {undo_depth(editor) - depth}")
+    select(editor, scene, [])
+    editor.close(scene)
+
+
+def check_fix_wall_floor_either_end(editor):
+    """Finding 3 (K6.1): a wall-floor connection Auto-connect made with the floor as the changed piece behaves as one the wall made."""
+    scene = create_scene(editor)
+    editor.call("set_active_scene", {"scene_name": scene})
+    floor = editor.call("level_create_layout", {"scene_name": scene, "name": "fe floor", "position": [0.0, 0.0, 0.0], "pattern": {"kind": "floor"}})
+    editor.wait_idle()
+    wall = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [{"shape": "architecture.wall", "name": "fe wall",
+                       "connect": {"connector": "base", "to_piece_id": floor["id"], "to_connector": "edge_0", "attach": False}}]})["pieces"][0]
+    editor.wait_idle()
+    editor.call("set_node_transform", {"scene_name": scene, "node_id": floor["id"], "translation": [0.0, 0.0, 0.0], "rotation_xyzw": [0.0, 0.0, 0.0, 1.0]})
+    editor.wait_idle()
+    links = connections_of(editor, scene, wall["id"])
+    check("a floor moved onto its place auto-connects its edge_0 to the free wall's base standing there",
+          [(c["connector"], c["other_connector"]) for c in links] == [("base", "edge_0")], json.dumps(links))
+    w = piece_by_id(editor, scene, wall["id"])
+    editor.call("set_node_transform", {"scene_name": scene, "node_id": wall["id"], "translation": [w["position"][0] - 1.0, w["position"][1], w["position"][2]],
+                                       "rotation_xyzw": w["rotation_xyzw"]})
+    editor.wait_idle()
+    corners = curve_points(editor, scene, floor["id"])
+    floor_position = editor.call("get_node_details", {"scene_name": scene, "node_id": floor["id"]})["world_transform"]["translation"]
+    check("then the wall moved 1 m outward makes the floor fit (corners 0 and 1 at x = -3), the floor node stays at the origin",
+          close([corners[0][0], corners[1][0]], [-3.0, -3.0], 1.0e-3) and close(floor_position, [0.0, 0.0, 0.0], 1.0e-4),
+          f"corners {corners} floor at {floor_position}")
+    editor.call("undo")
+    editor.wait_idle()
+    editor.call("set_node_transform", {"scene_name": scene, "node_id": floor["id"], "translation": [0.0, 0.0, 2.0], "rotation_xyzw": [0.0, 0.0, 0.0, 1.0]})
+    editor.wait_idle()
+    moved = piece_by_id(editor, scene, wall["id"])
+    check("and the floor moved 2 m along z carries the wall with it, still connected",
+          close(moved["position"], [w["position"][0], w["position"][1], w["position"][2] + 2.0], 1.0e-3) and
+          ([(c["connector"], c["other_connector"]) for c in connections_of(editor, scene, wall["id"])] == [("base", "edge_0")]),
+          f"wall {moved['position']} links {connections_of(editor, scene, wall['id'])}")
+    editor.close(scene)
+
+
+def check_fix_reflow_keeps_edit(editor):
+    """Finding 4 (C3.6): an author's height edit of a free wall that Auto-connect joins to a neighbour is kept; the neighbour takes it."""
+    scene = create_scene(editor)
+    editor.call("set_active_scene", {"scene_name": scene})
+    w1 = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [{"shape": "architecture.wall", "name": "re w1", "position": [0.0, 0.0, 0.0]}]})["pieces"][0]
+    editor.wait_idle()
+    w2 = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [{"shape": "architecture.wall", "name": "re w2",
+                     "connect": {"connector": "start", "to_piece_id": w1["id"], "to_connector": "end", "attach": False}}]})["pieces"][0]
+    editor.wait_idle()
+    editor.call("level_set_piece_parameters", {"scene_name": scene, "node_id": w2["id"], "parameters": {"height": 2.0}})
+    editor.wait_idle()
+    h1 = piece_by_id(editor, scene, w1["id"])["parameters"]["height"]
+    h2 = piece_by_id(editor, scene, w2["id"])["parameters"]["height"]
+    check("a height edit (2 m) of a free wall touching another wall's end auto-connects them; the edited wall keeps 2 m and the other takes it",
+          (connection_pairs(editor, scene, w2["id"]) == [("start", "re w1", "end")]) and close([h1, h2], [2.0, 2.0], 1.0e-4),
+          f"heights {h1} {h2} links {connection_pairs(editor, scene, w2['id'])}")
+    editor.close(scene)
+
+
+def check_fix_turned_wall_slide(editor):
+    """Finding 5 (C3.15): a wall joined to its edge turned half a turn, slid along its run, changes no edge line."""
+    scene = create_scene(editor)
+    editor.call("set_active_scene", {"scene_name": scene})
+    room, walls = make_room(editor, scene, "tu", twists=(2, 0, 0, 0))
+    before = curve_points(editor, scene, room["id"])
+    w0 = piece_by_id(editor, scene, walls[0]["id"])
+    editor.call("set_node_transform", {"scene_name": scene, "node_id": w0["id"], "translation": [w0["position"][0], w0["position"][1], w0["position"][2] + 0.5],
+                                       "rotation_xyzw": w0["rotation_xyzw"]})
+    editor.wait_idle()
+    after = curve_points(editor, scene, room["id"])
+    back = piece_by_id(editor, scene, walls[0]["id"])
+    check("a wall joined to edge_0 with twist 2 (turned half a turn), slid 0.5 m along its run, leaves the floor's outline as it was and "
+          "returns to the edge's midpoint",
+          all(close(a, b, 1.0e-4) for a, b in zip(after, before)) and close(back["position"], w0["position"], 1.0e-3),
+          f"outline {after} wall {back['position']} was {w0['position']}")
+    editor.close(scene)
+
+
+def check_fix_grouped_wall_fit(editor):
+    """Finding 6 (C3.15): a wall inside a moved group, standing on a floor outside it, makes the floor fit."""
+    scene = create_scene(editor)
+    editor.call("set_active_scene", {"scene_name": scene})
+    floor = editor.call("level_create_layout", {"scene_name": scene, "name": "gw floor", "position": [0.0, 0.0, 0.0], "pattern": {"kind": "floor"}})
+    editor.wait_idle()
+    wall = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [{"shape": "architecture.wall", "name": "gw wall",
+                       "connect": {"connector": "base", "to_piece_id": floor["id"], "to_connector": "edge_0"}}]})["pieces"][0]
+    editor.wait_idle()
+    group = editor.call("level_group_nodes", {"scene_name": scene, "node_ids": [wall["id"]], "name": "gw group"})
+    editor.wait_idle()
+    g = editor.call("get_node_details", {"scene_name": scene, "node_id": group["id"]})["world_transform"]["translation"]
+    editor.call("set_node_transform", {"scene_name": scene, "node_id": group["id"], "translation": [g[0] - 1.0, g[1], g[2]], "rotation_xyzw": [0.0, 0.0, 0.0, 1.0]})
+    editor.wait_idle()
+    corners = curve_points(editor, scene, floor["id"])
+    check("moving the group holding the wall on edge_0 1 m outward makes the floor fit: corners 0 and 1 at x = -3",
+          close([corners[0][0], corners[1][0]], [-3.0, -3.0], 1.0e-3), f"corners {corners}")
+    editor.close(scene)
+
+
+def check_fix_stale_record(editor):
+    """Finding 7: Auto-connect replaces a stale record (its target deleted) of the connector it joins; a record list that does not
+    read is logged as an error naming the piece."""
+    scene = create_scene(editor)
+    editor.call("set_active_scene", {"scene_name": scene})
+    w1 = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [{"shape": "architecture.wall", "name": "st w1", "position": [0.0, 0.0, 0.0]}]})["pieces"][0]
+    editor.wait_idle()
+    w2 = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [{"shape": "architecture.wall", "name": "st w2",
+                     "connect": {"connector": "start", "to_piece_id": w1["id"], "to_connector": "end"}}]})["pieces"][0]
+    editor.wait_idle()
+    editor.call("delete_nodes", {"scene_name": scene, "ids": [w1["id"]]})
+    editor.wait_idle()
+    w3 = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [{"shape": "architecture.wall", "name": "st w3",
+                     "connect": {"connector": "end", "to_piece_id": w2["id"], "to_connector": "start", "attach": False}}]})["pieces"][0]
+    editor.wait_idle()
+    editor.call("level_set_piece_parameters", {"scene_name": scene, "node_id": w2["id"], "parameters": {"height": 2.5}})
+    editor.wait_idle()
+    links = connections_of(editor, scene, w2["id"])
+    check("a wall whose start target was deleted, edited with a free wall's end at its start, auto-connects there: one start "
+          "connection, to the new wall (the stale record replaced)",
+          [(c["connector"], c["other_name"], c["other_connector"]) for c in links] == [("start", "st w3", "end")], json.dumps(links))
+    uid = piece_by_id(editor, scene, w2["id"])["uid"]
+    entry = {"connector": "start", "gap": "0x0p+0", "owner": uid, "target": piece_by_id(editor, scene, w3["id"])["uid"], "target_connector": "end", "twist_steps": 0}
+    log_start = len(pav.read_log())
+    editor.call("set_item_property", {"scene_name": scene, "item_id": w2["id"], "property": "Kit_piece.attachment", "value": json.dumps([entry, entry])})
+    editor.wait_idle()
+    connections_of(editor, scene, w2["id"])
+    editor.wait_frames()
+    lines = [line for line in pav.read_log()[log_start:].splitlines() if ("[E]" in line) and ("'st w2'" in line) and ("do not read" in line)]
+    check("a raw record list with two connections of one connector is logged as an error naming the piece", bool(lines), str(lines[:2]))
+    editor.call("undo")
+    editor.wait_idle()
+    editor.close(scene)
+
+
+def check_fix_one_per_connector(editor):
+    """Finding 8 (C3.1, K6.2): a piece connecting a second connector of its own onto a connector it is connected to already is refused."""
+    scene = create_scene(editor)
+    editor.call("set_active_scene", {"scene_name": scene})
+    t = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [{"shape": "architecture.wall", "name": "op t", "position": [0.0, 0.0, 0.0]}]})["pieces"][0]
+    editor.wait_idle()
+    w = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [{"shape": "architecture.wall", "name": "op w",
+                    "connect": {"connector": "start", "to_piece_id": t["id"], "to_connector": "end"}}]})["pieces"][0]
+    editor.wait_idle()
+    error = call_error(editor, "level_connect_pieces", {"scene_name": scene, "node_id": w["id"], "connector": "end", "to_piece_id": t["id"], "to_connector": "end"})
+    editor.wait_idle()
+    check("connecting the wall's end onto the target connector its start holds is refused; the target connector keeps one connection",
+          (error is not None) and ("already" in error) and (len([c for c in connections_of(editor, scene, t["id"]) if c["connector"] == "end"]) == 1),
+          f"{error} {json.dumps(connections_of(editor, scene, t['id']))}")
+    u = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [{"shape": "architecture.wall", "name": "op u", "position": [0.0, 0.0, 10.0]}]})["pieces"][0]
+    editor.wait_idle()
+    v = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [{"shape": "architecture.wall", "name": "op v",
+                    "connect": {"connector": "end", "to_piece_id": u["id"], "to_connector": "start"}}]})["pieces"][0]
+    editor.wait_idle()
+    error = call_error(editor, "level_connect_pieces", {"scene_name": scene, "node_id": u["id"], "connector": "start", "to_piece_id": v["id"], "to_connector": "start"})
+    editor.wait_idle()
+    check("connecting a connector the target holds a record on onto another connector of the target is refused; it keeps one connection",
+          (error is not None) and ("already" in error) and (len([c for c in connections_of(editor, scene, u["id"]) if c["connector"] == "start"]) == 1),
+          f"{error} {json.dumps(connections_of(editor, scene, u['id']))}")
+    editor.close(scene)
+
+
+def check_fix_masked_apart(editor):
+    """Finding 9 (C3.9, C3.14): with the wall type off in the flow mask, moving either end of a wall-wall join apart removes it."""
+    scene = create_scene(editor)
+    editor.call("set_active_scene", {"scene_name": scene})
+    settings = editor.call("get_surface_snap_settings", {})
+    w1 = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [{"shape": "architecture.wall", "name": "ma w1", "position": [0.0, 0.0, 0.0]}]})["pieces"][0]
+    editor.wait_idle()
+    w2 = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [{"shape": "architecture.wall", "name": "ma w2",
+                     "connect": {"connector": "start", "to_piece_id": w1["id"], "to_connector": "end"}}]})["pieces"][0]
+    editor.wait_idle()
+    editor.call("set_surface_snap_settings", {"flow_mask": ["generic", "wall-floor", "floor"]})
+    try:
+        for label, mover in (("the target (w1, the other end of w2's record)", w1), ("the owner (w2, which records it)", w2)):
+            p = piece_by_id(editor, scene, mover["id"])
+            editor.call("set_node_transform", {"scene_name": scene, "node_id": mover["id"], "translation": [p["position"][0], p["position"][1], p["position"][2] + 2.0],
+                                               "rotation_xyzw": p["rotation_xyzw"]})
+            editor.wait_idle()
+            check(f"with wall off in the flow mask, moving {label} 2 m off the join removes the connection",
+                  (connections_of(editor, scene, w2["id"]) == []) and (connections_of(editor, scene, w1["id"]) == []), json.dumps(connections_of(editor, scene, w2["id"])))
+            editor.call("undo")
+            editor.wait_idle()
+    finally:
+        editor.call("set_surface_snap_settings", {"flow_mask": settings["flow_mask"]})
+    editor.close(scene)
+
+
+def check_fix_joined_and_groups(editor):
+    """Findings 10 and 11 (C6.2): walls auto-connected at a room's corners report joined; the scene's connected groups are listed."""
+    scene = create_scene(editor)
+    editor.call("set_active_scene", {"scene_name": scene})
+    room, walls = make_room(editor, scene, "jg")
+    corner = [c for c in connections_of(editor, scene, walls[0]["id"]) if c["connector"] in ("start", "end")]
+    check("the walls joined at the room's corners report their connections joined (one joined rule per connection kind)",
+          (len(corner) == 2) and all(c["joined"] for c in corner), json.dumps(corner))
+    a = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [{"shape": "architecture.wall", "name": "jg a", "position": [0.0, 0.0, 20.0]}]})["pieces"][0]
+    editor.wait_idle()
+    b = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [{"shape": "architecture.wall", "name": "jg b",
+                    "connect": {"connector": "start", "to_piece_id": a["id"], "to_connector": "end"}}]})["pieces"][0]
+    editor.wait_idle()
+    editor.call("level_place_pieces", {"scene_name": scene, "pieces": [{"shape": "architecture.wall", "name": "jg alone", "position": [0.0, 0.0, 40.0]}]})
+    editor.wait_idle()
+    error = None
+    groups = []
+    try:
+        groups = editor.call("level_get_connected_groups", {"scene_name": scene})["groups"]
+    except RuntimeError as e:
+        error = str(e)
+    names = sorted(sorted(n["name"] for n in g["nodes"]) for g in groups)
+    check("level_get_connected_groups lists the room (floor and four walls) and the joined pair as two groups; the lone wall is in none",
+          (error is None) and (names == [sorted(["jg a", "jg b"]), sorted(["jg floor", "jg w0", "jg w1", "jg w2", "jg w3"])]), f"{error} {names}")
+    one = None
+    try:
+        one = editor.call("level_get_connected_groups", {"scene_name": scene, "node_id": b["id"]})["groups"]
+    except RuntimeError as e:
+        error = str(e)
+    check("with node_id it lists the one group holding the node",
+          (one is not None) and (len(one) == 1) and (sorted(n["name"] for n in one[0]["nodes"]) == ["jg a", "jg b"]), f"{error} {one}")
+    editor.close(scene)
+
+
+def check_fix_floor_properties_rows(editor):
+    """Finding 12 (C6.3, C9.2): a selected floor layout's Properties group lists its connections with Remove, and Detach."""
+    scene = create_scene(editor)
+    editor.call("set_active_scene", {"scene_name": scene})
+    room, walls = make_room(editor, scene, "pr")
+    editor.call("set_window_visibility", {"title": "Properties", "visible": True, "focus": True})
+    select(editor, scene, [room["id"]])
+    open_property_groups(editor, ["Kit Layout"])
+    # The rows below the window's view are not drawn: scroll the Detach row into view first.
+    editor.call("imgui_scroll_to_item", {"window": "Properties", "label": "Detach", "align": "center"})
+    editor.wait_idle()
+    items = editor.call("get_imgui_items", {"window": "Properties", "limit": 3000, "visible_only": False}).get("items", [])
+    labels = [i.get("display_label") or "" for i in items]
+    rows = sorted(label for label in labels if label.startswith("Connection "))
+    check("the selected floor's Properties rows list its four connections (one per edge), each a Remove button, and a Detach button",
+          (rows == ["Connection edge_0", "Connection edge_1", "Connection edge_2", "Connection edge_3"]) and ("Detach" in labels),
+          f"rows {rows} detach {'Detach' in labels}")
+    # A row's widget is its Remove button, recorded under the row's label.
+    remove = next((i for i in items if i.get("display_label") == "Connection edge_1"), None)
+    depth = undo_depth(editor)
+    if remove is not None:
+        editor.call("imgui_click", {"window": "Properties", "id": remove["id"]})
+        editor.wait_idle()
+    check("the edge_1 row's Remove removes that connection alone (the wall's record), one undo entry",
+          (sorted(c["connector"] for c in connections_of(editor, scene, room["id"])) == ["edge_0", "edge_2", "edge_3"]) and (undo_depth(editor) == depth + 1),
+          json.dumps(connection_pairs(editor, scene, room["id"])))
+    editor.call("undo")
+    editor.wait_idle()
+    editor.call("imgui_scroll_to_item", {"window": "Properties", "label": "Detach", "align": "center"})
+    editor.wait_idle()
+    items = editor.call("get_imgui_items", {"window": "Properties", "limit": 3000, "visible_only": False}).get("items", [])
+    detach = [i for i in items if (i.get("display_label") == "Detach") and (i.get("type") in ("button", "Button", "small_button"))] or \
+             [i for i in items if i.get("display_label") == "Detach"]
+    depth = undo_depth(editor)
+    if detach:
+        editor.call("imgui_scroll_to_item", {"window": "Properties", "id": detach[-1]["id"]})
+        editor.call("imgui_click", {"window": "Properties", "id": detach[-1]["id"]})
+        editor.wait_idle()
+    check("its Detach removes the floor's four connections in one undo entry",
+          (connections_of(editor, scene, room["id"]) == []) and (undo_depth(editor) == depth + 1), json.dumps(connections_of(editor, scene, room["id"]))[:300])
+    select(editor, scene, [])
+    editor.close(scene)
+
+
+def check_fix_excluded_side_channel(editor):
+    """Finding 13: an attach-none join that does not move the piece leaves no Auto-connect exclusion for its next change."""
+    scene = create_scene(editor)
+    editor.call("set_active_scene", {"scene_name": scene})
+    w1 = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [{"shape": "architecture.wall", "name": "ex w1", "position": [0.0, 0.0, 0.0]}]})["pieces"][0]
+    editor.wait_idle()
+    w2 = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [{"shape": "architecture.wall", "name": "ex w2",
+                     "connect": {"connector": "start", "to_piece_id": w1["id"], "to_connector": "end", "attach": False}}]})["pieces"][0]
+    editor.wait_idle()
+    editor.call("level_connect_pieces", {"scene_name": scene, "node_id": w2["id"], "connector": "start", "to_piece_id": w1["id"], "to_connector": "end", "attach": False})
+    editor.wait_idle()
+    editor.call("level_set_piece_parameters", {"scene_name": scene, "node_id": w2["id"], "parameters": {"thickness": 0.3}})
+    editor.wait_idle()
+    check("after an attach-none join that did not move the wall, its next edit auto-connects it to the wall its start touches",
+          connection_pairs(editor, scene, w2["id"]) == [("start", "ex w1", "end")], json.dumps(connection_pairs(editor, scene, w2["id"])))
+    editor.close(scene)
+
+def check_fix_floor_snapped_under_wall(editor):
+    """Review item 1 (C3.4, K6.1): a floor snapped under a free wall records the connection on the wall, and the wall takes the edge's values."""
+    scene = create_scene(editor)
+    editor.call("set_active_scene", {"scene_name": scene})
+    floor = editor.call("level_create_layout", {"scene_name": scene, "name": "fs floor", "position": [0.0, 0.0, 0.0],
+                                                "pattern": {"kind": "floor", "floor": {"wall_thickness": 0.3, "room_height": 2.5, "wall_material": "Kit Stone"}}})
+    editor.wait_idle()
+    wall = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [{"shape": "architecture.wall", "name": "fs wall",
+                       "parameters": {"height": 2.0, "thickness": 0.4, "length": 3.0},
+                       "connect": {"connector": "base", "to_piece_id": floor["id"], "to_connector": "edge_0", "attach": False}}]})["pieces"][0]
+    editor.wait_idle()
+    editor.call("set_node_transform", {"scene_name": scene, "node_id": floor["id"], "translation": [0.0, 0.0, 1.0], "rotation_xyzw": [0.0, 0.0, 0.0, 1.0]})
+    editor.wait_idle()
+    before = piece_by_id(editor, scene, wall["id"])
+    check("the free wall stands where the floor's edge_0 was, with its own values, unconnected",
+          (connections_of(editor, scene, wall["id"]) == []) and close([before["parameters"]["height"], before["parameters"]["thickness"]], [2.0, 0.4], 1.0e-4),
+          json.dumps(before["parameters"]))
+    select(editor, scene, [floor["id"]])
+    anchor = editor.call("get_transform_state", {})["anchor_frame"]["translation"]
+    depth = undo_depth(editor)
+    editor.call("transform_selection", {"translation": [anchor[0], anchor[1], anchor[2] - 0.95], "connector_snap_distance": 0.2, "end_edit": True})
+    editor.wait_idle()
+    after = piece_by_id(editor, scene, wall["id"])
+    links = connections_of(editor, scene, wall["id"])
+    taken = [after["parameters"]["length"], after["parameters"]["thickness"], after["parameters"]["height"]]
+    check("the floor dragged back and snapped under the wall records base - edge_0 on the wall, and the wall takes length 3.7, thickness 0.3, "
+          "height 2.5 and Kit Stone, one undo entry",
+          ([(c["connector"], c["other_connector"], c["recorded_on"]) for c in links] == [("base", "edge_0", wall["id"])]) and close(taken, [3.7, 0.3, 2.5], 1.0e-4) and
+          (after["materials"].get("wall") == "Kit Stone") and (undo_depth(editor) == depth + 1),
+          f"links {links} values {taken} {after['materials']} depth {undo_depth(editor) - depth}")
+    editor.call("undo")
+    editor.wait_idle()
+    undone = piece_by_id(editor, scene, wall["id"])
+    check("undo gives the wall its own values back and no connection",
+          (connections_of(editor, scene, wall["id"]) == []) and (undone["parameters"] == before["parameters"]), json.dumps(undone["parameters"]))
+    editor.call("redo")
+    editor.wait_idle()
+    redone = piece_by_id(editor, scene, wall["id"])
+    check("redo connects it again with the edge's values", close([redone["parameters"]["thickness"], redone["parameters"]["height"]], [0.3, 2.5], 1.0e-4) and
+          (len(connections_of(editor, scene, wall["id"])) == 1), json.dumps(redone["parameters"]))
+    select(editor, scene, [])
+    editor.close(scene)
+
+
+def check_fix_grouped_wall_end_fit(editor):
+    """Review item 2 (C3.16): a wall inside a moved group, joined end to end to a wall outside it with no floor, makes that wall fit."""
+    scene = create_scene(editor)
+    editor.call("set_active_scene", {"scene_name": scene})
+    w1 = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [{"shape": "architecture.wall", "name": "ge w1", "position": [0.0, 0.0, 0.0]}]})["pieces"][0]
+    editor.wait_idle()
+    w2 = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [{"shape": "architecture.wall", "name": "ge w2",
+                     "connect": {"connector": "start", "to_piece_id": w1["id"], "to_connector": "end"}}]})["pieces"][0]
+    editor.wait_idle()
+    far = connectors_of(editor, scene, w1["id"])["start"]["position"]
+    group = editor.call("level_group_nodes", {"scene_name": scene, "node_ids": [w2["id"]], "name": "ge group"})
+    editor.wait_idle()
+    g = editor.call("get_node_details", {"scene_name": scene, "node_id": group["id"]})["world_transform"]["translation"]
+    editor.call("set_node_transform", {"scene_name": scene, "node_id": group["id"], "translation": [g[0], g[1], g[2] + 1.0], "rotation_xyzw": [0.0, 0.0, 0.0, 1.0]})
+    editor.wait_idle()
+    frames = connectors_of(editor, scene, w1["id"])
+    w2_start = connectors_of(editor, scene, w2["id"])["start"]["position"]
+    length = piece_by_id(editor, scene, w1["id"])["parameters"]["length"]
+    check("moving the group holding w2 1 m along z makes w1 fit: its far end stays, its near end meets w2's start, length sqrt(17); still connected",
+          close(frames["start"]["position"], far, 1.0e-3) and close(frames["end"]["position"], w2_start, 1.0e-3) and (abs(length - math.sqrt(17.0)) < 1.0e-3) and
+          (connection_pairs(editor, scene, w2["id"]) == [("start", "ge w1", "end")]),
+          f"w1 {frames['start']['position']} {frames['end']['position']} length {length} links {connection_pairs(editor, scene, w2['id'])}")
+    editor.close(scene)
+
+
+def check_fix_near_parallel_corner(editor):
+    """Review item 3 (K5.3): at a corner between two changed edges within 15 degrees of parallel, the corner is their crossing where it
+    is near, and a change whose lines meet only far away (or never) is refused naming both walls; nothing is recorded."""
+    scene = create_scene(editor)
+    editor.call("set_active_scene", {"scene_name": scene})
+    bent = [[-3.0, 0.0, -2.0], [-3.1, 0.0, 0.0], [-3.4, 0.0, 2.0], [3.0, 0.0, 2.0], [3.0, 0.0, -2.0]]
+    floor = editor.call("level_create_layout", {"scene_name": scene, "name": "np floor", "position": [0.0, 0.0, 0.0], "closed": True,
+                                                "pattern": {"kind": "floor"}, "points": [{"position": p} for p in bent]})
+    editor.wait_idle()
+    walls = [editor.call("level_place_pieces", {"scene_name": scene, "pieces": [{"shape": "architecture.wall", "name": f"np w{k}",
+             "connect": {"connector": "base", "to_piece_id": floor["id"], "to_connector": f"edge_{k}"}}]})["pieces"][0] for k in range(2)]
+    editor.wait_idle()
+    select(editor, scene, [w["id"] for w in walls])
+    anchor = editor.call("get_transform_state", {})["anchor_frame"]["translation"]
+    editor.call("transform_selection", {"translation": [anchor[0] - 1.0, anchor[1], anchor[2]], "end_edit": True})
+    editor.wait_idle()
+    corners = curve_points(editor, scene, floor["id"])
+    # Both edges' lines moved 1 m along -x: the corner between them is their crossing, 1 m to -x of where it was.
+    check("two walls on edges 5.7 degrees apart moved 1 m outward together put the corner between them on both lines (1 m along -x)",
+          close(corners[1], [-4.1, 0.0, 0.0], 2.0e-3), f"corners {corners}")
+    editor.call("undo")
+    editor.wait_idle()
+    before = curve_points(editor, scene, floor["id"])
+    depth = undo_depth(editor)
+    editor.call("transform_selection", {"scale": [3.0, 1.0, 1.0], "end_edit": True})
+    editor.wait_idle()
+    after = curve_points(editor, scene, floor["id"])
+    refusal = editor.call("level_get_flow_report", {}).get("flow") or {}
+    check("scaling the two walls apart across x (their lines move opposite ways) is refused naming both walls; the outline and the undo stack stay",
+          all(close(a, b, 1.0e-5) for a, b in zip(after, before)) and (undo_depth(editor) == depth) and
+          ("np w0" in (refusal.get("refusal") or "")) and ("np w1" in (refusal.get("refusal") or "")),
+          f"refusal {refusal.get('refusal')} depth {undo_depth(editor) - depth} outline {after}")
+    select(editor, scene, [])
+    editor.close(scene)
+
+
+def check_fix_floor_rows_after_delete(editor):
+    """Review item 5: a selected floor's Properties connection rows drop a deleted wall's row at the delete and get it back at its undo."""
+    scene = create_scene(editor)
+    editor.call("set_active_scene", {"scene_name": scene})
+    room, walls = make_room(editor, scene, "rd")
+    editor.call("set_window_visibility", {"title": "Properties", "visible": True, "focus": True})
+    select(editor, scene, [room["id"]])
+    open_property_groups(editor, ["Kit Layout"])
+
+    def rows():
+        items = editor.call("get_imgui_items", {"window": "Properties", "limit": 3000, "visible_only": False}).get("items", [])
+        return sorted((i.get("display_label") or "") for i in items if (i.get("display_label") or "").startswith("Connection "))
+    before = rows()
+    editor.call("delete_nodes", {"scene_name": scene, "ids": [walls[1]["id"]]})
+    editor.wait_idle()
+    deleted = rows()
+    editor.call("undo")
+    editor.wait_idle()
+    restored = rows()
+    check("deleting a wall of the selected floor drops its Connection row at once; the undo of the delete gives it back",
+          (len(before) == 4) and ("Connection edge_1" not in deleted) and (len(deleted) == 3) and (restored == before), f"{before} / {deleted} / {restored}")
+    select(editor, scene, [])
+    editor.close(scene)
+
+
+CONNECTION_FIX_GROUPS = [
+    ("fix floor-floor renames", check_fix_floor_floor_renames),
+    ("fix two walls fit", check_fix_two_walls_fit),
+    ("fix wall-floor either end", check_fix_wall_floor_either_end),
+    ("fix reflow keeps edit", check_fix_reflow_keeps_edit),
+    ("fix turned wall slide", check_fix_turned_wall_slide),
+    ("fix grouped wall fit", check_fix_grouped_wall_fit),
+    ("fix stale record", check_fix_stale_record),
+    ("fix one per connector", check_fix_one_per_connector),
+    ("fix masked apart", check_fix_masked_apart),
+    ("fix joined and groups", check_fix_joined_and_groups),
+    ("fix floor properties rows", check_fix_floor_properties_rows),
+    ("fix excluded side channel", check_fix_excluded_side_channel),
+    ("fix floor snapped under wall", check_fix_floor_snapped_under_wall),
+    ("fix grouped wall end fit", check_fix_grouped_wall_end_fit),
+    ("fix near parallel corner", check_fix_near_parallel_corner),
+    ("fix floor rows after delete", check_fix_floor_rows_after_delete),
+]
+
+
+def check_floor_layouts(editor):
+    """doc/plans/level_kit_connections.md C8: a floor layout is a closed Curve node with one generated slab filling it: an L-shaped
+    outline fills (its slab's bounds, a static body); the default floor is a square four modules on a side; an edit to an outline whose
+    edges cross keeps the slab and reports them as the run's problem, and its undo restores; smooth points are reported as curved;
+    an open curve is refused."""
+    scene = create_scene(editor)
+    editor.call("set_active_scene", {"scene_name": scene})
+    l_points = [[0.0, 0.0, 0.0], [0.0, 0.0, 4.0], [2.0, 0.0, 4.0], [2.0, 0.0, 2.0], [4.0, 0.0, 2.0], [4.0, 0.0, 0.0]]
+    made = editor.call("level_create_layout", {"scene_name": scene, "name": "floor l", "position": [0.0, 0.0, 0.0], "closed": True,
+                                               "pattern": {"kind": "floor"}, "points": [{"position": p} for p in l_points]})
+    editor.wait_idle()
+    layout = layouts_by_id(editor, scene)[made["id"]]
+    child = layout["children"][0] if layout.get("children") else {}
+    check("a floor layout on a closed L-shaped curve is one Curve node with one generated child",
+          (layout["type"] == "Curve") and (layout["child_count"] == 1) and child.get("generated", False), json.dumps(layout)[:300])
+    slab = editor.call("get_node_details", {"scene_name": scene, "node_id": child.get("id", 0)}) if child else {}
+    box = (slab.get("mesh") or {}).get("world_aabb", {})
+    check("the slab spans the outline from y 0 to the 0.2 m thickness and has a static body",
+          close(box.get("min", [9, 9, 9]), [0.0, 0.0, 0.0], 1.0e-4) and close(box.get("max", [9, 9, 9]), [4.0, 0.2, 4.0], 1.0e-4) and
+          bool(slab.get("physics")), json.dumps(box))
+    depth = undo_depth(editor)
+    bow_tie = [[0.0, 0.0, 0.0], [4.0, 0.0, 4.0], [4.0, 0.0, 0.0], [0.0, 0.0, 4.0]]
+    error = call_error(editor, "set_curve", {"scene_name": scene, "curve_id": made["id"], "closed": True, "points": [{"position": p} for p in bow_tie]})
+    editor.wait_idle()
+    after = layouts_by_id(editor, scene)[made["id"]]
+    problem = (after.get("run") or {}).get("problem", "") if error is None else error
+    check("an edit to an outline whose edges cross leaves the slab and reports the crossing edges as the run's problem (C8.3)",
+          (error is None) and ("cross" in (problem or "")) and (after["child_count"] == 1) and (undo_depth(editor) == depth + 1),
+          f"{error} / {json.dumps(after.get('run'))}")
+    editor.call("undo")
+    editor.wait_idle()
+    restored = layouts_by_id(editor, scene)[made["id"]]
+    check("undo of that edit restores the L outline: no run problem, one slab", ("problem" not in (restored.get("run") or {})) and
+          (restored["child_count"] == 1) and (undo_depth(editor) == depth), json.dumps(restored.get("run")))
+    smooth = [{"position": p, "kind": "smooth", "in": [-0.5, 0.0, 0.0], "out": [0.5, 0.0, 0.0]} for p in l_points]
+    error = call_error(editor, "set_curve", {"scene_name": scene, "curve_id": made["id"], "closed": True, "points": smooth})
+    editor.wait_idle()
+    curved = layouts_by_id(editor, scene)[made["id"]]
+    check("an outline of smooth points is reported as curved: a floor's points are corners",
+          (error is None) and ("curved" in (curved.get("run") or {}).get("problem", "")), json.dumps(curved.get("run")))
+    editor.call("undo")
+    editor.wait_idle()
+    square = editor.call("level_create_layout", {"scene_name": scene, "name": "floor square", "position": [10.0, 0.0, 0.0], "pattern": {"kind": "floor"}})
+    editor.wait_idle()
+    square_layout = layouts_by_id(editor, scene)[square["id"]]
+    square_child = square_layout["children"][0] if square_layout.get("children") else {}
+    square_box = (editor.call("get_node_details", {"scene_name": scene, "node_id": square_child.get("id", 0)}).get("mesh") or {}).get("world_aabb", {}) if square_child else {}
+    check("a floor layout made without points is a square four modules on a side (C8.2)",
+          close(square_box.get("min", [0, 0, 0]), [8.0, 0.0, -2.0], 1.0e-4) and close(square_box.get("max", [0, 0, 0]), [12.0, 0.2, 2.0], 1.0e-4),
+          json.dumps(square_box))
+    # Floor to floor: two squares sharing the edge x = 12 (square at 10, its neighbour at 14) connect when one is moved
+    # onto its place (Auto-connect of floor connectors); a corner edit of one moves the shared corner of the other.
+    neighbour = editor.call("level_create_layout", {"scene_name": scene, "name": "floor neighbour", "position": [14.0, 0.0, 0.0], "pattern": {"kind": "floor"}})
+    editor.wait_idle()
+    editor.call("set_node_transform", {"scene_name": scene, "node_id": neighbour["id"], "translation": [14.0, 0.0, 0.0], "rotation_xyzw": [0.0, 0.0, 0.0, 1.0]})
+    editor.wait_idle()
+    links = editor.call("level_get_connections", {"scene_name": scene, "node_id": square["id"]})["connections"]
+    check("two floors sharing an edge connect by their floor connectors (floor_2 of the left, floor_0 of the right)",
+          [(c["connector"], c["other_connector"], c["other_name"]) for c in links] == [("floor_2", "floor_0", "floor neighbour")], json.dumps(links))
+    moved_points = [[-2.0, 0.0, -2.0], [-2.0, 0.0, 2.0], [2.5, 0.0, 2.5], [2.0, 0.0, -2.0]]
+    editor.call("set_curve", {"scene_name": scene, "curve_id": square["id"], "closed": True, "points": [{"position": p} for p in moved_points]})
+    editor.wait_idle()
+    shared = editor.call("get_curve", {"scene_name": scene, "curve_id": neighbour["id"]})["points"][1]["position"]
+    check("moving the left floor's corner (12, 2) to (12.5, 2.5) moves the right floor's shared corner with it (local (-1.5, 2.5))",
+          close(shared, [-1.5, 0.0, 2.5], 1.0e-3), json.dumps(shared))
+    editor.call("undo")
+    editor.wait_idle()
+    shared = editor.call("get_curve", {"scene_name": scene, "curve_id": neighbour["id"]})["points"][1]["position"]
+    check("undo puts both floors' corner back", close(shared, [-2.0, 0.0, 2.0], 1.0e-3), json.dumps(shared))
+    error = call_error(editor, "level_create_layout", {"scene_name": scene, "name": "floor open", "pattern": {"kind": "floor"},
+                                                       "points": [{"position": p} for p in l_points]})
+    check("a floor layout on an open curve is refused", (error is not None) and ("closed curve" in error), str(error))
+    editor.close(scene)
 
 
 @gives_back_tool_settings
@@ -3587,11 +5441,11 @@ def check_segment_handles(editor, image_path):
     after_points = curve_points(room["id"])
     after_layout = layout_of(room["id"])
     expected = [[0.0, 0.0, -1.0], [8.0, 0.0, -1.0], [8.0, 0.0, 6.0], [0.0, 0.0, 6.0]]
-    scales = [c["scale"][0] for c in after_layout["children"]]
+    scales = [(child_length(c) or 0.0) / 4.0 for c in after_layout["children"]]
     check("segment handles: level_move_segment of wall 0 by -1 m moves its two corners 1 m along the normal, the opposite wall's corners unchanged, one undo entry",
           reply.get("changed") and positions_match(after_points, expected) and (undo_depth(editor) == before["undo"] + 1),
           f"{fmt3(after_points[0])} {fmt3(after_points[1])}, undo {undo_depth(editor) - before['undo']}")
-    check("segment handles: piece 0 keeps its scale (8 m / 4 m), pieces 1 and 3 grow to 7 m / 4 m, piece 2 is the same node, the pieces span the moved corners",
+    check("segment handles: piece 0 keeps its length (8 m), pieces 1 and 3 grow to 7 m (L24: lengths, not scales), piece 2 is the same node, the pieces span the moved corners",
           (len(scales) == 4) and (abs(scales[0] - 2.0) < 1.0e-4) and (abs(scales[1] - 1.75) < 1.0e-4) and (abs(scales[3] - 1.75) < 1.0e-4) and
           (segment_snapshot(after_layout)[2] == before["children"][2]) and spans_points(after_layout, expected, min_x, max_x),
           f"scales {scales}")
@@ -6664,14 +8518,14 @@ def check_persistence(editor, walkable_scene, directory):
                 edited_names["stairs"] = node["name"]
             elif node.get("name") == "upper floor":
                 record = json.loads(properties["Kit_piece.parameters"])
-                record["width"] = "0x1p+10"
+                record["width"] = "-0x1p+0"
                 properties["Kit_piece.parameters"] = json.dumps(record, separators=(",", ":"))
                 edited_names["upper floor"] = node["name"]
     edited.get("extensions", {}).get("ERHE_scene", {}).pop("editor_asset", None)
     edited_path = os.path.join(directory, "walkable_level_edited.gltf")
     with open(edited_path, "w", encoding="utf-8") as file:
         json.dump(edited, file)
-    check("the hand-edited copy names an unknown shape on the stairs and a width of 1024 m on the upper floor",
+    check("the hand-edited copy names an unknown shape on the stairs and a width of -1 m on the upper floor",
           all(edited_names.values()), json.dumps(edited_names))
     edited_name = editor.load(edited_path)
     loaded = {p["name"]: p for p in pieces(editor, edited_name)}
@@ -6682,7 +8536,7 @@ def check_persistence(editor, walkable_scene, directory):
               close(p["world_aabb"]["min"], before_by_name[n]["world_aabb"]["min"]) and
               close(p["world_aabb"]["max"], before_by_name[n]["world_aabb"]["max"]) for n, p in problems.items()),
           "; ".join(f"{n}: follows {p.get('follows_kit')}, problem '{p.get('problem')}'" for n, p in problems.items()))
-    check("the unknown shape and the out-of-range width are named in the problem texts",
+    check("the unknown shape and the negative width are named in the problem texts",
           ("basic.no_such_shape" in problems["stairs"].get("problem", "")) and ("'width'" in problems["upper floor"].get("problem", "")),
           json.dumps({n: p.get("problem") for n, p in problems.items()}))
     check("the edited copy's untouched piece follows its kit", loaded.get("floor", {}).get("follows_kit") is True,
@@ -7748,6 +9602,17 @@ def check_brush_connect(editor, window_scene, image_path):
           and same_rotation(state.get("rotation_xyzw", [9, 9, 9, 9]), expected["rotation_xyzw"])
           and close(state.get("position", [9, 9, 9]), [end_x + 0.5 * length, 0.0, 0.0], 1.0e-4),
           f"join {state.get('connector_join')}, preview {state.get('position')} {state.get('rotation_xyzw')}, connect {expected['position']}")
+    # K9.2: a material-only change of the target changes the wall.material it supplies; the joined preview takes it at once.
+    editor.call("level_set_piece_material", {"scene_name": scene, "node_id": wall["id"], "slot": "wall", "material": "Kit Stone"})
+    editor.wait_idle()
+    stoned = wait_preview(editor, lambda r: joined(r) and (((r.get("connector_join") or {}).get("materials") or {}).get("wall") == "Kit Stone"))
+    check("K9.2: with the pointer still, level_set_piece_material Kit Stone on the target wall gives the joined preview the supplied Kit Stone",
+          ((stoned.get("connector_join") or {}).get("materials") or {}).get("wall") == "Kit Stone", json.dumps(stoned.get("connector_join")))
+    editor.call("undo")
+    editor.wait_idle()
+    plain = wait_preview(editor, lambda r: joined(r) and (((r.get("connector_join") or {}).get("materials") or {}).get("wall") != "Kit Stone"))
+    check("its undo takes the supplied Kit Stone off the joined preview", ((plain.get("connector_join") or {}).get("materials") or {}).get("wall") != "Kit Stone",
+          json.dumps(plain.get("connector_join")))
     title = viewport["title"]
     shown = editor.call("level_get_connector_indicators", {"viewport": title})
     highlighted = [i for i in shown.get("indicators", []) if (i.get("piece_id") == wall["id"]) and (i.get("name") == "end")]
@@ -10067,6 +11932,10 @@ def check_connector_switches(editor):
     drawn_moved = sorted(i["name"] for i in shown["indicators"] if i["piece_id"] == m["id"])
     check("with Connectors 'all' the wall's five enabled connectors are drawn and its disabled end is not; the other wall shows all six",
           (drawn == sorted(n for n in wall_names if n != "end")) and (drawn_moved == sorted(wall_names)), f"{drawn} | {drawn_moved}")
+    colors = {i["name"]: [round(c, 3) for c in i["color"]] for i in shown["indicators"] if i["piece_id"] == m["id"]}
+    check("the indicators take their connector type's color: the wall's ends the wall color, its base the wall-floor color, its top the plain color (C1.8)",
+          (colors.get("start") == [1.0, 0.55, 0.15, 1.0]) and (colors.get("base") == [0.2, 0.75, 1.0, 1.0]) and (colors.get("top") == [0.4, 0.9, 0.4, 1.0]),
+          json.dumps(colors))
 
     # The piece switch: every connector off, the per-name list kept.
     depth = undo_depth(editor)
@@ -10262,12 +12131,57 @@ def check_connector_switches(editor):
         shutil.rmtree(directory, ignore_errors=True)
 
 
+def check_connector_types(editor):
+    """doc/plans/level_kit_connections.md C1: connector types. An explicit join of connectors sharing no type is refused
+    naming both connectors and their types; a wall's base (wall-floor) joins no generic top (L15); a held drag near only an
+    incompatible connector does not snap (C1.9); wall ends still join wall ends."""
+    scene = create_scene(editor)
+    editor.call("set_active_scene", {"scene_name": scene})
+    pieces = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [
+        {"shape": "architecture.wall", "position": [0.0, 0.0, 0.0], "name": "types wall"},
+        {"shape": "basic.block", "position": [6.0, 0.0, 0.0], "name": "types box"},
+        {"shape": "architecture.wall", "position": [0.0, 0.0, 6.0], "name": "types probe"}]})["pieces"]
+    editor.wait_idle()
+    wall, box, probe = pieces
+    types = {c["name"]: c["types"] for c in connectors_of(editor, scene, wall["id"]).values()}
+    check("a wall's start and end accept generic and wall, its base wall-floor only, its top generic (K1.5)",
+          (types.get("start") == ["generic", "wall"]) and (types.get("end") == ["generic", "wall"]) and (types.get("base") == ["wall-floor"]) and
+          (types.get("top") == ["generic"]), json.dumps(types))
+    refused = call_error(editor, "level_connect_pieces", {"scene_name": scene, "node_id": probe["id"], "connector": "base",
+                                                          "to_piece_id": box["id"], "to_connector": "top"})
+    check("an explicit join of a wall's base to a block's top is refused naming both connectors and their types (C1.9, L15)",
+          (refused is not None) and ("share no connector type" in refused) and ("'base' (wall-floor)" in refused) and ("'top' (generic)" in refused),
+          str(refused))
+    joined = editor.call("level_connect_pieces", {"scene_name": scene, "node_id": probe["id"], "connector": "start",
+                                                  "to_piece_id": wall["id"], "to_connector": "end"})
+    editor.wait_idle()
+    check("a wall's start still joins another wall's end", joined["changed"], json.dumps(joined)[:200])
+    editor.call("undo")
+    editor.wait_idle()
+    # A held drag of the probe's base 0.1 m above the box's top: the only connector in reach is incompatible.
+    box_top = connectors_of(editor, scene, box["id"])["top"]["position"]
+    place_at(editor, scene, probe["id"], [box_top[0], box_top[1] + 0.3, box_top[2] + 10.0])
+    editor.wait_idle()
+    probe_base = connectors_of(editor, scene, probe["id"])["base"]["position"]
+    delta = [box_top[i] - probe_base[i] for i in range(3)]
+    delta[1] += 0.1
+    select(editor, scene, [probe["id"]])
+    editor.call("drag_selection", {"translation": delta, "frames": 2, "release": False, "connector_snap_distance": 0.11})
+    state = editor.call("get_connector_snap", {})
+    editor.call("cancel_transform_drag", {})
+    editor.wait_idle()
+    check("a held drag whose only connector in reach shares no type does not snap (C1.9)", not state.get("snapped"), json.dumps(state)[:300])
+    select(editor, scene, [])
+    editor.close(scene)
+
+
 def check_attachments(editor, directory):
     """Plan step 41, R5.3: persistent connector attachments (doc/editor/level_tools.md "Attachments"). A join records an
     attachment; the joined piece follows a transform edit, a held drag (live and at the release) and a parameter change of its
-    target in one undo entry with undo and redo restoring both; a chain follows; a cycle is refused; moving the attached piece
+    target in one undo entry with undo and redo restoring both; a chain follows; a cycle is made and reported apart; moving the attached piece
     detaches it; deleting the target leaves it dormant and undo makes it active; save and reload keep it and following still
-    works; a connector-snapped drag release attaches; level_detach_piece; a locked layout's child is never attached."""
+    works; a connector-snapped drag release attaches; level_detach_piece; a locked layout's child is never attached. The pieces
+    are arches, whose ends are generic connectors: walls joined end to end fit instead of following (C3.16)."""
     scene = create_scene(editor)
     editor.call("set_active_scene", {"scene_name": scene})
 
@@ -10289,9 +12203,9 @@ def check_attachments(editor, directory):
     def world(node_id, scene_name=None):
         return node_transforms(editor, scene_name or scene, node_id)[1]
 
-    a = place([{"shape": "architecture.wall", "position": [0.0, 0.0, 0.0], "name": "att a"}])[0]
+    a = place([{"shape": "architecture.arch", "position": [0.0, 0.0, 0.0], "name": "att a"}])[0]
     depth = undo_depth(editor)
-    b = place([{"shape": "architecture.wall", "name": "att b", "connect": {"connector": "start", "to_piece_id": a["id"], "to_connector": "end"}}])[0]
+    b = place([{"shape": "architecture.arch", "name": "att b", "connect": {"connector": "start", "to_piece_id": a["id"], "to_connector": "end"}}])[0]
     b_attachment = attachment(b["id"])
     check("a placement with connect records an attachment: active, its target, connectors, twist and gap; the target has none; one entry",
           (b_attachment is not None) and (b_attachment["state"] == "active") and (b_attachment["target_id"] == a["id"]) and
@@ -10341,14 +12255,14 @@ def check_attachments(editor, directory):
 
     # A parameter change of the target: its end connector moves, the follower joins it there.
     depth = undo_depth(editor)
-    editor.call("level_set_piece_parameters", {"scene_name": scene, "node_id": a["id"], "parameters": {"length": 6.0}})
+    editor.call("level_set_piece_parameters", {"scene_name": scene, "node_id": a["id"], "parameters": {"span": 6.0}})
     editor.wait_idle()
-    check("a length change of the target moves the attached wall to its new end, one undo entry",
-          joined(b["id"], "start", a["id"], "end") and (piece_by_id(editor, scene, a["id"])["parameters"]["length"] == 6.0) and
+    check("a span change of the target moves the attached arch to its new end, one undo entry",
+          joined(b["id"], "start", a["id"], "end") and (piece_by_id(editor, scene, a["id"])["parameters"]["span"] == 6.0) and
           (undo_depth(editor) == depth + 1), f"undo {undo_depth(editor) - depth}")
 
     # A chain: c on b's end follows a move of a through b.
-    c = place([{"shape": "architecture.wall", "name": "att c", "connect": {"connector": "start", "to_piece_id": b["id"], "to_connector": "end"}}])[0]
+    c = place([{"shape": "architecture.arch", "name": "att c", "connect": {"connector": "start", "to_piece_id": b["id"], "to_connector": "end"}}])[0]
     depth = undo_depth(editor)
     editor.call("set_node_transform", {"scene_name": scene, "node_id": a["id"], "space": "world", "translation": [-2.0, 0.0, 1.0], "rotation_xyzw": yaw_xyzw(-30.0)})
     editor.wait_idle()
@@ -10358,7 +12272,7 @@ def check_attachments(editor, directory):
 
     # A raw write of the target's record (set_item_property, as a developer row or a paste writes it): followed in the same entry.
     raw_text = piece_by_id(editor, scene, a["id"])["parameters_text"]
-    editor.call("level_set_piece_parameters", {"scene_name": scene, "node_id": a["id"], "parameters": {"length": 5.0}})
+    editor.call("level_set_piece_parameters", {"scene_name": scene, "node_id": a["id"], "parameters": {"span": 5.0}})
     editor.wait_idle()
     shorter_text = piece_by_id(editor, scene, a["id"])["parameters_text"]
     editor.call("undo")
@@ -10395,12 +12309,22 @@ def check_attachments(editor, directory):
     editor.wait_idle()
     select(editor, scene, [])
 
-    # A cycle: a attached to c would close a <- b <- c <- a.
+    # A cycle (C3.2): a attached to c closes a <- b <- c <- a. a moves onto c's end, b and c follow a, so the loop does not close:
+    # the new connection is kept and reported apart (C3.7).
     depth = undo_depth(editor)
     a_before = world(a["id"])
-    cycle = call_error(editor, "level_connect_pieces", {"scene_name": scene, "node_id": a["id"], "connector": "start", "to_piece_id": c["id"], "to_connector": "end"})
-    check("attaching a to c, which follows a through b, is refused as a cycle: nothing moved, no entry",
-          (cycle is not None) and ("cycle" in cycle) and (world(a["id"]) == a_before) and (attachment(a["id"]) is None) and (undo_depth(editor) == depth), str(cycle))
+    cycle = editor.call("level_connect_pieces", {"scene_name": scene, "node_id": a["id"], "connector": "start", "to_piece_id": c["id"], "to_connector": "end"})
+    editor.wait_idle()
+    apart = [(x["piece"]["id"], x["connector"], x["other"]["id"]) for x in (cycle.get("flow") or {}).get("apart_connections", [])]
+    check("attaching a to c, which follows a through b, is made (C3.2): b and c follow a, the cycle does not close, so a's new connection is kept and reported apart, one entry",
+          (attachment(a["id"]) is not None) and (attachment(a["id"])["target_id"] == c["id"]) and joined(b["id"], "start", a["id"], "end") and
+          joined(c["id"], "start", b["id"], "end") and not joined(a["id"], "start", c["id"], "end") and ((a["id"], "start", c["id"]) in apart) and
+          (undo_depth(editor) == depth + 1), json.dumps(cycle)[:600])
+    editor.call("undo")
+    editor.wait_idle()
+    check("undo of the cycle join gives a its pose back and removes its connection, b and c joined as before",
+          (world(a["id"]) == a_before) and (attachment(a["id"]) is None) and joined(b["id"], "start", a["id"], "end") and joined(c["id"], "start", b["id"], "end") and
+          (undo_depth(editor) == depth), "")
 
     # Moving the attached piece itself detaches it; its own follower keeps following it.
     depth = undo_depth(editor)
@@ -10452,7 +12376,10 @@ def check_attachments(editor, directory):
 
     # A connector-snapped drag release attaches: d's end pulled near a's start with full snap orientation.
     a_start = connectors_of(editor, scene, a["id"])["start"]["position"]
-    d = place([{"shape": "architecture.wall", "name": "att d", "position": [a_start[0] - 2.3, 0.0, a_start[2] + 0.2]}])[0]
+    d = place([{"shape": "architecture.arch", "name": "att d", "position": [a_start[0] - 6.0, 0.0, a_start[2] + 0.2]}])[0]
+    d_end_offset = connectors_of(editor, scene, d["id"])["end"]["position"][0] - d["position"][0]
+    place_at(editor, scene, d["id"], [a_start[0] - d_end_offset - 0.3, 0.0, a_start[2] + 0.2])
+    editor.wait_idle()
     select(editor, scene, [d["id"]])
     depth = undo_depth(editor)
     editor.call("drag_selection", {"translation": [0.1, 0.0, 0.0], "frames": 4, "connector_snap_distance": 0.5, "connector_snap_orientation": "full"})
@@ -10480,9 +12407,9 @@ def check_attachments(editor, directory):
 
     # Dependency order under a Replace: f placed before e in scene order, e a child of the replaced piece r and f attached to e;
     # both follow, e first. A rider: g, a child of follower e attached to the unmoved block x, is moved off its join and detaches.
-    f = place([{"shape": "architecture.wall", "name": "att f", "position": [20.0, 0.0, 20.0]}])[0]
-    r = place([{"shape": "architecture.wall", "name": "att r", "position": [10.0, 0.0, -20.0]}])[0]
-    e = place([{"shape": "architecture.wall", "name": "att e", "connect": {"connector": "start", "to_piece_id": r["id"], "to_connector": "end"}}])[0]
+    f = place([{"shape": "architecture.arch", "name": "att f", "position": [20.0, 0.0, 20.0]}])[0]
+    r = place([{"shape": "architecture.arch", "name": "att r", "position": [10.0, 0.0, -20.0]}])[0]
+    e = place([{"shape": "architecture.arch", "name": "att e", "connect": {"connector": "start", "to_piece_id": r["id"], "to_connector": "end"}}])[0]
     editor.call("reparent_item", {"scene_name": scene, "item_id": e["id"], "parent_id": r["id"]})
     editor.wait_idle()
     editor.call("level_connect_pieces", {"scene_name": scene, "node_id": f["id"], "connector": "start", "to_piece_id": e["id"], "to_connector": "end"})
@@ -10506,7 +12433,7 @@ def check_attachments(editor, directory):
 
     # A locked layout's child takes no part: a join to it is made without an attachment.
     layout = editor.call("level_create_layout", {"scene_name": scene, "name": "att layout", "position": [0.0, 0.0, -12.0],
-                                                 "pattern": {"kind": "line", "count": 2}, "items": [{"shape": "architecture.wall"}], "locked": True})
+                                                 "pattern": {"kind": "line", "count": 2}, "items": [{"shape": "architecture.arch"}], "locked": True})
     editor.wait_idle()
     child = layout["children"][0]["id"]
     on_child = place([{"shape": "architecture.pillar", "name": "att on child", "connect": {"connector": "base", "to_piece_id": child, "to_connector": "top"}}])[0]
@@ -10557,6 +12484,8 @@ def check_attachments(editor, directory):
 
 def check_connectors(editor):
     """R5.3, D3.12: connectors in the catalog, level_get_connectors, level_place_pieces connect and level_connect_pieces."""
+    # Its joins test the join geometry alone: Auto-connect (C5) would connect the pieces those joins leave touching.
+    editor.call("set_surface_snap_settings", {"auto_connect": False})
     scene = create_scene(editor)
     kits = editor.call("level_get_kits", {"scene_name": scene})
     by_id = {shape["id"]: shape for shape in kits["shapes"]}
@@ -10596,7 +12525,7 @@ def check_connectors(editor):
     check("a gap of 0.5 m moves the joined wall 0.5 m along the target connector's outward axis",
           close(gapped["position"], [1.0 + half_a + half_b + 0.5, 0.0, 2.0]), fmt3(gapped["position"]))
     snapped = editor.call("level_place_pieces", {"scene_name": scene, "snap": "module", "surface_snap": True, "pieces": [
-        {"shape": "architecture.wall", "name": "c snapped", "connect": {"connector": "start", "to_piece_id": a["id"], "to_connector": "end", "gap": 0.3}}]})["pieces"][0]
+        {"shape": "architecture.wall", "name": "c snapped", "connect": {"connector": "start", "to_piece_id": a["id"], "to_connector": "end", "gap": 0.3, "attach": False}}]})["pieces"][0]
     editor.wait_idle()
     check("module snap and surface snap of the call do not apply to a connected piece (the join is exact)",
           close(snapped["position"], [1.0 + half_a + half_b + 0.3, 0.0, 2.0]) and not snapped["surface_found"], fmt3(snapped["position"]))
@@ -10667,10 +12596,11 @@ def check_connectors(editor):
     editor.wait_idle()
     longer = editor.call("level_connect_pieces", {"scene_name": scene, "node_id": b["id"], "connector": "start", "to_piece_id": a["id"], "to_connector": "end"})
     editor.wait_idle()
-    long_half = 0.5 * piece_by_id(editor, scene, a["id"])["parameters"]["length"]
-    expected_long = joined_position([1.0, 0.0, 2.0], target_rotation, [long_half, 0.0, 0.0], target_rotation, [-half_b, 0.0, 0.0])
-    check("after the target's length becomes 6 m, a re-connect lands at its new end", close(longer["position"], expected_long),
-          f"{fmt3(longer['position'])} vs {fmt3(expected_long)}")
+    # C3.16: the joined wall fits the lengthened target (its far end kept), so its start is on the new end already.
+    b_start = connectors_of(editor, scene, b["id"])["start"]["position"]
+    a_end = connectors_of(editor, scene, a["id"])["end"]["position"]
+    check("after the target's length becomes 6 m, the joined wall's start is on its new end (the wall fit, C3.16) and a re-connect keeps it there",
+          close(b_start, a_end, 1.0e-3), f"{fmt3(b_start)} vs {fmt3(a_end)}")
 
     # Refusals: nothing placed, nothing moved.
     count = len(pieces(editor, scene))
@@ -10714,6 +12644,7 @@ def check_connectors(editor):
           close(on_child["position"], child_frames["top"]["position"]) and (node_transforms(editor, scene, child) == child_before), fmt3(on_child["position"]))
     check_connector_hierarchies(editor, scene)
     check_connector_scale(editor, scene)
+    editor.call("set_surface_snap_settings", {"auto_connect": True})
     editor.close(scene)
     check_connector_switches(editor)
 
@@ -10763,7 +12694,8 @@ def check_connector_scale(editor, scene):
     def joined_check(label, moved_id, target_id):
         local_before = editor.call("get_node_details", {"scene_name": scene, "node_id": moved_id})["local_transform"]
         depth = undo_depth(editor)
-        reply = editor.call("level_connect_pieces", {"scene_name": scene, "node_id": moved_id, "connector": "start", "to_piece_id": target_id, "to_connector": "end"})
+        reply = editor.call("level_connect_pieces", {"scene_name": scene, "node_id": moved_id, "connector": "start", "to_piece_id": target_id, "to_connector": "end",
+                                                     "attach": False})
         editor.wait_idle()
         start = connectors_of(editor, scene, moved_id)["start"]
         end = connectors_of(editor, scene, target_id)["end"]
@@ -10772,7 +12704,8 @@ def check_connector_scale(editor, scene):
               reply["changed"] and close(start["position"], end["position"], 1.0e-4) and close(start["outward"], [-x for x in end["outward"]], 1.0e-4) and
               close(start["up"], end["up"], 1.0e-4) and close(local_after["scale"], local_before["scale"], 1.0e-6) and (undo_depth(editor) == depth + 1),
               f"start {fmt3(start['position'])} end {fmt3(end['position'])} scale {local_before['scale']} -> {local_after['scale']} undo {undo_depth(editor) - depth}")
-        again = editor.call("level_connect_pieces", {"scene_name": scene, "node_id": moved_id, "connector": "start", "to_piece_id": target_id, "to_connector": "end"})
+        again = editor.call("level_connect_pieces", {"scene_name": scene, "node_id": moved_id, "connector": "start", "to_piece_id": target_id, "to_connector": "end",
+                                                     "attach": False})
         editor.wait_idle()
         check(label + ": connecting again records nothing", (not again["changed"]) and (undo_depth(editor) == depth + 1), "")
 
@@ -10956,6 +12889,102 @@ def check_window_connect(editor, scene):
     editor.call("delete_nodes", {"scene_name": scene, "ids": [target["id"], moved["id"]] + [p["id"] for p in added]})
     editor.call("select_items", {"scene_name": scene, "ids": []})
     editor.wait_idle()
+
+
+def check_window_detach(editor, scene):
+    """C9.2: the Level Kit window's Detach Selected removes every connection of the selected kit pieces, one undo entry."""
+    placed = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [
+        {"shape": "architecture.wall", "position": [0.0, 0.0, 40.0], "name": "wd a"}]})["pieces"][0]
+    editor.wait_idle()
+    joined = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [{"shape": "architecture.wall", "name": "wd b",
+                         "connect": {"connector": "start", "to_piece_id": placed["id"], "to_connector": "end"}}]})["pieces"][0]
+    editor.wait_idle()
+
+    def connections(node_id):
+        return editor.call("level_get_connections", {"scene_name": scene, "node_id": node_id})["connections"]
+
+    editor.call("select_items", {"scene_name": scene, "ids": [joined["id"]]})
+    editor.wait_idle()
+    depth = undo_depth(editor)
+    before = len(connections(joined["id"]))
+    click_item(editor, "Detach Selected")
+    editor.wait_idle()
+    check("Detach Selected in the Level Kit window removes the selected wall's connection (the record on it), one undo entry",
+          (before == 1) and (connections(joined["id"]) == []) and (connections(placed["id"]) == []) and (undo_depth(editor) == depth + 1) and
+          ("Level Kit: Detached 1 node." in pav.read_log()), f"before {before}, after {connections(joined['id'])}, undo {undo_depth(editor) - depth}")
+    editor.call("undo")
+    editor.wait_idle()
+    check("undo of Detach Selected restores the connection", len(connections(joined["id"])) == 1, json.dumps(connections(joined["id"])))
+    editor.call("delete_nodes", {"scene_name": scene, "ids": [placed["id"], joined["id"]]})
+    editor.call("select_items", {"scene_name": scene, "ids": []})
+    editor.wait_idle()
+
+
+def check_brush_floor_join(editor, window_scene):
+    """K6: the Brush tool's kit mode joins a wall's base to the hovered floor layout's edge connector; with the pointer still,
+    an outline edit and a floor value edit keep the join on the floor at the edge's new frame (refresh_kit_join())."""
+    import curve_verify as cv  # noqa: E402 - frames the camera from the viewport's real size
+    editor.call("select_items", {"scene_name": window_scene, "ids": []})
+    scene = create_scene(editor)
+    floor = editor.call("level_create_layout", {"scene_name": scene, "name": "bf floor", "position": [0.0, 0.0, 0.0], "pattern": {"kind": "floor"}})
+    editor.wait_idle()
+    edge = connectors_of(editor, scene, floor["id"])["edge_0"]
+    p = edge["position"]
+    length = math.hypot(p[0], p[2])
+    aim_point = [p[0] - 0.1 * p[0] / length, p[1], p[2] - 0.1 * p[2] / length]  # on the slab's top, just inside edge_0's connector
+    saved_distance = editor.call("get_surface_snap_settings", {}).get("connector_snap_distance", 0.0)
+    editor.call("set_surface_snap_settings", {"connector_snap_distance": 0.5})
+    viewport = cv.frame_camera(editor, scene, [2.5 * p[0], 3.0, 2.5 * p[2]], aim_point,
+                               [[x, y, z] for x in (-2.5, 2.5) for y in (0.0, 0.5) for z in (-2.5, 2.5)])
+    hover(editor, viewport, aim_point)
+    click(editor, "Wall")
+    entered = wait_preview(editor, lambda r: r.get("active") and (r.get("shape") == "architecture.wall"))
+    settings_ok = (set_checkbox(editor, "Snap To Module", True) and set_checkbox(editor, "Snap To Surface", True)
+                   and set_checkbox(editor, "Orient To Surface", False) and set_checkbox(editor, "Place As Layout", False))
+
+    def floor_join(r):
+        j = r.get("connector_join") or {}
+        return (j.get("target_piece_id") == floor["id"]) and (j.get("target_connector") == "edge_0") and (j.get("connector") == "base")
+
+    def at_edge(r):
+        target = connectors_of(editor, scene, floor["id"])["edge_0"]["position"]
+        return r.get("visible") and floor_join(r) and close(r.get("position", [9, 9, 9]), target, 1.0e-4)
+
+    hover(editor, viewport, [aim_point[0], aim_point[1], aim_point[2] + 0.02])
+    hover(editor, viewport, aim_point)
+    joined = wait_preview(editor, at_edge)
+    check("the Brush tool's kit mode hovering a floor's slab beside edge_0 joins the new wall's base to edge_0, at the connector",
+          settings_ok and entered.get("active") and at_edge(joined), json.dumps(joined.get("connector_join")) + " " + json.dumps(joined.get("position")))
+
+    def flowed_length(r):
+        j = r.get("connector_join") or {}
+        return (j.get("parameters") or {}).get("length", 0.0) if j.get("flowed") else 0.0
+
+    join = joined.get("connector_join") or {}
+    check("K9.2: the joined preview takes the edge's values: length 3.75 (the 4 m edge minus the 0.25 m wall thickness), thickness 0.25, height 3",
+          join.get("flowed") and close([flowed_length(joined), join["parameters"].get("thickness", 0.0), join["parameters"].get("height", 0.0)], [3.75, 0.25, 3.0], 1.0e-4),
+          json.dumps(join))
+    points = [c["position"] for c in editor.call("get_curve", {"scene_name": scene, "curve_id": floor["id"]})["points"]]
+    shift = [0.15 * p[0] / length, 0.0, 0.15 * p[2] / length]
+    editor.call("set_curve", {"scene_name": scene, "curve_id": floor["id"], "closed": True,
+                              "points": [{"position": [q[0] + shift[0], q[1], q[2] + shift[2]]} for q in points]})
+    editor.wait_idle()
+    moved = wait_preview(editor, at_edge)
+    check("with the pointer still, an outline edit moving edge_0 keeps the join on the floor at the connector's new place",
+          at_edge(moved) and not close(moved.get("position", [9, 9, 9]), p, 1.0e-3), json.dumps(moved.get("connector_join")) + " " + json.dumps(moved.get("position")))
+    editor.call("level_set_layout", {"scene_name": scene, "layout_id": floor["id"], "pattern": {"kind": "floor", "floor": {"thickness": 0.35}}})
+    editor.wait_idle()
+    raised = wait_preview(editor, at_edge)
+    check("with the pointer still, a floor thickness edit keeps the join on the floor at the raised connector",
+          at_edge(raised) and (abs(raised.get("position", [9, 9, 9])[1] - 0.35) < 1.0e-4), json.dumps(raised.get("connector_join")) + " " + json.dumps(raised.get("position")))
+    editor.call("level_set_layout", {"scene_name": scene, "layout_id": floor["id"], "pattern": {"kind": "floor", "floor": {"thickness": 0.35, "wall_thickness": 0.5}}})
+    editor.wait_idle()
+    thicker = wait_preview(editor, lambda r: at_edge(r) and (abs(flowed_length(r) - 3.5) < 1.0e-4))
+    check("with the pointer still, a floor wall thickness edit (0.5 m) gives the joined preview length 3.5 and thickness 0.5 (K9.2)",
+          (abs(flowed_length(thicker) - 3.5) < 1.0e-4) and (abs(((thicker.get("connector_join") or {}).get("parameters") or {}).get("thickness", 0.0) - 0.5) < 1.0e-4),
+          json.dumps(thicker.get("connector_join")))
+    editor.call("set_surface_snap_settings", {"connector_snap_distance": saved_distance})
+    editor.close(scene)
 
 
 def check_window_connector_switches(editor, scene, target, moved):
@@ -13328,9 +15357,7 @@ def check_more_shapes(editor):
           (len(accepted) == 5) and (accepted[4]["triangle_count"] == 1922) and all(abs(p["world_aabb"]["min"][1]) < TOLERANCE for p in accepted),
           "; ".join(f"{p['shape']} {p['triangle_count']}" for p in accepted))
     refusals = [
-        ("nature.cliff", {"overhang": 0.3, "derive": []}, "'overhang'"),
         ("nature.palm",  {"fronds": 25, "derive": []}, "'fronds'"),
-        ("nature.shore", {"berm": 0.9}, "'berm'"),
         ("nature.water", {"subdivisions": 32}, "'subdivisions'"),
     ]
     refusal_problems = []
@@ -13340,8 +15367,18 @@ def check_more_shapes(editor):
         if (error is None) or (name not in error):
             refusal_problems.append(f"{shape_id} {parameters}: {error}")
     editor.wait_idle()
-    check("a value beyond a new shape's range is refused naming the parameter, and nothing is placed",
+    check("an integer beyond a new shape's range is refused naming the parameter, and nothing is placed",
           (not refusal_problems) and (len(pieces(editor, scene)) == count_before), "; ".join(refusal_problems))
+    taken_problems = []
+    for shape_id, parameters in [("nature.cliff", {"overhang": 0.3, "derive": []}), ("nature.shore", {"berm": 0.9})]:
+        error = call_error(editor, "level_place_pieces", {"scene_name": scene, "pieces": [{"shape": shape_id, "parameters": parameters}]})
+        editor.wait_idle()
+        if error is not None:
+            taken_problems.append(f"{shape_id} {parameters}: {error}")
+        else:
+            editor.call("undo")
+            editor.wait_idle()
+    check("a float beyond its declared range is taken (L23)", not taken_problems, "; ".join(taken_problems))
 
     # Derive from seed: two seeds, the masked values from each seed inside their derive ranges.
     seeded = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [
@@ -13651,10 +15688,6 @@ def check_more_shapes_2(editor):
           "; ".join(f"{p['shape']} {p['triangle_count']}" for p in accepted))
     refusals = [
         ("architecture.column",      {"flutes": 25}, "'flutes'"),
-        ("architecture.entablature", {"cornice": 0.4}, "'cornice'"),
-        ("architecture.torii",       {"lean": 9.0, "derive": []}, "'lean'"),
-        ("architecture.battlement",  {"merlon_width": 0.3}, "'merlon_width'"),
-        ("architecture.tower",       {"opening_height": 1.9}, "'opening_height'"),
         ("nature.leaf_plant",        {"leaves": 15, "derive": []}, "'leaves'"),
         ("architecture.tower",       {"width": 2.5, "wall": 0.7}, "narrower than the doorway"),
         ("architecture.torii",       {"width": 1.0, "height": 15.0, "lean": 8.0, "derive": []}, "meet"),
@@ -13666,8 +15699,18 @@ def check_more_shapes_2(editor):
         if (error is None) or (name not in error):
             refusal_problems.append(f"{shape_id} {parameters}: {error}")
     editor.wait_idle()
-    check("a value beyond a second batch shape's range, a tower whose inside is narrower than its doorway and a torii whose posts meet are refused, and nothing is placed",
+    check("an integer beyond a second batch shape's range, a tower whose inside is narrower than its doorway and a torii whose posts meet are refused, and nothing is placed",
           (not refusal_problems) and (len(pieces(editor, scene)) == count_before), "; ".join(refusal_problems))
+    taken_problems = []
+    for shape_id, parameters in [("architecture.entablature", {"cornice": 0.4}), ("architecture.torii", {"lean": 9.0, "derive": []}), ("architecture.battlement", {"merlon_width": 0.3}), ("architecture.tower", {"opening_height": 1.9})]:
+        error = call_error(editor, "level_place_pieces", {"scene_name": scene, "pieces": [{"shape": shape_id, "parameters": parameters}]})
+        editor.wait_idle()
+        if error is not None:
+            taken_problems.append(f"{shape_id} {parameters}: {error}")
+        else:
+            editor.call("undo")
+            editor.wait_idle()
+    check("a float beyond its declared range is taken (L23)", not taken_problems, "; ".join(taken_problems))
 
     # Derive from seed: the leaf plant's height, leaves and droop, the torii's curve.
     seeded = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [
@@ -14039,13 +16082,8 @@ def check_more_shapes_3(editor):
           (len(accepted) == 7) and all((p["triangle_count"] <= 2000) and (abs(p["world_aabb"]["min"][1]) < TOLERANCE) for p in accepted),
           "; ".join(f"{p['shape']} {p['triangle_count']}" for p in accepted))
     refusals = [
-        ("nature.rock_spire",     {"lean": 16.0, "derive": []}, "'lean'"),
-        ("nature.basalt_columns", {"height_spread": 0.95, "derive": []}, "'height_spread'"),
-        ("architecture.roof",     {"pitch": 10.0}, "'pitch'"),
         ("nature.palm_clump",     {"stems": 10, "derive": []}, "'stems'"),
         ("nature.palm_shrub",     {"fronds": 17, "derive": []}, "'fronds'"),
-        ("nature.dune",           {"asymmetry": 0.9}, "'asymmetry'"),
-        ("nature.ground_patch",   {"thickness": 0.5}, "'thickness'"),
         ("nature.dune",           {"length": 5.0, "width": 5.0, "derive": []}, "1.04 times the width"),
     ]
     refusal_problems = []
@@ -14055,8 +16093,18 @@ def check_more_shapes_3(editor):
         if (error is None) or (name not in error):
             refusal_problems.append(f"{shape_id} {parameters}: {error}")
     editor.wait_idle()
-    check("a value beyond a third batch shape's range is refused naming the parameter, a dune shorter than 1.04 widths is refused, and nothing is placed",
+    check("an integer beyond a third batch shape's range is refused naming the parameter, a dune shorter than 1.04 widths is refused, and nothing is placed",
           (not refusal_problems) and (len(pieces(editor, scene)) == count_before), "; ".join(refusal_problems))
+    taken_problems = []
+    for shape_id, parameters in [("nature.rock_spire", {"lean": 16.0, "derive": []}), ("nature.basalt_columns", {"height_spread": 0.95, "derive": []}), ("architecture.roof", {"pitch": 10.0}), ("nature.dune", {"asymmetry": 0.9}), ("nature.ground_patch", {"thickness": 0.5})]:
+        error = call_error(editor, "level_place_pieces", {"scene_name": scene, "pieces": [{"shape": shape_id, "parameters": parameters}]})
+        editor.wait_idle()
+        if error is not None:
+            taken_problems.append(f"{shape_id} {parameters}: {error}")
+        else:
+            editor.call("undo")
+            editor.wait_idle()
+    check("a float beyond its declared range is taken (L23)", not taken_problems, "; ".join(taken_problems))
 
     # Derive from seed: the default masks' values inside their derive ranges, other seeds other meshes; the dune and the
     # basalt stay walkable at every derived value.
@@ -15329,6 +17377,8 @@ def check_layout_connectors(editor, image_prefix):
                 for c in piece["connectors"]:
                     if not c["enabled"]:
                         continue
+                    if not set(p.get("types", ["generic"])) & set(c.get("types", ["generic"])):
+                        continue  # C1.9: a pair sharing no connector type is no candidate
                     distance = math.dist(moved, c["position"])
                     if (distance <= snap_distance) and ((best is None) or (distance < best[0] - 1.0e-6)):
                         best = (distance, piece["id"], c["name"])
@@ -16836,6 +18886,13 @@ def main():
     parser.add_argument("--only-layout-selection", action="store_true", help="run the selection paths checks of locked kit layout children alone")
     parser.add_argument("--only-scatter", action="store_true", help="run the scatter layout checks alone")
     parser.add_argument("--only-connectors", action="store_true", help="run the connector checks (MCP and the Level Kit window) alone")
+    parser.add_argument("--only-property-flow", action="store_true", help="run the property flow checks (level kit connections step 5) alone")
+    parser.add_argument("--only-flow-preview", action="store_true", help="run the flow preview checks (level kit connections step 7) alone, with the Brush tool's floor join")
+    parser.add_argument("--only-connection-records", action="store_true", help="run the connection record checks (level kit connections step 4) alone")
+    parser.add_argument("--only-connection-fixes", action="store_true", help="run the checks of the connection series review fixes alone")
+    parser.add_argument("--only-connection-persistence", action="store_true", help="run the save and load and the navigation build of a connected room alone (level kit connections step 9)")
+    parser.add_argument("--only-polygon-floor", action="store_true", help="run the floor layout checks (level kit connections step 2) alone")
+    parser.add_argument("--only-connector-types", action="store_true", help="run the connector type checks (level kit connections step 1) alone")
     parser.add_argument("--only-attachments", action="store_true", help="run the connector attachment checks (plan step 41) alone")
     parser.add_argument("--only-connector-snap", action="store_true", help="run the connector snap checks of Transform tool drags alone")
     parser.add_argument("--only-layout-indicators", action="store_true", help="run the kit layout drawing checks alone")
@@ -16939,6 +18996,7 @@ def main():
         ]
         window_replace = [lambda e, s, _: check_window_replace(e, s)]
         window_connect = [lambda e, s, _: check_window_connect(e, s)]
+        window_connections = [lambda e, s, _: check_window_detach(e, s), lambda e, s, _: check_brush_floor_join(e, s)]
         # The live parameter drags (R6.2) run after the Properties rows, which show the stairs' rows they drag.
         window_thumbnails = [
             lambda e, s, _: check_window_thumbnails(e, s, thumbnails_image_path),
@@ -16957,6 +19015,7 @@ def main():
             *window_connect,
             lambda e, s, _: check_brush_surface_normal(e, s),
             lambda e, s, _: check_brush_connect(e, s, brush_connect_image_path),
+            *window_connections,
         ]
 
         more_shapes = [("more shapes", check_more_shapes), ("more shapes 2", check_more_shapes_2), ("more shapes 3", check_more_shapes_3)]
@@ -17008,6 +19067,23 @@ def main():
             groups = [("connectors", check_connectors), ("Level Kit window connect", level_kit_window(*window_connect))]
         elif args.only_attachments:
             groups = [("attachments", check_attachments, work)]
+        elif args.only_connector_types:
+            groups = [("connector types", check_connector_types)]
+        elif args.only_polygon_floor:
+            groups = [("polygon floor", check_floor_layouts)]
+        elif args.only_connection_records:
+            groups = [("connection records", check_connection_records, work),
+                      ("Level Kit window connections", level_kit_window(*window_connections))]
+        elif args.only_connection_fixes:
+            groups = list(CONNECTION_FIX_GROUPS)
+        elif args.only_connection_persistence:
+            groups = [("connection persistence", check_connection_persistence, work)]
+        elif args.only_property_flow:
+            groups = [("property flow", check_property_flow)]
+        elif args.only_flow_preview:
+            groups = [("flow preview", check_flow_preview), ("flow preview rows", check_flow_preview_rows),
+                      ("Level Kit window brush floor join", level_kit_window(lambda e, s, _: check_brush_floor_join(e, s))),
+                      ("Level Kit window brush connect", level_kit_window(lambda e, s, _: check_brush_connect(e, s, brush_connect_image_path)))]
         elif args.only_connector_snap:
             groups = [("connector snap", check_connector_snap)]
         elif args.only_layout_indicators:
@@ -17048,6 +19124,14 @@ def main():
                     ("replace", check_replace),
                     ("connectors", check_connectors),
                     ("attachments", check_attachments, work),
+                    ("connector types", check_connector_types),
+                    ("polygon floor", check_floor_layouts),
+                    ("connection records", check_connection_records, work),
+                    ("property flow", check_property_flow),
+                    ("flow preview", check_flow_preview),
+                    ("flow preview rows", check_flow_preview_rows),
+                    ("connection persistence", check_connection_persistence, work),
+                    *CONNECTION_FIX_GROUPS,
                     ("layouts", check_layouts, work),
                     ("path layouts", check_path_layouts, work, path_image_path),
                     ("segment layouts", check_segment_layouts, work, segments_image_path),

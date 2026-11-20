@@ -1,5 +1,7 @@
 #pragma once
 
+#include "level/kit_standard_property.hpp"
+
 #include <cstddef>
 #include <cstdint>
 #include <functional>
@@ -250,6 +252,7 @@ using Kit_seam_sides_function = std::function<std::vector<Kit_side>(const Kit_pa
 using Kit_connectors_function = std::function<void(const Kit_parameter_values& values, std::vector<Kit_connector>& out_connectors)>;
 using Kit_light_frames_function = std::function<void(const Kit_parameter_values& values, std::vector<Kit_light_frame>& out_frames)>;
 using Kit_collision_function    = std::function<Kit_collision(const Kit_parameter_values& values)>;
+using Kit_supply_function       = std::function<void(const Kit_piece_view& piece, std::string_view connector_name, Kit_supply_list& out_supply)>;
 
 class Kit_shape_definition
 {
@@ -277,6 +280,8 @@ public:
     Kit_values_check           check_combination;      // optional: limits between parameters
     Kit_walkability_check      check_walkability;      // set for shapes meant to be walked on or through
     Kit_seam_sides_function    get_seam_sides;         // optional: sides that fill their bounds rectangle
+    std::vector<Kit_property_mapping> property_mappings; // C2.2: the standard properties the shape takes, onto parameters or slots
+    Kit_supply_function        get_supply;             // optional (C3.3): the values a piece supplies over one of its connectors
 
     [[nodiscard]] auto find_parameter(std::string_view name) const -> std::optional<std::size_t>;
     [[nodiscard]] auto has_tag       (std::string_view tag) const -> bool;

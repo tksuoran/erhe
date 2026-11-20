@@ -15,6 +15,43 @@ namespace editor {
 
 class Kit_parameter_values;
 
+// What a connector is for (doc/plans/level_kit_connections.md C1); two connectors connect when they share a type.
+enum class Kit_connector_type : unsigned int
+{
+    generic = 0,
+    wall,
+    wall_floor,
+    floor      // floor edge to floor edge: connected floors share their corners
+};
+
+inline constexpr std::size_t c_connector_type_count = 4;
+
+[[nodiscard]] auto c_str(Kit_connector_type type) -> const char*;
+[[nodiscard]] auto parse_connector_type(std::string_view name) -> std::optional<Kit_connector_type>;
+
+// The set of types a connector accepts (K1.2).
+class Kit_connector_types
+{
+public:
+    std::uint32_t bits{1u}; // generic
+
+    [[nodiscard]] static constexpr auto of(Kit_connector_type type) -> Kit_connector_types
+    {
+        return Kit_connector_types{.bits = (1u << static_cast<unsigned int>(type))};
+    }
+    [[nodiscard]] static constexpr auto all() -> Kit_connector_types
+    {
+        return Kit_connector_types{.bits = ((1u << c_connector_type_count) - 1u)};
+    }
+    [[nodiscard]] constexpr auto contains  (Kit_connector_type type) const -> bool { return (bits & (1u << static_cast<unsigned int>(type))) != 0u; }
+    [[nodiscard]] constexpr auto intersects(Kit_connector_types other) const -> bool { return (bits & other.bits) != 0u; }
+    [[nodiscard]] constexpr auto is_empty  () const -> bool { return bits == 0u; }
+    [[nodiscard]] auto operator==(const Kit_connector_types& other) const -> bool = default;
+};
+
+// "generic", "wall, wall-floor", ...; allocates (messages and reports only).
+[[nodiscard]] auto connector_types_text(Kit_connector_types types) -> std::string;
+
 // A named frame on a shape where another shape attaches (R5.3, D1.12): unit outward and up axes, up normal to outward.
 // The name is a literal (static storage), so filling and copying connectors allocates nothing.
 class Kit_connector
@@ -24,7 +61,14 @@ public:
     glm::vec3   position{0.0f};
     glm::vec3   outward {0.0f, 0.0f, 1.0f};
     glm::vec3   up      {0.0f, 1.0f, 0.0f};
+    Kit_connector_types types{};
 };
+
+// K1.4: the one compatibility test of every join path.
+[[nodiscard]] inline auto is_compatible(const Kit_connector& a, const Kit_connector& b) -> bool
+{
+    return a.types.intersects(b.types);
+}
 
 // A connector switch's state (U33).
 enum class Kit_connector_state : unsigned int
@@ -83,6 +127,7 @@ public:
     glm::vec3     position       {0.0f};
     std::uint64_t piece_id       {0};
     std::size_t   connector_index{0}; // in the shape's declared order
+    Kit_connector_types types{};
 };
 
 class Kit_connector_snap_match
@@ -94,7 +139,8 @@ public:
     float       distance{0.0f};
 };
 
-// D3.13: the closest (moved, other) pair at most max_distance apart (inclusive); none when max_distance is not positive.
+// D3.13: the closest compatible (moved, other) pair at most max_distance apart (inclusive); none when max_distance is not
+// positive. Incompatible pairs are skipped silently (C1.9).
 [[nodiscard]] auto find_connector_snap(
     std::span<const Kit_connector_point> moved,
     std::span<const Kit_connector_point> others,

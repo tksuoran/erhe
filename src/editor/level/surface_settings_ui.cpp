@@ -227,6 +227,34 @@ void surface_settings_checkboxes(Level_kits& level_kits)
     connector_snap_distance_input(level_kits, Surface_widget_label::shown);
     connector_snap_axis_checkbox (level_kits, Surface_widget_label::shown);
     connector_snap_orientation_combo(level_kits, Surface_widget_label::shown);
+    connection_settings_rows(level_kits);
+}
+
+void connection_settings_rows(Level_kits& level_kits)
+{
+    bool auto_connect = level_kits.get_connector_auto_connect();
+    if (ImGui::Checkbox("Auto-connect##connector_auto_connect", &auto_connect)) {
+        level_kits.set_connector_auto_connect(auto_connect ? Connector_auto_connect::on : Connector_auto_connect::off);
+    }
+    tooltip("After a change, a connector of a changed kit piece that sits on a free compatible connector of another piece is connected.");
+    Kit_connector_types mask = level_kits.get_connector_flow_mask();
+    ImGui::TextUnformatted("Flow over");
+    for (unsigned int i = 0; i < c_connector_type_count; ++i) {
+        const Kit_connector_type type = static_cast<Kit_connector_type>(i);
+        bool on = mask.contains(type);
+        ImGui::SameLine();
+        ImGui::PushID(static_cast<int>(i));
+        if (ImGui::Checkbox(c_str(type), &on)) {
+            mask.bits = on ? (mask.bits | Kit_connector_types::of(type).bits) : (mask.bits & ~Kit_connector_types::of(type).bits);
+            level_kits.set_connector_flow_mask(mask);
+        }
+        ImGui::PopID();
+    }
+    int limit = static_cast<int>(level_kits.get_connection_step_limit());
+    if (ImGui::DragInt("Connection Step Limit##connection_step_limit", &limit, 1.0f, 1, 100000)) {
+        level_kits.set_connection_step_limit(static_cast<std::size_t>(std::max(limit, 1)));
+    }
+    tooltip("The most rounds a change's property flow runs (Auto-connect runs once per change).");
 }
 
 void surface_settings_toolbar_buttons(Level_kits& level_kits, ImFont* const icon_font, const float font_size)

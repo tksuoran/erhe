@@ -45,8 +45,10 @@ migrated" table lists the hand-written rows that are authored state; section
 4. Edit hooks (`Property_edit_hook`, registered in the `Properties`
    constructor through `Dependency_property_rows::add_edit_hook()`) follow
    the live writes of a generic row's drag or typed input: `begin` at the
-   edit's first write with the items and the property it records, `step`
-   after each write, `end` when the widget deactivates, and `commit`, which
+   edit's first write with the items and the property it records,
+   `before_write` before each later write (a preview gives the items back
+   the state the write goes over), `step` after each write, `end` when the
+   widget deactivates, and `commit`, which
    appends the operations the edit implies after the edit's writes in its
    one undo entry; when a hook appends any, the writes record no follow-ups
    of their own (`Property_set_follow_ups::none`). A hook ignores the

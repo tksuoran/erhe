@@ -287,6 +287,48 @@ TEST(KitLayoutConnectors, EveryShapeKeepsWithinTheConnectorBound)
     }
 }
 
+// C1.6: every connector accepts at least one type; the wall run shapes type their ends and base (K1.5).
+TEST(KitLayoutConnectors, EveryConnectorAcceptsAType)
+{
+    static const editor::Kit_shape_library library;
+    std::vector<editor::Kit_connector> connectors;
+    for (const editor::Kit_shape_definition& shape : library.get_shapes()) {
+        editor::get_shape_connectors(editor::make_default_values(shape, 1.0f, 3.0f), connectors);
+        for (const editor::Kit_connector& connector : connectors) {
+            EXPECT_FALSE(connector.types.is_empty()) << shape.id << " " << connector.name;
+        }
+    }
+    const editor::Kit_shape_definition* const wall = library.find("architecture.wall");
+    ASSERT_NE(wall, nullptr);
+    editor::get_shape_connectors(editor::make_default_values(*wall, 1.0f, 3.0f), connectors);
+    const editor::Kit_connector* const end  = editor::find_connector(connectors, "end");
+    const editor::Kit_connector* const base = editor::find_connector(connectors, "base");
+    const editor::Kit_connector* const top  = editor::find_connector(connectors, "top");
+    ASSERT_TRUE((end != nullptr) && (base != nullptr) && (top != nullptr));
+    EXPECT_TRUE (end->types.contains(editor::Kit_connector_type::wall) && end->types.contains(editor::Kit_connector_type::generic));
+    EXPECT_TRUE (base->types == editor::Kit_connector_types::of(editor::Kit_connector_type::wall_floor));
+    EXPECT_TRUE (editor::is_compatible(*end, *end));
+    EXPECT_TRUE (editor::is_compatible(*end, *top));
+    EXPECT_FALSE(editor::is_compatible(*base, *top));
+    EXPECT_FALSE(editor::is_compatible(*end, *base));
+}
+
+TEST(KitLayoutConnectors, SnapSearchSkipsIncompatiblePairs)
+{
+    const editor::Kit_connector_point wall_end{
+        .position = glm::vec3{0.0f}, .piece_id = 1, .connector_index = 0, .types = editor::Kit_connector_types::of(editor::Kit_connector_type::wall)
+    };
+    const editor::Kit_connector_point generic_near{.position = glm::vec3{0.01f, 0.0f, 0.0f}, .piece_id = 2, .connector_index = 0};
+    const editor::Kit_connector_point wall_far{
+        .position = glm::vec3{0.2f, 0.0f, 0.0f}, .piece_id = 3, .connector_index = 0, .types = editor::Kit_connector_types::of(editor::Kit_connector_type::wall)
+    };
+    const std::array<editor::Kit_connector_point, 1> moved{wall_end};
+    const std::array<editor::Kit_connector_point, 2> others{generic_near, wall_far};
+    const editor::Kit_connector_snap_match match = editor::find_connector_snap(moved, others, 0.5f);
+    ASSERT_TRUE(match.found);
+    EXPECT_EQ(match.other, 1u);
+}
+
 TEST(KitLayoutConnectors, SwitchesReadTheLayoutHiddenBits)
 {
     editor::Kit_connector_switches switches;

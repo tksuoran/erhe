@@ -77,6 +77,8 @@ public:
     using Items = std::vector<std::shared_ptr<erhe::Item_base>>;
     std::function<void(const Items&, const erhe::property::Dependency_property&)>                                          begin{};
     std::function<void()>                                                                                                  step{};
+    // Before each write of a begun edit: a preview gives the items back the state the write goes over.
+    std::function<void()>                                                                                                  before_write{};
     std::function<void()>                                                                                                  end{};
     // Appends the operations the committed edit implies after its writes; when any are appended, the writes record none.
     std::function<void(const Items&, const erhe::property::Dependency_property&, std::vector<std::shared_ptr<Operation>>&)> commit{};

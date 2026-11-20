@@ -306,6 +306,10 @@ private:
     auto action_level_connect_pieces          (const nlohmann::json& args) -> std::string;
     auto action_level_set_piece_connectors    (const nlohmann::json& args) -> std::string;
     auto action_level_detach_piece            (const nlohmann::json& args) -> std::string;
+    auto action_level_detach_pieces           (const nlohmann::json& args) -> std::string;
+    auto action_level_get_connections         (const nlohmann::json& args) -> std::string;
+    auto action_level_get_connected_groups    (const nlohmann::json& args) -> std::string;
+    auto action_level_remove_connection       (const nlohmann::json& args) -> std::string;
     auto action_level_set_connector_visualization(const nlohmann::json& args) -> std::string;
     auto query_level_connector_indicators     (const nlohmann::json& args) -> std::string;
     auto action_level_set_layout_visualization(const nlohmann::json& args) -> std::string;
@@ -315,6 +319,12 @@ private:
     auto action_level_select_segment_handle   (const nlohmann::json& args) -> std::string;
     auto query_level_segment_handles          (const nlohmann::json& args) -> std::string;
     auto action_level_move_segment            (const nlohmann::json& args) -> std::string;
+    auto query_level_flow_report              (const nlohmann::json& args) -> std::string;
+    auto query_level_flow_preview             (const nlohmann::json& args) -> std::string;
+    // C3.13: the report of the last entry recorded since the recording serial that ran a flow (each such entry replaces the
+    // previous one's); null when none did.
+    [[nodiscard]] auto make_flow_reply(std::size_t recording_serial) const -> nlohmann::json;
+    [[nodiscard]] auto get_recording_serial() const -> std::size_t;
     auto action_level_snap_to_surface         (const nlohmann::json& args) -> std::string;
     auto query_level_region_contents          (const nlohmann::json& args) -> std::string;
     auto query_level_height_map               (const nlohmann::json& args) -> std::string;

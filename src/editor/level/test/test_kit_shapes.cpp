@@ -346,16 +346,18 @@ TEST(Kit_parameter_values, canonical_text_rejects_malformed_input)
     EXPECT_TRUE(values == defaults(wall));
 }
 
-// R3.6: an out-of-range value is rejected with a message naming the parameter and its range.
+// R3.6, L23: a float beyond its declared range is taken; one of the wrong sign is rejected naming the parameter.
 TEST(Kit_parameter_values, out_of_range_message_names_parameter_and_range)
 {
     const Kit_shape_definition& stairs = get_shape("basic.stairs");
     Kit_parameter_values values = defaults(stairs);
     ASSERT_TRUE(values.set_float("rise", 20.0f));
+    EXPECT_EQ(values.validate(), "");
+    ASSERT_TRUE(values.set_float("rise", -1.0f));
     const std::string message = values.validate();
     EXPECT_NE(message.find("basic.stairs"), std::string::npos) << message;
     EXPECT_NE(message.find("'rise'"),       std::string::npos) << message;
-    EXPECT_NE(message.find("0.1 - 16 m"),   std::string::npos) << message;
+    EXPECT_NE(message.find("above zero"),   std::string::npos) << message;
 
     Kit_parameter_values segments = defaults(get_shape("basic.cylinder"));
     ASSERT_TRUE(segments.set_int("segments", 2));

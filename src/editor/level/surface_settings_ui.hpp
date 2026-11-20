@@ -29,6 +29,8 @@ void connector_snap_distance_input(Level_kits& level_kits, Surface_widget_label 
 void connector_snap_axis_checkbox (Level_kits& level_kits, Surface_widget_label label);
 // U50: Off, Rotate or Full: how a drag's connector snap turns the moved nodes so the connector frames face each other.
 void connector_snap_orientation_combo(Level_kits& level_kits, Surface_widget_label label);
+// The connection settings: Auto-connect, the flow mask per connector type and the step limit.
+void connection_settings_rows(Level_kits& level_kits);
 
 // Both checkboxes, the rest rule, the surface max distance, the drag direction mode and vector, the connector snap distance, its axis checkbox and orientation combo with their labels (the Level Kit window).
 void surface_settings_checkboxes(Level_kits& level_kits);

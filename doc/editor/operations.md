@@ -8,13 +8,13 @@ Implements the undo/redo operation system and all concrete editor operations.
 
 ## Key Types
 
-- **`Operation`** -- Abstract base class with `execute(App_context&)` and `undo(App_context&)`. Has a unique serial ID, a description string, and an error state (`set_error`/`get_error`/`has_error`). Operations that fail set the error instead of asserting.
+- **`Operation`** -- Abstract base class with `execute(App_context&)` and `undo(App_context&)`. Has a unique serial ID, a description string, and an error state (`set_error`/`get_error`/`has_error`). Operations that fail set the error instead of asserting. An operation whose first execute is refused (`set_refused()`, `is_refused()`; the reason is its error) leaves the state as it found it, and the entry it ends is not recorded: the level kit flow refuses a change whose floor fit would make an invalid outline (`doc/editor/level_tools.md` "Property flow"). `execute_unless_refused()` runs a list of operations and, at a refused one, undoes the ones before it in reverse; every host that runs sub-operations or follow-ups on its first execute goes through it and is refused with the child, after taking back its own write: `Compound_operation`, `Property_set_operation` (the value goes back), `Property_set_apply_operation` (the targets' values go back), `Curve_set_operation` (the path goes back) and `Kit_attachment_follow_operation`.
 
-- **`Operation_stack`** -- Manages three vectors: `m_queued`, `m_executed`, `m_undone`. Operations are queued via `queue()`, then executed during `update()` (called once per frame). Undo moves from `m_executed` to `m_undone`; redo moves back. Also an `Imgui_window` that displays the operation history. Binds Ctrl+Z/Ctrl+Y for undo/redo.
+- **`Operation_stack`** -- Manages three vectors: `m_queued`, `m_executed`, `m_undone`. Operations are queued via `queue()`, then executed during `update()` (called once per frame). Undo moves from `m_executed` to `m_undone`; redo moves back. Also an `Imgui_window` that displays the operation history. Binds Ctrl+Z/Ctrl+Y for undo/redo. A refused operation (`execute_now()`, `update()`, a group's `queue()`) is logged as a warning naming it and is not recorded, and it leaves the redo history as it was. A caller of `execute_now()` reads `is_refused()` afterwards: the level kit entry points return the refusal as their error (`Level_kits::execute_entry()`), and the MCP tools that record at once reply an error naming it. `is_recording()` is true during the first execute of a new entry (not during undo, redo or an operation a tool runs outside the stack for a preview), and `get_recording_serial()` counts those first executes: the level kit flow report keys on them (`doc/editor/level_tools.md` "Flow report").
+
+- **`Compound_operation`** -- Groups multiple operations into a single undo step. A child refused during the first execute makes the compound undo the children before it, in reverse, and refuse with the child's reason (`execute_unless_refused()`).
 
 - **`Mesh_operation`** -- Base for operations that modify mesh geometry. Contains a list of `Entry` objects, each storing before/after mesh primitives and node physics. `make_entries()` helper applies a geometry transformation function to all selected meshes. After each geometry transform, the output is sanitized (`Geometry::sanitize()` - fixes degenerate facets and NaN/Inf vertices) and validated (`Geometry::validate()`). When sanitization fixes problems, the pre-operation input geometry is saved to `debug_geometry/` as a `.geogram` file for investigation. A result with no facets (every face deleted, a merge by distance that collapses the mesh) is a legal result: it yields an empty `Primitive` that renders and raytraces nothing (`doc/erhe/primitive.md` "Empty primitives"), the mesh keeps it (no rigid body, since it has no convex hull), and undo restores the previous primitive like for any other operation.
-
-- **`Compound_operation`** -- Groups multiple operations into a single undo step.
 
 - **Geometry operations** (all extend `Mesh_operation`):
   - `Catmull_clark_subdivision_operation`, `Sqrt3_subdivision_operation`
@@ -171,6 +171,8 @@ saved scene records.
   Geometry gets it, keeping its own material, then its optional per-mesh
   step (the physics rebuild of a vertex move) and a
   `Mesh_geometry_changed_message`.
+- `Mesh_material_assign_operation` sends `Mesh_materials_changed_message`
+  once per mesh at execute and undo.
 - `Merge_operation` records each removed source's sibling index when it
   removes it and undo re-inserts the sources in reverse removal order at
   those indices.

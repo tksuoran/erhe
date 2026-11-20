@@ -152,6 +152,10 @@ public:
     [[nodiscard]] auto get_kit_pose        () const -> std::optional<Kit_placement_pose>;
     // The connector join the preview shows and a click places; none while there is no joined preview.
     [[nodiscard]] auto get_kit_join        () const -> std::optional<Kit_brush_join>;
+    // K9.2: the values and slot materials the joined preview shows, taken from the target's supply; null when the
+    // preview shows the kit values (no join, or nothing supplied changes them).
+    [[nodiscard]] auto get_kit_join_values() const -> const Kit_parameter_values*;
+    [[nodiscard]] auto get_kit_join_slot_materials() const -> const std::vector<std::string>&;
     // Whether the last preview update found the connector snap suspend key held (U27).
     [[nodiscard]] auto is_kit_join_suspended() const -> bool;
     // A connector snap suspend key event: the preview follows the key at its edge.
@@ -192,6 +196,11 @@ private:
     ) -> bool;
     void refresh_kit_join();
     void clear_kit_join();
+    // K9.2: the join's moved connector at the values the target supplies (computed when the pair or the target changed);
+    // the kit values' own when nothing changes them.
+    [[nodiscard]] auto get_kit_join_moved_connector(const erhe::scene::Node& target, const char* target_connector, const Kit_connector& moved) -> const Kit_connector&;
+    // The preview mesh shows the joined values' brush while joined with supplied values, the kit brush otherwise.
+    void sync_kit_preview_primitives();
     // Another kit piece's enabled connector sits on the world connector and faces it (a join made already).
     [[nodiscard]] auto is_kit_connector_joined(const Scene_root& scene_root, const erhe::scene::Node& piece, const Kit_connector& connector) -> bool;
     // The join's target or a node above it moved, or a piece's connector switches changed: the preview joins again.
@@ -221,6 +230,10 @@ private:
     erhe::message_bus::Subscription<Selection_message>     m_selection_subscription;
     erhe::message_bus::Subscription<Node_touched_message>  m_node_touched_subscription;
     erhe::message_bus::Subscription<Kit_piece_connectors_changed_message> m_kit_piece_connectors_changed_subscription;
+    erhe::message_bus::Subscription<Curve_changed_message>                m_curve_changed_subscription;
+    erhe::message_bus::Subscription<Kit_layout_changed_message>           m_kit_layout_changed_subscription;
+    erhe::message_bus::Subscription<Mesh_geometry_changed_message>        m_mesh_geometry_changed_subscription;
+    erhe::message_bus::Subscription<Mesh_materials_changed_message>       m_mesh_materials_changed_subscription;
     Brush_preview_command                   m_preview_command;
     Brush_insert_command                    m_insert_command;
     Brush_pick_command                      m_pick_command;
@@ -276,6 +289,24 @@ private:
     std::vector<Kit_connector>                 m_kit_connectors;          // the kit shape's at the values
     std::vector<Kit_connector>                 m_kit_target_connectors;   // hover scratch: the hovered piece's in world space
     std::optional<Kit_brush_join>              m_kit_join;
+    // K9.2: the supplied values of the last join pair, kept until the pair, the target or the kit values change.
+    class Kit_join_flow
+    {
+    public:
+        bool                                                    valid {false};
+        bool                                                    flowed{false};
+        bool                                                    piece_mode{true}; // not Place As Layout: a layout takes no values
+        std::uint64_t                                           target_id{0};
+        std::string                                             target_connector;
+        std::string                                             connector;
+        Kit_parameter_values                                    values;
+        std::vector<std::string>                                slot_materials;
+        std::vector<std::shared_ptr<erhe::primitive::Material>> materials; // the preview's, per slot
+        std::vector<Kit_connector>                              connectors;
+        std::shared_ptr<Brush>                                  brush;
+    };
+    Kit_join_flow                              m_kit_join_flow;
+    std::weak_ptr<Brush>                       m_kit_preview_shown; // the brush whose primitives the preview mesh has
     bool                                       m_kit_join_suspended{false};
     ///std::unique_ptr<Item_tree>         m_brush_item_tree;
 };

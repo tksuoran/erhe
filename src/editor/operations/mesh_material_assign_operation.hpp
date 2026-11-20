@@ -45,6 +45,8 @@ public:
 
 private:
     void adopt_userships(App_context& context);
+    // Mesh_materials_changed_message, once per mesh of the entries.
+    void announce(App_context& context);
 
     std::vector<Entry>           m_entries;
     // R5.4 (asset-manager plan resolution 7, mechanism a): while recorded,

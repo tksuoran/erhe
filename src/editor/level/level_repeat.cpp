@@ -421,13 +421,15 @@ auto c_str(const Repeat_pattern_kind kind) -> const char*
         case Repeat_pattern_kind::scatter:  return "scatter";
         case Repeat_pattern_kind::segments: return "segments";
         case Repeat_pattern_kind::stairs:   return "stairs";
+        case Repeat_pattern_kind::floor:    return "floor";
         default:                            return "?";
     }
 }
 
 auto is_curve_layout_kind(const Repeat_pattern_kind kind) -> bool
 {
-    return (kind == Repeat_pattern_kind::path) || (kind == Repeat_pattern_kind::segments) || (kind == Repeat_pattern_kind::stairs);
+    return (kind == Repeat_pattern_kind::path) || (kind == Repeat_pattern_kind::segments) || (kind == Repeat_pattern_kind::stairs) ||
+           (kind == Repeat_pattern_kind::floor);
 }
 
 auto c_str(const Repeat_path_orientation orientation) -> const char*
@@ -461,6 +463,12 @@ auto pick_scatter_item(const std::span<const Repeat_scatter_item> items, const u
     return 0;
 }
 
+auto get_segment_span_length(const glm::vec3& p0, const glm::vec3& p1, const Repeat_path_orientation orientation) -> float
+{
+    const glm::vec3 chord = p1 - p0;
+    return glm::length((orientation == Repeat_path_orientation::upright) ? glm::vec3{chord.x, 0.0f, chord.z} : chord);
+}
+
 auto make_segment_pose(
     const std::size_t                segment,
     const glm::vec3&                 p0,
@@ -470,10 +478,6 @@ auto make_segment_pose(
     Repeat_pose&                     out_pose
 ) -> std::string
 {
-    const float extent = item.max_x - item.min_x;
-    if (!std::isfinite(extent) || !(extent > 0.0f)) {
-        return fmt::format("segment {}: its item has no extent along x ({} m), so no scale spans the segment", segment, extent);
-    }
     if (!is_finite(p0) || !is_finite(p1)) {
         return fmt::format("segment {}: a point is not finite", segment);
     }
@@ -498,11 +502,12 @@ auto make_segment_pose(
         }
         y_axis = up_rest / rest;
     }
-    const float scale  = length / extent;
-    const float offset = scale * item.min_x;
-    out_pose.position = p0 - (offset * x_axis);
+    // L24: never scaled; the piece's x extent is centred on the segment (a piece whose child.length was set to the
+    // segment's length spans it end to end).
+    const float center = (std::isfinite(item.min_x) && std::isfinite(item.max_x)) ? (0.5f * (item.min_x + item.max_x)) : 0.0f;
+    out_pose.position = p0 + (((0.5f * length) - center) * x_axis);
     out_pose.rotation = rotation_from_axes(x_axis, y_axis);
-    out_pose.scale    = glm::vec3{scale, 1.0f, 1.0f};
+    out_pose.scale    = glm::vec3{1.0f};
     out_pose.item     = 0;
     return {};
 }
@@ -615,6 +620,7 @@ auto expand_repeat(const Repeat_pattern& pattern, const Repeat_pose& start, std:
         case Repeat_pattern_kind::segments: expand_segments(pattern, start, out_poses); return {};
         // The staircase is one generated child in the node's own frame.
         case Repeat_pattern_kind::stairs: out_poses.push_back(start); return {};
+        case Repeat_pattern_kind::floor:  out_poses.push_back(start); return {};
         default: return "unknown pattern";
     }
 }

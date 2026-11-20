@@ -23,6 +23,7 @@ add_executable(${_target}
     # layout node values erhe::scene; the kit layout values and outlines
     # nlohmann_json; the piece record (the attachment) erhe::scene and nlohmann_json; the light frames glm and fmt; the snap to
     # surface search (surface_snap_search.hpp) is header-only.
+    ${CMAKE_CURRENT_SOURCE_DIR}/../kit_connection_flow.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../kit_connector.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../kit_layout.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../kit_layout_connectors.cpp
@@ -59,6 +60,8 @@ add_executable(${_target}
     ${CMAKE_CURRENT_SOURCE_DIR}/../level_group.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../level_region.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../level_repeat.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../floor_polygon.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../kit_standard_property.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../stairs_fit.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../stairs_mesh.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../surface_base_frame.cpp
@@ -68,6 +71,7 @@ add_executable(${_target}
     ${_config_out}/surface_support.cpp
     test_kit_attachment.cpp
     test_kit_collision.cpp
+    test_kit_connection_flow.cpp
     test_kit_connector.cpp
     test_kit_layout.cpp
     test_kit_layout_connectors.cpp
@@ -96,6 +100,7 @@ add_executable(${_target}
     test_level_region.cpp
     test_level_repeat.cpp
     test_stairs_fit.cpp
+    test_floor_polygon.cpp
     test_stairs_mesh.cpp
     test_surface_base_frame.cpp
     test_surface_drag_anchor.cpp

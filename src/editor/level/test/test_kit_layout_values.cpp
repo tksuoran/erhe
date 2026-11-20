@@ -792,7 +792,7 @@ TEST(Kit_layout_values, every_layout_kind_has_its_own_create_label)
     // A user looking for stairs along a curve finds the stairs kind by its name.
     EXPECT_STREQ(editor::get_layout_kind_create_label(Repeat_pattern_kind::stairs), "Path Stairs");
     std::set<Repeat_pattern_kind> kinds{std::begin(editor::c_layout_kinds), std::end(editor::c_layout_kinds)};
-    EXPECT_EQ(kinds.size(), static_cast<std::size_t>(Repeat_pattern_kind::stairs) + 1);
+    EXPECT_EQ(kinds.size(), static_cast<std::size_t>(Repeat_pattern_kind::floor) + 1);
 }
 
 TEST(Kit_layout_values, wrap_path_items_are_distinct)
@@ -842,8 +842,9 @@ TEST(Kit_layout_values, segments_text_and_resolve)
     ASSERT_EQ(run.count, 3u);
     ASSERT_EQ(poses.size(), 3u);
     EXPECT_NEAR(run.space, 5.0f + 3.0f + std::sqrt(34.0f), c_tolerance);
-    EXPECT_NEAR(poses[0].scale.x, 2.5f, c_tolerance);
-    EXPECT_NEAR(poses[1].scale.x, 1.5f, c_tolerance);
+    // L24: never scaled; each item is centred on its chord.
+    EXPECT_NEAR(poses[0].scale.x, 1.0f, c_tolerance);
+    EXPECT_NEAR(poses[1].scale.x, 1.0f, c_tolerance);
     EXPECT_NEAR(poses[0].position.x, 2.5f, c_tolerance);
 
     // Without poses, and without a curve.

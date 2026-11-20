@@ -1829,7 +1829,7 @@ void Debug_visualizations::connectors_visualization(const Render_context& contex
     );
     const float width = style.connector_width;
     for (const Kit_connector_indicator& indicator : m_connector_indicators) {
-        const glm::vec4& color = get_connector_indicator_color(style, indicator.role);
+        const glm::vec4& color = get_connector_indicator_color(style, indicator.role, indicator.frame.types);
         const glm::vec3  p     = indicator.frame.position;
         const glm::vec3  o     = indicator.frame.outward;
         const glm::vec3  up    = indicator.frame.up;

@@ -114,7 +114,7 @@ public:
     [[nodiscard]] auto get_target_curve() const -> std::shared_ptr<erhe::scene::Curve>;
     // False for an index that is no editable point (a corner's handle).
     [[nodiscard]] auto get_point_world_position(std::size_t index, glm::vec3& out_position) const -> bool;
-    // Segment handles (doc/editor/level_tools.md "Segment handles"): the target is a segments kit layout.
+    // Segment handles (doc/editor/level_tools.md "Segment handles"): the target is a segments or floor kit layout.
     [[nodiscard]] auto has_segment_handles() const -> bool;
     [[nodiscard]] auto get_segment_count  () const -> std::size_t;
     [[nodiscard]] auto get_selected_segment() const -> std::optional<std::size_t>;
@@ -174,7 +174,7 @@ private:
     std::weak_ptr<erhe::scene::Curve>                m_target;
     bool                                             m_target_stale{true};
     std::vector<std::size_t>                         m_selection; // point set indices, ascending
-    bool                                             m_segment_handles{false}; // the target is a segments kit layout
+    bool                                             m_segment_handles{false}; // the target is a segments or floor kit layout
     std::optional<std::size_t>                       m_selected_segment;       // exclusive with m_selection
 
     enum class Miss_action : unsigned int { none = 0, insert, clear };

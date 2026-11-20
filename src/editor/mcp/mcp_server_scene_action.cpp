@@ -2360,8 +2360,8 @@ auto Mcp_server::action_set_node_transform(const json& args) -> std::string
 
     // Applied immediately (so chained set_node_transform calls compose), then
     // recorded for undo: Node_transform_operation's execute is an idempotent
-    // absolute re-apply, so queueing it is the record. It also snaps the
-    // rigid body to the new pose (teleport, no impulse) on execute and undo.
+    // absolute re-apply. It also snaps the rigid body to the new pose
+    // (teleport, no impulse) on execute and undo.
     std::vector<std::shared_ptr<Operation>> operations;
     operations.push_back(
         std::make_shared<Node_transform_operation>(
@@ -2378,11 +2378,14 @@ auto Mcp_server::action_set_node_transform(const json& args) -> std::string
         node->update_world_from_node();
         m_context.level_kits->append_layout_move_operations(*sr, std::span<const std::shared_ptr<erhe::scene::Node>>{&node, 1}, operations);
     }
-    m_context.operation_stack->queue(
-        (operations.size() == 1)
-            ? operations.front()
-            : std::make_shared<Compound_operation>(Compound_operation::Parameters{.operations = std::move(operations)})
-    );
+    // Recorded now (K0.3): a kit flow that refuses the move gives the node its pose back and the call fails.
+    const std::shared_ptr<Operation> entry = (operations.size() == 1)
+        ? operations.front()
+        : std::make_shared<Compound_operation>(Compound_operation::Parameters{.operations = std::move(operations)});
+    m_context.operation_stack->execute_now(entry);
+    if (entry->is_refused()) {
+        return make_error_content("set_node_transform: refused: " + entry->get_error() + "; nothing was changed");
+    }
 
     auto trs_to_json = [](const erhe::scene::Trs_transform& t) -> json {
         const glm::vec3 translation_out = t.get_translation();

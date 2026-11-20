@@ -160,7 +160,8 @@ auto transform_connector(const Kit_connector& connector, const glm::vec3& positi
         .name     = connector.name,
         .position = position + (basis * connector.position),
         .outward  = basis * connector.outward,
-        .up       = basis * connector.up
+        .up       = basis * connector.up,
+        .types    = connector.types
     };
 }
 
@@ -281,7 +282,8 @@ auto connector_in_root(const Kit_connector& connector, const glm::mat4& root_fro
         .name     = connector.name,
         .position = glm::vec3{root_from_node * glm::vec4{connector.position, 1.0f}},
         .outward  = glm::inverse(glm::transpose(linear)) * connector.outward,
-        .up       = linear * connector.up
+        .up       = linear * connector.up,
+        .types    = connector.types
     };
 }
 
@@ -306,7 +308,8 @@ auto transform_connector(const Kit_connector& connector, const glm::mat4& world_
         .name     = connector.name,
         .position = glm::vec3{world_from_node * glm::vec4{connector.position, 1.0f}},
         .outward  = glm::normalize(outward),
-        .up       = glm::normalize(up)
+        .up       = glm::normalize(up),
+        .types    = connector.types
     };
 }
 
@@ -483,6 +486,43 @@ auto constrain_connector_snap_offset(const glm::vec3& offset, const Kit_connecto
     return (constraint.kind == Kit_connector_snap_constraint_kind::axis) ? along : (offset - along);
 }
 
+auto c_str(const Kit_connector_type type) -> const char*
+{
+    switch (type) {
+        case Kit_connector_type::generic:    return "generic";
+        case Kit_connector_type::wall:       return "wall";
+        case Kit_connector_type::wall_floor: return "wall-floor";
+        case Kit_connector_type::floor:      return "floor";
+        default:                             return "?";
+    }
+}
+
+auto parse_connector_type(const std::string_view name) -> std::optional<Kit_connector_type>
+{
+    for (unsigned int i = 0; i < c_connector_type_count; ++i) {
+        const Kit_connector_type type = static_cast<Kit_connector_type>(i);
+        if (name == c_str(type)) {
+            return type;
+        }
+    }
+    return std::nullopt;
+}
+
+auto connector_types_text(const Kit_connector_types types) -> std::string
+{
+    std::string text;
+    for (unsigned int i = 0; i < c_connector_type_count; ++i) {
+        const Kit_connector_type type = static_cast<Kit_connector_type>(i);
+        if (types.contains(type)) {
+            if (!text.empty()) {
+                text += ", ";
+            }
+            text += c_str(type);
+        }
+    }
+    return text;
+}
+
 auto find_connector_snap(
     const std::span<const Kit_connector_point> moved,
     const std::span<const Kit_connector_point> others,
@@ -499,6 +539,9 @@ auto find_connector_snap(
         const Kit_connector_point& a = moved[i];
         for (std::size_t j = 0, j_end = others.size(); j < j_end; ++j) {
             const Kit_connector_point& b = others[j];
+            if (!a.types.intersects(b.types)) {
+                continue;
+            }
             // Scalar arithmetic: the search runs every drag step, and glm calls are not inlined in Debug builds.
             const float dx        = b.position.x - a.position.x;
             const float dy        = b.position.y - a.position.y;

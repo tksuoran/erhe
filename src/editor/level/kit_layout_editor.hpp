@@ -24,6 +24,7 @@ namespace editor {
 
 class App_context;
 class Kit_slot_palette;
+class Kit_shape_library;
 class Scene_root;
 
 // The kinds a pattern's Kind row offers (R5.12.8): every kind (initial values), an Xform node's or a curve node's.
@@ -64,7 +65,12 @@ enum class Kit_layout_row : unsigned int {
     stairs_tread,
     stairs_thickness,
     stairs_tolerance,
-    stairs_material
+    stairs_material,
+    floor_thickness,
+    floor_wall_thickness,
+    floor_room_height,
+    floor_material,
+    floor_wall_material
 };
 
 // One row of a layout's snap and seed values.
@@ -96,9 +102,9 @@ enum class Kit_layout_setting_row : unsigned int {
 
 // The widget of one pattern row (doc/editor/level_tools.md "Kit layout rows"): changed during a drag or typing, committed
 // when a drag is released, a value entered, a radio button or checkbox pressed.
-// stairs_palette: the materials the Stairs Material row offers (the stone slot's), null for none.
+// library: the slot palettes the material rows offer (stairs: the stone slot's; floor: the floor and wall slots').
 [[nodiscard]] auto layout_pattern_row(
-    Kit_layout_pattern& pattern, Kit_layout_row row, Kit_layout_kinds kinds, Kit_row_label label, const Kit_slot_palette* stairs_palette
+    Kit_layout_pattern& pattern, Kit_layout_row row, Kit_layout_kinds kinds, Kit_row_label label, const Kit_shape_library& library
 ) -> Kit_row_edit;
 [[nodiscard]] auto layout_setting_row(Kit_layout_data& data, Kit_layout_setting_row row, Kit_row_label label) -> Kit_row_edit;
 

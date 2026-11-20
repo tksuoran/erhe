@@ -1364,7 +1364,9 @@ void add_build_17_20_shapes(std::vector<Kit_shape_definition>& shapes)
             add_base_and_top_connectors(out_connectors, values.get_float("height"));
             add_side_connector(out_connectors, "front", glm::vec3{0.0f, 0.0f,  half_t}, glm::vec3{0.0f, 0.0f,  1.0f});
             add_side_connector(out_connectors, "back",  glm::vec3{0.0f, 0.0f, -half_t}, glm::vec3{0.0f, 0.0f, -1.0f});
+            type_wall_run_connectors(out_connectors);
         };
+        set_wall_run_flow(shape, nullptr);
         shapes.push_back(std::move(shape));
     }
     {

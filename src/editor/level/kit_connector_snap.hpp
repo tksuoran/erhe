@@ -11,12 +11,21 @@
 #include <memory>
 #include <optional>
 #include <span>
+#include <string>
 #include <vector>
 
 namespace editor {
 
 class Level_kits;
 class Scene_root;
+
+// One end of a connection: the piece (or floor layout) and its connector.
+class Kit_connection_end
+{
+public:
+    const erhe::scene::Node* node{nullptr};
+    std::string              connector;
+};
 
 // Why a step of an active drag did not look for a pair (U27).
 enum class Kit_connector_snap_skip : unsigned int {
@@ -117,6 +126,7 @@ private:
         glm::vec3                        up_in_root      {0.0f};
         std::weak_ptr<erhe::scene::Node> piece;
         std::uint64_t                    piece_id{0};
+        Kit_connector_types              types{};
         std::size_t                      connector_index{0};
         const char*                      name{""};
     };
@@ -135,6 +145,7 @@ private:
         glm::vec3   local_outward {0.0f, 0.0f, 1.0f};
         glm::vec3   local_up      {0.0f, 1.0f, 0.0f};
         std::size_t piece{0}; // in m_target_pieces
+        Kit_connector_types types{};
         std::size_t connector_index{0};
         const char* name{""};
     };
@@ -154,6 +165,8 @@ private:
     std::vector<std::size_t>                      m_moved_world_source;
     std::vector<Kit_connector_point>              m_target_world;
     std::vector<std::size_t>                      m_target_world_source;
+    std::vector<std::shared_ptr<erhe::scene::Node>> m_flow_moved;  // begin scratch: moved by the drag's flow
+    std::vector<Kit_connection_end>               m_joined_ends; // begin scratch: joined connectors of partners that stay
     std::vector<Kit_connector>                    m_local_connectors;
     std::vector<Kit_connector>                    m_world_connectors;
     Kit_connector_snap_state                      m_state;

@@ -101,6 +101,10 @@ private:
     void replace_imgui          (const std::shared_ptr<Scene_root>& scene_root);
     void queue_replace          (const std::shared_ptr<Scene_root>& scene_root, const Kit_shape_definition& shape);
     void connect_imgui          (const std::shared_ptr<Scene_root>& scene_root);
+    void connection_rows_imgui  ();
+    void detach_imgui           (const std::shared_ptr<Scene_root>& scene_root);
+    // C9.2: in the queued call, Level_kits::detach_pieces() of the selected kit pieces and floor layouts of the scene.
+    void queue_detach           (const std::shared_ptr<Scene_root>& scene_root);
     void update_connect_pieces  (const Scene_root& scene_root);
     // Hands the chosen pair to the connector indicators (doc/editor/level_tools.md "Connector indicators").
     void publish_connect_choice ();
@@ -180,6 +184,8 @@ private:
     bool                             m_connect_selection_changed{true};
     std::string                      m_connect_message;
     bool                             m_connect_failed{false};
+    std::size_t                      m_detach_node_count{0}; // selected kit pieces and floor layouts of the scene
+    std::string                      m_detach_message;
 
     // The Group section: the new group's name, the copy's offset (the group's width by default) and the last result.
     std::string                            m_group_name{"Group"};

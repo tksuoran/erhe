@@ -46,4 +46,29 @@ auto Operation::has_error() const -> bool
     return !m_error.empty();
 }
 
+auto Operation::is_refused() const -> bool
+{
+    return m_refused;
+}
+
+void Operation::set_refused(std::string reason)
+{
+    m_error   = std::move(reason);
+    m_refused = true;
+}
+
+auto execute_unless_refused(App_context& context, const std::span<const std::shared_ptr<Operation>> operations) -> const Operation*
+{
+    for (std::size_t i = 0, end = operations.size(); i < end; ++i) {
+        operations[i]->execute(context);
+        if (operations[i]->is_refused()) {
+            for (std::size_t j = i; j > 0; --j) {
+                operations[j - 1]->undo(context);
+            }
+            return operations[i].get();
+        }
+    }
+    return nullptr;
+}
+
 }

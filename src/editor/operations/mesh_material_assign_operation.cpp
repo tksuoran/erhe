@@ -1,6 +1,7 @@
 #include "operations/mesh_material_assign_operation.hpp"
 
 #include "app_context.hpp"
+#include "app_message_bus.hpp"
 #include "assets/asset_manager.hpp"
 #include "operations/operation_stack.hpp"
 
@@ -81,13 +82,27 @@ void Mesh_material_assign_operation::execute(App_context& context)
     for (const Entry& entry : m_entries) {
         entry.mesh->set_primitive_material(entry.primitive_index, entry.after);
     }
+    announce(context);
 }
 
 void Mesh_material_assign_operation::undo(App_context& context)
 {
-    static_cast<void>(context);
     for (const Entry& entry : m_entries) {
         entry.mesh->set_primitive_material(entry.primitive_index, entry.before);
+    }
+    announce(context);
+}
+
+void Mesh_material_assign_operation::announce(App_context& context)
+{
+    if (context.app_message_bus == nullptr) {
+        return;
+    }
+    for (std::size_t i = 0, end = m_entries.size(); i < end; ++i) {
+        const bool first = std::none_of(m_entries.begin(), m_entries.begin() + i, [this, i](const Entry& entry) { return entry.mesh == m_entries[i].mesh; });
+        if (first) {
+            context.app_message_bus->mesh_materials_changed.send_message(Mesh_materials_changed_message{.mesh = m_entries[i].mesh});
+        }
     }
 }
 

@@ -234,6 +234,50 @@ void add_base_and_top_connectors(std::vector<Kit_connector>& out_connectors, con
     out_connectors.push_back(Kit_connector{.name = "top",  .position = glm::vec3{0.0f, top_y, 0.0f}, .outward = glm::vec3{0.0f,  1.0f, 0.0f}, .up = glm::vec3{0.0f, 0.0f, 1.0f}});
 }
 
+void type_wall_run_connectors(std::vector<Kit_connector>& out_connectors)
+{
+    for (Kit_connector& connector : out_connectors) {
+        const std::string_view name{connector.name};
+        if ((name == "start") || (name == "end")) {
+            // Generic too, so a wall still meets a tower's or a pillar's side (orchestrator choice, C1.5).
+            connector.types = Kit_connector_types{.bits = Kit_connector_types::of(Kit_connector_type::wall).bits | Kit_connector_types::of(Kit_connector_type::generic).bits};
+        } else if (name == "base") {
+            connector.types = Kit_connector_types::of(Kit_connector_type::wall_floor);
+        }
+    }
+}
+
+void set_wall_run_flow(Kit_shape_definition& shape, const char* const thickness_parameter)
+{
+    shape.property_mappings = {
+        Kit_property_mapping{.property = Kit_standard_property::room_height,    .target = "height"},
+        Kit_property_mapping{.property = Kit_standard_property::child_length,    .target = "length"},
+        Kit_property_mapping{.property = Kit_standard_property::wall_material,  .target = "wall"}
+    };
+    if (thickness_parameter != nullptr) {
+        shape.property_mappings.push_back(Kit_property_mapping{.property = Kit_standard_property::wall_thickness, .target = thickness_parameter});
+    }
+    std::size_t wall_slot = 0;
+    for (std::size_t i = 0, end = shape.material_slots.size(); i < end; ++i) {
+        if (shape.material_slots[i] == "wall") {
+            wall_slot = i;
+        }
+    }
+    shape.get_supply = [wall_slot, thickness_parameter](const Kit_piece_view& piece, const std::string_view name, Kit_supply_list& out_supply) {
+        out_supply.clear();
+        if ((name != "start") && (name != "end")) {
+            return;
+        }
+        if (thickness_parameter != nullptr) {
+            out_supply.add(Kit_supplied_value{.property = Kit_standard_property::wall_thickness, .priority = c_wall_supply_priority, .length = piece.values->get_float(thickness_parameter)});
+        }
+        out_supply.add(Kit_supplied_value{.property = Kit_standard_property::room_height,    .priority = c_wall_supply_priority, .length = piece.values->get_float("height")});
+        if (wall_slot < piece.slot_materials.size()) {
+            out_supply.add(Kit_supplied_value{.property = Kit_standard_property::wall_material, .priority = c_wall_supply_priority, .material = piece.slot_materials[wall_slot]});
+        }
+    };
+}
+
 void add_side_connector(std::vector<Kit_connector>& out_connectors, const char* const name, const glm::vec3& position, const glm::vec3& outward)
 {
     out_connectors.push_back(Kit_connector{.name = name, .position = position, .outward = outward, .up = glm::vec3{0.0f, 1.0f, 0.0f}});

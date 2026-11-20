@@ -9,6 +9,7 @@
 #include "brushes/brush_placement.hpp"
 #include "editor_item_bits.hpp"
 #include "editor_log.hpp"
+#include "erhe_scene/scene.hpp"
 #include "operations/mesh_primitive_swap.hpp"
 #include "scene/node_physics.hpp"
 #include "scene/node_physics_system.hpp"
@@ -104,11 +105,19 @@ void Kit_piece_parameters_operation::collect_item_references(std::unordered_set<
 Kit_attachment_follow_operation::Kit_attachment_follow_operation(
     std::vector<std::shared_ptr<erhe::scene::Node>>&& moved_nodes,
     std::vector<std::shared_ptr<erhe::scene::Node>>&& changed_pieces,
-    std::optional<Kit_snap_pair>&&                    snap
+    std::optional<Kit_snap_pair>&&                    snap,
+    std::vector<std::shared_ptr<erhe::scene::Node>>&& requesting,
+    std::vector<Kit_new_connection>&&                 new_connections,
+    const std::optional<Kit_flow_overrides>&          flow_overrides,
+    const std::vector<std::shared_ptr<erhe::scene::Node>>& auto_connect_excluded
 )
-    : m_moved_nodes   {std::move(moved_nodes)}
-    , m_changed_pieces{std::move(changed_pieces)}
-    , m_snap          {std::move(snap)}
+    : m_moved_nodes    {std::move(moved_nodes)}
+    , m_changed_pieces {std::move(changed_pieces)}
+    , m_snap           {std::move(snap)}
+    , m_requesting     {std::move(requesting)}
+    , m_new_connections{std::move(new_connections)}
+    , m_flow_overrides {flow_overrides}
+    , m_auto_connect_excluded{auto_connect_excluded}
 {
     set_description(fmt::format("[{}] Kit attachments follow", get_serial()));
 }
@@ -117,26 +126,129 @@ Kit_attachment_follow_operation::~Kit_attachment_follow_operation() noexcept = d
 
 void Kit_attachment_follow_operation::execute(App_context& context)
 {
-    if (!m_recorded) {
-        m_recorded = true;
-        Scene_root* scene_root = nullptr;
-        for (const std::vector<std::shared_ptr<erhe::scene::Node>>* nodes : {&m_moved_nodes, &m_changed_pieces}) {
-            for (const std::shared_ptr<erhe::scene::Node>& node : *nodes) {
-                if ((scene_root == nullptr) && node) {
-                    scene_root = dynamic_cast<Scene_root*>(node->get_item_host());
-                }
+    if (m_recorded) {
+        for (const std::shared_ptr<Operation>& operation : m_operations) {
+            operation->execute(context);
+        }
+        return;
+    }
+    m_recorded = true;
+    Scene_root* scene_root = nullptr;
+    for (const std::vector<std::shared_ptr<erhe::scene::Node>>* nodes : {&m_moved_nodes, &m_changed_pieces, &m_requesting}) {
+        for (const std::shared_ptr<erhe::scene::Node>& node : *nodes) {
+            if ((scene_root == nullptr) && node) {
+                scene_root = dynamic_cast<Scene_root*>(node->get_item_host());
             }
         }
-        if ((scene_root == nullptr) && m_snap.has_value() && m_snap.value().piece) {
-            scene_root = dynamic_cast<Scene_root*>(m_snap.value().piece->get_item_host());
+    }
+    if ((scene_root == nullptr) && m_snap.has_value() && m_snap.value().piece) {
+        scene_root = dynamic_cast<Scene_root*>(m_snap.value().piece->get_item_host());
+    }
+    if ((scene_root == nullptr) || (context.level_kits == nullptr)) {
+        return;
+    }
+    Level_kits& level_kits = *context.level_kits;
+    // C6.2: the overrides of the call that made the entry, which may run after the call (a held stack defers it).
+    const std::optional<Kit_flow_overrides> outer = level_kits.get_flow_overrides();
+    level_kits.set_flow_overrides(m_flow_overrides);
+    const std::string refusal = record(context, *scene_root);
+    level_kits.set_flow_overrides(outer);
+    level_kits.clear_fitted_pairs();
+    if (!refusal.empty()) {
+        // K0.3: what ran was undone; the report of a refused entry states the refusal only.
+        m_operations.clear();
+        Kit_flow_report* const report = level_kits.get_flow_report();
+        if (report != nullptr) {
+            report->clear();
+            report->refusal = refusal;
         }
-        if ((scene_root != nullptr) && (context.level_kits != nullptr)) {
-            context.level_kits->build_attachment_follow_ups(*scene_root, m_moved_nodes, m_changed_pieces, m_snap.has_value() ? &m_snap.value() : nullptr, m_operations);
+        set_refused(refusal);
+    }
+    level_kits.update_flow_summary();
+}
+
+auto Kit_attachment_follow_operation::record(App_context& context, Scene_root& scene_root) -> std::string
+{
+    Level_kits& level_kits = *context.level_kits;
+    // Runs the operations from begin; at a refusal everything this operation ran is undone, in reverse.
+    const auto run = [this, &context](const std::size_t begin) -> std::string {
+        const Operation* const refused = execute_unless_refused(context, std::span<const std::shared_ptr<Operation>>{m_operations}.subspan(begin));
+        if (refused == nullptr) {
+            return {};
+        }
+        for (std::size_t i = begin; i > 0; --i) {
+            m_operations[i - 1]->undo(context);
+        }
+        return refused->get_error();
+    };
+    // C3.13: the entry's report (an empty one says a flow ran and changed nothing).
+    if (level_kits.get_flow_report() != nullptr) {
+        for (const Kit_new_connection& connection : m_new_connections) {
+            level_kits.report_new_connection(connection);
         }
     }
-    for (const std::shared_ptr<Operation>& operation : m_operations) {
-        operation->execute(context);
+    // C3.15: floors fit the moved walls standing on them first (each edit's own follow-ups make the walls follow).
+    // K0.3: an outline a floor refuses refuses the change; nothing of this operation ran yet.
+    // The fits, the return to the edge and the detach pass read world frames: the moves of this change reach every node
+    // below the moved ones first (a move writes the moved node's world matrix alone).
+    scene_root.get_scene().update_node_transforms();
+    std::string refusal = level_kits.build_floor_fits(scene_root, m_moved_nodes, m_operations);
+    if (refusal.empty()) {
+        refusal = run(0);
     }
+    if (!refusal.empty()) {
+        return refusal;
+    }
+    // C3.16: then the walls joined end to end to the moved walls (no floor under them) fit.
+    const std::size_t wall_begin = m_operations.size();
+    // A wall's partner moved, or changed (its connector moved with its length): both make it fit.
+    std::vector<std::shared_ptr<erhe::scene::Node>> fit_movers = m_moved_nodes;
+    fit_movers.insert(fit_movers.end(), m_changed_pieces.begin(), m_changed_pieces.end());
+    level_kits.build_wall_fits(scene_root, fit_movers, m_operations);
+    refusal = run(wall_begin);
+    if (!refusal.empty()) {
+        return refusal;
+    }
+    // C3: the value flow, applied, so the following joins the pieces at their new connectors.
+    const std::size_t flow_begin = m_operations.size();
+    std::vector<std::shared_ptr<erhe::scene::Node>> flowed;
+    level_kits.build_connection_flow(scene_root, m_changed_pieces, m_requesting, m_snap.has_value() ? &m_snap.value() : nullptr, m_operations, flowed);
+    refusal = run(flow_begin);
+    if (!refusal.empty()) {
+        return refusal;
+    }
+    const std::size_t follow_begin = m_operations.size();
+    std::vector<std::shared_ptr<erhe::scene::Node>> changed = m_changed_pieces;
+    changed.insert(changed.end(), flowed.begin(), flowed.end());
+    // The fitted walls moved and changed: the pieces attached to them follow.
+    const std::vector<std::shared_ptr<erhe::scene::Node>>& fitted = level_kits.get_fitted_walls();
+    changed.insert(changed.end(), fitted.begin(), fitted.end());
+    level_kits.build_attachment_follow_ups(scene_root, m_moved_nodes, changed, m_snap.has_value() ? &m_snap.value() : nullptr, m_operations);
+    refusal = run(follow_begin);
+    if (!refusal.empty()) {
+        return refusal;
+    }
+    level_kits.clear_fitted_pairs();
+    // C5: then the changed pieces connect where their connectors sit on free compatible ones, and the new
+    // connections' pieces take their values (one round; design K7.3).
+    std::vector<std::shared_ptr<erhe::scene::Node>> pieces = changed;
+    pieces.insert(pieces.end(), m_moved_nodes.begin(), m_moved_nodes.end());
+    pieces.insert(pieces.end(), m_requesting.begin(), m_requesting.end());
+    if (m_snap.has_value() && m_snap.value().piece) {
+        pieces.push_back(m_snap.value().piece);
+    }
+    std::vector<std::shared_ptr<erhe::scene::Node>> owners;
+    const std::size_t connect_begin = m_operations.size();
+    level_kits.build_auto_connections(scene_root, pieces, m_auto_connect_excluded, m_operations, owners);
+    refusal = run(connect_begin);
+    if (!refusal.empty() || owners.empty()) {
+        return refusal;
+    }
+    std::vector<std::shared_ptr<erhe::scene::Node>> reflowed;
+    const std::size_t reflow_begin = m_operations.size();
+    // C3.6: the author's edit of this change is kept in the reflow too.
+    level_kits.build_connection_flow(scene_root, m_changed_pieces, owners, nullptr, m_operations, reflowed);
+    return run(reflow_begin);
 }
 
 void Kit_attachment_follow_operation::undo(App_context& context)

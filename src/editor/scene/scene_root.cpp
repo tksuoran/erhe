@@ -42,6 +42,7 @@
 #include "operations/variant_select_operation.hpp"
 #include "level/kit_layout.hpp"
 #include "level/level_kit_create_menu.hpp"
+#include "level/kit_piece.hpp"
 #include "level/level_kits.hpp"
 #include "prefabs/instance_structure.hpp"
 #include "rig/bone_commands.hpp"
@@ -838,6 +839,35 @@ auto Scene_root::make_browser_window(
                             : "A path layout in the place of the first piece, the pieces its items repeated along a\n"
                               "straight curve from the piece's origin; edit the curve's points to shape the path; one undo step"
                     );
+                }
+                // C9.2: Detach removes every connection of the menu's kit pieces and floor layouts (one undo step).
+                if (ImGui::MenuItem("Detach Connections")) {
+                    deferred_operations.push_back(
+                        [&context, weak_scene_root = weak_from_this(), weak_nodes = m_wrap_menu_nodes]() {
+                            const std::shared_ptr<Scene_root> scene_root = weak_scene_root.lock();
+                            if (!scene_root || !context.app_scenes->is_host_registered(scene_root.get())) {
+                                return;
+                            }
+                            std::vector<std::shared_ptr<erhe::scene::Node>> nodes;
+                            for (const std::weak_ptr<erhe::scene::Node>& weak_node : weak_nodes) {
+                                std::shared_ptr<erhe::scene::Node> detach_node = weak_node.lock();
+                                if (detach_node && (carries_kit_piece(*detach_node) || is_floor_layout(*detach_node))) {
+                                    nodes.push_back(std::move(detach_node));
+                                }
+                            }
+                            if (nodes.empty()) {
+                                return;
+                            }
+                            const Kit_detach_result result = context.level_kits->detach_pieces(*scene_root, nodes);
+                            if (!result.error.empty()) {
+                                log_scene->warn("Detach Connections refused: {}", result.error);
+                            }
+                        }
+                    );
+                    close = true;
+                }
+                if (ImGui::IsItemHovered()) {
+                    ImGui::SetTooltip("%s", "Removes every connection of the kit pieces (the selection when this node is selected); they stay where they are.");
                 }
             }
             // Rigging: offered only when the clicked subtree contains a bone

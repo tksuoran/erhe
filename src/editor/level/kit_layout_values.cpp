@@ -35,7 +35,7 @@ constexpr double c_fit_epsilon = 1.0e-4;
 
 [[nodiscard]] auto parse_kind(const std::string& name, Repeat_pattern_kind& out_kind) -> bool
 {
-    for (const Repeat_pattern_kind kind : {Repeat_pattern_kind::line, Repeat_pattern_kind::grid, Repeat_pattern_kind::ring, Repeat_pattern_kind::path, Repeat_pattern_kind::scatter, Repeat_pattern_kind::segments, Repeat_pattern_kind::stairs}) {
+    for (const Repeat_pattern_kind kind : {Repeat_pattern_kind::line, Repeat_pattern_kind::grid, Repeat_pattern_kind::ring, Repeat_pattern_kind::path, Repeat_pattern_kind::scatter, Repeat_pattern_kind::segments, Repeat_pattern_kind::stairs, Repeat_pattern_kind::floor}) {
         if (name == c_str(kind)) {
             out_kind = kind;
             return true;
@@ -296,6 +296,14 @@ auto to_canonical_text(const Kit_layout_pattern& pattern) -> std::string
         object["stairs_tolerance"] = hex_json(pattern.stairs.tolerance);
         object["stairs_material"]  = pattern.stairs_material;
     }
+    // Likewise the floor values (C8).
+    if ((pattern.floor != Floor_values{}) || !pattern.floor_material.empty() || !pattern.floor_wall_material.empty()) {
+        object["floor_thickness"]      = hex_json(pattern.floor.thickness);
+        object["floor_wall_thickness"] = hex_json(pattern.floor.wall_thickness);
+        object["floor_room_height"]    = hex_json(pattern.floor.room_height);
+        object["floor_material"]       = pattern.floor_material;
+        object["floor_wall_material"]  = pattern.floor_wall_material;
+    }
     return object.dump();
 }
 
@@ -375,6 +383,11 @@ auto parse_layout_pattern(const std::string_view text, Kit_layout_pattern& out_p
     reader.read_optional_float("stairs_thickness", pattern.stairs.thickness);
     reader.read_optional_float("stairs_tolerance", pattern.stairs.tolerance);
     pattern.stairs_material = reader.find_optional_string("stairs_material");
+    reader.read_optional_float("floor_thickness",      pattern.floor.thickness);
+    reader.read_optional_float("floor_wall_thickness", pattern.floor.wall_thickness);
+    reader.read_optional_float("floor_room_height",    pattern.floor.room_height);
+    pattern.floor_material      = reader.find_optional_string("floor_material");
+    pattern.floor_wall_material = reader.find_optional_string("floor_wall_material");
     const std::string error = reader.finish("pattern");
     if (!error.empty()) {
         return error;
@@ -667,6 +680,23 @@ namespace {
             out_run.space = report.fit.length;
             return {};
         }
+        case Repeat_pattern_kind::floor: {
+            if (path_table == nullptr) {
+                return "a floor layout needs a curve";
+            }
+            // The slab is one child at the node's origin; the run checks the outline (C8.3) and the values.
+            if (out_poses != nullptr) {
+                out_poses->clear();
+                out_poses->push_back(Repeat_pose{});
+            }
+            out_run.count = 1;
+            static thread_local std::vector<glm::vec2> outline;
+            std::string outline_error = read_floor_outline(*path_table, outline);
+            if (outline_error.empty()) {
+                outline_error = check_floor_outline(outline);
+            }
+            return outline_error.empty() ? check_floor_values(pattern.floor) : outline_error;
+        }
         default: {
             return "unknown pattern kind";
         }
@@ -696,7 +726,8 @@ auto resolve_layout_pattern(
         out_run.requested = out_run.count;
     }
     // A scatter's, a segments run's and the stairs' poses are made while resolving it; the other kinds expand here.
-    const bool expanded = (pattern.kind == Repeat_pattern_kind::scatter) || (pattern.kind == Repeat_pattern_kind::segments) || (pattern.kind == Repeat_pattern_kind::stairs);
+    const bool expanded = (pattern.kind == Repeat_pattern_kind::scatter) || (pattern.kind == Repeat_pattern_kind::segments) || (pattern.kind == Repeat_pattern_kind::stairs) ||
+                          (pattern.kind == Repeat_pattern_kind::floor);
     if ((out_poses != nullptr) && !expanded) {
         error = expand_repeat(out_run.pattern, Repeat_pose{}, *out_poses);
         for (std::size_t i = 0, end = out_poses->size(); i < end; ++i) {
@@ -827,6 +858,7 @@ auto get_layout_kind_create_label(const Repeat_pattern_kind kind) -> const char*
         case Repeat_pattern_kind::scatter:  return "Scatter Layout";
         case Repeat_pattern_kind::segments: return "Segments Layout";
         case Repeat_pattern_kind::stairs:   return "Path Stairs";
+        case Repeat_pattern_kind::floor:    return "Polygon Floor";
         default:                            return "Kit Layout";
     }
 }

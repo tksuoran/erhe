@@ -1,4 +1,5 @@
 #include "brushes/brush_tool.hpp"
+#include "config/generated/editor_settings_config.hpp"
 #include "editor_item_bits.hpp"
 
 #include "app_context.hpp"
@@ -33,6 +34,7 @@
 #include "erhe_math/math_util.hpp"
 #include "erhe_primitive/material.hpp"
 #include "erhe_profile/profile.hpp"
+#include "erhe_scene/curve.hpp"
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/node.hpp"
 #include "erhe_scene/scene.hpp"
@@ -225,6 +227,41 @@ Brush_tool::Brush_tool(
             on_kit_join_target_changed(nullptr);
         }
     );
+    // A floor target's outline edit (its edge connectors move with the curve's revision) keeps the join on the floor.
+    m_curve_changed_subscription = app_message_bus.curve_changed.subscribe(
+        [this](Curve_changed_message& message) {
+            if (message.curve) {
+                on_kit_join_target_changed(message.curve.get());
+            }
+        }
+    );
+    // A floor target's values (thickness, wall thickness) move its edge connectors: read its frames again.
+    m_kit_layout_changed_subscription = app_message_bus.kit_layout_changed.subscribe(
+        [this](Kit_layout_changed_message& message) {
+            if (m_kit_join.has_value() && (m_kit_join.value().target_id == message.node_id) && (m_context.level_kits != nullptr)) {
+                m_context.level_kits->get_connector_indicators().forget_node(message.node_id);
+                on_kit_join_target_changed(nullptr);
+            }
+        }
+    );
+
+    // K9.2: a parameter change of the join's target changes what it supplies: the join is read again at once.
+    m_mesh_geometry_changed_subscription = app_message_bus.mesh_geometry_changed.subscribe(
+        [this](Mesh_geometry_changed_message& message) {
+            if (m_kit_join.has_value() && message.mesh && (m_kit_join.value().target_id == static_cast<std::uint64_t>(message.mesh->get_id()))) {
+                on_kit_join_target_changed(nullptr);
+            }
+        }
+    );
+
+    // K9.2: a material change of the join's target changes the wall.material it supplies.
+    m_mesh_materials_changed_subscription = app_message_bus.mesh_materials_changed.subscribe(
+        [this](Mesh_materials_changed_message& message) {
+            if (m_kit_join.has_value() && message.mesh && (m_kit_join.value().target_id == static_cast<std::uint64_t>(message.mesh->get_id()))) {
+                on_kit_join_target_changed(nullptr);
+            }
+        }
+    );
 
     m_grid_scale = scene_config.object_scale;
 
@@ -256,6 +293,7 @@ void Brush_tool::set_kit_brush(const Kit_parameter_values& values, const std::sh
     }
     m_kit_values = values;
     m_kit_brush  = brush;
+    m_kit_join_flow.valid = false;
     get_shape_connectors(m_kit_values, m_kit_connectors);
     Level_kits& level_kits = *m_context.level_kits;
     level_kits.get_default_slot_materials(*shape, m_kit_slot_materials);
@@ -281,6 +319,7 @@ void Brush_tool::leave_kit_mode()
     m_kit_preview_materials.clear();
     m_kit_connectors.clear();
     m_kit_pose.reset();
+    m_kit_join_flow = Kit_join_flow{};
     remove_preview_mesh();
 }
 
@@ -486,6 +525,7 @@ void Brush_tool::remove_preview_mesh()
     }
 
     m_hover_frame.reset();
+    m_kit_preview_shown.reset();
     clear_kit_join();
 }
 
@@ -1015,6 +1055,7 @@ void Brush_tool::update_kit_preview_transform(Brush& brush)
     m_preview_node->set_parent_from_node(
         erhe::math::create_translation<float>(m_kit_pose.value().position) * glm::mat4_cast(m_kit_pose.value().rotation)
     );
+    sync_kit_preview_primitives();
 }
 
 void Brush_tool::clear_kit_join()
@@ -1039,13 +1080,24 @@ void Brush_tool::update_kit_join(Scene_root& scene_root)
     ) {
         return;
     }
-    // The hovered mesh is the piece's node (Brush::make_instance()).
-    const std::shared_ptr<erhe::scene::Node> piece = m_hover.scene_mesh_weak.lock();
-    if (!piece || (piece->get_item_host() != &scene_root) || !carries_kit_piece(*piece)) {
+    // The hovered mesh is the piece's node (Brush::make_instance()), or a floor layout's slab, whose parent is the target (K6);
+    // the indicator cache knows a floor without parsing its layout value again.
+    Kit_connector_indicators& indicators = level_kits.get_connector_indicators();
+    std::shared_ptr<erhe::scene::Node> piece = m_hover.scene_mesh_weak.lock();
+    bool floor = false;
+    if (piece && !carries_kit_piece(*piece)) {
+        std::shared_ptr<erhe::scene::Node> parent = piece->get_parent_node();
+        if (parent && indicators.is_floor_layout(*parent)) {
+            piece = std::move(parent);
+            floor = true;
+        }
+    }
+    if (!piece || (piece->get_item_host() != &scene_root) || !(floor || carries_kit_piece(*piece))) {
         return;
     }
-    // Enabled frames only (U33, U39): a switched-off or layout-hidden connector is never a target.
-    const std::vector<Kit_connector>& local = level_kits.get_connector_indicators().get_local_connectors(*piece);
+    // Enabled frames only (U33, U39): a switched-off or layout-hidden connector is never a target. The cache reads a
+    // floor's frames again when its outline or values change.
+    const std::vector<Kit_connector>& local = indicators.get_local_connectors(*piece);
     if (local.empty() || !transform_connectors(local, piece->world_from_node(), m_kit_target_connectors)) {
         return;
     }
@@ -1054,6 +1106,14 @@ void Brush_tool::update_kit_join(Scene_root& scene_root)
     std::optional<std::size_t> nearest{};
     float nearest_distance = 0.0f;
     for (std::size_t i = 0, end = m_kit_target_connectors.size(); i < end; ++i) {
+        // C1.9: a target no connector of the new piece is compatible with is skipped silently.
+        const bool compatible = std::any_of(
+            m_kit_connectors.begin(), m_kit_connectors.end(),
+            [&](const Kit_connector& connector) -> bool { return is_compatible(connector, m_kit_target_connectors[i]); }
+        );
+        if (!compatible) {
+            continue;
+        }
         const float distance = glm::distance(m_kit_target_connectors[i].position, hover_point);
         if (
             (distance <= reach) && (!nearest.has_value() || (distance < nearest_distance)) &&
@@ -1071,6 +1131,9 @@ void Brush_tool::update_kit_join(Scene_root& scene_root)
     const Kit_connector* moved        = nullptr;
     float                moved_dot    = 2.0f;
     for (const Kit_connector& connector : m_kit_connectors) {
+        if (!is_compatible(connector, target_local)) {
+            continue;
+        }
         const float facing = glm::dot(connector.outward, target_local.outward);
         if (facing < (moved_dot - 1.0e-4f)) {
             moved     = &connector;
@@ -1080,7 +1143,102 @@ void Brush_tool::update_kit_join(Scene_root& scene_root)
     // The quarter twist nearest the rotation steps' yaw angle.
     const float yaw_degrees = static_cast<float>(m_kit_yaw_steps) * level_kits.get_placement_settings().rotation_step_degrees;
     const int   twist_steps = static_cast<int>(std::lround(yaw_degrees / 90.0f)) % 4;
-    static_cast<void>(apply_kit_join(scene_root, piece, target_local.name, m_kit_target_connectors[nearest.value()], *moved, twist_steps, nearest_distance));
+    // K9.2: the new piece joins at the values the target supplies, as the placement's flow gives them.
+    const Kit_connector& joined = get_kit_join_moved_connector(*piece, target_local.name, *moved);
+    static_cast<void>(apply_kit_join(scene_root, piece, target_local.name, m_kit_target_connectors[nearest.value()], joined, twist_steps, nearest_distance));
+}
+
+auto Brush_tool::get_kit_join_moved_connector(const erhe::scene::Node& target, const char* const target_connector, const Kit_connector& moved) -> const Kit_connector&
+{
+    Kit_join_flow&      flow       = m_kit_join_flow;
+    Level_kits&         level_kits = *m_context.level_kits;
+    const std::uint64_t target_id  = static_cast<std::uint64_t>(target.get_id());
+    // Read from the setting, not get_layout_initial_values(), which parses the layout pattern.
+    const bool          piece_mode = (m_context.editor_settings == nullptr) || !m_context.editor_settings->level_kit.place_as_layout;
+    const bool same = flow.valid && (flow.piece_mode == piece_mode) && (flow.target_id == target_id) &&
+                      (flow.target_connector == target_connector) && (flow.connector == moved.name);
+    if (!same) {
+        flow.valid            = true;
+        flow.piece_mode       = piece_mode;
+        flow.target_id        = target_id;
+        flow.target_connector = target_connector;
+        flow.connector        = moved.name;
+        flow.values           = m_kit_values;
+        flow.slot_materials   = m_kit_slot_materials;
+        flow.brush.reset();
+        flow.connectors.clear();
+        flow.materials.clear();
+        flow.flowed = piece_mode && level_kits.get_join_supplied_values(target, target_connector, moved.name, flow.values, flow.slot_materials);
+        if (flow.flowed) {
+            flow.brush = level_kits.get_brush(flow.values);
+            if (flow.brush) {
+                flow.brush->late_initialize();
+            }
+            const Brush::Scaled* const scaled = flow.brush ? flow.brush->get_scaled(1.0f) : nullptr;
+            if ((scaled == nullptr) || (scaled->part_primitives.size() != m_kit_preview_materials.size())) {
+                flow.flowed = false;
+                flow.brush.reset();
+            } else {
+                get_shape_connectors(flow.values, flow.connectors);
+                const std::shared_ptr<Scene_root>& scene_root = get_scene_root();
+                for (std::size_t slot = 0, end = flow.slot_materials.size(); slot < end; ++slot) {
+                    std::shared_ptr<erhe::primitive::Material> material = level_kits.get_preview_material(flow.slot_materials[slot]);
+                    if (!material && scene_root) {
+                        material = Level_kits::find_scene_material(*scene_root, flow.slot_materials[slot]);
+                    }
+                    flow.materials.push_back(material ? material : m_kit_preview_materials[slot]);
+                }
+            }
+        }
+    }
+    if (flow.flowed) {
+        const Kit_connector* const flowed = find_connector(flow.connectors, moved.name);
+        if (flowed != nullptr) {
+            return *flowed;
+        }
+    }
+    return moved;
+}
+
+void Brush_tool::sync_kit_preview_primitives()
+{
+    if (!m_kit_brush || !m_preview_mesh || !m_preview_node) {
+        return;
+    }
+    const bool flowed = m_kit_join.has_value() && m_kit_join_flow.valid && m_kit_join_flow.flowed && m_kit_join_flow.brush;
+    const std::shared_ptr<Brush>& shown = flowed ? m_kit_join_flow.brush : m_kit_brush;
+    // Owner identity: a brush made later at a reused address is another brush.
+    if (!m_kit_preview_shown.owner_before(shown) && !shown.owner_before(m_kit_preview_shown) && !m_kit_preview_shown.expired()) {
+        return;
+    }
+    const Brush::Scaled* const scaled = shown->get_scaled(1.0f);
+    const std::shared_ptr<Scene_root>& scene_root = get_scene_root();
+    if ((scaled == nullptr) || !scene_root) {
+        return;
+    }
+    const std::shared_ptr<erhe::primitive::Material> fallback = m_preview_mesh->get_primitives().empty()
+        ? std::shared_ptr<erhe::primitive::Material>{}
+        : m_preview_mesh->get_primitives().front().material;
+    // Out of the scene while its primitives change, as update_preview_mesh_node_transform() swaps them.
+    m_preview_node->set_parent({});
+    m_preview_mesh->clear_primitives();
+    for (std::size_t part = 0, end = scaled->part_primitives.size(); part < end; ++part) {
+        const std::vector<std::shared_ptr<erhe::primitive::Material>>& materials = flowed ? m_kit_join_flow.materials : m_kit_preview_materials;
+        const bool has_own = (part < materials.size()) && materials[part];
+        m_preview_mesh->add_primitive(scaled->part_primitives[part], has_own ? materials[part] : fallback);
+    }
+    m_preview_node->set_parent(scene_root->get_scene().get_root_node());
+    m_kit_preview_shown = shown;
+}
+
+auto Brush_tool::get_kit_join_values() const -> const Kit_parameter_values*
+{
+    return (m_kit_join.has_value() && m_kit_join_flow.valid && m_kit_join_flow.flowed) ? &m_kit_join_flow.values : nullptr;
+}
+
+auto Brush_tool::get_kit_join_slot_materials() const -> const std::vector<std::string>&
+{
+    return (get_kit_join_values() != nullptr) ? m_kit_join_flow.slot_materials : m_kit_slot_materials;
 }
 
 auto Brush_tool::apply_kit_join(
@@ -1129,13 +1287,17 @@ void Brush_tool::refresh_kit_join()
         const Kit_connector* const        moved        = find_connector(m_kit_connectors, join.connector);
         if ((target_local != nullptr) && (moved != nullptr)) {
             const std::optional<Kit_connector> target_world = transform_connector(*target_local, target->world_from_node());
+            // K9.2: the changed target may supply other values (a floor edge's new length).
+            m_kit_join_flow.valid = false;
+            const Kit_connector& joined = get_kit_join_moved_connector(*target, join.target_connector, *moved);
             if (
                 target_world.has_value() &&
-                apply_kit_join(*scene_root, target, join.target_connector, target_world.value(), *moved, join.twist_steps, join.distance)
+                apply_kit_join(*scene_root, target, join.target_connector, target_world.value(), joined, join.twist_steps, join.distance)
             ) {
                 m_preview_node->set_parent_from_node(
                     erhe::math::create_translation<float>(m_kit_pose.value().position) * glm::mat4_cast(m_kit_pose.value().rotation)
                 );
+                sync_kit_preview_primitives();
                 return;
             }
         }
@@ -1302,6 +1464,7 @@ void Brush_tool::add_preview_mesh(Brush& brush)
             const bool has_own = (part < m_kit_preview_materials.size()) && m_kit_preview_materials[part];
             m_preview_mesh->add_primitive(brush_scaled.part_primitives[part], has_own ? m_kit_preview_materials[part] : material);
         }
+        m_kit_preview_shown = m_kit_brush;
     } else {
         m_preview_mesh->add_primitive(brush_scaled.primitive, material);
     }

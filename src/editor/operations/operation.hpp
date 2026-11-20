@@ -2,6 +2,8 @@
 
 #include "erhe_item/unique_id.hpp"
 
+#include <memory>
+#include <span>
 #include <string>
 #include <unordered_set>
 
@@ -59,14 +61,21 @@ public:
     [[nodiscard]] inline auto get_serial() const -> std::size_t { return m_id.get_id(); }
     [[nodiscard]] auto        get_error () const -> const std::string&;
     [[nodiscard]] auto        has_error () const -> bool;
+    // A refused execute left the state as it found it: the entry is not recorded (Compound_operation undoes its earlier children).
+    [[nodiscard]] auto        is_refused() const -> bool;
 
     void set_description(std::string&& description);
     void set_error      (std::string error);
+    void set_refused    (std::string reason); // also the error
 
 private:
     erhe::Unique_id<Operation> m_id{};
     std::string                m_description;
     std::string                m_error;
+    bool                       m_refused{false};
 };
+
+// Executes the operations in order; at a refused one, undoes the ones before it in reverse and returns it (null when none is).
+[[nodiscard]] auto execute_unless_refused(App_context& context, std::span<const std::shared_ptr<Operation>> operations) -> const Operation*;
 
 }

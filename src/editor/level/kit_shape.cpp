@@ -377,13 +377,16 @@ auto Kit_parameter_values::validate() const -> std::string
         const Kit_parameter_value& value     = m_values[i];
         switch (parameter.type) {
             case Kit_parameter_type::float_value: {
+                // L23: the declared range is where the UI's drags run, not a limit: any finite value of the range's sign is
+                // taken (a range starting above zero takes any positive value, one starting at zero any non-negative one).
                 const float v = value.float_value;
-                if (!std::isfinite(v) || (v < parameter.float_min) || (v > parameter.float_max)) {
+                const bool  positive     = (parameter.float_min > 0.0f);
+                const bool  non_negative = (parameter.float_min >= 0.0f);
+                if (!std::isfinite(v) || (positive && !(v > 0.0f)) || (non_negative && (v < 0.0f))) {
                     return fmt::format(
-                        "{}: parameter '{}' is {}{}, outside its range {} - {}{}",
-                        m_shape->id, parameter.name,
-                        format_number(v), unit_suffix(parameter.unit),
-                        format_number(parameter.float_min), format_number(parameter.float_max), unit_suffix(parameter.unit)
+                        "{}: parameter '{}' is {}{}; it must be a finite number{}",
+                        m_shape->id, parameter.name, format_number(v), unit_suffix(parameter.unit),
+                        positive ? " above zero" : (non_negative ? " of zero or more" : "")
                     );
                 }
                 break;

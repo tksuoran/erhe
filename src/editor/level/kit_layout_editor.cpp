@@ -79,6 +79,7 @@ constexpr std::array<Kit_layout_row, 4> c_path_count_rows{kind, count_mode, coun
 constexpr std::array<Kit_layout_row, 4> c_path_gap_rows  {kind, count_mode, gap,   orientation};
 constexpr std::array<Kit_layout_row, 2> c_segments_rows  {kind, orientation};
 constexpr std::array<Kit_layout_row, 7> c_stairs_rows    {kind, stairs_width, stairs_rise, stairs_tread, stairs_thickness, stairs_tolerance, stairs_material};
+constexpr std::array<Kit_layout_row, 6> c_floor_rows     {kind, floor_thickness, floor_wall_thickness, floor_room_height, floor_material, floor_wall_material};
 constexpr std::array<Kit_layout_row, 9> c_scatter_rectangle_count_rows  {kind, scatter_mode, count,   region, size_x, size_z, min_spacing, yaw_min, yaw_max};
 constexpr std::array<Kit_layout_row, 9> c_scatter_rectangle_density_rows{kind, scatter_mode, density, region, size_x, size_z, min_spacing, yaw_min, yaw_max};
 constexpr std::array<Kit_layout_row, 8> c_scatter_disc_count_rows       {kind, scatter_mode, count,   region, region_radius, min_spacing, yaw_min, yaw_max};
@@ -124,12 +125,16 @@ constexpr std::array<Kit_layout_row, 8> c_scatter_disc_density_rows     {kind, s
                 : "Pieces along the layout node's own curve by distance; the new node is a curve node, a polyline a curve of corner points.") || ended;
         ImGui::SameLine();
         ended = kind_radio(kind, Repeat_pattern_kind::segments, "Segments", label,
-            "One piece per segment between two neighbouring points of the layout node's own curve, scaled along its x axis to span "
-            "the straight chord (walls between room corners); handles do not bend the pieces.") || ended;
+            "One piece per segment between two neighbouring points of the layout node's own curve, centred on the straight chord and "
+            "taking its length as the piece's length (walls between room corners); handles do not bend the pieces.") || ended;
         ImGui::SameLine();
         ended = kind_radio(kind, Repeat_pattern_kind::stairs, "Stairs", label,
             "A staircase generated along the layout node's own curve: flights of equal steps and level landings that stay within one step rise "
             "of the curve's height, its side edges following the curve in plan.") || ended;
+        ImGui::SameLine();
+        ended = kind_radio(kind, Repeat_pattern_kind::floor, "Floor", label,
+            "A floor slab generated to fill the layout node's own closed curve of corner points; walls stand on its edges' wall "
+            "connectors.") || ended;
     }
     if (kinds == Kit_layout_kinds::xform) {
         ImGui::SameLine();
@@ -171,6 +176,7 @@ auto get_layout_rows(const Kit_layout_pattern& pattern) -> std::span<const Kit_l
         case Repeat_pattern_kind::scatter: return get_scatter_rows(pattern);
         case Repeat_pattern_kind::segments: return c_segments_rows;
         case Repeat_pattern_kind::stairs:   return c_stairs_rows;
+        case Repeat_pattern_kind::floor:    return c_floor_rows;
         default:                        return {};
     }
 }
@@ -208,6 +214,11 @@ auto get_layout_row_name(const Kit_layout_row row) -> const char*
         case Kit_layout_row::stairs_thickness: return "Thickness";
         case Kit_layout_row::stairs_tolerance: return "Edge Tolerance";
         case Kit_layout_row::stairs_material:  return "Material";
+        case Kit_layout_row::floor_thickness:      return "Thickness";
+        case Kit_layout_row::floor_wall_thickness: return "Wall Thickness";
+        case Kit_layout_row::floor_room_height:    return "Room Height";
+        case Kit_layout_row::floor_material:       return "Material";
+        case Kit_layout_row::floor_wall_material:  return "Wall Material";
         default:                          return "?";
     }
 }
@@ -248,8 +259,8 @@ auto get_layout_setting_rows(const Kit_layout_pattern& pattern) -> std::span<con
     };
     constexpr std::size_t c_rows_of_every_kind = 9; // the connector switches follow
     const std::span<const Kit_layout_setting_row> all{rows};
-    // A stairs layout places no piece: nothing snaps, takes a seed or has connectors.
-    if (pattern.kind == Repeat_pattern_kind::stairs) {
+    // A stairs or floor layout places no piece: nothing snaps, takes a seed or has connectors.
+    if ((pattern.kind == Repeat_pattern_kind::stairs) || (pattern.kind == Repeat_pattern_kind::floor)) {
         return {};
     }
     return is_curve_layout_kind(pattern.kind) ? all : all.first(c_rows_of_every_kind);
@@ -286,13 +297,33 @@ namespace {
 } // anonymous namespace
 
 auto layout_pattern_row(
-    Kit_layout_pattern& pattern, const Kit_layout_row row, const Kit_layout_kinds kinds, const Kit_row_label label, const Kit_slot_palette* const stairs_palette
+    Kit_layout_pattern& pattern, const Kit_layout_row row, const Kit_layout_kinds kinds, const Kit_row_label label, const Kit_shape_library& library
 ) -> Kit_row_edit
 {
     const int    max_count = static_cast<int>(c_max_repeat_count);
     const char*  name      = widget_label(get_layout_row_name(row), label);
     bool         ended     = false; // a radio button or checkbox
     Kit_row_edit edit      = Kit_row_edit::none;
+    // A combo of a slot's default and alternatives over a material name (empty: the default); views only, no copy per frame.
+    const auto material_combo = [&ended](const char* const combo_name, std::string& value, const Kit_slot_palette* const palette) {
+        const char* const shown_text = !value.empty() ? value.c_str() : ((palette != nullptr) ? palette->default_material.c_str() : "(default)");
+        if (ImGui::BeginCombo(combo_name, shown_text)) {
+            const std::string shown{shown_text}; // while the combo is open: the selection below replaces the viewed name
+            const auto option = [&value, &ended, &shown](const std::string& material) {
+                if (ImGui::Selectable(material.c_str(), material == shown) && (material != shown)) {
+                    value = material;
+                    ended = true;
+                }
+            };
+            if (palette != nullptr) {
+                option(palette->default_material);
+                for (const std::string& alternative : palette->alternatives) {
+                    option(alternative);
+                }
+            }
+            ImGui::EndCombo();
+        }
+    };
     switch (row) {
         case Kit_layout_row::kind: {
             ended = kind_row(pattern, kinds, label);
@@ -498,27 +529,36 @@ auto layout_pattern_row(
             break;
         }
         case Kit_layout_row::stairs_material: {
-            // Views of the pattern's and the palette's names: nothing is copied per frame.
-            const char* const shown_text = !pattern.stairs_material.empty()
-                ? pattern.stairs_material.c_str()
-                : ((stairs_palette != nullptr) ? stairs_palette->default_material.c_str() : "(default)");
-            if (ImGui::BeginCombo(name, shown_text)) {
-                const std::string shown{shown_text}; // while the combo is open: the selection below replaces the viewed name
-                const auto option = [&pattern, &ended, &shown](const std::string& material) {
-                    if (ImGui::Selectable(material.c_str(), material == shown) && (material != shown)) {
-                        pattern.stairs_material = material;
-                        ended = true;
-                    }
-                };
-                if (stairs_palette != nullptr) {
-                    option(stairs_palette->default_material);
-                    for (const std::string& alternative : stairs_palette->alternatives) {
-                        option(alternative);
-                    }
-                }
-                ImGui::EndCombo();
-            }
+            material_combo(name, pattern.stairs_material, library.find_slot_palette(c_stairs_material_slot));
             tooltip("The staircase's material: the stone slot's default first, then its alternatives.");
+            break;
+        }
+        case Kit_layout_row::floor_thickness: {
+            const bool changed = ImGui::DragFloat(name, &pattern.floor.thickness, 0.005f, 0.01f, 4.0f, "%.3f m", ImGuiSliderFlags_AlwaysClamp);
+            edit = drag_edit(changed);
+            tooltip("The slab's thickness: its top, where walls stand, is this far above the node's origin.");
+            break;
+        }
+        case Kit_layout_row::floor_wall_thickness: {
+            const bool changed = ImGui::DragFloat(name, &pattern.floor.wall_thickness, 0.005f, 0.0f, 4.0f, "%.3f m", ImGuiSliderFlags_AlwaysClamp);
+            edit = drag_edit(changed);
+            tooltip("The thickness of the walls on the floor's edges: the wall connectors sit half of it inside each edge.");
+            break;
+        }
+        case Kit_layout_row::floor_room_height: {
+            const bool changed = ImGui::DragFloat(name, &pattern.floor.room_height, 0.01f, 0.1f, 32.0f, "%.3f m", ImGuiSliderFlags_AlwaysClamp);
+            edit = drag_edit(changed);
+            tooltip("The height of the walls standing on the floor.");
+            break;
+        }
+        case Kit_layout_row::floor_material: {
+            material_combo(name, pattern.floor_material, library.find_slot_palette(c_floor_material_slot));
+            tooltip("The slab's material: the floor slot's default first, then its alternatives.");
+            break;
+        }
+        case Kit_layout_row::floor_wall_material: {
+            material_combo(name, pattern.floor_wall_material, library.find_slot_palette(c_floor_wall_material_slot));
+            tooltip("The material of the walls standing on the floor: the wall slot's default first, then its alternatives.");
             break;
         }
         default: {
@@ -709,8 +749,7 @@ void Kit_layout_editor::state_line()
 
 void Kit_layout_editor::pattern_row(const Kit_layout_row row)
 {
-    const Kit_slot_palette* const palette = m_context.level_kits->get_library().find_slot_palette(c_stairs_material_slot);
-    const Kit_row_edit edit = layout_pattern_row(m_data.pattern, row, m_kinds, Kit_row_label::recorded, palette);
+    const Kit_row_edit edit = layout_pattern_row(m_data.pattern, row, m_kinds, Kit_row_label::recorded, m_context.level_kits->get_library());
     on_row_edit(edit, m_data);
 }
 
@@ -1194,11 +1233,10 @@ void Kit_layout_initial_editor::imgui(const std::shared_ptr<Scene_root>& scene_r
     ImGui::PushID("layout");
     ImGui::TextWrapped("The values a new kit layout node starts with; a selected layout node's values are edited in the Properties window.");
     bool changed = false;
-    const Kit_slot_palette* const stairs_palette = m_context.level_kits->get_library().find_slot_palette(c_stairs_material_slot);
     for (const Kit_layout_row row : get_layout_rows(m_values.data.pattern)) {
         const bool spaced = (row == Kit_layout_row::step) || (row == Kit_layout_row::spacing_x) || (row == Kit_layout_row::spacing_z);
         ImGui::BeginDisabled(spaced && (m_values.spacing == Kit_layout_spacing::from_item));
-        changed = (layout_pattern_row(m_values.data.pattern, row, Kit_layout_kinds::all, Kit_row_label::beside, stairs_palette) == Kit_row_edit::committed) || changed;
+        changed = (layout_pattern_row(m_values.data.pattern, row, Kit_layout_kinds::all, Kit_row_label::beside, m_context.level_kits->get_library()) == Kit_row_edit::committed) || changed;
         ImGui::EndDisabled();
     }
     bool from_item = (m_values.spacing == Kit_layout_spacing::from_item);
@@ -1234,7 +1272,7 @@ void Kit_layout_initial_editor::imgui(const std::shared_ptr<Scene_root>& scene_r
             : "Adds a kit layout node of this kind at the scene's origin with the values above and the shape chosen above as its item "
               "(a basic block when none is chosen). One undo step; selects the node."
     );
-    const bool stairs = (kind == Repeat_pattern_kind::stairs);
+    const bool stairs = (kind == Repeat_pattern_kind::stairs) || (kind == Repeat_pattern_kind::floor);
     ImGui::BeginDisabled(!piece || stairs);
     if (ImGui::Button("Make Layout")) {
         queue_make(scene_root, piece);
@@ -1290,6 +1328,7 @@ auto Kit_layout_initial_editor::get_layout_add_button_label(const Repeat_pattern
         case Repeat_pattern_kind::scatter:  return "Add Scatter Layout";
         case Repeat_pattern_kind::segments: return "Add Segments Layout";
         case Repeat_pattern_kind::stairs:   return "Add Path Stairs";
+        case Repeat_pattern_kind::floor:    return "Add Polygon Floor";
         default:                            return "Add Layout";
     }
 }

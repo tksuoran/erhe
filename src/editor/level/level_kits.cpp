@@ -21,6 +21,8 @@
 #include "operations/item_parent_change_operation.hpp"
 #include "operations/library_attach_operation.hpp"
 #include "operations/mesh_material_assign_operation.hpp"
+#include "level/floor_polygon.hpp"
+#include "level/level_repeat.hpp"
 #include "operations/mesh_primitive_swap.hpp"
 #include "operations/node_transform_operation.hpp"
 #include "operations/operation_stack.hpp"
@@ -54,6 +56,8 @@
 #include <geogram/mesh/mesh.h>
 
 #include <algorithm>
+#include <deque>
+#include <limits>
 #include <chrono>
 #include <cmath>
 #include <mutex>
@@ -404,8 +408,9 @@ Level_kits::Level_kits(App_context& context, App_message_bus& app_message_bus)
     m_kit_layout_changed_subscription = app_message_bus.kit_layout_changed.subscribe(
         [this](Kit_layout_changed_message& message) {
             m_layout_indicators.forget_layout(message.node_id);
-            // The connector switches, the lock or a regeneration's child count (U39).
+            // The connector switches, the lock or a regeneration's child count (U39); a floor's own values or kind.
             m_connector_indicators.forget_children_of(message.node_id);
+            m_connector_indicators.forget_node(message.node_id);
         }
     );
 }
@@ -741,6 +746,153 @@ void Level_kits::set_connector_snap_axis_mode(const Connector_snap_axis_mode mod
     }
 }
 
+auto Level_kits::get_connector_auto_connect() const -> bool
+{
+    return (m_context.editor_settings == nullptr) || m_context.editor_settings->surface_snap.connector_auto_connect;
+}
+
+void Level_kits::set_connector_auto_connect(const Connector_auto_connect auto_connect)
+{
+    if (m_context.editor_settings == nullptr) {
+        return;
+    }
+    m_context.editor_settings->surface_snap.connector_auto_connect = (auto_connect == Connector_auto_connect::on);
+    if (m_context.app_settings != nullptr) {
+        m_context.app_settings->settings_store().touch();
+    }
+}
+
+auto Level_kits::get_connector_flow_mask() const -> Kit_connector_types
+{
+    const int off = (m_context.editor_settings != nullptr) ? m_context.editor_settings->surface_snap.connector_flow_off : 0;
+    return Kit_connector_types{.bits = Kit_connector_types::all().bits & ~static_cast<std::uint32_t>(off)};
+}
+
+void Level_kits::set_connector_flow_mask(const Kit_connector_types mask)
+{
+    if (m_context.editor_settings == nullptr) {
+        return;
+    }
+    m_context.editor_settings->surface_snap.connector_flow_off = static_cast<int>(Kit_connector_types::all().bits & ~mask.bits);
+    if (m_context.app_settings != nullptr) {
+        m_context.app_settings->settings_store().touch();
+    }
+}
+
+auto Level_kits::get_connection_step_limit() const -> std::size_t
+{
+    const int limit = (m_context.editor_settings != nullptr) ? m_context.editor_settings->surface_snap.connection_step_limit : static_cast<int>(c_connection_step_limit);
+    return static_cast<std::size_t>(std::max(limit, 1));
+}
+
+void Level_kits::set_connection_step_limit(const std::size_t limit)
+{
+    if (m_context.editor_settings == nullptr) {
+        return;
+    }
+    m_context.editor_settings->surface_snap.connection_step_limit = static_cast<int>(std::clamp<std::size_t>(limit, 1, 100000));
+    if (m_context.app_settings != nullptr) {
+        m_context.app_settings->settings_store().touch();
+    }
+}
+
+void Level_kits::set_flow_overrides(const std::optional<Kit_flow_overrides>& overrides)
+{
+    m_flow_overrides = overrides;
+}
+
+auto Level_kits::get_flow_overrides() const -> const std::optional<Kit_flow_overrides>&
+{
+    return m_flow_overrides;
+}
+
+auto Level_kits::get_effective_flow_mask() const -> Kit_connector_types
+{
+    return (m_flow_overrides.has_value() && m_flow_overrides.value().flow_mask.has_value())
+        ? m_flow_overrides.value().flow_mask.value()
+        : get_connector_flow_mask();
+}
+
+auto Level_kits::get_effective_auto_connect() const -> bool
+{
+    return (m_flow_overrides.has_value() && m_flow_overrides.value().auto_connect.has_value())
+        ? m_flow_overrides.value().auto_connect.value()
+        : get_connector_auto_connect();
+}
+
+auto Level_kits::execute_entry(const std::shared_ptr<Operation>& operation) -> std::string
+{
+    m_context.operation_stack->execute_now(operation);
+    return operation->is_refused() ? operation->get_error() : std::string{};
+}
+
+auto Level_kits::get_flow_report() -> Kit_flow_report*
+{
+    const Operation_stack* const stack = m_context.operation_stack;
+    if ((stack == nullptr) || !stack->is_recording() || m_flow_previewing) {
+        return nullptr;
+    }
+    if (m_flow_report_serial != stack->get_recording_serial()) {
+        m_flow_report_serial = stack->get_recording_serial();
+        m_flow_report.clear();
+    }
+    return &m_flow_report;
+}
+
+auto Level_kits::flow_log_level(const spdlog::level::level_enum level) const -> spdlog::level::level_enum
+{
+    return m_flow_previewing ? spdlog::level::trace : level;
+}
+
+auto Level_kits::get_last_flow_report() const -> const Kit_flow_report&
+{
+    return m_flow_report;
+}
+
+auto Level_kits::get_last_flow_report_serial() const -> std::size_t
+{
+    return m_flow_report_serial;
+}
+
+void Level_kits::update_flow_summary()
+{
+    const Kit_flow_report* const report = get_flow_report();
+    if (report != nullptr) {
+        m_flow_summary = report->make_summary();
+    }
+}
+
+void Level_kits::clear_flow_summary()
+{
+    m_flow_summary.clear();
+}
+
+auto Level_kits::get_flow_summary() const -> const std::string&
+{
+    return m_flow_summary;
+}
+
+auto Level_kits::make_flow_piece(const erhe::scene::Node& node) -> Kit_flow_piece
+{
+    return Kit_flow_piece{.id = node.get_id(), .name = node.get_name()};
+}
+
+void Level_kits::report_new_connection(const Kit_new_connection& connection)
+{
+    Kit_flow_report* const report = get_flow_report();
+    if ((report != nullptr) && connection.node && connection.target) {
+        report->add_connection(
+            report->new_connections,
+            Kit_flow_connection{
+                .piece           = make_flow_piece(*connection.node),
+                .connector       = connection.attachment.connector,
+                .other           = make_flow_piece(*connection.target),
+                .other_connector = connection.attachment.target_connector
+            }
+        );
+    }
+}
+
 auto Level_kits::get_connector_snap_orientation() const -> Connector_snap_orientation
 {
     return (m_context.editor_settings != nullptr) ? m_context.editor_settings->surface_snap.connector_snap_orientation : Connector_snap_orientation::off;
@@ -908,19 +1060,41 @@ auto Level_kits::make_brush(const Kit_parameter_values& values, const Kit_brush_
 
 auto Level_kits::check_stairs_material(const Scene_root& scene_root, const std::string& material_name) const -> std::string
 {
+    return check_slot_material_name(scene_root, c_stairs_material_slot, material_name, "stairs material");
+}
+
+auto Level_kits::check_slot_material_name(const Scene_root& scene_root, const char* const slot, const std::string& material_name, const char* const what) const -> std::string
+{
     if (material_name.empty()) {
-        return (m_library.find_slot_default(c_stairs_material_slot) != nullptr)
+        return (m_library.find_slot_default(slot) != nullptr)
             ? std::string{}
-            : fmt::format("no palette material for slot '{}'", c_stairs_material_slot);
+            : fmt::format("no palette material for slot '{}'", slot);
     }
     const std::shared_ptr<Content_library> library = scene_root.get_content_library();
     if ((library && find_material_by_name(library, material_name)) || (m_library.find_palette_material(material_name) != nullptr)) {
         return {};
     }
-    return fmt::format("stairs material: no material '{}' in the scene or the kit palette", material_name);
+    return fmt::format("{}: no material '{}' in the scene or the kit palette", what, material_name);
 }
 
 auto Level_kits::make_stairs_insert(
+    Scene_root&                                      scene_root,
+    const std::shared_ptr<erhe::scene::Node>&        layout,
+    const glm::mat4&                                 world_from_layout,
+    const std::shared_ptr<erhe::geometry::Geometry>& geometry,
+    const std::string&                               material_name,
+    const std::string&                               source,
+    std::vector<std::shared_ptr<Operation>>&         out_operations
+) -> std::string
+{
+    return make_generated_child_insert(
+        Generated_child{.name = "Stairs", .slot = c_stairs_material_slot, .what = "stairs material", .crease_degrees = c_stairs_crease_angle_degrees},
+        scene_root, layout, world_from_layout, geometry, material_name, source, out_operations
+    );
+}
+
+auto Level_kits::make_generated_child_insert(
+    const Generated_child&                           child,
     Scene_root&                                      scene_root,
     const std::shared_ptr<erhe::scene::Node>&        layout,
     const glm::mat4&                                 world_from_layout,
@@ -934,7 +1108,7 @@ auto Level_kits::make_stairs_insert(
     if (!library) {
         return "the scene has no content library";
     }
-    const std::string material_problem = check_stairs_material(scene_root, material_name);
+    const std::string material_problem = check_slot_material_name(scene_root, child.slot, material_name, child.what);
     if (!material_problem.empty()) {
         return material_problem;
     }
@@ -953,12 +1127,12 @@ auto Level_kits::make_stairs_insert(
                 erhe::geometry::Geometry::process_flag_generate_facet_texture_coordinates
         }
     );
-    // The sides and the underside shade smooth along the curve; treads, risers and the side edges stay hard.
-    set_crease_corner_normals(*geometry.get(), c_stairs_crease_angle_degrees);
+    // Faces meeting at more than the crease angle keep a hard edge (the stairs' treads and risers, a floor's sides).
+    set_crease_corner_normals(*geometry.get(), child.crease_degrees);
     Brush_data brush_data{
         .context      = m_context,
         .app_settings = *m_context.app_settings,
-        .name         = "Stairs",
+        .name         = child.name,
         .build_info   = erhe::primitive::Build_info{
             .primitive_types = {
                 .fill_triangles          = true,
@@ -978,14 +1152,14 @@ auto Level_kits::make_stairs_insert(
     };
     const std::shared_ptr<Brush> brush = std::make_shared<Brush>(brush_data);
     Palette_material_resolver    resolver{m_context, library};
-    const std::array<std::shared_ptr<erhe::primitive::Material>, 1> materials{resolver.resolve(m_library, c_stairs_material_slot, given)};
+    const std::array<std::shared_ptr<erhe::primitive::Material>, 1> materials{resolver.resolve(m_library, child.slot, given)};
     const Brush_instance_insert insert = make_brush_instance_insert(
         m_context, *brush.get(), scene_root, world_from_layout, materials, 1.0, erhe::physics::Motion_mode::e_static, layout, 0
     );
     if (!insert.node) {
-        return "the stairs made no node";
+        return fmt::format("the {} made no node", child.name);
     }
-    insert.node->set_name("Stairs");
+    insert.node->set_name(child.name);
     insert.node->set_value(Kit_layout_generated::source_property, source);
     // Materials are inserted first, so an undo takes the staircase out before the material it uses.
     for (std::shared_ptr<Operation>& operation : resolver.take_operations()) {
@@ -1077,6 +1251,18 @@ void Level_kits::refresh_scene(const std::shared_ptr<Scene_root>& scene_root, st
         }
     );
     refresh.report.piece_count = pieces.size();
+    // K6.2: a loaded connection record list that does not read (a hand-edited file) is named once, at the load.
+    scene_root->get_scene().for_each_node(
+        [](const std::shared_ptr<erhe::scene::Node>& node) -> bool {
+            const std::optional<std::string> text = node->read_local_value(Kit_piece::attachment_property);
+            std::vector<Kit_attachment> attachments;
+            const std::string problem = (text.has_value() && !text.value().empty()) ? parse_attachments_text(text.value(), attachments) : std::string{};
+            if (!problem.empty()) {
+                log_scene->error("Kit piece '{}' (id {}): its connections do not read ({}); none is followed", node->get_name(), node->get_id(), problem);
+            }
+            return true;
+        }
+    );
     // U33: switch values a write would refuse (a hand-edited file) are kept as loaded and named in one warning.
     std::string switch_problems;
     std::size_t switch_problem_count = 0;
@@ -1319,7 +1505,8 @@ auto Level_kits::snap_to_surface(
     const std::span<const std::shared_ptr<erhe::scene::Mesh>> meshes,
     const Surface_options&                                    options,
     const Kit_snap_apply                                      apply,
-    std::vector<Kit_snap_result>&                             out_results
+    std::vector<Kit_snap_result>&                             out_results,
+    std::string* const                                        out_refusal
 ) -> std::size_t
 {
     out_results.clear();
@@ -1361,11 +1548,17 @@ auto Level_kits::snap_to_surface(
         if (follow) {
             operations.push_back(std::move(follow));
         }
-        m_context.operation_stack->execute_now(
+        const std::string refusal = execute_entry(
             (operations.size() == 1)
                 ? operations.front()
                 : std::make_shared<Compound_operation>(Compound_operation::Parameters{.operations = std::move(operations)})
         );
+        if (!refusal.empty()) {
+            if (out_refusal != nullptr) {
+                *out_refusal = refusal;
+            }
+            return 0;
+        }
     }
     return moved_count;
 }
@@ -1402,7 +1595,11 @@ auto Level_kits::place(Scene_root& scene_root, const std::span<const Kit_placeme
     if (!prepare_placements(scene_root, placements, snap, result, operations) || result.pieces.empty()) {
         return result;
     }
-    m_context.operation_stack->execute_now(std::make_shared<Compound_operation>(Compound_operation::Parameters{.operations = std::move(operations)}));
+    const std::string refusal = execute_entry(std::make_shared<Compound_operation>(Compound_operation::Parameters{.operations = std::move(operations)}));
+    if (!refusal.empty()) {
+        result.error = refusal;
+        result.pieces.clear();
+    }
     return result;
 }
 
@@ -1476,6 +1673,30 @@ auto Level_kits::prepare_placements(
             const std::string connect_problem = resolve_connect(scene_root, piece_values, Kit_connector_switches{}, placement.connect.value(), glm::mat4{1.0f}, pose);
             if (!connect_problem.empty()) {
                 return fail(i, connect_problem);
+            }
+            // K6.2: one connection per connector; a placement that records one needs the target's connector free, also of
+            // the earlier placements of the call.
+            if (placement.connect.value().attach == Kit_attach::attach) {
+                for (std::size_t j = 0; j < i; ++j) {
+                    const std::optional<Kit_connect>& earlier = placements[j].connect;
+                    if (
+                        earlier.has_value() && (earlier.value().attach == Kit_attach::attach) &&
+                        (earlier.value().target == placement.connect.value().target) &&
+                        (earlier.value().target_connector == placement.connect.value().target_connector)
+                    ) {
+                        return fail(i, fmt::format(
+                            "placements {} and {} both connect to connector '{}' of '{}' (one connection per connector)",
+                            j, i, placement.connect.value().target_connector, placement.connect.value().target->get_name()
+                        ));
+                    }
+                }
+                const std::shared_ptr<erhe::scene::Node> other = find_connection_at(scene_root, *placement.connect.value().target, placement.connect.value().target_connector);
+                if (other) {
+                    return fail(i, fmt::format(
+                        "connector '{}' of '{}' is connected to '{}' already (detach it first)",
+                        placement.connect.value().target_connector, placement.connect.value().target->get_name(), other->get_name()
+                    ));
+                }
             }
             // D3.12: the joined world pose has scale 1; under the parent it must be a local transform without shear.
             const std::shared_ptr<erhe::scene::Node> parent_node = std::dynamic_pointer_cast<erhe::scene::Node>(placement.parent);
@@ -1569,6 +1790,27 @@ auto Level_kits::prepare_placements(
     for (std::shared_ptr<Operation>& operation : insert_operations) {
         out_operations.push_back(std::move(operation));
     }
+    // C3.4: each piece placed with a recorded connection takes the values the connection supplies, in the same entry.
+    std::vector<std::shared_ptr<erhe::scene::Node>> requesting;
+    std::vector<Kit_new_connection>                 made;
+    for (std::size_t i = 0, end = placements.size(); (i < end) && (i < result.pieces.size()); ++i) {
+        if (placements[i].connect.has_value() && result.pieces[i].node && result.pieces[i].node->has_local_value(Kit_piece::attachment_property.get())) {
+            requesting.push_back(result.pieces[i].node);
+            made.push_back(
+                Kit_new_connection{
+                    .node       = result.pieces[i].node,
+                    .attachment = make_connect_attachment(*result.pieces[i].node, placements[i].connect.value()),
+                    .target     = placements[i].connect.value().target
+                }
+            );
+        }
+    }
+    if (!requesting.empty()) {
+        std::shared_ptr<Operation> flow = make_attachment_follow_operation(scene_root, {}, {}, nullptr, requesting, made);
+        if (flow) {
+            out_operations.push_back(std::move(flow));
+        }
+    }
     return true;
 }
 
@@ -1630,6 +1872,10 @@ auto Level_kits::get_local_connectors(const erhe::scene::Node& node, std::vector
     out_connectors.clear();
     const std::optional<Kit_piece_data> record = read_kit_piece(node);
     if (!record.has_value()) {
+        // K6: a floor layout node is a connection end with one wall-floor connector per edge (all enabled).
+        if (is_floor_layout(node)) {
+            return get_floor_layout_connectors(node, out_connectors);
+        }
         return fmt::format("'{}' is not a kit piece", node.get_name());
     }
     Kit_parameter_values values;
@@ -1641,6 +1887,35 @@ auto Level_kits::get_local_connectors(const erhe::scene::Node& node, std::vector
     if (set == Kit_connector_set::enabled) {
         remove_disabled_connectors(get_connector_switches(node, out_connectors), out_connectors);
     }
+    return {};
+}
+
+auto is_floor_layout(const erhe::scene::Node& node) -> bool
+{
+    if ((dynamic_cast<const erhe::scene::Curve*>(&node) == nullptr) || !carries_kit_layout(node)) {
+        return false;
+    }
+    Kit_layout_data data;
+    return read_kit_layout(node, data).empty() && (data.pattern.kind == Repeat_pattern_kind::floor);
+}
+
+auto get_floor_layout_connectors(const erhe::scene::Node& node, std::vector<Kit_connector>& out_connectors) -> std::string
+{
+    out_connectors.clear();
+    const erhe::scene::Curve* const curve = dynamic_cast<const erhe::scene::Curve*>(&node);
+    Kit_layout_data data;
+    if ((curve == nullptr) || !read_kit_layout(node, data).empty() || (data.pattern.kind != Repeat_pattern_kind::floor)) {
+        return fmt::format("'{}' is not a floor layout", node.get_name());
+    }
+    static thread_local std::vector<glm::vec2> outline;
+    std::string error = read_floor_outline(curve->get_table(), outline);
+    if (error.empty()) {
+        error = check_floor_outline(outline);
+    }
+    if (!error.empty()) {
+        return fmt::format("'{}': {}", node.get_name(), error);
+    }
+    get_floor_connectors(outline, data.pattern.floor, out_connectors);
     return {};
 }
 
@@ -1763,6 +2038,14 @@ auto Level_kits::resolve_connect(
             by_layout ? "hidden by its kit layout's connector switches" : "disabled", connector_names_text(target_connectors)
         );
     }
+    // C1.9: a join the author named is refused with both connectors' types.
+    if (!is_compatible(*piece_connector, *target_connector)) {
+        return fmt::format(
+            "connector '{}' ({}) of {} and connector '{}' ({}) of target '{}' share no connector type",
+            connect.connector, connector_types_text(piece_connector->types), shape->id,
+            connect.target_connector, connector_types_text(target_connector->types), connect.target->get_name()
+        );
+    }
     const std::optional<Kit_join_pose> motion = join_motion(*piece_connector, world_from_node, *target_connector, connect.twist_steps, connect.gap);
     if (!motion.has_value()) {
         return fmt::format("{} connector '{}' degenerates under a zero scale axis", shape->id, connect.connector);
@@ -1806,19 +2089,47 @@ auto Level_kits::connect_piece(Scene_root& scene_root, const std::shared_ptr<erh
     }
     Kit_join_pose motion{};
     result.error = resolve_connect(scene_root, values, get_connector_switches(*node), connect, node->world_from_node(), motion);
+    // A join without an attachment declines its record: Auto-connect of this change leaves the piece alone. The follow
+    // operations made while the join is built keep the piece; nothing is left set after it.
+    class Excluded_scope
+    {
+    public:
+        explicit Excluded_scope(std::vector<std::shared_ptr<erhe::scene::Node>>& excluded) : m_excluded{excluded} {}
+        ~Excluded_scope() noexcept { m_excluded.clear(); }
+        Excluded_scope(const Excluded_scope&) = delete;
+        auto operator=(const Excluded_scope&) -> Excluded_scope& = delete;
+    private:
+        std::vector<std::shared_ptr<erhe::scene::Node>>& m_excluded;
+    };
+    m_auto_connect_excluded.clear();
+    const Excluded_scope excluded_scope{m_auto_connect_excluded};
+    if (connect.attach == Kit_attach::none) {
+        m_auto_connect_excluded.push_back(node);
+    }
     if (!result.error.empty()) {
         return result;
     }
     // Step 41: the attachment the join records; a locked layout's child on either side makes the join without one.
     std::shared_ptr<Operation> attach_operation;
     if (connect.attach == Kit_attach::attach) {
-        Kit_attach_check check = check_attach(*node, *connect.target);
-        if (check.refusal == Kit_attach_refusal::cycle) {
-            result.error = std::move(check.message);
+        // K6.2: one connection per connector, counting both ends; the piece's own record of its connector is replaced.
+        result.error = check_one_connection_per_connector(scene_root, *node, connect.connector, *connect.target, connect.target_connector);
+        if (!result.error.empty()) {
             return result;
         }
+        // C3.2: cycles are allowed; a cycle that does not close is kept and reported apart (C3.7).
+        Kit_attach_check check = check_attach(*node, *connect.target);
         if (check.refusal == Kit_attach_refusal::none) {
             attach_operation = make_attachment_operation(node, make_connect_attachment(*node, connect));
+            // The same pair recorded on the target: the record moves to the piece, so the connection is kept once.
+            std::shared_ptr<Operation> moved_record = make_connection_removal_operation(connect.target, connect.target_connector);
+            const std::vector<Kit_attachment> target_records = read_kit_attachments(*connect.target);
+            const bool target_holds_pair = std::any_of(target_records.begin(), target_records.end(), [&](const Kit_attachment& a) {
+                return (a.connector == connect.target_connector) && (a.target == node->get_gltf_uid()) && (a.target_connector == connect.connector);
+            });
+            if (target_holds_pair && moved_record && attach_operation) {
+                attach_operation = std::make_shared<Compound_operation>(Compound_operation::Parameters{.operations = {std::move(moved_record), attach_operation}});
+            }
         } else {
             result.not_attached = std::move(check.message);
         }
@@ -1830,8 +2141,17 @@ auto Level_kits::connect_piece(Scene_root& scene_root, const std::shared_ptr<erh
     result.rotation = world_after.get_rotation();
     if (is_identity_motion(motion)) {
         if (attach_operation) {
-            m_context.operation_stack->execute_now(attach_operation);
-            result.changed = true;
+            // C3.4: the piece takes the values its new connection supplies, in the same entry.
+            std::vector<std::shared_ptr<Operation>> operations{attach_operation};
+            const Kit_new_connection made{.node = node, .attachment = make_connect_attachment(*node, connect), .target = connect.target};
+            std::shared_ptr<Operation> flow = make_attachment_follow_operation(
+                scene_root, {}, {}, nullptr, std::span<const std::shared_ptr<erhe::scene::Node>>{&node, 1}, std::span<const Kit_new_connection>{&made, 1}
+            );
+            if (flow) {
+                operations.push_back(std::move(flow));
+            }
+            result.error   = execute_entry(std::make_shared<Compound_operation>(Compound_operation::Parameters{.operations = std::move(operations)}));
+            result.changed = result.error.empty();
         }
         return result;
     }
@@ -1866,12 +2186,22 @@ auto Level_kits::connect_piece(Scene_root& scene_root, const std::shared_ptr<erh
         operations.push_back(attach_operation);
     }
     append_layout_move_operations(scene_root, std::span<const std::shared_ptr<erhe::scene::Node>>{&node, 1}, operations);
-    m_context.operation_stack->execute_now(
+    if (attach_operation) {
+        // C3.4: the piece takes the values its new connection supplies, in the same entry.
+        const Kit_new_connection made{.node = node, .attachment = make_connect_attachment(*node, connect), .target = connect.target};
+        std::shared_ptr<Operation> flow = make_attachment_follow_operation(
+            scene_root, {}, {}, nullptr, std::span<const std::shared_ptr<erhe::scene::Node>>{&node, 1}, std::span<const Kit_new_connection>{&made, 1}
+        );
+        if (flow) {
+            operations.push_back(std::move(flow));
+        }
+    }
+    result.error = execute_entry(
         (operations.size() == 1)
             ? operations.front()
             : std::make_shared<Compound_operation>(Compound_operation::Parameters{.operations = std::move(operations)})
     );
-    result.changed = true;
+    result.changed = result.error.empty();
     return result;
 }
 
@@ -2031,12 +2361,12 @@ auto Level_kits::set_connector_switches(
     if (operations.empty()) {
         return result;
     }
-    m_context.operation_stack->execute_now(
+    result.error = execute_entry(
         (operations.size() == 1)
             ? operations.front()
             : std::make_shared<Compound_operation>(Compound_operation::Parameters{.operations = std::move(operations)})
     );
-    result.changed = true;
+    result.changed = result.error.empty();
     return result;
 }
 
@@ -2124,8 +2454,8 @@ auto Level_kits::group(Scene_root& scene_root, const std::span<const std::shared
             std::make_shared<Item_parent_change_operation>(group_node, node, std::shared_ptr<erhe::Hierarchy>{}, std::shared_ptr<erhe::Hierarchy>{})
         );
     }
-    m_context.operation_stack->execute_now(std::make_shared<Compound_operation>(std::move(parameters)));
-    result.node = group_node;
+    result.error = execute_entry(std::make_shared<Compound_operation>(std::move(parameters)));
+    result.node  = result.error.empty() ? group_node : std::shared_ptr<erhe::scene::Node>{};
     return result;
 }
 
@@ -2285,7 +2615,7 @@ auto Level_kits::mirror(Scene_root& scene_root, const std::shared_ptr<erhe::scen
     if (follow) {
         operations.push_back(std::move(follow));
     }
-    m_context.operation_stack->execute_now(std::make_shared<Compound_operation>(Compound_operation::Parameters{.operations = std::move(operations)}));
+    result.error = execute_entry(std::make_shared<Compound_operation>(Compound_operation::Parameters{.operations = std::move(operations)}));
     return result;
 }
 
@@ -2426,6 +2756,7 @@ void Level_kits::on_close_scene(const erhe::Item_host* const closing_host)
 {
     // A closing scene's queued refresh goes with it; its on_done is not called.
     std::erase_if(m_scene_refreshes, [closing_host](const Scene_refresh& refresh) -> bool { return refresh.scene_root.get() == closing_host; });
+    clear_flow_summary();
     m_connector_indicators.forget_all();
     m_layout_indicators.forget_all();
     if (m_parameter_preview.has_value() && (m_parameter_preview.value().mesh->get_item_host() == closing_host)) {
@@ -2436,12 +2767,13 @@ void Level_kits::on_close_scene(const erhe::Item_host* const closing_host)
         m_layout_preview.clear();
         m_layout_transform_preview = false;
     }
-    // So do its followers.
-    for (Follow_preview* preview : {&m_move_follow_preview, &m_parameter_follow_preview}) {
-        if ((preview->scene_root != nullptr) && (static_cast<const erhe::Item_host*>(preview->scene_root) == closing_host)) {
-            preview->moves.clear();
-            restore_follow_preview(*preview);
-        }
+    // So do its followers and its flow preview.
+    if ((m_parameter_follow_preview.scene_root != nullptr) && (static_cast<const erhe::Item_host*>(m_parameter_follow_preview.scene_root) == closing_host)) {
+        m_parameter_follow_preview.moves.clear();
+        restore_follow_preview(m_parameter_follow_preview);
+    }
+    if ((m_flow_preview.scene_root != nullptr) && (static_cast<const erhe::Item_host*>(m_flow_preview.scene_root) == closing_host)) {
+        forget_flow_preview();
     }
 }
 
@@ -2579,7 +2911,7 @@ auto Level_kits::set_parameters(const std::shared_ptr<erhe::scene::Node>& node, 
             operations.push_back(std::move(follow));
         }
     }
-    m_context.operation_stack->execute_now(
+    result.error = execute_entry(
         (operations.size() == 1)
             ? operations.front()
             : std::make_shared<Compound_operation>(Compound_operation::Parameters{.operations = std::move(operations)})
@@ -2648,11 +2980,17 @@ auto Level_kits::set_slot_material(
     Compound_operation::Parameters parameters;
     parameters.operations = resolver.take_operations();
     parameters.operations.push_back(assign);
-    m_context.operation_stack->execute_now(
+    // C3.6, K7.5: the edited piece's neighbours take the material it now supplies, in the same entry.
+    std::shared_ptr<Operation> flow = make_attachment_follow_operation(scene_root, {}, std::span<const std::shared_ptr<erhe::scene::Node>>{&node, 1});
+    if (flow) {
+        parameters.operations.push_back(std::move(flow));
+    }
+    result.error = execute_entry(
         (parameters.operations.size() == 1)
             ? parameters.operations.front()
             : std::make_shared<Compound_operation>(std::move(parameters))
     );
+    result.changed = result.error.empty();
     return result;
 }
 
@@ -2946,8 +3284,12 @@ auto Level_kits::replace_shape(
     for (std::shared_ptr<Operation>& operation : snap_operations) {
         parameters.operations.push_back(std::move(operation));
     }
+    // K11.2: a connection is kept where the new shape has its connector with types meeting the other end's, else dropped.
+    if (has_attachments(scene_root)) {
+        append_replace_connection_drops(scene_root, result, parameters.operations);
+    }
     // Step 41: the pieces attached to a replaced piece join its new connector of the same name, and a replaced attached
-    // piece joins again with its own; a name the new shape lacks leaves the attachment dormant.
+    // piece joins again with its own.
     std::vector<std::shared_ptr<erhe::scene::Node>> replaced_nodes;
     for (const Kit_replaced_piece& piece : result.pieces) {
         if (piece.replaced) {
@@ -2958,12 +3300,1115 @@ auto Level_kits::replace_shape(
     if (follow) {
         parameters.operations.push_back(std::move(follow));
     }
-    m_context.operation_stack->execute_now(
+    result.error = execute_entry(
         (parameters.operations.size() == 1)
             ? parameters.operations.front()
             : std::make_shared<Compound_operation>(std::move(parameters))
     );
     return result;
+}
+
+
+namespace {
+
+enum class Kit_length_take : unsigned int {
+    taken = 0,
+    clamped,
+    refused
+};
+
+// L23: a supplied length as given; only where the shape cannot take it, clamped to the declared range. A taken
+// parameter becomes explicit (C3.5). Refused (io_values unchanged) when even the clamped value is not taken or changes nothing.
+[[nodiscard]] auto take_supplied_length(
+    const Kit_shape_definition& shape,
+    const std::size_t           index,
+    const char* const           target,
+    const float                 length,
+    Kit_parameter_values&       io_values
+) -> Kit_length_take
+{
+    const auto accepts = [&shape](const Kit_parameter_values& values) {
+        return values.validate().empty() && (!shape.check_combination || shape.check_combination(values).empty());
+    };
+    Kit_parameter_values trial = io_values;
+    if (!trial.set_float(target, length)) {
+        return Kit_length_take::refused;
+    }
+    Kit_length_take take = Kit_length_take::taken;
+    if (!accepts(trial)) {
+        const Kit_parameter& parameter = shape.parameters[index];
+        const float clamped = std::clamp(length, parameter.float_min, parameter.float_max);
+        if (!trial.set_float(target, clamped) || !accepts(trial) || (clamped == io_values.get_float(target))) {
+            return Kit_length_take::refused;
+        }
+        take = Kit_length_take::clamped;
+    }
+    trial.set_value_source(index, Kit_value_source::explicit_value);
+    io_values = std::move(trial);
+    return take;
+}
+
+} // anonymous namespace
+
+auto Level_kits::make_parameters_operation(const std::shared_ptr<erhe::scene::Node>& node, const Kit_parameter_values& values, std::string& out_error) -> std::shared_ptr<Operation>
+{
+    std::shared_ptr<erhe::scene::Mesh> mesh;
+    Kit_piece_data                     record;
+    out_error = check_piece_values(m_library, node, values, mesh, record);
+    if (!out_error.empty()) {
+        return {};
+    }
+    const std::shared_ptr<Brush> brush = get_brush(values);
+    const Brush::Scaled* const scaled = brush ? brush->get_scaled(1.0) : nullptr;
+    if ((scaled == nullptr) || (mesh->get_primitives().size() != scaled->part_primitives.size())) {
+        out_error = fmt::format("{}: the shape made no geometry of its slots", record.shape);
+        return {};
+    }
+    const std::optional<Brush_placement_data> placement = read_brush_placement(*mesh);
+    Kit_piece_mesh_state before{
+        .shape           = record.shape,
+        .primitives      = mesh->get_primitives(),
+        .collision_shape = get_node_source_collision_shape(*mesh),
+        .brush           = placement.has_value() ? placement.value().brush : std::shared_ptr<Brush>{},
+        .parameters      = record.parameters,
+        .motion_mode     = get_piece_motion_mode(*mesh),
+        .ground          = get_piece_ground(*mesh)
+    };
+    const std::string parameters = values.to_canonical_text();
+    if (parameters == before.parameters) {
+        return {};
+    }
+    Kit_piece_mesh_state after{
+        .shape           = values.get_shape()->id,
+        .primitives      = with_brush_primitives(before.primitives, *scaled),
+        .collision_shape = carries_node_physics(*mesh) ? scaled->collision_shape : before.collision_shape,
+        .brush           = brush,
+        .parameters      = parameters,
+        .motion_mode     = before.motion_mode,
+        .ground          = before.ground
+    };
+    return std::make_shared<Kit_piece_parameters_operation>(mesh, std::move(before), std::move(after));
+}
+
+void Level_kits::build_connection_flow(
+    Scene_root&                                         scene_root,
+    std::span<const std::shared_ptr<erhe::scene::Node>> edited,
+    std::span<const std::shared_ptr<erhe::scene::Node>> requesting,
+    const Kit_snap_pair* const                          snap,
+    std::vector<std::shared_ptr<Operation>>&            out_operations,
+    std::vector<std::shared_ptr<erhe::scene::Node>>&    out_changed
+)
+{
+    // C3.4 - C3.8, C4 (design K7, value flow): pieces take the supplies of their neighbours by priority, in rounds.
+    std::vector<Attached_piece> attached;
+    gather_attachments(scene_root, attached);
+    class Edge
+    {
+    public:
+        erhe::scene::Node* a{nullptr};
+        std::string        a_connector;
+        erhe::scene::Node* b{nullptr};
+        std::string        b_connector;
+        bool               is_new{false};
+    };
+    std::vector<Edge> edges;
+    const Kit_connector_types mask = get_effective_flow_mask();
+    for (const Attached_piece& piece : attached) {
+        // C3.9: values flow over a connection only when a type both connectors accept is on in the flow mask.
+        if ((piece.dormant() == nullptr) && piece.target && piece.own.types.intersects(Kit_connector_types{.bits = piece.target_local.types.bits & mask.bits})) {
+            edges.push_back(Edge{piece.node.get(), piece.attachment.connector, piece.target.get(), piece.attachment.target_connector, false});
+        }
+    }
+    // A snapped release takes part only where it records its connection (find_snap_attachment()), which replaces the
+    // piece's connection of that connector.
+    const std::optional<Kit_attachment> snap_record = ((snap != nullptr) && snap->piece && snap->target) ? find_snap_attachment(*snap) : std::optional<Kit_attachment>{};
+    const bool snap_records = snap_record.has_value();
+    if (snap_records) {
+        std::erase_if(edges, [snap](const Edge& edge) {
+            return ((edge.a == snap->piece.get()) && (edge.a_connector == snap->connector)) || ((edge.b == snap->piece.get()) && (edge.b_connector == snap->connector));
+        });
+        edges.push_back(Edge{snap->piece.get(), snap->connector, snap->target.get(), snap->target_connector, true});
+    }
+    if (edges.empty()) {
+        return;
+    }
+    // Staged state per node: its values (a piece) and its slot material names.
+    class Staged
+    {
+    public:
+        std::shared_ptr<erhe::scene::Node> node;
+        bool                               floor{false};
+        Kit_parameter_values               values;
+        std::vector<std::string>           materials; // piece: per slot; floor: [wall material, resolved]
+        Kit_layout_data                    layout;
+        std::vector<glm::vec2>             outline;
+        bool                               values_changed{false};
+        std::vector<bool>                  material_changed;
+        bool                               changed_now{false};
+    };
+    std::deque<Staged> staged; // push_back keeps the references stage() hands out
+    const auto stage = [&](erhe::scene::Node* node) -> Staged* {
+        for (Staged& entry : staged) {
+            if (entry.node.get() == node) {
+                return &entry;
+            }
+        }
+        Staged entry;
+        entry.node = std::dynamic_pointer_cast<erhe::scene::Node>(node->shared_from_this());
+        if (is_floor_layout(*node)) {
+            const erhe::scene::Curve* const curve = dynamic_cast<const erhe::scene::Curve*>(node);
+            if (!read_kit_layout(*node, entry.layout).empty() ||
+                !read_floor_outline(curve->get_table(), entry.outline).empty()) {
+                return nullptr;
+            }
+            entry.floor = true;
+            const Kit_palette_material* const wall_default = m_library.find_slot_default(c_floor_wall_material_slot);
+            entry.materials.push_back(!entry.layout.pattern.floor_wall_material.empty()
+                ? entry.layout.pattern.floor_wall_material
+                : ((wall_default != nullptr) ? wall_default->name : std::string{}));
+        } else {
+            const std::optional<Kit_piece_data> record = read_kit_piece(*node);
+            const erhe::scene::Mesh* const mesh = dynamic_cast<const erhe::scene::Mesh*>(node);
+            if (!record.has_value() || (mesh == nullptr) || !read_piece_values(record.value(), entry.values).empty()) {
+                return nullptr;
+            }
+            for (const erhe::scene::Mesh_primitive& primitive : mesh->get_primitives()) {
+                entry.materials.push_back(primitive.material ? primitive.material->get_name() : std::string{});
+            }
+        }
+        entry.material_changed.resize(entry.materials.size(), false);
+        staged.push_back(std::move(entry));
+        return &staged.back();
+    };
+    const auto contains_node = [](std::span<const std::shared_ptr<erhe::scene::Node>> list, const erhe::scene::Node* node) {
+        return std::any_of(list.begin(), list.end(), [node](const std::shared_ptr<erhe::scene::Node>& n) { return n.get() == node; });
+    };
+    // A neighbour's supply over its connector, from its staged state.
+    std::vector<std::string_view> views;
+    const auto supply_of = [&](Staged& other, const std::string& connector, Kit_supply_list& out_supply) {
+        out_supply.clear();
+        if (other.floor) {
+            for (std::size_t i = 0; i < other.outline.size(); ++i) {
+                if (connector == get_floor_edge_connector_name(i)) {
+                    get_floor_supply(other.outline, other.layout.pattern.floor, other.materials.front(), i, out_supply);
+                }
+            }
+            return;
+        }
+        const Kit_shape_definition* const shape = other.values.get_shape();
+        if ((shape == nullptr) || !shape->get_supply) {
+            return;
+        }
+        views.assign(other.materials.begin(), other.materials.end());
+        shape->get_supply(Kit_piece_view{.values = &other.values, .slot_materials = views}, connector, out_supply);
+    };
+    std::vector<erhe::scene::Node*> pending;
+    std::vector<erhe::scene::Node*> changed_this; // E and the pieces the flow changed: a tie prefers them (C4.3)
+    for (const std::shared_ptr<erhe::scene::Node>& node : edited) {
+        changed_this.push_back(node.get());
+    }
+    const auto neighbours_pending = [&](const erhe::scene::Node* node) {
+        for (const Edge& edge : edges) {
+            erhe::scene::Node* const other = (edge.a == node) ? edge.b : ((edge.b == node) ? edge.a : nullptr);
+            if ((other != nullptr) && (std::find(pending.begin(), pending.end(), other) == pending.end())) {
+                pending.push_back(other);
+            }
+        }
+    };
+    for (const std::shared_ptr<erhe::scene::Node>& node : edited) {
+        neighbours_pending(node.get());
+    }
+    for (const std::shared_ptr<erhe::scene::Node>& node : requesting) {
+        pending.push_back(node.get());
+    }
+    // C3.4: the end that records the snapped connection takes its values (a floor snapped under a wall: the wall, K6.1).
+    if (snap_records) {
+        pending.push_back((snap_record.value().owner == snap->piece->get_gltf_uid()) ? snap->piece.get() : snap->target.get());
+    }
+    Kit_supply_list supply;
+    std::vector<Kit_connector> own_connectors;
+    // One supplied value offered to the piece through one connection (C3.4).
+    // Its material views a string of the supplier's staged state, which this mapping's evaluation does not change.
+    class Offer
+    {
+    public:
+        Kit_supplied_value  value;
+        erhe::scene::Node*  supplier{nullptr};
+        const std::string*  supplier_connector{nullptr};
+    };
+    std::vector<Kit_supply_candidate> candidates;
+    std::vector<Offer>                offers;
+    Kit_flow_report* const report = get_flow_report();
+    const auto skipped = [&](const erhe::scene::Node& piece, const Kit_supplied_value& value, const erhe::scene::Node& supplier, const Kit_flow_skip reason) {
+        report->add_not_taken(
+            Kit_flow_skipped_value{
+                .piece    = make_flow_piece(piece),
+                .property = value.property,
+                .length   = value.length,
+                .material = std::string{value.material},
+                .supplier = make_flow_piece(supplier),
+                .priority = value.priority,
+                .reason   = reason
+            }
+        );
+    };
+    // C3.13: every value the piece's connections supply that it does not look at, with the reason.
+    const auto report_unreceived = [&](erhe::scene::Node* const node, const Kit_flow_skip reason) {
+        for (const Edge& edge : edges) {
+            const bool as_a = (edge.a == node);
+            if (!as_a && (edge.b != node)) {
+                continue;
+            }
+            Staged* const other = stage(as_a ? edge.b : edge.a);
+            if (other == nullptr) {
+                continue;
+            }
+            supply_of(*other, as_a ? edge.b_connector : edge.a_connector, supply);
+            for (const Kit_supplied_value& value : supply.get()) {
+                skipped(*node, value, *other->node, reason);
+            }
+        }
+    };
+    std::size_t round = 0;
+    const std::size_t limit = get_connection_step_limit();
+    while (!pending.empty() && (round < limit)) {
+        ++round;
+        std::vector<erhe::scene::Node*> current;
+        current.swap(pending);
+        for (erhe::scene::Node* const node : current) {
+            // C3.6: the author's edit is kept; C3.11: a locked layout's child takes nothing.
+            const bool author_edit = contains_node(edited, node);
+            if (author_edit || find_locking_kit_layout(*node)) {
+                if (report != nullptr) {
+                    report_unreceived(node, author_edit ? Kit_flow_skip::author_edit : Kit_flow_skip::locked_layout_child);
+                }
+                continue;
+            }
+            Staged* const self = stage(node);
+            if (self == nullptr) {
+                continue;
+            }
+            if (self->floor) {
+                if (report != nullptr) {
+                    report_unreceived(node, Kit_flow_skip::floor); // a floor takes no values (design K3.0)
+                }
+                continue;
+            }
+            const Kit_shape_definition* const shape = self->values.get_shape();
+            if (shape == nullptr) {
+                continue;
+            }
+            if (report != nullptr) {
+                // The supplied properties the shape maps nothing to.
+                for (const Edge& edge : edges) {
+                    const bool as_a = (edge.a == node);
+                    Staged* const other = (as_a || (edge.b == node)) ? stage(as_a ? edge.b : edge.a) : nullptr;
+                    if (other == nullptr) {
+                        continue;
+                    }
+                    supply_of(*other, as_a ? edge.b_connector : edge.a_connector, supply);
+                    for (const Kit_supplied_value& value : supply.get()) {
+                        const bool mapped = std::any_of(
+                            shape->property_mappings.begin(), shape->property_mappings.end(),
+                            [&value](const Kit_property_mapping& mapping) { return mapping.property == value.property; }
+                        );
+                        if (!mapped) {
+                            skipped(*node, value, *other->node, Kit_flow_skip::no_mapping);
+                        }
+                    }
+                }
+            }
+            if (shape->property_mappings.empty()) {
+                continue;
+            }
+            get_shape_connectors(self->values, own_connectors);
+            bool changed = false;
+            for (const Kit_property_mapping& mapping : shape->property_mappings) {
+                candidates.clear();
+                offers.clear();
+                for (const Edge& edge : edges) {
+                    const bool as_a = (edge.a == node);
+                    if (!as_a && (edge.b != node)) {
+                        continue;
+                    }
+                    erhe::scene::Node* const other_node = as_a ? edge.b : edge.a;
+                    Staged* const other = stage(other_node);
+                    if (other == nullptr) {
+                        continue;
+                    }
+                    const std::string& other_connector = as_a ? edge.b_connector : edge.a_connector;
+                    supply_of(*other, other_connector, supply);
+                    const Kit_supplied_value* const value = supply.find(mapping.property);
+                    if (value == nullptr) {
+                        continue;
+                    }
+                    const std::string& own_name = as_a ? edge.a_connector : edge.b_connector;
+                    const Kit_connector* const own = find_connector(own_connectors, own_name);
+                    candidates.push_back(
+                        Kit_supply_candidate{
+                            .priority         = value->priority,
+                            .supplier_changed = std::find(changed_this.begin(), changed_this.end(), other_node) != changed_this.end(),
+                            .new_connection   = edge.is_new,
+                            .connector_index  = (own != nullptr) ? static_cast<std::size_t>(own - own_connectors.data()) : own_connectors.size()
+                        }
+                    );
+                    offers.push_back(Offer{.value = *value, .supplier = other_node, .supplier_connector = &other_connector});
+                }
+                if (candidates.empty()) {
+                    continue;
+                }
+                const Kit_supply_choice choice = choose_supply(candidates);
+                Offer& best = offers[choice.index];
+                if (report != nullptr) {
+                    for (std::size_t i = 0, end = offers.size(); i < end; ++i) {
+                        if (i != choice.index) {
+                            skipped(*node, offers[i].value, *offers[i].supplier, get_supply_loss(candidates[i], candidates[choice.index]));
+                        }
+                    }
+                }
+                bool took = false;
+                if (get_kind(mapping.property) == Kit_property_kind::length) {
+                    const std::optional<std::size_t> index = shape->find_parameter(mapping.target);
+                    if (index.has_value() && (self->values.get_float(mapping.target) != best.value.length)) {
+                        const Kit_length_take take = take_supplied_length(*shape, index.value(), mapping.target, best.value.length, self->values);
+                        if (take == Kit_length_take::refused) {
+                            log_scene->log(flow_log_level(spdlog::level::warn), "Kit piece '{}' does not take {} = {} m", node->get_name(), c_str(mapping.property), best.value.length);
+                            if (report != nullptr) {
+                                skipped(*node, best.value, *best.supplier, Kit_flow_skip::shape_refuses);
+                            }
+                            continue;
+                        }
+                        if (take == Kit_length_take::clamped) {
+                            log_scene->log(
+                                flow_log_level(spdlog::level::info), "Kit piece '{}' takes {} = {} m clamped to {} m",
+                                node->get_name(), c_str(mapping.property), best.value.length, self->values.get_float(mapping.target)
+                            );
+                        }
+                        best.value.length = self->values.get_float(mapping.target);
+                        self->values_changed = true;
+                        took = true;
+                    }
+                } else {
+                    for (std::size_t slot = 0; slot < shape->material_slots.size(); ++slot) {
+                        if ((shape->material_slots[slot] == mapping.target) && (slot < self->materials.size()) &&
+                            !best.value.material.empty() && (self->materials[slot] != best.value.material)) {
+                            self->materials[slot] = std::string{best.value.material};
+                            self->material_changed[slot] = true;
+                            took = true;
+                        }
+                    }
+                }
+                if (took) {
+                    changed = true;
+                    if (report != nullptr) {
+                        report->add_taken(
+                            Kit_flow_value{
+                                .piece              = make_flow_piece(*node),
+                                .property           = mapping.property,
+                                .length             = best.value.length,
+                                .material           = std::string{best.value.material},
+                                .supplier           = make_flow_piece(*best.supplier),
+                                .supplier_connector = *best.supplier_connector,
+                                .priority           = best.value.priority,
+                                .tie                = choice.tie
+                            }
+                        );
+                    }
+                }
+            }
+            if (changed) {
+                if (std::find(changed_this.begin(), changed_this.end(), node) == changed_this.end()) {
+                    changed_this.push_back(node);
+                }
+                neighbours_pending(node);
+            }
+        }
+    }
+    if (report != nullptr) {
+        report->rounds = std::max(report->rounds, round);
+    }
+    if (!pending.empty()) {
+        log_scene->log(flow_log_level(spdlog::level::warn), "Kit connection flow stopped at the step limit ({} rounds) with {} pieces still changing", limit, pending.size());
+        if (report != nullptr) {
+            report->limit_reached = true;
+            for (const erhe::scene::Node* const node : pending) {
+                if (contains_node(edited, node)) {
+                    continue; // the author's edit takes nothing: it is not still changing
+                }
+                const Kit_flow_piece piece = make_flow_piece(*node);
+                if (std::find(report->pending.begin(), report->pending.end(), piece) == report->pending.end()) {
+                    report->pending.push_back(piece);
+                }
+            }
+        }
+    }
+    // K7.4: the staged values and materials as operations of the entry.
+    const std::shared_ptr<Content_library> library = scene_root.get_content_library();
+    for (Staged& entry : staged) {
+        if (entry.floor) {
+            continue;
+        }
+        bool touched = false;
+        if (entry.values_changed) {
+            std::string error;
+            std::shared_ptr<Operation> operation = make_parameters_operation(entry.node, entry.values, error);
+            if (!error.empty()) {
+                log_scene->log(flow_log_level(spdlog::level::warn), "Kit piece '{}' takes no flowed values: {}", entry.node->get_name(), error);
+            } else if (operation) {
+                out_operations.push_back(std::move(operation));
+                touched = true;
+            }
+        }
+        const std::shared_ptr<erhe::scene::Mesh> mesh = std::dynamic_pointer_cast<erhe::scene::Mesh>(entry.node);
+        const Kit_shape_definition* const shape = entry.values.get_shape();
+        for (std::size_t slot = 0; (slot < entry.material_changed.size()) && library && mesh && (shape != nullptr); ++slot) {
+            if (!entry.material_changed[slot] || (slot >= shape->material_slots.size())) {
+                continue;
+            }
+            Kit_slot_material given;
+            given.material = find_material_by_name(library, entry.materials[slot]);
+            if (!given.material) {
+                given.palette_name = entry.materials[slot];
+            }
+            Palette_material_resolver resolver{m_context, library};
+            const std::shared_ptr<erhe::primitive::Material> material = resolver.resolve(m_library, shape->material_slots[slot], given);
+            if (!material) {
+                continue;
+            }
+            for (std::shared_ptr<Operation>& operation : resolver.take_operations()) {
+                out_operations.push_back(std::move(operation));
+            }
+            std::shared_ptr<Operation> assign = make_mesh_material_assign_operation(mesh, slot, material);
+            if (assign) {
+                out_operations.push_back(std::move(assign));
+                touched = true;
+            }
+        }
+        if (touched) {
+            log_scene->log(flow_log_level(spdlog::level::info), "Kit piece '{}' takes values over its connections", entry.node->get_name());
+            out_changed.push_back(entry.node);
+        }
+    }
+}
+
+
+auto Level_kits::find_scene_material(const Scene_root& scene_root, const std::string_view name) -> std::shared_ptr<erhe::primitive::Material>
+{
+    const std::shared_ptr<Content_library> library = scene_root.get_content_library();
+    return library ? find_material_by_name(library, name) : std::shared_ptr<erhe::primitive::Material>{};
+}
+
+auto Level_kits::get_join_supplied_values(
+    const erhe::scene::Node&  target,
+    const std::string_view    target_connector,
+    const std::string_view    connector,
+    Kit_parameter_values&     io_values,
+    std::vector<std::string>& io_slot_materials
+) -> bool
+{
+    // K9.2: what the placement's flow gives the new piece over its one new connection (C3.4, C3.5); C3.11: a locked
+    // layout's child is joined without a connection, so nothing flows.
+    const Kit_shape_definition* const shape = io_values.get_shape();
+    if ((shape == nullptr) || shape->property_mappings.empty() || find_locking_kit_layout(target)) {
+        return false;
+    }
+    std::vector<Kit_connector> target_frames;
+    if (!get_local_connectors(target, target_frames, Kit_connector_set::all).empty()) {
+        return false;
+    }
+    std::vector<Kit_connector> own_frames;
+    get_shape_connectors(io_values, own_frames);
+    const Kit_connector* const target_frame = find_connector(target_frames, target_connector);
+    const Kit_connector* const own_frame    = find_connector(own_frames, connector);
+    // C3.9: values flow only over a type both connectors accept that the flow mask lets through.
+    if ((target_frame == nullptr) || (own_frame == nullptr) ||
+        !own_frame->types.intersects(Kit_connector_types{.bits = target_frame->types.bits & get_effective_flow_mask().bits})) {
+        return false;
+    }
+    Kit_supply_list               supply;
+    std::vector<std::string>      target_materials;
+    std::vector<std::string_view> views;
+    Kit_parameter_values          target_values;
+    if (is_floor_layout(target)) {
+        const erhe::scene::Curve* const curve = dynamic_cast<const erhe::scene::Curve*>(&target);
+        Kit_layout_data        layout;
+        std::vector<glm::vec2> outline;
+        if ((curve == nullptr) || !read_kit_layout(target, layout).empty() ||
+            !read_floor_outline(curve->get_table(), outline).empty()) {
+            return false;
+        }
+        const Kit_palette_material* const wall_default = m_library.find_slot_default(c_floor_wall_material_slot);
+        const std::string wall_material = !layout.pattern.floor_wall_material.empty()
+            ? layout.pattern.floor_wall_material
+            : ((wall_default != nullptr) ? wall_default->name : std::string{});
+        for (std::size_t i = 0; i < outline.size(); ++i) {
+            if (target_connector == get_floor_edge_connector_name(i)) {
+                get_floor_supply(outline, layout.pattern.floor, wall_material, i, supply);
+            }
+        }
+        return apply_join_supply(*shape, supply, io_values, io_slot_materials);
+    }
+    const std::optional<Kit_piece_data> record = read_kit_piece(target);
+    const erhe::scene::Mesh* const      mesh   = dynamic_cast<const erhe::scene::Mesh*>(&target);
+    if (!record.has_value() || (mesh == nullptr) || !read_piece_values(record.value(), target_values).empty()) {
+        return false;
+    }
+    const Kit_shape_definition* const target_shape = target_values.get_shape();
+    if ((target_shape == nullptr) || !target_shape->get_supply) {
+        return false;
+    }
+    for (const erhe::scene::Mesh_primitive& primitive : mesh->get_primitives()) {
+        target_materials.push_back(primitive.material ? primitive.material->get_name() : std::string{});
+    }
+    views.assign(target_materials.begin(), target_materials.end());
+    target_shape->get_supply(Kit_piece_view{.values = &target_values, .slot_materials = views}, target_connector, supply);
+    return apply_join_supply(*shape, supply, io_values, io_slot_materials);
+}
+
+auto Level_kits::apply_join_supply(
+    const Kit_shape_definition& shape,
+    const Kit_supply_list&      supply,
+    Kit_parameter_values&       io_values,
+    std::vector<std::string>&   io_slot_materials
+) -> bool
+{
+    bool changed = false;
+    for (const Kit_property_mapping& mapping : shape.property_mappings) {
+        const Kit_supplied_value* const value = supply.find(mapping.property);
+        if (value == nullptr) {
+            continue;
+        }
+        if (get_kind(mapping.property) == Kit_property_kind::length) {
+            const std::optional<std::size_t> index = shape.find_parameter(mapping.target);
+            if (index.has_value() && (io_values.get_float(mapping.target) != value->length) &&
+                (take_supplied_length(shape, index.value(), mapping.target, value->length, io_values) != Kit_length_take::refused)) {
+                changed = true;
+            }
+            continue;
+        }
+        for (std::size_t slot = 0; (slot < shape.material_slots.size()) && (slot < io_slot_materials.size()); ++slot) {
+            if ((shape.material_slots[slot] == mapping.target) && !value->material.empty() && (io_slot_materials[slot] != value->material)) {
+                io_slot_materials[slot] = std::string{value->material};
+                changed = true;
+            }
+        }
+    }
+    return changed;
+}
+
+auto Level_kits::is_moved(const erhe::scene::Node* const node, const std::span<const std::shared_ptr<erhe::scene::Node>> moved_nodes) -> bool
+{
+    for (const erhe::scene::Node* i = node; i != nullptr; i = i->get_parent_node().get()) {
+        for (const std::shared_ptr<erhe::scene::Node>& moved : moved_nodes) {
+            if (moved.get() == i) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+auto Level_kits::build_floor_fits(
+    Scene_root&                                         scene_root,
+    std::span<const std::shared_ptr<erhe::scene::Node>> moved_nodes,
+    std::vector<std::shared_ptr<Operation>>&            out_operations
+) -> std::string
+{
+    // C3.15, K5.3, L20: each moved wall (at or below a moved node) standing on a floor's edge gives that edge the line of its
+    // base, half a wall thickness toward the floor's outside. Per floor, a corner between two changed edges goes to their
+    // lines' crossing; a corner between a changed and an unchanged edge slides along the unchanged edge's line.
+    const auto cross2 = [](const glm::vec2& a, const glm::vec2& b) { return (a.x * b.y) - (a.y * b.x); };
+    if (!get_effective_flow_mask().contains(Kit_connector_type::wall_floor) || moved_nodes.empty()) {
+        return {}; // C3.9: nothing flows over wall-floor joins
+    }
+    class Edge_line
+    {
+    public:
+        std::size_t                        edge{0};
+        glm::vec2                          point{0.0f};
+        glm::vec2                          run{0.0f};
+        std::shared_ptr<erhe::scene::Node> wall;
+    };
+    class Floor_fit
+    {
+    public:
+        std::shared_ptr<erhe::scene::Curve> curve;
+        Kit_layout_data                     data;
+        std::vector<glm::vec2>              outline;
+        std::vector<Edge_line>              lines;
+    };
+    std::vector<Floor_fit> fits;
+    std::vector<std::shared_ptr<erhe::scene::Node>> walls;
+    scene_root.get_scene().for_each_node([&](const std::shared_ptr<erhe::scene::Node>& node) -> bool {
+        if (node->has_local_value(Kit_piece::attachment_property.get()) && carries_kit_piece(*node) && is_moved(node.get(), moved_nodes)) {
+            walls.push_back(node);
+        }
+        return true;
+    });
+    std::vector<Kit_connector> frames;
+    for (const std::shared_ptr<erhe::scene::Node>& wall : walls) {
+        for (const Kit_attachment& attachment : read_kit_attachments(*wall)) {
+            std::shared_ptr<erhe::scene::Node> floor_node;
+            scene_root.get_scene().for_each_node([&](const std::shared_ptr<erhe::scene::Node>& n) -> bool {
+                if (n->get_gltf_uid() == attachment.target) { floor_node = n; return false; }
+                return true;
+            });
+            const std::shared_ptr<erhe::scene::Curve> curve = std::dynamic_pointer_cast<erhe::scene::Curve>(floor_node);
+            // A floor moved with the wall (both at or below a moved node) keeps its outline.
+            if (!curve || !is_floor_edge_join(*curve, attachment.target_connector) || is_moved(curve.get(), moved_nodes)) {
+                continue;
+            }
+            std::vector<Floor_fit>::iterator fit = std::find_if(fits.begin(), fits.end(), [&curve](const Floor_fit& f) { return f.curve == curve; });
+            if (fit == fits.end()) {
+                Floor_fit made{.curve = curve};
+                if (!read_kit_layout(*curve, made.data).empty() || !read_floor_outline(curve->get_table(), made.outline).empty()) {
+                    continue;
+                }
+                fits.push_back(std::move(made));
+                fit = fits.end() - 1;
+            }
+            const std::size_t n = fit->outline.size();
+            std::size_t edge = n;
+            for (std::size_t k = 0; k < n; ++k) {
+                if (attachment.target_connector == get_floor_edge_connector_name(k)) {
+                    edge = k;
+                }
+            }
+            if ((edge == n) || !get_world_connectors(*wall, frames, Kit_connector_set::all).empty()) {
+                continue;
+            }
+            const Kit_connector* const base = find_connector(frames, attachment.connector);
+            if (base == nullptr) {
+                continue;
+            }
+            const glm::mat4 world_from_wall = wall->world_from_node();
+            // The wall's base point and run (x) in the floor's plan; vertical moves and tilts drop out.
+            const glm::mat4 floor_from_world = curve->node_from_world();
+            const glm::vec3 p3   = glm::vec3{floor_from_world * glm::vec4{base->position, 1.0f}};
+            const glm::vec3 run3 = glm::mat3{floor_from_world} * glm::vec3{world_from_wall * glm::vec4{1.0f, 0.0f, 0.0f, 0.0f}};
+            const glm::vec2 run{run3.x, run3.z};
+            if (glm::length(run) < 1.0e-6f) {
+                continue;
+            }
+            fit->lines.push_back(Edge_line{.edge = edge, .point = glm::vec2{p3.x, p3.z}, .run = glm::normalize(run), .wall = wall});
+        }
+    }
+    const std::size_t operations_begin = out_operations.size();
+    for (Floor_fit& fit : fits) {
+        const std::vector<glm::vec2>& outline = fit.outline;
+        const std::size_t n = outline.size();
+        if (fit.lines.empty() || (n < 3)) {
+            continue;
+        }
+        // The outward side of each edge is the floor's (K5.3): the wall's own facing does not say it (a wall turned half a
+        // turn or joined with a twist faces the other way).
+        const auto outward_of = [&outline](const std::size_t k) { return -get_floor_edge_inward(outline, k); };
+        // The line of each changed edge: a point on it and its direction.
+        std::vector<std::optional<std::pair<glm::vec2, glm::vec2>>> changed(n);
+        std::vector<const erhe::scene::Node*> changed_by(n, nullptr);
+        for (const Edge_line& line : fit.lines) {
+            changed_by[line.edge] = line.wall.get();
+            glm::vec2 normal{-line.run.y, line.run.x};
+            if (glm::dot(normal, outward_of(line.edge)) < 0.0f) {
+                normal = -normal;
+            }
+            changed[line.edge] = std::pair<glm::vec2, glm::vec2>{line.point + (0.5f * fit.data.pattern.floor.wall_thickness * normal), line.run};
+        }
+        // The crossing of a line with another line; nullopt when the sine of their angle is below min_sine.
+        const auto cross_lines_within = [&](const glm::vec2& p, const glm::vec2& d, const glm::vec2& q, const glm::vec2& e, const float min_sine) -> std::optional<glm::vec2> {
+            const float length = glm::length(e);
+            if ((length <= 0.0f) || (std::abs(cross2(d, e / length)) < min_sine)) {
+                return std::nullopt;
+            }
+            return p + ((cross2(q - p, e) / cross2(d, e)) * d);
+        };
+        // A slide along a neighbour's line: not within c_segment_slide_min_sine of parallel.
+        const auto cross_lines = [&](const glm::vec2& p, const glm::vec2& d, const glm::vec2& q, const glm::vec2& e) -> std::optional<glm::vec2> {
+            return cross_lines_within(p, d, q, e, c_segment_slide_min_sine);
+        };
+        const auto distance_to_line = [](const glm::vec2& point, const glm::vec2& p, const glm::vec2& d) {
+            return std::abs(glm::dot(point - p, glm::vec2{-d.y, d.x}));
+        };
+        // A corner moved straight along the normal of a changed edge's line (a neighbour near parallel).
+        const auto along_normal = [](const glm::vec2& corner, const glm::vec2& p, const glm::vec2& d) {
+            const glm::vec2 normal{-d.y, d.x};
+            return corner + (glm::dot(p - corner, normal) * normal);
+        };
+        // Two changed lines that are one line (in plan, within 1 mm and 0.06 degrees).
+        const auto same_line = [&cross2](const std::pair<glm::vec2, glm::vec2>& a, const std::pair<glm::vec2, glm::vec2>& b) {
+            const glm::vec2 normal{-a.second.y, a.second.x};
+            return (std::abs(cross2(a.second, b.second)) <= 1.0e-3f) && (std::abs(glm::dot(b.first - a.first, normal)) <= 1.0e-3f);
+        };
+        std::vector<glm::vec2> moved = outline;
+        std::string corner_refusal;
+        for (std::size_t c = 0; c < n; ++c) {
+            const std::size_t before = (c + n - 1) % n; // the edge ending at corner c
+            const std::size_t after  = c;               // the edge starting at corner c
+            const std::optional<std::pair<glm::vec2, glm::vec2>>& in  = changed[before];
+            const std::optional<std::pair<glm::vec2, glm::vec2>>& out = changed[after];
+            if (in.has_value() && out.has_value()) {
+                // Near parallel, the crossing is taken where it stays about as near the corner as the lines are; farther
+                // away (or none: a step between the lines) one corner cannot meet both, and the change is refused.
+                const std::optional<glm::vec2> crossing = cross_lines(out->first, out->second, in->first, in->second);
+                const std::optional<glm::vec2> near_crossing = cross_lines_within(out->first, out->second, in->first, in->second, 1.0e-4f);
+                const float reach = (2.0f * std::max(distance_to_line(outline[c], in->first, in->second), distance_to_line(outline[c], out->first, out->second))) + 1.0e-3f;
+                if (crossing.has_value()) {
+                    moved[c] = crossing.value();
+                } else if (near_crossing.has_value() && (glm::distance(near_crossing.value(), outline[c]) <= reach)) {
+                    moved[c] = near_crossing.value();
+                } else if (same_line(in.value(), out.value())) {
+                    moved[c] = along_normal(outline[c], out->first, out->second);
+                } else if (corner_refusal.empty()) {
+                    // Nearly in line and apart: one corner meets neither line (a step between them needs a corner the fit
+                    // does not make).
+                    corner_refusal = fmt::format(
+                        "the walls '{}' and '{}' give edges {} and {} lines within 15 degrees of parallel that do not meet at corner {}",
+                        changed_by[before]->get_name(), changed_by[after]->get_name(), before, after, c
+                    );
+                }
+            } else if (out.has_value()) {
+                const std::optional<glm::vec2> crossing = cross_lines(out->first, out->second, outline[before], outline[c] - outline[before]);
+                moved[c] = crossing.value_or(along_normal(outline[c], out->first, out->second));
+            } else if (in.has_value()) {
+                const std::optional<glm::vec2> crossing = cross_lines(in->first, in->second, outline[c], outline[(c + 1) % n] - outline[c]);
+                moved[c] = crossing.value_or(along_normal(outline[c], in->first, in->second));
+            }
+        }
+        const std::shared_ptr<erhe::scene::Curve>& curve = fit.curve;
+        if (!corner_refusal.empty()) {
+            const std::string refusal = fmt::format("floor '{}' cannot fit the moved walls: {}", curve->get_name(), corner_refusal);
+            log_scene->log(flow_log_level(spdlog::level::warn), "{}", refusal);
+            out_operations.resize(operations_begin);
+            return refusal;
+        }
+        // K0.3, C8.3: an outline the floor refuses refuses the whole change.
+        const std::string problem = check_floor_outline_change(outline, moved);
+        if (!problem.empty()) {
+            const std::string refusal = fmt::format("floor '{}' cannot fit the moved wall '{}': {}", curve->get_name(), fit.lines.front().wall->get_name(), problem);
+            log_scene->log(flow_log_level(spdlog::level::warn), "{}", refusal);
+            out_operations.resize(operations_begin);
+            return refusal;
+        }
+        bool any = false;
+        for (std::size_t c = 0; c < n; ++c) {
+            any = any || (glm::distance(moved[c], outline[c]) >= 1.0e-5f);
+        }
+        if (!any) {
+            continue;
+        }
+        erhe::math::Curve_path after = curve->get_path();
+        for (std::size_t c = 0; c < n; ++c) {
+            if (glm::distance(moved[c], outline[c]) >= 1.0e-5f) {
+                after.points[c].position = glm::vec3{moved[c].x, 0.0f, moved[c].y};
+            }
+        }
+        out_operations.push_back(std::make_shared<Curve_set_operation>(curve, curve->get_path(), std::move(after), std::string{"floor fit"}));
+        Kit_flow_report* const report = get_flow_report();
+        for (const Edge_line& line : fit.lines) {
+            log_scene->log(flow_log_level(spdlog::level::info), "Floor '{}' fits the moved wall '{}' (edge {})", curve->get_name(), line.wall->get_name(), line.edge);
+            if (report != nullptr) {
+                report->add_response(Kit_flow_response{.piece = make_flow_piece(*curve), .kind = Kit_flow_response_kind::floor_fit, .from = make_flow_piece(*line.wall)});
+            }
+        }
+    }
+    return {};
+}
+
+
+
+auto Level_kits::is_floor_edge_join(const erhe::scene::Node& target, const std::string_view target_connector) -> bool
+{
+    return is_floor_layout(target) && target_connector.starts_with("edge_");
+}
+
+auto Level_kits::get_wall_fit_wall(
+    const Attached_piece&                                 entry,
+    const std::function<bool(const erhe::scene::Node*)>& is_moved,
+    const std::span<const Attached_piece>                 attached
+) -> const std::shared_ptr<erhe::scene::Node>*
+{
+    if (!entry.target || (entry.dormant() != nullptr)) {
+        return nullptr;
+    }
+    const bool node_moved = is_moved(entry.node.get());
+    if (node_moved == is_moved(entry.target.get())) {
+        return nullptr;
+    }
+    // Only joins of two wall connectors fit; the fitted wall is the end that did not move.
+    if (!entry.own.types.contains(Kit_connector_type::wall) || !entry.target_local.types.contains(Kit_connector_type::wall)) {
+        return nullptr;
+    }
+    const std::shared_ptr<erhe::scene::Node>& wall      = node_moved ? entry.target : entry.node;
+    const std::string&                        near_name = node_moved ? entry.attachment.target_connector : entry.attachment.connector;
+    if ((near_name != "start") && (near_name != "end")) {
+        return nullptr;
+    }
+    // A wall standing on a floor is the floor's (C4).
+    const bool stands_on_floor = std::any_of(attached.begin(), attached.end(), [&wall](const Attached_piece& p) {
+        return ((p.node == wall) && p.target && is_floor_layout(*p.target)) || ((p.target == wall) && is_floor_layout(*p.node));
+    });
+    return stands_on_floor ? nullptr : &wall;
+}
+
+void Level_kits::build_wall_fits(
+    Scene_root&                                         scene_root,
+    std::span<const std::shared_ptr<erhe::scene::Node>> moved_nodes,
+    std::vector<std::shared_ptr<Operation>>&            out_operations
+)
+{
+    // C3.16, L22: a wall joined end to end to a moved wall keeps its far end where it is; its near end goes onto the moved
+    // wall's connector, so its length and its turn about the up axis change (upright; a tilt is dropped). A wall whose
+    // partners at both ends moved spans the two. A wall standing on a floor is the floor's (C4).
+    m_fitted_pairs.clear();
+    m_fitted_walls.clear();
+    if (!get_effective_flow_mask().contains(Kit_connector_type::wall)) {
+        return; // C3.9: nothing flows over wall joins
+    }
+    std::vector<Attached_piece> attached;
+    gather_attachments(scene_root, attached);
+    // Moved: a moved node or below one (a wall in a moved group moved with it), the rule of the floor fits too.
+    const auto is_moved = [&moved_nodes](const erhe::scene::Node* node) { return Level_kits::is_moved(node, moved_nodes); };
+    class Fit
+    {
+    public:
+        std::shared_ptr<erhe::scene::Node>                              wall;
+        std::optional<glm::vec3>                                        start; // where its start connector goes
+        std::optional<glm::vec3>                                        end;
+        std::vector<std::pair<const erhe::scene::Node*, const erhe::scene::Node*>> pairs;
+        std::vector<const erhe::scene::Node*>                           movers;
+    };
+    std::vector<Fit> fits;
+    std::vector<Kit_connector> moved_frames;
+    for (const Attached_piece& entry : attached) {
+        const std::shared_ptr<erhe::scene::Node>* const fitted = get_wall_fit_wall(entry, is_moved, attached);
+        if (fitted == nullptr) {
+            continue;
+        }
+        const bool node_moved = is_moved(entry.node.get());
+        const std::shared_ptr<erhe::scene::Node>& wall       = *fitted;
+        const std::shared_ptr<erhe::scene::Node>& mover      = node_moved ? entry.node : entry.target;
+        const std::string&                        near_name  = node_moved ? entry.attachment.target_connector : entry.attachment.connector;
+        const std::string&                        mover_name = node_moved ? entry.attachment.connector : entry.attachment.target_connector;
+        if (!get_world_connectors(*mover, moved_frames, Kit_connector_set::all).empty()) {
+            continue;
+        }
+        const Kit_connector* const target = find_connector(moved_frames, mover_name);
+        if (target == nullptr) {
+            continue;
+        }
+        std::vector<Fit>::iterator fit = std::find_if(fits.begin(), fits.end(), [&wall](const Fit& f) { return f.wall == wall; });
+        if (fit == fits.end()) {
+            fits.push_back(Fit{.wall = wall});
+            fit = fits.end() - 1;
+        }
+        (near_name == "start" ? fit->start : fit->end) = target->position;
+        fit->pairs.emplace_back(entry.node.get(), entry.target.get());
+        fit->movers.push_back(mover.get());
+    }
+    std::vector<Kit_connector> wall_frames;
+    for (const Fit& fit : fits) {
+        const std::shared_ptr<erhe::scene::Node>& wall = fit.wall;
+        const glm::vec3 scale = wall->parent_from_node_transform().get_scale();
+        if (glm::any(glm::greaterThan(glm::abs(scale - glm::vec3{1.0f}), glm::vec3{1.0e-4f}))) {
+            log_scene->log(flow_log_level(spdlog::level::info), "Wall '{}' is scaled ({}, {}, {}): it does not fit its moved neighbour", wall->get_name(), scale.x, scale.y, scale.z);
+            continue;
+        }
+        const std::optional<Kit_piece_data> record = read_kit_piece(*wall);
+        Kit_parameter_values values;
+        if (!record.has_value() || !read_piece_values(record.value(), values).empty() || !get_world_connectors(*wall, wall_frames, Kit_connector_set::all).empty()) {
+            continue;
+        }
+        const Kit_shape_definition* const shape = values.get_shape();
+        const char* length_parameter = nullptr;
+        for (const Kit_property_mapping& mapping : shape->property_mappings) {
+            if (mapping.property == Kit_standard_property::child_length) {
+                length_parameter = mapping.target;
+            }
+        }
+        const Kit_connector* const old_start = find_connector(wall_frames, "start");
+        const Kit_connector* const old_end   = find_connector(wall_frames, "end");
+        if ((length_parameter == nullptr) || (old_start == nullptr) || (old_end == nullptr)) {
+            continue;
+        }
+        // From start to end in plan: a moved partner's connector, else the wall's own far end where it is.
+        const glm::vec3 start = fit.start.value_or(old_start->position);
+        const glm::vec3 end   = fit.end.value_or(old_end->position);
+        const float     y     = fit.start.has_value() && fit.end.has_value() ? start.y : (fit.start.has_value() ? end.y : start.y);
+        glm::vec2 run{end.x - start.x, end.z - start.z};
+        const float length = glm::length(run);
+        if (!(length > 1.0e-4f)) {
+            continue;
+        }
+        run /= length;
+        // The partners' connectors are where this wall's ends are (a value edit that moved no end): nothing to fit.
+        if ((glm::distance(start, old_start->position) < 1.0e-5f) && (glm::distance(end, old_end->position) < 1.0e-5f)) {
+            continue;
+        }
+        if (std::abs(values.get_float(length_parameter) - length) > 1.0e-5f) {
+            static_cast<void>(values.set_float(length_parameter, length));
+            values.set_value_source(shape->find_parameter(length_parameter).value(), Kit_value_source::explicit_value);
+            std::string error;
+            std::shared_ptr<Operation> parameters = make_parameters_operation(wall, values, error);
+            if (!error.empty()) {
+                log_scene->log(flow_log_level(spdlog::level::warn), "Wall '{}' does not fit its moved neighbour: {}", wall->get_name(), error);
+                continue;
+            }
+            if (parameters) {
+                out_operations.push_back(std::move(parameters));
+            }
+        }
+        const float     yaw      = std::atan2(-run.y, run.x);
+        const glm::quat rotation = glm::angleAxis(yaw, glm::vec3{0.0f, 1.0f, 0.0f});
+        const glm::vec3 center{0.5f * (start.x + end.x), y, 0.5f * (start.z + end.z)};
+        const erhe::scene::Trs_transform before = wall->parent_from_node_transform();
+        const std::shared_ptr<erhe::scene::Node> parent = wall->get_parent_node();
+        const glm::mat4 world_after = glm::translate(glm::mat4{1.0f}, center) * glm::mat4_cast(rotation);
+        const glm::mat4 parent_from_node = parent ? (parent->node_from_world() * world_after) : world_after;
+        out_operations.push_back(
+            std::make_shared<Node_transform_operation>(
+                Node_transform_operation::Parameters{
+                    .node                    = wall,
+                    .parent_from_node_before = before,
+                    .parent_from_node_after  = make_joined_local_transform(parent_from_node, before.get_scale()),
+                    .xform_op_stack_before   = wall->copy_xform_op_stack()
+                }
+            )
+        );
+        m_fitted_pairs.insert(m_fitted_pairs.end(), fit.pairs.begin(), fit.pairs.end());
+        m_fitted_walls.push_back(wall);
+        log_scene->log(flow_log_level(spdlog::level::info), "Wall '{}' fits its moved neighbour (length {} m)", wall->get_name(), length);
+        Kit_flow_report* const report = get_flow_report();
+        for (const erhe::scene::Node* const mover : fit.movers) {
+            if (report != nullptr) {
+                report->add_response(Kit_flow_response{.piece = make_flow_piece(*wall), .kind = Kit_flow_response_kind::wall_fit, .from = make_flow_piece(*mover)});
+            }
+        }
+    }
+}
+
+
+void Level_kits::build_auto_connections(
+    Scene_root&                                         scene_root,
+    std::span<const std::shared_ptr<erhe::scene::Node>> pieces,
+    std::span<const std::shared_ptr<erhe::scene::Node>> excluded,
+    std::vector<std::shared_ptr<Operation>>&            out_operations,
+    std::vector<std::shared_ptr<erhe::scene::Node>>&    out_owners
+)
+{
+    // C5, design K8: a free enabled connector of a changed piece on a free compatible connector of another piece is
+    // connected: co-located within 0.1 mm and, but for two wall connectors (a room corner, where they meet at an angle),
+    // facing it (outward axes opposed); up axes are not compared (L7). The record goes on the changed piece.
+    if (!get_effective_auto_connect()) {
+        return;
+    }
+    class Frame
+    {
+    public:
+        std::shared_ptr<erhe::scene::Node> node;
+        Kit_connector                      world;
+        Kit_connector                      local;
+    };
+    std::vector<Frame> frames;
+    std::vector<Kit_connector> local;
+    std::vector<Kit_connector> world;
+    scene_root.get_scene().for_each_node([&](const std::shared_ptr<erhe::scene::Node>& node) -> bool {
+        if (!(carries_kit_piece(*node) || is_floor_layout(*node)) || !get_local_connectors(*node, local, Kit_connector_set::enabled).empty() ||
+            !transform_connectors(local, node->world_from_node(), world)) {
+            return true;
+        }
+        for (std::size_t i = 0; i < local.size(); ++i) {
+            frames.push_back(Frame{node, world[i], local[i]});
+        }
+        return true;
+    });
+    std::vector<std::pair<const erhe::scene::Node*, std::string>> taken; // connectors connected in this pass
+    const auto is_free = [&](const std::shared_ptr<erhe::scene::Node>& node, const char* name) {
+        for (const std::pair<const erhe::scene::Node*, std::string>& t : taken) {
+            if ((t.first == node.get()) && (t.second == name)) {
+                return false;
+            }
+        }
+        return !find_connection_at(scene_root, *node, name);
+    };
+    // The record lists written, one per node: the changed piece's, or a wall's for a join a floor made (K6.1).
+    std::vector<std::pair<std::shared_ptr<erhe::scene::Node>, std::vector<Kit_attachment>>> lists;
+    const auto list_of = [&lists](const std::shared_ptr<erhe::scene::Node>& node) -> std::vector<Kit_attachment>& {
+        for (std::pair<std::shared_ptr<erhe::scene::Node>, std::vector<Kit_attachment>>& entry : lists) {
+            if (entry.first == node) {
+                return entry.second;
+            }
+        }
+        lists.emplace_back(node, read_kit_attachments(*node));
+        return lists.back().second;
+    };
+    std::vector<const erhe::scene::Node*> visited;
+    for (const std::shared_ptr<erhe::scene::Node>& piece : pieces) {
+        if (!piece || !(carries_kit_piece(*piece) || is_floor_layout(*piece)) || find_locking_kit_layout(*piece) ||
+            (std::find(visited.begin(), visited.end(), piece.get()) != visited.end()) ||
+            (std::find(excluded.begin(), excluded.end(), piece) != excluded.end())) {
+            continue; // a piece joined with attach none declined a record in this change
+        }
+        visited.push_back(piece.get());
+        for (const Frame& own : frames) {
+            if ((own.node != piece) || !is_free(own.node, own.local.name)) {
+                continue;
+            }
+            for (const Frame& other : frames) {
+                if ((other.node == piece) || !is_compatible(own.local, other.local) || find_locking_kit_layout(*other.node)) {
+                    continue;
+                }
+                // Only typed connectors (wall, wall-floor) auto-connect: touching generic pieces (tiles) do not chain.
+                const Kit_connector_types shared{.bits = own.local.types.bits & other.local.types.bits & ~Kit_connector_types::of(Kit_connector_type::generic).bits};
+                if (shared.is_empty()) {
+                    continue;
+                }
+                // Two wall connectors meet at a corner at any angle; floors meet edge to edge, facing.
+                const bool  wall_pair = shared.contains(Kit_connector_type::wall);
+                const float facing    = glm::dot(own.world.outward, other.world.outward);
+                if ((glm::distance(own.world.position, other.world.position) > 1.0e-4f) ||
+                    (!wall_pair && (facing > -0.99999f)) || (wall_pair && (facing > 0.99f)) || !is_free(other.node, other.local.name)) {
+                    continue; // a wall pair meets at any angle but not pointing the same way (a duplicate in place)
+                }
+                if (check_attach(*piece, *other.node).refusal != Kit_attach_refusal::none) {
+                    continue;
+                }
+                // The quarter twist nearest the up axes' turn about the target's outward axis (followed rigidly where rigid).
+                const float angle = std::atan2(glm::dot(glm::cross(other.world.up, own.world.up), other.world.outward), glm::dot(other.world.up, own.world.up));
+                const int   twist = ((static_cast<int>(std::lround(angle / glm::half_pi<float>())) % 4) + 4) % 4;
+                const Kit_attachment made{
+                    .owner            = piece->get_gltf_uid(),
+                    .target           = other.node->get_gltf_uid(),
+                    .connector        = own.local.name,
+                    .target_connector = other.local.name,
+                    .twist_steps      = twist,
+                    .gap              = 0.0f
+                };
+                // K6.1: a floor's join to a wall is recorded on the wall.
+                const bool on_other = is_floor_end_of_wall_floor_join(*piece, own.local, *other.node, other.local);
+                const Kit_attachment record = on_other ? make_reversed_attachment(made) : made;
+                const std::shared_ptr<erhe::scene::Node>& holder = on_other ? other.node : piece;
+                const std::shared_ptr<erhe::scene::Node>& reached = on_other ? piece : other.node;
+                std::vector<Kit_attachment>& records = list_of(holder);
+                // A record of this connector whose target is gone (is_free() reads it as free) is replaced.
+                std::erase_if(records, [&record](const Kit_attachment& r) { return r.connector == record.connector; });
+                records.push_back(record);
+                taken.emplace_back(piece.get(), own.local.name);
+                taken.emplace_back(other.node.get(), other.local.name);
+                log_scene->log(flow_log_level(spdlog::level::info), "Kit piece '{}' auto-connects '{}' to '{}' of '{}'", piece->get_name(), own.local.name, other.local.name, other.node->get_name());
+                report_new_connection(Kit_new_connection{.node = holder, .attachment = record, .target = reached});
+                if (std::find(out_owners.begin(), out_owners.end(), holder) == out_owners.end()) {
+                    out_owners.push_back(holder);
+                }
+                break;
+            }
+        }
+    }
+    for (const std::pair<std::shared_ptr<erhe::scene::Node>, std::vector<Kit_attachment>>& entry : lists) {
+        std::shared_ptr<Operation> operation = make_attachments_operation(entry.first, entry.second);
+        if (operation) {
+            out_operations.push_back(std::move(operation));
+        }
+    }
 }
 
 } // namespace editor

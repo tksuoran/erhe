@@ -87,6 +87,15 @@ public:
 [[nodiscard]] auto parse_attachment_text(std::string_view text, Kit_attachment& out_attachment) -> std::string;
 
 // The node's own attachment from its local value: none when it has no record, the record does not read or names another owner.
+// With several connections (K6.1), the first by connector name.
 [[nodiscard]] auto read_kit_attachment(const erhe::scene::Node& node) -> std::optional<Kit_attachment>;
+
+// K6.1: the connections a piece records, one per connector of the piece: one object (the form of one) or an array sorted by
+// connector; empty text for none.
+[[nodiscard]] auto make_attachments_text(std::vector<Kit_attachment> attachments) -> std::string;
+[[nodiscard]] auto parse_attachments_text(std::string_view text, std::vector<Kit_attachment>& out_attachments) -> std::string;
+
+// The node's own connections (entries naming another owner dropped); empty when the record does not read. Allocates.
+[[nodiscard]] auto read_kit_attachments(const erhe::scene::Node& node) -> std::vector<Kit_attachment>;
 
 } // namespace editor
