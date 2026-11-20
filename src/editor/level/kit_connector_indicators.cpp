@@ -270,6 +270,9 @@ auto get_connector_indicator_color(const Debug_visualizations_style& style, cons
         if (types.contains(Kit_connector_type::wall_floor)) {
             return style.connector_wall_floor_color;
         }
+        if (types.contains(Kit_connector_type::rail)) {
+            return style.connector_rail_color;
+        }
     }
     switch (role) {
         case Kit_connector_indicator_role::chosen:  return style.connector_chosen_color;

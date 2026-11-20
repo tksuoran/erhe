@@ -3,7 +3,7 @@
 Status: in progress
 
 The design that meets `doc/plans/level_kit_connections.md` (C-numbers,
-rulings L1 - L22). The build order is
+rulings L1 - L26). The build order is
 `doc/plans/level_kit_connections_implementation.md`. It builds on the
 connectors, connector switches and attachments of
 `doc/editor/level_tools.md`, on curves (`doc/editor/curves.md`) and on
@@ -472,3 +472,60 @@ and outlines), cleared and not reallocated in the steady state.
   covering C7.2.
 - The gates of each step: `editor_level_tests`, `level_tools_verify.py`,
   `curve_verify.py` and `ctest -C Debug -L editor -j1` in the headless tree.
+
+## K13 Riders
+
+As built for C10 (L26):
+
+- K13.1 `Kit_connector_type::rail` (`rail`, flow mask bit 16, a type added
+  later starts on), and `Kit_connector::rail_end` (`Kit_rail_end::rider` by
+  default, `host`), carried by every connector transform.
+  `is_rail_host_of(own, other)`: both accept `rail`, own hosts, other rides.
+- K13.2 Hosts: `type_wall_run_connectors()` gives a wall run shape's `top`
+  `rail` and `generic`, as a host; `set_wall_run_flow()` supplies over `top`
+  `child.length` (the `length` parameter) and `wall.thickness` at priority 1.
+  The floor layout's `get_floor_connectors()` appends `rail_<i>` after
+  `edge_<i>` and `floor_<i>`: type `rail`, a host, at the middle of the
+  edge's rail span (`get_floor_rail_span()`: the edge's line moved
+  `Floor_values::rail_inset` inside, between its crossings with the moved
+  lines of the neighbouring edges; the corner moved along the inward where
+  two neighbouring edges are parallel), facing up, up toward the inside.
+  `get_floor_rail_supply()` supplies the span's signed length at priority 2
+  (none under 0.1 m); `get_floor_connector_supply()` dispatches by name
+  (`parse_floor_connector_name()`, `Floor_connector_family`), used by the
+  flow and the Brush join preview. `rail_inset` is a pattern value
+  (`floor_rail_inset`, written only off its default), a Properties / Level
+  Kit window row and a key of the MCP `floor` object.
+- K13.3 Riders: `type_rider_base_connector()` gives a `base` `rail` and
+  `generic`; `architecture.railing` and `architecture.entablature` map
+  `child.length` to `length`, `architecture.battlement` also
+  `wall.thickness` to `thickness`. Other runs along X with a length were not
+  made riders: the industrial truss and the pier stand on the ground, the
+  quay wall and the tunnel are bases themselves, the pediment's run is its
+  `width` and sits on an entablature's top (generic).
+- K13.4 Spacing (C10.4): `get_kit_repeat_count(length, spacing, max)` gives
+  the count whose repeat is nearest the spacing (the smaller on a tie). The
+  railing's `bays` became `bay_length` (1 module, 0.25 - 8); its topology
+  now follows a float ratio, so its integers-only topology test was dropped.
+  The battlement already counts its bays from `length` and its nominal
+  merlon and crenel widths (rounded ratio), and the entablature its
+  triglyphs from `length`; neither changed.
+- K13.5 Record (C10.7): `is_host_end_of_join()` (formerly
+  `is_floor_end_of_wall_floor_join()`) also names the host end of a rail
+  join, so the snapped release and Auto-connect write the record on the
+  rider. `Level_kits::make_join_connection()` does the same for the
+  explicit join (`connect_piece()`: a host moved onto a rider writes the
+  rider's record, and the rider is the requesting end that takes the
+  values) and for connected placements (a new host's record goes onto the
+  existing rider by an operation after the inserts).
+- K13.6 Response (C10.5): the rider's record makes it the follower, so it
+  follows its host rigidly (`is_rigid_join()` unchanged). The K5.5 return
+  of `follow_attachments()` (`returns_to_join`) also takes a rider the user
+  moved alone whose record targets a rail host with `rail` in the mask; the
+  flow preview runs the same operation, so a drag shows it. Nothing makes a
+  host fit or follow its rider: the floor fit reads `edge_<i>` records only,
+  the wall fit `wall` joins only.
+- K13.7 Renames (C8.4): `append_floor_edge_renames()` renames the three
+  families apart, `rail_<i>` among them.
+- K13.8 Indicators: `Debug_visualizations_style` v16
+  `connector_rail_color`.

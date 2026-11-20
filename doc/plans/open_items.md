@@ -63,7 +63,8 @@ ask the user which to pick. Item 14 starts with writing its plan. Items 15,
 17. Level kit connections: every step is built. The user's windowed test
     ("User test (windowed, pending)") and rulings ("For the user to rule
     on") of `doc/plans/level_kit_connections_implementation.md`, and the
-    review of design K0.
+    review of design K0. Riders (`doc/plans/level_kit_connections.md` C10, design
+    K13) are built: the user's windowed test and review of ruling L26.
 18. Kit layout composition (GitHub issue 301): the user's rulings on the
     open questions of `doc/plans/kit_layout_composition.md`, then its build
     order.
@@ -431,6 +432,13 @@ Plans: `doc/plans/culling.md`, `doc/plans/occlusion_culling.md`.
 
 ## Verify scripts
 
+- `curve_verify.py` fails 1 of 157 on Linux headless (2026-11-20): "a
+  magenta curve_selected_color ... draw the selected curve magenta at the
+  next start (848 vs 0)". Reported cause, not confirmed: the curve tool's
+  point gizmos (commit "curve tool: the pointer brings a translate gizmo to
+  the nearest point") cover most of the selected curve in the image.
+- `ctest -L editor`: `Mcp_test.undo_of_gltf_import_clears_the_animation_target`
+  failed once of two runs on Linux headless (2026-11-20); not looked into.
 - `level_tools_verify.py` depends on which windows the tracked
   `config/editor/desktop_windows.json` shows: with `"operations": false`
   twelve Brush tool hover / click placement checks fail (`--only-brush-normal`),

@@ -32,7 +32,7 @@ TEST(FloorPolygon, RectangleConnectorsSitInsetOnEachEdge)
     const editor::Floor_values values{};
     std::vector<editor::Kit_connector> connectors;
     editor::get_floor_connectors(outline, values, connectors);
-    ASSERT_EQ(connectors.size(), 8u); // four wall-floor edge connectors, then four floor connectors
+    ASSERT_EQ(connectors.size(), 12u); // four wall-floor edge connectors, four floor connectors, then four rail connectors
     // Edge 0 runs along x = -2: its connector is 0.125 m inside, at the top, its up axis toward +x.
     EXPECT_NEAR(connectors[0].position.x, -2.0f + 0.125f, 1.0e-6f);
     EXPECT_NEAR(connectors[0].position.y, values.thickness, 1.0e-6f);
@@ -46,6 +46,15 @@ TEST(FloorPolygon, RectangleConnectorsSitInsetOnEachEdge)
     EXPECT_NEAR(connectors[4].position.x, -2.0f, 1.0e-6f);
     EXPECT_NEAR(connectors[4].outward.x, -1.0f, 1.0e-6f);
     EXPECT_TRUE(connectors[4].types.contains(editor::Kit_connector_type::floor));
+    // C10.2: the rail connectors: rail_inset inside the edge, on the middle of the edge's rail span, facing up, hosts.
+    EXPECT_STREQ(connectors[8].name, "rail_0");
+    EXPECT_NEAR(connectors[8].position.x, -2.0f + values.rail_inset, 1.0e-6f);
+    EXPECT_NEAR(connectors[8].position.y, values.thickness, 1.0e-6f);
+    EXPECT_NEAR(connectors[8].position.z, 0.0f, 1.0e-6f);
+    EXPECT_NEAR(connectors[8].outward.y, 1.0f, 1.0e-6f);
+    EXPECT_NEAR(connectors[8].up.x, 1.0f, 1.0e-6f);
+    EXPECT_TRUE(connectors[8].types == editor::Kit_connector_types::of(editor::Kit_connector_type::rail));
+    EXPECT_EQ(connectors[8].rail_end, editor::Kit_rail_end::host);
     connectors.resize(4);
     for (const editor::Kit_connector& connector : connectors) {
         // Every wall-floor connector is half a wall thickness inside the rectangle's edge.
@@ -131,10 +140,10 @@ TEST(FloorPolygon, EveryPropertyMappingNamesItsTarget)
             }
         }
     }
-    EXPECT_EQ(mapped_shapes, 4u); // the wall run shapes (K3.3)
+    EXPECT_EQ(mapped_shapes, 7u); // the wall run shapes (K3.3) and the riders railing, battlement, entablature (K13)
 }
 
-TEST(FloorPolygon, WallSuppliesOverItsEndsOnly)
+TEST(FloorPolygon, WallSuppliesOverItsEndsAndTop)
 {
     static const editor::Kit_shape_library library;
     const editor::Kit_shape_definition* const wall = library.find("architecture.wall");
@@ -155,6 +164,12 @@ TEST(FloorPolygon, WallSuppliesOverItsEndsOnly)
             EXPECT_EQ(supply.find(editor::Kit_standard_property::wall_material)->material, "Kit Plaster");
             EXPECT_EQ(supply.find(editor::Kit_standard_property::wall_material)->priority, editor::c_wall_supply_priority);
             EXPECT_EQ(supply.find(editor::Kit_standard_property::child_length), nullptr);
+        } else if (name == "top") {
+            // C10.2: a rider on the top takes the wall's length and thickness.
+            ASSERT_EQ(supply.get().size(), 2u);
+            EXPECT_EQ(supply.find(editor::Kit_standard_property::child_length)->length, values.get_float("length"));
+            EXPECT_EQ(supply.find(editor::Kit_standard_property::child_length)->priority, editor::c_wall_supply_priority);
+            EXPECT_NEAR(supply.find(editor::Kit_standard_property::wall_thickness)->length, 0.25f, 1.0e-6f);
         } else {
             EXPECT_TRUE(supply.get().empty()) << name;
         }
@@ -184,4 +199,149 @@ TEST(FloorPolygon, WallsAtSuppliedLengthsMeetAtTheCorners)
             EXPECT_NEAR(glm::length(ends[i].second - ends[(i + 1) % n].first), 0.0f, 1.0e-5f) << i;
         }
     }
+}
+
+//
+// C10 riders (design K13).
+//
+
+namespace {
+
+// The plan point of a connector frame's local position under a join pose.
+[[nodiscard]] auto joined_point(const editor::Kit_join_pose& pose, const glm::vec3& local) -> glm::vec3
+{
+    return pose.position + (pose.rotation * local);
+}
+
+} // anonymous namespace
+
+// C10.3: the riders map child.length onto their length and stand by a base that accepts rail and generic.
+TEST(FloorPolygon, RidersMapTheirLengthAndRideByTheirBase)
+{
+    static const editor::Kit_shape_library library;
+    for (const char* const id : {"architecture.railing", "architecture.battlement", "architecture.entablature"}) {
+        const editor::Kit_shape_definition* const shape = library.find(id);
+        ASSERT_NE(shape, nullptr) << id;
+        const std::vector<editor::Kit_property_mapping>::const_iterator mapping = std::find_if(shape->property_mappings.begin(), shape->property_mappings.end(), [](const editor::Kit_property_mapping& m) {
+            return m.property == editor::Kit_standard_property::child_length;
+        });
+        ASSERT_NE(mapping, shape->property_mappings.end()) << id;
+        EXPECT_STREQ(mapping->target, "length") << id;
+        std::vector<editor::Kit_connector> connectors;
+        editor::get_shape_connectors(editor::make_default_values(*shape, 1.0f, 3.0f), connectors);
+        const editor::Kit_connector* const base = editor::find_connector(connectors, "base");
+        ASSERT_NE(base, nullptr) << id;
+        EXPECT_TRUE(base->types.contains(editor::Kit_connector_type::rail) && base->types.contains(editor::Kit_connector_type::generic)) << id;
+        EXPECT_EQ(base->rail_end, editor::Kit_rail_end::rider) << id;
+    }
+    // The battlement takes the wall's thickness too.
+    const editor::Kit_shape_definition* const battlement = library.find("architecture.battlement");
+    EXPECT_TRUE(std::any_of(battlement->property_mappings.begin(), battlement->property_mappings.end(), [](const editor::Kit_property_mapping& m) {
+        return (m.property == editor::Kit_standard_property::wall_thickness) && (std::string_view{m.target} == "thickness");
+    }));
+}
+
+// C10.2, C10.3: a wall's top hosts riders, and a rider joined there with no twist runs along the wall.
+TEST(FloorPolygon, RiderOnAWallTopRunsAlongTheWall)
+{
+    static const editor::Kit_shape_library library;
+    const editor::Kit_shape_definition* const wall    = library.find("architecture.wall");
+    const editor::Kit_shape_definition* const railing = library.find("architecture.railing");
+    std::vector<editor::Kit_connector> wall_connectors;
+    std::vector<editor::Kit_connector> railing_connectors;
+    editor::get_shape_connectors(editor::make_default_values(*wall, 1.0f, 3.0f), wall_connectors);
+    editor::get_shape_connectors(editor::make_default_values(*railing, 1.0f, 3.0f), railing_connectors);
+    const editor::Kit_connector* const top  = editor::find_connector(wall_connectors, "top");
+    const editor::Kit_connector* const base = editor::find_connector(railing_connectors, "base");
+    ASSERT_TRUE((top != nullptr) && (base != nullptr));
+    EXPECT_TRUE(top->types.contains(editor::Kit_connector_type::rail) && top->types.contains(editor::Kit_connector_type::generic));
+    EXPECT_EQ(top->rail_end, editor::Kit_rail_end::host);
+    EXPECT_TRUE(editor::is_rail_host_of(*top, *base));
+    EXPECT_FALSE(editor::is_rail_host_of(*base, *top));
+    const editor::Kit_join_pose pose = editor::join_connectors(*base, *top, 0, 0.0f);
+    const glm::vec3 x = pose.rotation * glm::vec3{1.0f, 0.0f, 0.0f};
+    EXPECT_NEAR(x.x, 1.0f, 1.0e-5f);
+    EXPECT_NEAR(pose.position.y, top->position.y, 1.0e-5f);
+}
+
+// C10.2, L26: riders standing on the rail connectors at the lengths the floor supplies meet at the crossings of their
+// lines, at right corners, at other angles and at a reflex corner.
+TEST(FloorPolygon, RidersAtSuppliedLengthsMeetWhereTheirLinesCross)
+{
+    static const editor::Kit_shape_library library;
+    const editor::Kit_shape_definition* const railing = library.find("architecture.railing");
+    std::vector<editor::Kit_connector> railing_connectors;
+    editor::get_shape_connectors(editor::make_default_values(*railing, 1.0f, 3.0f), railing_connectors);
+    const editor::Kit_connector base = *editor::find_connector(railing_connectors, "base");
+    const std::vector<std::vector<glm::vec2>> outlines{
+        {{-2.0f, -3.0f}, {-2.0f, 3.0f}, {2.0f, 3.0f}, {2.0f, -3.0f}},
+        {{0.0f, 0.0f}, {1.0f, 5.0f}, {6.0f, 4.0f}, {5.0f, -1.0f}},
+        l_shape()
+    };
+    for (const std::vector<glm::vec2>& outline : outlines) {
+        for (const float inset : {0.0f, 0.1f, 0.3f}) {
+            editor::Floor_values values{};
+            values.rail_inset = inset;
+            std::vector<editor::Kit_connector> connectors;
+            editor::get_floor_connectors(outline, values, connectors);
+            const std::size_t n = outline.size();
+            ASSERT_EQ(connectors.size(), 3 * n);
+            editor::Kit_supply_list supply;
+            std::vector<std::pair<glm::vec3, glm::vec3>> ends; // per edge: the rider's start and end in the floor's frame
+            for (std::size_t i = 0; i < n; ++i) {
+                const editor::Kit_connector& rail = connectors[(2 * n) + i];
+                ASSERT_STREQ(rail.name, editor::get_floor_rail_connector_name(i));
+                editor::get_floor_connector_supply(outline, values, "Kit Plaster", rail.name, supply);
+                ASSERT_EQ(supply.get().size(), 1u);
+                const float length = supply.find(editor::Kit_standard_property::child_length)->length;
+                EXPECT_EQ(supply.find(editor::Kit_standard_property::child_length)->priority, editor::c_floor_supply_priority);
+                // The rider joined with no twist: its x axis runs along the edge, its start toward corner i.
+                const editor::Kit_join_pose pose = editor::join_connectors(base, rail, 0, 0.0f);
+                const glm::vec3 x = pose.rotation * glm::vec3{1.0f, 0.0f, 0.0f};
+                const glm::vec2 along = glm::normalize(outline[(i + 1) % n] - outline[i]);
+                EXPECT_NEAR(std::abs(glm::dot(glm::vec2{x.x, x.z}, along)), 1.0f, 1.0e-5f);
+                glm::vec3 start = joined_point(pose, glm::vec3{-0.5f * length, 0.0f, 0.0f});
+                glm::vec3 end   = joined_point(pose, glm::vec3{ 0.5f * length, 0.0f, 0.0f});
+                if (glm::dot(glm::vec2{end.x - start.x, end.z - start.z}, along) < 0.0f) {
+                    std::swap(start, end);
+                }
+                // Every rider point is rail_inset inside its edge.
+                const glm::vec2 inward = editor::get_floor_edge_inward(outline, i);
+                EXPECT_NEAR(glm::dot(glm::vec2{start.x, start.z} - outline[i], inward), inset, 1.0e-4f);
+                ends.emplace_back(start, end);
+            }
+            for (std::size_t i = 0; i < n; ++i) {
+                EXPECT_NEAR(glm::length(ends[i].second - ends[(i + 1) % n].first), 0.0f, 1.0e-4f) << i << " inset " << inset;
+            }
+        }
+    }
+}
+
+// C10.2: a span shorter than a rider's least length supplies no length; the edge's other families supply apart.
+TEST(FloorPolygon, RailSupplyDispatchesByConnectorName)
+{
+    std::vector<glm::vec2> outline;
+    editor::make_floor_rectangle(4.0f, 6.0f, outline);
+    editor::Floor_values values{};
+    editor::Kit_supply_list supply;
+    editor::get_floor_connector_supply(outline, values, "Kit Plaster", "edge_1", supply);
+    EXPECT_EQ(supply.get().size(), 4u);
+    EXPECT_NEAR(supply.find(editor::Kit_standard_property::child_length)->length, 4.0f - values.wall_thickness, 1.0e-5f);
+    editor::get_floor_connector_supply(outline, values, "Kit Plaster", "rail_1", supply);
+    ASSERT_EQ(supply.get().size(), 1u);
+    EXPECT_NEAR(supply.find(editor::Kit_standard_property::child_length)->length, 4.0f - (2.0f * values.rail_inset), 1.0e-5f);
+    editor::get_floor_connector_supply(outline, values, "Kit Plaster", "floor_1", supply);
+    EXPECT_TRUE(supply.get().empty());
+    editor::get_floor_connector_supply(outline, values, "Kit Plaster", "rail_9", supply);
+    EXPECT_TRUE(supply.get().empty());
+    values.rail_inset = 1.99f; // the 4 m edge's span: 0.02 m
+    editor::get_floor_connector_supply(outline, values, "Kit Plaster", "rail_1", supply);
+    EXPECT_TRUE(supply.get().empty());
+    // The names parse into their families.
+    const std::optional<editor::Floor_connector_name> rail = editor::parse_floor_connector_name("rail_3", 4);
+    ASSERT_TRUE(rail.has_value());
+    EXPECT_EQ(rail->family, editor::Floor_connector_family::rail);
+    EXPECT_EQ(rail->edge, 3u);
+    EXPECT_EQ(editor::parse_floor_connector_name("rail_4", 4)->edge, 4u);
+    EXPECT_FALSE(editor::parse_floor_connector_name("top", 4).has_value());
 }

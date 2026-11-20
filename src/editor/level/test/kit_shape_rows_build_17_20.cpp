@@ -26,7 +26,7 @@ auto get_build_17_20_rows() -> Kit_shape_rows
     // steps of the two stairs.
     rows.worst_cases         = {
         {"architecture.timber_bay",    R"({"length":"0x1p+1","height":"0x1.8p+1","post_width":"0x1.333334p-3","infill":"shoji","rails":3,"panels":4,"seed":0})"},
-        {"architecture.railing",       R"({"length":"0x1.8p+2","height":"0x1p+0","bays":6,"post_width":"0x1.eb851ep-4","style":"balustrade","infill":8,"seed":0})"},
+        {"architecture.railing",       R"({"length":"0x1.8p+2","height":"0x1p+0","bay_length":"0x1p+0","post_width":"0x1.eb851ep-4","style":"balustrade","infill":8,"seed":0})"},
         {"nature.bamboo",              R"({"height":"0x1p+4","culms":16,"radius":"0x1.99999ap-4","lean":"0x1.4p+4","cane_width":"0x1.eb851ep-6","seed":0})"},
         {"architecture.stairs",        R"({"form":"u_landing","rise":"0x1.8p+3","width":"0x1.333334p+0","step_rise_limit":"0x1.851eb8p-3","wall_height":"0x1.ccccccp-1","seed":0})"},
         {"architecture.spiral_stairs", R"({"rise":"0x1.8p+3","radius":"0x1.4p+0","step_rise_limit":"0x1p-3","turn":"right","newel_width":"0x1.333334p-2","seed":0})"}

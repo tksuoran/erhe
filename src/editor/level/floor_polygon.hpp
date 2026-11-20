@@ -6,8 +6,10 @@
 #include <glm/glm.hpp>
 
 #include <cstddef>
+#include <optional>
 #include <span>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace GEO { class Mesh; }
@@ -24,6 +26,7 @@ public:
     float thickness     {0.2f};  // the slab's top is at this height above the node's origin
     float wall_thickness{0.25f}; // the inset of the wall connectors and the edge lengths the floor supplies
     float room_height   {3.0f};  // the room height the floor supplies to its walls
+    float rail_inset    {0.1f};  // C10.2: the rail connectors' line, this far inside each edge
 
     [[nodiscard]] auto operator==(const Floor_values& other) const -> bool = default;
 };
@@ -78,10 +81,43 @@ void make_floor_rectangle(float width, float depth, std::vector<glm::vec2>& out_
 [[nodiscard]] auto get_floor_edge_connector_name(std::size_t edge) -> const char*;
 // The floor connector name of edge i: "floor_<i>", a literal.
 [[nodiscard]] auto get_floor_floor_connector_name(std::size_t edge) -> const char*;
+// The rail connector name of edge i: "rail_<i>", a literal (C10.2).
+[[nodiscard]] auto get_floor_rail_connector_name(std::size_t edge) -> const char*;
+
+// The connector families of a floor, one connector per edge each; they rename apart when the edges renumber (C8.4).
+enum class Floor_connector_family : unsigned int
+{
+    edge = 0, // edge_<i>, wall-floor
+    floor,    // floor_<i>, floor
+    rail      // rail_<i>, rail
+};
+
+class Floor_connector_name
+{
+public:
+    Floor_connector_family family{Floor_connector_family::edge};
+    std::size_t            edge  {0}; // edge_count when the name's number is not an edge of the outline
+};
+
+// The family and edge of a floor connector name; nullopt for a name of no family.
+[[nodiscard]] auto parse_floor_connector_name(std::string_view name, std::size_t edge_count) -> std::optional<Floor_connector_name>;
+[[nodiscard]] auto get_floor_connector_name(Floor_connector_family family, std::size_t edge) -> const char*;
+
+// C10.2: the line of edge i moved rail_inset inside, from the crossing with edge i - 1's moved line to the crossing with
+// edge i + 1's (where two neighbouring lines are parallel, the corner moved along the inward); length is signed.
+class Floor_rail_span
+{
+public:
+    glm::vec2 start {0.0f};
+    glm::vec2 end   {0.0f};
+    float     length{0.0f};
+};
+[[nodiscard]] auto get_floor_rail_span(std::span<const glm::vec2> outline, float rail_inset, std::size_t edge) -> Floor_rail_span;
 
 // C2.4, K4.5: one wall-floor connector per edge (edge_<i>), at the edge's midpoint on the top, inset by half the wall
 // thickness, facing up, its up axis toward the inside; then one floor connector per edge (floor_<i>), at the edge's
-// midpoint on the top, facing out, level; into the caller's vector (cleared, capacity kept).
+// midpoint on the top, facing out, level; then one rail connector per edge (rail_<i>, a rail host, C10.2), at the middle
+// of its rail span on the top, facing up, its up axis toward the inside; into the caller's vector (cleared, capacity kept).
 void get_floor_connectors(std::span<const glm::vec2> outline, const Floor_values& values, std::vector<Kit_connector>& out_connectors);
 
 // C3.3, K4.3: what edge i supplies to the wall standing on it, at the floor priority: the edge's length minus the wall
@@ -93,6 +129,20 @@ void get_floor_supply(
     const Floor_values&        values,
     std::string_view           wall_material,
     std::size_t                edge,
+    Kit_supply_list&           out_supply
+);
+
+// C10.2: what rail_<i> supplies to its rider at the floor priority: the length of its rail span (none below
+// c_floor_min_wall_length), so the riders of neighbouring edges meet where their lines cross.
+void get_floor_rail_supply(std::span<const glm::vec2> outline, const Floor_values& values, std::size_t edge, Kit_supply_list& out_supply);
+
+// What the floor supplies over the named connector: get_floor_supply() for edge_<i>, get_floor_rail_supply() for
+// rail_<i>, nothing for the others.
+void get_floor_connector_supply(
+    std::span<const glm::vec2> outline,
+    const Floor_values&        values,
+    std::string_view           wall_material,
+    std::string_view           connector_name,
     Kit_supply_list&           out_supply
 );
 

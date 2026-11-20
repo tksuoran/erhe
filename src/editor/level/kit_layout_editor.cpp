@@ -79,7 +79,7 @@ constexpr std::array<Kit_layout_row, 4> c_path_count_rows{kind, count_mode, coun
 constexpr std::array<Kit_layout_row, 4> c_path_gap_rows  {kind, count_mode, gap,   orientation};
 constexpr std::array<Kit_layout_row, 2> c_segments_rows  {kind, orientation};
 constexpr std::array<Kit_layout_row, 7> c_stairs_rows    {kind, stairs_width, stairs_rise, stairs_tread, stairs_thickness, stairs_tolerance, stairs_material};
-constexpr std::array<Kit_layout_row, 6> c_floor_rows     {kind, floor_thickness, floor_wall_thickness, floor_room_height, floor_material, floor_wall_material};
+constexpr std::array<Kit_layout_row, 7> c_floor_rows     {kind, floor_thickness, floor_wall_thickness, floor_room_height, floor_rail_inset, floor_material, floor_wall_material};
 constexpr std::array<Kit_layout_row, 9> c_scatter_rectangle_count_rows  {kind, scatter_mode, count,   region, size_x, size_z, min_spacing, yaw_min, yaw_max};
 constexpr std::array<Kit_layout_row, 9> c_scatter_rectangle_density_rows{kind, scatter_mode, density, region, size_x, size_z, min_spacing, yaw_min, yaw_max};
 constexpr std::array<Kit_layout_row, 8> c_scatter_disc_count_rows       {kind, scatter_mode, count,   region, region_radius, min_spacing, yaw_min, yaw_max};
@@ -219,6 +219,7 @@ auto get_layout_row_name(const Kit_layout_row row) -> const char*
         case Kit_layout_row::floor_room_height:    return "Room Height";
         case Kit_layout_row::floor_material:       return "Material";
         case Kit_layout_row::floor_wall_material:  return "Wall Material";
+        case Kit_layout_row::floor_rail_inset:     return "Rail Inset";
         default:                          return "?";
     }
 }
@@ -549,6 +550,12 @@ auto layout_pattern_row(
             const bool changed = ImGui::DragFloat(name, &pattern.floor.room_height, 0.01f, 0.1f, 32.0f, "%.3f m", ImGuiSliderFlags_AlwaysClamp);
             edit = drag_edit(changed);
             tooltip("The height of the walls standing on the floor.");
+            break;
+        }
+        case Kit_layout_row::floor_rail_inset: {
+            const bool changed = ImGui::DragFloat(name, &pattern.floor.rail_inset, 0.005f, 0.0f, 4.0f, "%.3f m", ImGuiSliderFlags_AlwaysClamp);
+            edit = drag_edit(changed);
+            tooltip("Riders (railings, battlements) on the floor's edges stand on a line this far inside each edge; riders on neighbouring edges meet where their lines cross.");
             break;
         }
         case Kit_layout_row::floor_material: {

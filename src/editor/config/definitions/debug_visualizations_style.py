@@ -8,7 +8,7 @@ from erhe_codegen import *
 # read live by tools/debug_visualizations.cpp. Negative line widths are in
 # pixels and do not scale by distance.
 struct("Debug_visualizations_style",
-    version=15,
+    version=16,
     short_desc="Debug Visualizations Style",
     long_desc="Editor-global colors and line widths for the debug visualizations",
     developer=False,
@@ -106,6 +106,7 @@ struct("Debug_visualizations_style",
         field("connector_snapped_color",           Vec4,  added_in=11, default="1.0f, 0.2f, 0.9f, 1.0f",  short_desc="Connector Snapped Color",  long_desc="The connector pair the drag snapped by"),
         field("connector_wall_color",              Vec4,  added_in=13, default="1.0f, 0.55f, 0.15f, 1.0f", short_desc="Connector Wall Color",       long_desc="Connector of a shown kit piece accepting the wall type (doc/plans/level_kit_connections.md C1.8)"),
         field("connector_wall_floor_color",        Vec4,  added_in=13, default="0.2f, 0.75f, 1.0f, 1.0f",  short_desc="Connector Wall-floor Color", long_desc="Connector of a shown kit piece or floor accepting the wall-floor type"),
+        field("connector_rail_color",              Vec4,  added_in=16, default="0.95f, 0.35f, 0.35f, 1.0f", short_desc="Connector Rail Color",     long_desc="Connector of a shown kit piece or floor accepting the rail type: a rider's base, a wall's top, a floor's rail (doc/plans/level_kit_connections.md C10)"),
         field("connector_size",                    Float, added_in=11, default="0.04f",                   short_desc="Connector Size",           long_desc="Outward arrow length per metre of distance to the camera; the up tick is half of it"),
         field("connector_width",                   Float, added_in=11, default="-2.0f",                   short_desc="Connector Width",          long_desc="Line width of the connector indicators; negative is pixels"),
 

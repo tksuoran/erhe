@@ -106,5 +106,9 @@
 !workflow{opus-coder(brief-forbids-git-commit)+Fable-reviewer(report-only;re-review-after-each-fix-round;same-agents-continued-with-SendMessage)+orchestrator-commit;the-whole-series-review-found-15-defects-the-per-commit-reviews-missed->run-one-for-every-multi-commit-series}
 ?next{©User:windowed-test-items-1-17+rulings-1-9("For the user to rule on")+K0-review;open:raw-floor-owned-wall-floor-records-follow-in-the-stored-direction}
 
+[TASK::level-kit-riders]{started-2026-11-20;branch=main(UNPUSHED);doc/plans/level_kit_connections.md-C10+L26;design-K13}
+✓built{opus-coder+orchestrator-review;verify=level_tools_verify.py---only-riders;Linux:--editor-build_ninja_linux_vulkan_headless/bin/editor}
+?next{©User-windowed-test->iterate-on-L26-choices(new-type-rail|rail_inset|rider-returns|bay_length|riders=railing+battlement+entablature)}
+
 [TASK::kit-layout-composition]{planned-2026-11-20;GitHub-issue-301;doc/plans/kit_layout_composition.md}
 ?next{©User-rulings-Q1-Q7->build-order-steps-1-6}

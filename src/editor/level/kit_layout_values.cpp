@@ -301,6 +301,10 @@ auto to_canonical_text(const Kit_layout_pattern& pattern) -> std::string
         object["floor_thickness"]      = hex_json(pattern.floor.thickness);
         object["floor_wall_thickness"] = hex_json(pattern.floor.wall_thickness);
         object["floor_room_height"]    = hex_json(pattern.floor.room_height);
+        // C10.2: at its default the rail inset is left out, so a text written before riders is the canonical text of its values.
+        if (pattern.floor.rail_inset != Floor_values{}.rail_inset) {
+            object["floor_rail_inset"] = hex_json(pattern.floor.rail_inset);
+        }
         object["floor_material"]       = pattern.floor_material;
         object["floor_wall_material"]  = pattern.floor_wall_material;
     }
@@ -386,6 +390,7 @@ auto parse_layout_pattern(const std::string_view text, Kit_layout_pattern& out_p
     reader.read_optional_float("floor_thickness",      pattern.floor.thickness);
     reader.read_optional_float("floor_wall_thickness", pattern.floor.wall_thickness);
     reader.read_optional_float("floor_room_height",    pattern.floor.room_height);
+    reader.read_optional_float("floor_rail_inset",     pattern.floor.rail_inset);
     pattern.floor_material      = reader.find_optional_string("floor_material");
     pattern.floor_wall_material = reader.find_optional_string("floor_wall_material");
     const std::string error = reader.finish("pattern");

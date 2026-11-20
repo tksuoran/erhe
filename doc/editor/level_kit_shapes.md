@@ -39,7 +39,7 @@ the ceiling at its range maxima.
   arch, battlement, tower, rock, land mass, hill, tree, bush, rock spire, leaf
   plant and palm shrub, every shape of the prop, ruin, traversal, harbour, light, industrial and machine kits, and the
   succulent, grass tuft, boulder cluster, stepping stone, timber bay,
-  railing, bamboo, stairs with side walls, spiral stairs, rock arch, bridge
+  bamboo, stairs with side walls, spiral stairs, rock arch, bridge
   deck, buttress, log, shell and blocky tree build their topology (vertex
   count, facets, their order, the slot of each facet) from their integer and
   enum values and integer draws alone; float values, float draws and the
@@ -48,9 +48,10 @@ the ceiling at its range maxima.
   `architecture.stairs`, `architecture.spiral_stairs`), a ladder's rungs
   (from `height` and `rung_spacing`), a pier's planks (from `length`) and
   bents (from `length` and `pile_spacing`), and a rope bridge's planks (from
-  `span` and `plank_gap`). Two shapes take further counts from
+  `span` and `plank_gap`). Three shapes take further counts from
   lengths: the battlement its bays (from `length`, `merlon_width` and
-  `crenel_width`); the tower its merlons (round, from `width`), its
+  `crenel_width`); the railing its bays (from `length` and `bay_length`);
+  the tower its merlons (round, from `width`), its
   crenels per side and corbels between the corners (square, from `width`),
   its rows of slits (as many of `slit_rows` as fit between the cut's head,
   from `opening_height`, and the corbels or the top floor, from `height`),
@@ -445,6 +446,8 @@ corona's projection beyond the architrave, 0 - 0.3 m), `frieze` (`triglyph`,
 `plain`) and `seed` (draws nothing); slot `trim`; connectors base, top, start
 and end (the base's end centers); a triangle mesh body (a hull would fill the
 space under the cornice and before the recessed frieze); mirror planes x and z.
+It is a rider (`doc/editor/level_tools.md` "Riders"): its base accepts `rail`
+and `generic`, and it maps `child.length` to `length`.
 
 - The profile, bottom to top: two fasciae and a taenia (the architrave, 0.35
   of the height), the frieze recessed 4 cm behind the architrave's face (0.38),
@@ -523,6 +526,10 @@ overhang).
   line layout of battlements without a step steps by their length, end to
   end along a wall. Replace carries `length`, `thickness` and `height`
   (clamped to the sill's range) to and from `architecture.wall`.
+- It is a rider (`doc/editor/level_tools.md` "Riders"): its base accepts
+  `rail` and `generic`, and it maps `child.length` to `length` and
+  `wall.thickness` to `thickness`, so on a wall's top it takes the wall's
+  length and thickness; its bay count follows the length.
 
 112 triangles at the defaults, 80 a bay with square merlons and 88 with the
 two other forms plus 32, at most 1968 (22 bays).
@@ -780,13 +787,19 @@ screens with three rails).
 
 `architecture.railing` is a railing or fence run along X in equal bays.
 Parameters `length` (2 modules, 0.5 - 16 m), `height` (the posts' height, 1 m,
-0.4 - 2), `bays` (1 - 6, default 2), `post_width` (0.12 m, 0.04 - 0.3; at most
-0.35 of a bay), `style` (`rail`, `picket`, `balustrade`, `lattice`; default
-`balustrade`), `infill` (1 - 8, default 5) and `seed`; slot `trim`; connectors
-start, end and base; a triangle mesh body; mirror planes x and z; tags
-`railing`, `fence` and `tiles`.
+0.4 - 2), `bay_length` (the nominal bay, 1 module, 0.25 - 8), `post_width`
+(0.12 m, 0.04 - 0.3; at most 0.35 of a bay), `style` (`rail`, `picket`,
+`balustrade`, `lattice`; default `balustrade`), `infill` (1 - 8, default 5) and
+`seed`; slot `trim`; connectors start, end and base; a triangle mesh body;
+mirror planes x and z; tags `railing`, `fence` and `tiles`.
 
-- The posts stand `length` / `bays` apart.
+- The bay count is the count (1 - 6) whose bays, `length` / count, are nearest
+  to `bay_length`, the smaller count on a tie (`get_kit_repeat_count()`), so a
+  run that takes another length keeps its bays about `bay_length` long. The
+  posts stand `length` / count apart.
+- It is a rider (`doc/editor/level_tools.md` "Riders"): its base accepts
+  `rail` and `generic`, and it maps `child.length` to `length`, so on a
+  floor's rail or a wall's top it takes the host's length.
 - A half post stands at each end (two runs joined make a whole post) and a
   post between two bays, each a shaft under a pyramid whose apex stands over
   the post's center line (an end post's over the run's end). The balustrade's
@@ -803,8 +816,8 @@ start, end and base; a triangle mesh body; mirror planes x and z; tags
   two slats in each bay.
 
 Derive ranges: `length` 1.5 - 4 modules (0.5), `height` 0.9 - 1.2 m (0.05),
-`bays` 1 - 3, `post_width` 0.1 - 0.16 m (0.02), `style` all values, `infill`
-3 - 6.
+`bay_length` 0.75 - 2 modules (0.25), `post_width` 0.1 - 0.16 m (0.02), `style`
+all values, `infill` 3 - 6.
 
 At the defaults it has 782 triangles (budget 800); the most is 1550 (a
 balustrade of 6 bays of 8).

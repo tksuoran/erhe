@@ -1632,6 +1632,8 @@ auto Level_kits::prepare_placements(
     }
 
     // Every placement is checked before anything is made, so a failing one leaves the scene unchanged.
+    std::vector<Kit_new_connection>           made;                // the joins' connections, on the end that holds each
+    std::vector<Kit_new_connection>           recorded_on_targets; // of them, those held by a placement's target (K13)
     std::vector<Kit_parameter_values>         values;
     std::vector<std::optional<Kit_join_pose>> joins;
     values.reserve(placements.size());
@@ -1766,10 +1768,17 @@ auto Level_kits::prepare_placements(
             insert.node->enable_flag_bits(Editor_item_flags::pass_through);
         }
         write_kit_piece(*insert.node.get(), Kit_piece_data{.shape = shape.id, .parameters = values[i].to_canonical_text()});
-        // Step 41: a join records its attachment on the new piece (in no chain yet), unless a locked layout owns either side.
+        // Step 41: a join records its attachment on the new piece (in no chain yet), unless a locked layout owns either side;
+        // K13: a new host joined onto a rider records it on the rider, written after the inserts.
         if (placement.connect.has_value() && (placement.connect.value().attach == Kit_attach::attach) &&
             !locked_layout_child_refusal(*parent).has_value() && !find_locking_kit_layout(*placement.connect.value().target)) {
-            insert.node->set_value(Kit_piece::attachment_property, make_attachment_text(make_connect_attachment(*insert.node, placement.connect.value())));
+            Kit_new_connection connection = make_join_connection(insert.node, values[i], placement.connect.value());
+            if (connection.node == insert.node) {
+                insert.node->set_value(Kit_piece::attachment_property, make_attachment_text(connection.attachment));
+            } else {
+                recorded_on_targets.push_back(connection);
+            }
+            made.push_back(std::move(connection));
         }
         // The lights ride the piece's insert as its children (D3.15).
         add_piece_lights(scene_root, insert.node, values[i]);
@@ -1792,19 +1801,17 @@ auto Level_kits::prepare_placements(
     for (std::shared_ptr<Operation>& operation : insert_operations) {
         out_operations.push_back(std::move(operation));
     }
-    // C3.4: each piece placed with a recorded connection takes the values the connection supplies, in the same entry.
+    // C3.4: the end that records each placed piece's connection takes the values it supplies, in the same entry.
     std::vector<std::shared_ptr<erhe::scene::Node>> requesting;
-    std::vector<Kit_new_connection>                 made;
-    for (std::size_t i = 0, end = placements.size(); (i < end) && (i < result.pieces.size()); ++i) {
-        if (placements[i].connect.has_value() && result.pieces[i].node && result.pieces[i].node->has_local_value(Kit_piece::attachment_property.get())) {
-            requesting.push_back(result.pieces[i].node);
-            made.push_back(
-                Kit_new_connection{
-                    .node       = result.pieces[i].node,
-                    .attachment = make_connect_attachment(*result.pieces[i].node, placements[i].connect.value()),
-                    .target     = placements[i].connect.value().target
-                }
-            );
+    for (const Kit_new_connection& connection : recorded_on_targets) {
+        std::shared_ptr<Operation> record = make_attachment_operation(connection.node, connection.attachment);
+        if (record) {
+            out_operations.push_back(std::move(record));
+        }
+    }
+    for (const Kit_new_connection& connection : made) {
+        if (std::find(requesting.begin(), requesting.end(), connection.node) == requesting.end()) {
+            requesting.push_back(connection.node);
         }
     }
     if (!requesting.empty()) {
@@ -2113,6 +2120,7 @@ auto Level_kits::connect_piece(Scene_root& scene_root, const std::shared_ptr<erh
     }
     // Step 41: the attachment the join records; a locked layout's child on either side makes the join without one.
     std::shared_ptr<Operation> attach_operation;
+    Kit_new_connection         made;
     if (connect.attach == Kit_attach::attach) {
         // K6.2: one connection per connector, counting both ends; the piece's own record of its connector is replaced.
         result.error = check_one_connection_per_connector(scene_root, *node, connect.connector, *connect.target, connect.target_connector);
@@ -2122,12 +2130,13 @@ auto Level_kits::connect_piece(Scene_root& scene_root, const std::shared_ptr<erh
         // C3.2: cycles are allowed; a cycle that does not close is kept and reported apart (C3.7).
         Kit_attach_check check = check_attach(*node, *connect.target);
         if (check.refusal == Kit_attach_refusal::none) {
-            attach_operation = make_attachment_operation(node, make_connect_attachment(*node, connect));
-            // The same pair recorded on the target: the record moves to the piece, so the connection is kept once.
-            std::shared_ptr<Operation> moved_record = make_connection_removal_operation(connect.target, connect.target_connector);
-            const std::vector<Kit_attachment> target_records = read_kit_attachments(*connect.target);
+            made = make_join_connection(node, values, connect);
+            attach_operation = make_attachment_operation(made.node, made.attachment);
+            // The same pair recorded on the other end: the record moves to the holder, so the connection is kept once.
+            std::shared_ptr<Operation> moved_record = make_connection_removal_operation(made.target, made.attachment.target_connector);
+            const std::vector<Kit_attachment> target_records = read_kit_attachments(*made.target);
             const bool target_holds_pair = std::any_of(target_records.begin(), target_records.end(), [&](const Kit_attachment& a) {
-                return (a.connector == connect.target_connector) && (a.target == node->get_gltf_uid()) && (a.target_connector == connect.connector);
+                return (a.connector == made.attachment.target_connector) && (a.target == made.node->get_gltf_uid()) && (a.target_connector == made.attachment.connector);
             });
             if (target_holds_pair && moved_record && attach_operation) {
                 attach_operation = std::make_shared<Compound_operation>(Compound_operation::Parameters{.operations = {std::move(moved_record), attach_operation}});
@@ -2145,9 +2154,8 @@ auto Level_kits::connect_piece(Scene_root& scene_root, const std::shared_ptr<erh
         if (attach_operation) {
             // C3.4: the piece takes the values its new connection supplies, in the same entry.
             std::vector<std::shared_ptr<Operation>> operations{attach_operation};
-            const Kit_new_connection made{.node = node, .attachment = make_connect_attachment(*node, connect), .target = connect.target};
             std::shared_ptr<Operation> flow = make_attachment_follow_operation(
-                scene_root, {}, {}, nullptr, std::span<const std::shared_ptr<erhe::scene::Node>>{&node, 1}, std::span<const Kit_new_connection>{&made, 1}
+                scene_root, {}, {}, nullptr, std::span<const std::shared_ptr<erhe::scene::Node>>{&made.node, 1}, std::span<const Kit_new_connection>{&made, 1}
             );
             if (flow) {
                 operations.push_back(std::move(flow));
@@ -2189,10 +2197,9 @@ auto Level_kits::connect_piece(Scene_root& scene_root, const std::shared_ptr<erh
     }
     append_layout_move_operations(scene_root, std::span<const std::shared_ptr<erhe::scene::Node>>{&node, 1}, operations);
     if (attach_operation) {
-        // C3.4: the piece takes the values its new connection supplies, in the same entry.
-        const Kit_new_connection made{.node = node, .attachment = make_connect_attachment(*node, connect), .target = connect.target};
+        // C3.4: the end that records the new connection takes the values it supplies, in the same entry.
         std::shared_ptr<Operation> flow = make_attachment_follow_operation(
-            scene_root, {}, {}, nullptr, std::span<const std::shared_ptr<erhe::scene::Node>>{&node, 1}, std::span<const Kit_new_connection>{&made, 1}
+            scene_root, {}, {}, nullptr, std::span<const std::shared_ptr<erhe::scene::Node>>{&made.node, 1}, std::span<const Kit_new_connection>{&made, 1}
         );
         if (flow) {
             operations.push_back(std::move(flow));
@@ -3490,11 +3497,7 @@ void Level_kits::build_connection_flow(
     const auto supply_of = [&](Staged& other, const std::string& connector, Kit_supply_list& out_supply) {
         out_supply.clear();
         if (other.floor) {
-            for (std::size_t i = 0; i < other.outline.size(); ++i) {
-                if (connector == get_floor_edge_connector_name(i)) {
-                    get_floor_supply(other.outline, other.layout.pattern.floor, other.materials.front(), i, out_supply);
-                }
-            }
+            get_floor_connector_supply(other.outline, other.layout.pattern.floor, other.materials.front(), connector, out_supply);
             return;
         }
         const Kit_shape_definition* const shape = other.values.get_shape();
@@ -3843,11 +3846,7 @@ auto Level_kits::get_join_supplied_values(
         const std::string wall_material = !layout.pattern.floor_wall_material.empty()
             ? layout.pattern.floor_wall_material
             : ((wall_default != nullptr) ? wall_default->name : std::string{});
-        for (std::size_t i = 0; i < outline.size(); ++i) {
-            if (target_connector == get_floor_edge_connector_name(i)) {
-                get_floor_supply(outline, layout.pattern.floor, wall_material, i, supply);
-            }
-        }
+        get_floor_connector_supply(outline, layout.pattern.floor, wall_material, target_connector, supply);
         return apply_join_supply(*shape, supply, io_values, io_slot_materials);
     }
     const std::optional<Kit_piece_data> record = read_kit_piece(target);
@@ -4359,7 +4358,7 @@ void Level_kits::build_auto_connections(
                 if ((other.node == piece) || !is_compatible(own.local, other.local) || find_locking_kit_layout(*other.node)) {
                     continue;
                 }
-                // Only typed connectors (wall, wall-floor) auto-connect: touching generic pieces (tiles) do not chain.
+                // Only typed connectors (wall, wall-floor, floor, rail) auto-connect: touching generic pieces (tiles) do not chain.
                 const Kit_connector_types shared{.bits = own.local.types.bits & other.local.types.bits & ~Kit_connector_types::of(Kit_connector_type::generic).bits};
                 if (shared.is_empty()) {
                     continue;
@@ -4385,8 +4384,8 @@ void Level_kits::build_auto_connections(
                     .twist_steps      = twist,
                     .gap              = 0.0f
                 };
-                // K6.1: a floor's join to a wall is recorded on the wall.
-                const bool on_other = is_floor_end_of_wall_floor_join(*piece, own.local, *other.node, other.local);
+                // K6.1, K13: a floor's join to a wall is recorded on the wall, a host's join to a rider on the rider.
+                const bool on_other = is_host_end_of_join(*piece, own.local, *other.node, other.local);
                 const Kit_attachment record = on_other ? make_reversed_attachment(made) : made;
                 const std::shared_ptr<erhe::scene::Node>& holder = on_other ? other.node : piece;
                 const std::shared_ptr<erhe::scene::Node>& reached = on_other ? piece : other.node;

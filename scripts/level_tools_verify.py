@@ -236,7 +236,7 @@ layout.
 Usage: python3 scripts/level_tools_verify.py [--editor <binary>] [--image <png path>] [--surface-image <png path>]
        [--walkable-image <png path>] [--window-image <png path>] [--properties-image <png path>] [--queries-image <png path>]
        [--layout-image <png path>] [--group-image <png path>] [--path-image <png path>] [--only-walkable] [--only-transform] [--only-layouts]
-       [--only-path-layouts] [--only-window-layout] [--only-replace] [--only-layout-selection] [--only-scatter] [--only-connectors] [--only-attachments] [--only-connector-types] [--only-polygon-floor] [--only-connection-records] [--only-property-flow] [--only-flow-preview] [--only-connector-snap]
+       [--only-path-layouts] [--only-window-layout] [--only-replace] [--only-layout-selection] [--only-scatter] [--only-connectors] [--only-attachments] [--only-connector-types] [--only-polygon-floor] [--only-connection-records] [--only-property-flow] [--only-riders] [--only-flow-preview] [--only-connector-snap]
        [--only-layout-indicators] [--only-region-handles] [--only-layout-handles] [--only-segment-handles] [--only-more-shapes] [--only-former-ids] [--only-layout-connectors] [--only-stairs-layout] [--only-stairs-drag-uploads]
        [--only-piece-lights] [--piece-lights-shape <shape id>] [--only-wrap-with-path] [--only-create-menu]
        [--only-thumbnails] [--thumbnails-image <png path>] [--only-machine-kit]
@@ -4766,6 +4766,253 @@ def check_fix_floor_rows_after_delete(editor):
           (len(before) == 4) and ("Connection edge_1" not in deleted) and (len(deleted) == 3) and (restored == before), f"{before} / {deleted} / {restored}")
     select(editor, scene, [])
     editor.close(scene)
+
+
+def check_riders(editor, directory):
+    """doc/plans/level_kit_connections.md C10 riders (L26, design K13): a railing on a floor's rail_0 takes the rail span's length
+    (the edge less two rail insets) and one on a wall's top the wall's length, a battlement on a wall's top its length and
+    thickness, each recorded on the rider; a wall's top joined onto a free railing's base records on the railing; a floor corner
+    edit and a held corner drag change the riders' lengths through the walls (C10.6); a wall length edit reaches its rider; a
+    rider moved alone goes back onto its rail, while held too (C10.5); a moved floor carries its walls and riders; Detach frees a
+    rider; Auto-connect of a floor edit records on the rider; a rail flow mask off joins without values; undo, redo, save and load."""
+    scene = create_scene(editor)
+    editor.call("set_active_scene", {"scene_name": scene})
+
+    def connections(node_id):
+        return [(c["connector"], c["other_name"], c["other_connector"], c["recorded_on"] == node_id, c["joined"])
+                for c in editor.call("level_get_connections", {"scene_name": scene, "node_id": node_id})["connections"]]
+
+    def length_of(node_id, scene_name=None):
+        return piece_by_id(editor, scene_name or scene, node_id)["parameters"]["length"]
+
+    def place(name, shape, connector, to_id, to_connector, extra=None, call_extra=None):
+        piece = {"shape": shape, "name": name, "connect": {"connector": connector, "to_piece_id": to_id, "to_connector": to_connector}}
+        piece.update(extra or {})
+        arguments = {"scene_name": scene, "pieces": [piece]}
+        arguments.update(call_extra or {})
+        reply = editor.call("level_place_pieces", arguments)
+        editor.wait_idle()
+        return reply["pieces"][0], reply
+
+    floor = editor.call("level_create_layout", {"scene_name": scene, "name": "rider floor", "position": [0.0, 0.0, 0.0], "pattern": {"kind": "floor"}})
+    editor.wait_idle()
+    floor_connectors = connectors_of(editor, scene, floor["id"])
+    rails = sorted(n for n in floor_connectors if n.startswith("rail_"))
+    check("a floor layout lists four rail connectors (rail_0 - rail_3), type rail, 0.1 m inside its edges at its top (C10.2)",
+          (rails == ["rail_0", "rail_1", "rail_2", "rail_3"]) and all(floor_connectors[n]["types"] == ["rail"] for n in rails) and
+          close(floor_connectors["rail_0"]["position"], [-1.9, 0.2, 0.0], 1.0e-4), json.dumps({n: floor_connectors[n] for n in rails})[:600])
+    floor_pattern = layouts_by_id(editor, scene)[floor["id"]]["pattern"]["floor"]
+    check("the floor's pattern reports rail_inset 0.1 by default", abs(floor_pattern.get("rail_inset", -1.0) - 0.1) < 1.0e-6, json.dumps(floor_pattern))
+
+    # C10.2, C10.3: a railing on rail_0 of the 4 m floor takes 4 - 2 x 0.1 = 3.8 m, recorded on the railing, one undo entry.
+    depth = undo_depth(editor)
+    r1, r1_reply = place("rider r1", "architecture.railing", "base", floor["id"], "rail_0")
+    p1 = piece_by_id(editor, scene, r1["id"])
+    check("a railing placed on the floor's rail_0 takes length 3.8 (the rail span), in one undo entry (C10.2)",
+          (abs(p1["parameters"]["length"] - 3.8) < 1.0e-4) and (undo_depth(editor) == depth + 1) and ("bays" not in p1["parameters"]) and
+          (abs(p1["parameters"]["bay_length"] - 1.0) < 1.0e-6), json.dumps(p1["parameters"]))
+    taken = {(t["property"], t["supplier"]["name"], t["supplier_connector"], t["priority"]) for t in (r1_reply.get("flow") or {}).get("taken", [])}
+    check("its flow report names child.length taken from the floor's rail_0 at priority 2", ("child.length", "rider floor", "rail_0", 2) in taken, json.dumps(r1_reply.get("flow"))[:500])
+    check("the connection base -> rail_0 is recorded on the railing and joined (C10.7)",
+          connections(r1["id"]) == [("base", "rider floor", "rail_0", True, True)], json.dumps(connections(r1["id"])))
+    r1_pose = (p1["position"], p1["rotation_xyzw"])
+    check("the railing stands on the rail: its origin on rail_0, at the floor's top", close(p1["position"], [-1.9, 0.2, 0.0], 1.0e-4), json.dumps(p1["position"]))
+
+    # A wall on edge_1 with a railing on its top, a wall on edge_2 with a battlement on its top.
+    w1, _ = place("rider w1", "architecture.wall", "base", floor["id"], "edge_1")
+    r2, _ = place("rider r2", "architecture.railing", "base", w1["id"], "top")
+    w2, _ = place("rider w2", "architecture.wall", "base", floor["id"], "edge_2")
+    b1, _ = place("rider b1", "architecture.battlement", "base", w2["id"], "top", {"parameters": {"thickness": 0.6}})
+    pw1 = piece_by_id(editor, scene, w1["id"])
+    pr2 = piece_by_id(editor, scene, r2["id"])
+    pb1 = piece_by_id(editor, scene, b1["id"])
+    check("a railing on a wall's top takes the wall's length (3.75), recorded on the railing (C10.2, C10.3)",
+          (abs(pw1["parameters"]["length"] - 3.75) < 1.0e-4) and (abs(pr2["parameters"]["length"] - 3.75) < 1.0e-4) and
+          (("base", "rider w1", "top", True, True) in connections(r2["id"])), json.dumps(connections(r2["id"])))
+    check("the railing on the wall's top runs along the wall: its origin on the wall's top center, its rotation the wall's",
+          close(pr2["position"], [pw1["position"][0], pw1["position"][1] + pw1["parameters"]["height"], pw1["position"][2]], 1.0e-4) and
+          same_xyzw(pr2["rotation_xyzw"], pw1["rotation_xyzw"]), json.dumps(pr2["position"]) + " " + json.dumps(pw1["position"]))
+    check("a battlement on a wall's top takes the wall's length (3.75) and thickness (0.25) over its own 0.6",
+          close([pb1["parameters"]["length"], pb1["parameters"]["thickness"]], [3.75, 0.25], 1.0e-4), json.dumps(pb1["parameters"]))
+
+    # K13: a free wall's top joined onto a free railing's base records the connection on the railing, which takes the length.
+    free_r = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [{"shape": "architecture.railing", "name": "rider free r", "position": [20.0, 0.0, 0.0]}]})["pieces"][0]
+    editor.wait_idle()
+    free_w = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [{"shape": "architecture.wall", "name": "rider free w", "position": [20.0, 0.0, 8.0],
+                         "parameters": {"length": 5.0}}]})["pieces"][0]
+    editor.wait_idle()
+    depth = undo_depth(editor)
+    editor.call("level_connect_pieces", {"scene_name": scene, "node_id": free_w["id"], "connector": "top", "to_piece_id": free_r["id"], "to_connector": "base"})
+    editor.wait_idle()
+    check("level_connect_pieces of a wall's top onto a railing's base records it on the railing, which takes the wall's 5 m, one undo entry (C10.7)",
+          (connections(free_r["id"]) == [("base", "rider free w", "top", True, True)]) and (abs(length_of(free_r["id"]) - 5.0) < 1.0e-4) and
+          (undo_depth(editor) == depth + 1), json.dumps(connections(free_r["id"])) + f" length {length_of(free_r['id'])}")
+
+    def lengths():
+        return [round(length_of(i), 4) for i in (r1["id"], w1["id"], r2["id"], w2["id"], b1["id"])]
+
+    start_lengths = lengths()
+    check("the riders before the floor edits: r1 3.8, w1 3.75, r2 3.75, w2 3.75, b1 3.75", start_lengths == [3.8, 3.75, 3.75, 3.75, 3.75], str(start_lengths))
+
+    # C10.6: a floor corner edit: edge 0 6 m (r1 5.8), edge 1 5 m (w1 4.75 and r2 on its top 4.75), one undo entry.
+    depth = undo_depth(editor)
+    wider = [[-2.0, 0.0, -3.0], [-2.0, 0.0, 3.0], [3.0, 0.0, 3.0], [3.0, 0.0, -3.0]]
+    editor.call("set_curve", {"scene_name": scene, "curve_id": floor["id"], "closed": True, "points": [{"position": p} for p in wider]})
+    editor.wait_idle()
+    edited = lengths()
+    check("a floor outline edit gives r1 5.8, w1 4.75 and the railing on w1's top 4.75, w2 5.75 and b1 5.75, in one undo entry (C10.6)",
+          (edited == [5.8, 4.75, 4.75, 5.75, 5.75]) and (undo_depth(editor) == depth + 1), str(edited))
+    pr2 = piece_by_id(editor, scene, r2["id"])
+    pw1 = piece_by_id(editor, scene, w1["id"])
+    check("the railing on w1's top follows w1 onto the moved edge", close(pr2["position"], [pw1["position"][0], pw1["position"][1] + pw1["parameters"]["height"], pw1["position"][2]], 1.0e-4),
+          json.dumps(pr2["position"]))
+    editor.call("undo")
+    editor.wait_idle()
+    check("undo of the outline edit restores every rider's length", lengths() == start_lengths, str(lengths()))
+    editor.call("redo")
+    editor.wait_idle()
+    check("redo gives them the edit's lengths again", lengths() == edited, str(lengths()))
+    editor.call("undo")
+    editor.wait_idle()
+
+    # C10.6 live: a held edit of corner 2 (between edges 1 and 2) 1 m along +x: w1 and the railing on its top take 4.75 while held.
+    select(editor, scene, [floor["id"]])
+    editor.call("select_curve_points", {"scene_name": scene, "curve_id": floor["id"], "points": [{"index": 2}]})
+    editor.wait_idle()
+    corner = editor.call("get_curve", {"scene_name": scene, "curve_id": floor["id"]})["points"][2]["position"]
+    depth = undo_depth(editor)
+    editor.call("transform_selection", {"translation": [corner[0] + 1.0, corner[1], corner[2]], "end_edit": False})
+    editor.wait_idle()
+    held = lengths()
+    check("a held corner edit (1 m along x) shows w1 and the railing on its top at 4.75 live, no undo entry (C10.6, K9.3)",
+          (held[1] == 4.75) and (held[2] == 4.75) and (held[0] == 3.8) and (undo_depth(editor) == depth), str(held))
+    editor.call("transform_selection", {"translation": [corner[0] + 1.0, corner[1], corner[2]], "end_edit": True})
+    editor.wait_idle()
+    check("its release records one entry equal to the held state", (lengths() == held) and (undo_depth(editor) == depth + 1), str(lengths()))
+    editor.call("undo")
+    editor.wait_idle()
+    editor.call("select_curve_points", {"scene_name": scene, "curve_id": floor["id"], "points": []})
+    select(editor, scene, [])
+    check("undo of the corner edit restores the lengths", lengths() == start_lengths, str(lengths()))
+
+    # A wall length edit reaches the rider on its top; the host does not fit to its rider (an edit of the rider leaves the wall).
+    depth = undo_depth(editor)
+    editor.call("level_set_piece_parameters", {"scene_name": scene, "node_id": w1["id"], "parameters": {"length": 3.0}})
+    editor.wait_idle()
+    check("a length edit of w1 (3.0) gives the railing on its top 3.0 in the same entry", (lengths()[1:3] == [3.0, 3.0]) and (undo_depth(editor) == depth + 1), str(lengths()))
+    editor.call("undo")
+    editor.wait_idle()
+    editor.call("level_set_piece_parameters", {"scene_name": scene, "node_id": r2["id"], "parameters": {"length": 2.0}})
+    editor.wait_idle()
+    check("a length edit of the rider keeps the rider's 2.0 and leaves its wall at 3.75 (the host does not respond, C10.5)",
+          lengths()[1:3] == [3.75, 2.0], str(lengths()))
+    editor.call("undo")
+    editor.wait_idle()
+
+    # C10.5: a rider moved alone goes back onto its rail at the end of the change; while held, too.
+    depth = undo_depth(editor)
+    floor_corners = editor.call("get_curve", {"scene_name": scene, "curve_id": floor["id"]})["points"]
+    editor.call("set_node_transform", {"scene_name": scene, "node_id": r1["id"], "translation": [r1_pose[0][0] + 0.4, r1_pose[0][1] + 0.3, r1_pose[0][2] + 0.5],
+                                       "rotation_xyzw": r1_pose[1]})
+    editor.wait_idle()
+    back = piece_by_id(editor, scene, r1["id"])
+    check("a railing moved off its rail goes back onto rail_0 (its joined pose), the floor unchanged, the connection kept (C10.5)",
+          close(back["position"], r1_pose[0], 1.0e-4) and same_xyzw(back["rotation_xyzw"], r1_pose[1]) and
+          (editor.call("get_curve", {"scene_name": scene, "curve_id": floor["id"]})["points"] == floor_corners) and
+          (connections(r1["id"]) == [("base", "rider floor", "rail_0", True, True)]), json.dumps(back["position"]))
+    while undo_depth(editor) > depth:
+        editor.call("undo")
+        editor.wait_idle()
+    select(editor, scene, [r2["id"]])
+    r2_pose = piece_by_id(editor, scene, r2["id"])["position"]
+    w1_pose = piece_by_id(editor, scene, w1["id"])["position"]
+    editor.call("drag_selection", {"translation": [0.0, 0.5, 0.7], "frames": 3, "release": False})
+    held_r2 = piece_by_id(editor, scene, r2["id"])["position"]
+    editor.call("drag_selection", {"action": "release"})
+    editor.wait_idle()
+    check("a held drag of the railing on w1's top shows it back on the top (K5.5 previewed), and the release leaves it and w1 there",
+          close(held_r2, r2_pose, 1.0e-4) and close(piece_by_id(editor, scene, r2["id"])["position"], r2_pose, 1.0e-4) and
+          close(piece_by_id(editor, scene, w1["id"])["position"], w1_pose, 1.0e-4), json.dumps(held_r2))
+    while undo_depth(editor) > depth:
+        editor.call("undo")
+        editor.wait_idle()
+    select(editor, scene, [])
+
+    # A moved floor carries its walls and their riders (follow over rail).
+    depth = undo_depth(editor)
+    editor.call("set_node_transform", {"scene_name": scene, "node_id": floor["id"], "translation": [0.0, 0.0, 10.0], "rotation_xyzw": [0.0, 0.0, 0.0, 1.0]})
+    editor.wait_idle()
+    moved = {i: piece_by_id(editor, scene, i)["position"] for i in (r1["id"], r2["id"], b1["id"])}
+    check("a floor moved 10 m along z carries the railing on its rail and the riders on its walls' tops, one entry",
+          close(moved[r1["id"]], [r1_pose[0][0], r1_pose[0][1], r1_pose[0][2] + 10.0], 1.0e-4) and close(moved[r2["id"]], [r2_pose[0], r2_pose[1], r2_pose[2] + 10.0], 1.0e-4) and
+          (undo_depth(editor) == depth + 1), json.dumps(moved))
+    editor.call("undo")
+    editor.wait_idle()
+
+    # C9: Detach frees a rider: a later move moves it alone and it stays there.
+    depth = undo_depth(editor)
+    detached = editor.call("level_detach_pieces", {"scene_name": scene, "node_ids": [r1["id"]]})
+    editor.wait_idle()
+    check("Detach of r1 removes its rail connection in one entry", detached["changed"] and (connections(r1["id"]) == []) and (undo_depth(editor) == depth + 1),
+          json.dumps(connections(r1["id"])))
+    away = [r1_pose[0][0] - 3.0, r1_pose[0][1], r1_pose[0][2]]
+    editor.call("set_node_transform", {"scene_name": scene, "node_id": r1["id"], "translation": away, "rotation_xyzw": r1_pose[1]})
+    editor.wait_idle()
+    check("the detached railing moved 3 m away stays there, unconnected", close(piece_by_id(editor, scene, r1["id"])["position"], away, 1.0e-4) and (connections(r1["id"]) == []),
+          json.dumps(piece_by_id(editor, scene, r1["id"])["position"]))
+    editor.call("undo")
+    editor.wait_idle()
+    # C5, K13: a floor edit with the detached railing still on rail_0 auto-connects it, recorded on the railing (the rider).
+    editor.call("level_set_layout", {"scene_name": scene, "layout_id": floor["id"], "pattern": {"kind": "floor", "floor": {"room_height": 2.6}}})
+    editor.wait_idle()
+    check("Auto-connect of a floor edit joins the detached railing still on rail_0 again, recorded on the railing (K13)",
+          connections(r1["id"]) == [("base", "rider floor", "rail_0", True, True)], json.dumps(connections(r1["id"])))
+    while undo_depth(editor) > depth:
+        editor.call("undo")
+        editor.wait_idle()
+    check("undo of the Detach and the edit restores the connection", connections(r1["id"]) == [("base", "rider floor", "rail_0", True, True)], json.dumps(connections(r1["id"])))
+
+    # C3.9: with rail off in the call's flow mask, a railing joined onto rail_3 connects but keeps its own length.
+    masked, _ = place("rider masked", "architecture.railing", "base", floor["id"], "rail_3", None, {"flow_mask": ["generic", "wall", "wall-floor", "floor"]})
+    check("a railing placed on rail_3 with rail off in the flow mask connects and keeps its 2 m (C3.9)",
+          (abs(length_of(masked["id"]) - 2.0) < 1.0e-4) and (connections(masked["id"]) == [("base", "rider floor", "rail_3", True, True)]),
+          f"{length_of(masked['id'])} {connections(masked['id'])}")
+
+    # A rail inset edit moves the rail connectors: the riders on the floor follow and take the new span (4 - 2 x 0.25).
+    depth = undo_depth(editor)
+    editor.call("level_set_layout", {"scene_name": scene, "layout_id": floor["id"], "pattern": {"kind": "floor", "floor": {"rail_inset": 0.25}}})
+    editor.wait_idle()
+    p1 = piece_by_id(editor, scene, r1["id"])
+    check("a rail_inset edit (0.25) moves r1 to x = -1.75 with length 3.5, one undo entry",
+          (abs(p1["parameters"]["length"] - 3.5) < 1.0e-4) and (abs(p1["position"][0] + 1.75) < 1.0e-4) and (undo_depth(editor) == depth + 1),
+          json.dumps(p1["position"]) + " " + json.dumps(p1["parameters"]))
+
+    # Save and load keep the rider connections, their lengths and the floor's rail_inset.
+    before_lengths = lengths()
+    path = os.path.join(directory, "riders.gltf")
+    editor.save(scene, path)
+    editor.close(scene)
+    loaded = editor.load(path)
+    ids = {p["name"]: p["id"] for p in pieces(editor, loaded)}
+    layouts = [layout for layout in layouts_by_id(editor, loaded).values() if layout["name"] == "rider floor"]
+    loaded_floor = layouts[0]["id"] if layouts else None
+    loaded_lengths = [round(piece_by_id(editor, loaded, ids[n])["parameters"]["length"], 4) for n in ("rider r1", "rider w1", "rider r2", "rider w2", "rider b1")]
+    loaded_links = [(c["connector"], c["other_name"], c["other_connector"], c["recorded_on"] == ids["rider r1"])
+                    for c in editor.call("level_get_connections", {"scene_name": loaded, "node_id": ids["rider r1"]})["connections"]]
+    loaded_r2 = [(c["connector"], c["other_name"], c["other_connector"])
+                 for c in editor.call("level_get_connections", {"scene_name": loaded, "node_id": ids["rider r2"]})["connections"]]
+    loaded_inset = layouts[0]["pattern"]["floor"]["rail_inset"] if layouts else None
+    check("save and load keep the riders' lengths, their connections (recorded on the riders) and the floor's rail_inset 0.25",
+          (loaded_lengths == before_lengths) and (loaded_links == [("base", "rider floor", "rail_0", True)]) and
+          (loaded_r2 == [("base", "rider w1", "top")]) and (loaded_inset is not None) and (abs(loaded_inset - 0.25) < 1.0e-6),
+          f"{loaded_lengths} vs {before_lengths}, {loaded_links}, {loaded_r2}, inset {loaded_inset}")
+    if loaded_floor is not None:
+        editor.call("set_curve", {"scene_name": loaded, "curve_id": loaded_floor, "closed": True, "points": [{"position": p} for p in wider]})
+        editor.wait_idle()
+        check("after the load a floor outline edit still reaches the riders (r1 5.5 on the 6 m edge at inset 0.25, r2 4.75 through w1)",
+              (abs(piece_by_id(editor, loaded, ids["rider r1"])["parameters"]["length"] - 5.5) < 1.0e-4) and
+              (abs(piece_by_id(editor, loaded, ids["rider r2"])["parameters"]["length"] - 4.75) < 1.0e-4), "")
+    editor.close(loaded)
 
 
 CONNECTION_FIX_GROUPS = [
@@ -11982,8 +12229,10 @@ def check_connector_switches(editor):
     check("with Connectors 'all' the wall's five enabled connectors are drawn and its disabled end is not; the other wall shows all six",
           (drawn == sorted(n for n in wall_names if n != "end")) and (drawn_moved == sorted(wall_names)), f"{drawn} | {drawn_moved}")
     colors = {i["name"]: [round(c, 3) for c in i["color"]] for i in shown["indicators"] if i["piece_id"] == m["id"]}
-    check("the indicators take their connector type's color: the wall's ends the wall color, its base the wall-floor color, its top the plain color (C1.8)",
-          (colors.get("start") == [1.0, 0.55, 0.15, 1.0]) and (colors.get("base") == [0.2, 0.75, 1.0, 1.0]) and (colors.get("top") == [0.4, 0.9, 0.4, 1.0]),
+    check("the indicators take their connector type's color: the wall's ends the wall color, its base the wall-floor color, its top the rail color, "
+          "its faces the plain color (C1.8, C10.2)",
+          (colors.get("start") == [1.0, 0.55, 0.15, 1.0]) and (colors.get("base") == [0.2, 0.75, 1.0, 1.0]) and (colors.get("top") == [0.95, 0.35, 0.35, 1.0]) and
+          (colors.get("front") == [0.4, 0.9, 0.4, 1.0]),
           json.dumps(colors))
 
     # The piece switch: every connector off, the per-name list kept.
@@ -12193,9 +12442,9 @@ def check_connector_types(editor):
     editor.wait_idle()
     wall, box, probe = pieces
     types = {c["name"]: c["types"] for c in connectors_of(editor, scene, wall["id"]).values()}
-    check("a wall's start and end accept generic and wall, its base wall-floor only, its top generic (K1.5)",
+    check("a wall's start and end accept generic and wall, its base wall-floor only, its top generic and rail (K1.5, C10.2)",
           (types.get("start") == ["generic", "wall"]) and (types.get("end") == ["generic", "wall"]) and (types.get("base") == ["wall-floor"]) and
-          (types.get("top") == ["generic"]), json.dumps(types))
+          (types.get("top") == ["generic", "rail"]), json.dumps(types))
     refused = call_error(editor, "level_connect_pieces", {"scene_name": scene, "node_id": probe["id"], "connector": "base",
                                                           "to_piece_id": box["id"], "to_connector": "top"})
     check("an explicit join of a wall's base to a block's top is refused naming both connectors and their types (C1.9, L15)",
@@ -18936,6 +19185,7 @@ def main():
     parser.add_argument("--only-scatter", action="store_true", help="run the scatter layout checks alone")
     parser.add_argument("--only-connectors", action="store_true", help="run the connector checks (MCP and the Level Kit window) alone")
     parser.add_argument("--only-property-flow", action="store_true", help="run the property flow checks (level kit connections step 5) alone")
+    parser.add_argument("--only-riders", action="store_true", help="run the rider checks (level kit connections C10: railings and battlements on rails and wall tops) alone")
     parser.add_argument("--only-flow-preview", action="store_true", help="run the flow preview checks (level kit connections step 7) alone, with the Brush tool's floor join")
     parser.add_argument("--only-connection-records", action="store_true", help="run the connection record checks (level kit connections step 4) alone")
     parser.add_argument("--only-connection-fixes", action="store_true", help="run the checks of the connection series review fixes alone")
@@ -19135,6 +19385,8 @@ def main():
             groups = [("connection persistence", check_connection_persistence, work)]
         elif args.only_property_flow:
             groups = [("property flow", check_property_flow)]
+        elif args.only_riders:
+            groups = [("riders", check_riders, work)]
         elif args.only_flow_preview:
             groups = [("flow preview", check_flow_preview), ("flow preview rows", check_flow_preview_rows),
                       ("Level Kit window brush floor join", level_kit_window(lambda e, s, _: check_brush_floor_join(e, s))),
@@ -19186,6 +19438,7 @@ def main():
                     ("flow preview", check_flow_preview),
                     ("flow preview rows", check_flow_preview_rows),
                     ("connection persistence", check_connection_persistence, work),
+                    ("riders", check_riders, work),
                     *CONNECTION_FIX_GROUPS,
                     ("layouts", check_layouts, work),
                     ("path layouts", check_path_layouts, work, path_image_path),

@@ -236,31 +236,50 @@ TEST(Kit_timber_bay, bounds_and_ends_follow_the_values)
 // Railing.
 //
 
-const std::vector<std::string> railing_floats{"length", "height", "post_width"};
+const std::vector<std::string> railing_floats{"length", "height", "bay_length", "post_width"};
+
+// The bay length that gives the bay count at the values' length (the count's own bay length).
+[[nodiscard]] auto set_railing_bays(Kit_parameter_values& values, const int bays) -> bool
+{
+    return values.set_float("bay_length", values.get_float("length") / static_cast<float>(bays));
+}
 
 TEST(Kit_railing, every_style_passes_at_the_corners)
 {
     const Kit_shape_definition& railing = get_shape("architecture.railing");
     for (const std::string& style : enum_values_of(railing, "style")) {
-        for (const int bays : {1, 2, 6}) {
-            for (const int infill : {1, 3, 4, 8}) {
-                Kit_parameter_values values = defaults(railing);
-                ASSERT_TRUE(values.set_enum("style", style));
-                ASSERT_TRUE(values.set_int("bays", bays));
-                ASSERT_TRUE(values.set_int("infill", infill));
-                for_each_corner(values, railing_floats, expect_valid_with_every_slot);
-            }
+        for (const int infill : {1, 3, 4, 8}) {
+            Kit_parameter_values values = defaults(railing);
+            ASSERT_TRUE(values.set_enum("style", style));
+            ASSERT_TRUE(values.set_int("infill", infill));
+            for_each_corner(values, railing_floats, expect_valid_with_every_slot);
         }
     }
 }
 
-TEST(Kit_railing, topology_follows_from_integers_alone)
+// C10.4: the bay count is the count whose bays are nearest bay_length, 1 to 6; a longer run of the same bay length has
+// more bays, each about as long.
+TEST(Kit_railing, bay_count_follows_the_length_at_the_bay_length)
 {
+    EXPECT_EQ(editor::get_kit_repeat_count(2.0f, 1.0f, 6), 2);
+    EXPECT_EQ(editor::get_kit_repeat_count(2.3f, 1.0f, 6), 2);  // 1.15 m bays beat 0.77 m bays
+    EXPECT_EQ(editor::get_kit_repeat_count(2.8f, 1.0f, 6), 3);  // 0.93 m bays beat 1.4 m bays
+    EXPECT_EQ(editor::get_kit_repeat_count(0.3f, 1.0f, 6), 1);
+    EXPECT_EQ(editor::get_kit_repeat_count(40.0f, 1.0f, 6), 6);
+    EXPECT_EQ(editor::get_kit_repeat_count(3.0f, 2.0f, 6), 2);  // 1.5 m bays beat a 3 m bay
+    EXPECT_EQ(editor::get_kit_repeat_count(3.0f, 2.25f, 6), 1); // a tie of 3 m and 1.5 m bays: the smaller count
+    EXPECT_EQ(editor::get_kit_repeat_count(3.0f, 0.0f, 6), 1);
     const Kit_shape_definition& railing = get_shape("architecture.railing");
-    for (const std::string& style : enum_values_of(railing, "style")) {
+    for (const float length : {1.0f, 2.0f, 3.3f, 4.6f, 7.0f}) {
         Kit_parameter_values values = defaults(railing);
-        ASSERT_TRUE(values.set_enum("style", style));
-        expect_topology_from_integers(values, railing_floats);
+        ASSERT_TRUE(values.set_float("length", length));
+        ASSERT_TRUE(values.set_float("bay_length", 1.0f));
+        ASSERT_TRUE(values.set_enum("style", "rail"));
+        ASSERT_TRUE(values.set_int("infill", 2));
+        const unsigned int bays = static_cast<unsigned int>(editor::get_kit_repeat_count(length, 1.0f, 6));
+        const Kit_mesh_report report = editor::check_kit_shape(values);
+        ASSERT_TRUE(report.is_valid()) << describe(report);
+        EXPECT_EQ(report.component_count, bays + 1 + 1) << length; // the posts and one rail
     }
 }
 
@@ -272,7 +291,7 @@ TEST(Kit_railing, parts_and_bounds_follow_the_values)
     for (const int seed : derive_seeds()) {
         const Kit_parameter_values values = all_derived(railing, seed);
         SCOPED_TRACE(values.to_canonical_text());
-        const unsigned int bays   = static_cast<unsigned int>(values.get_int("bays"));
+        const unsigned int bays   = static_cast<unsigned int>(editor::get_kit_repeat_count(values.get_float("length"), values.get_float("bay_length"), 6));
         const unsigned int infill = static_cast<unsigned int>(values.get_int("infill"));
         const std::string  style{values.get_enum("style")};
         const Kit_mesh_report report = editor::check_kit_shape(values);
@@ -307,7 +326,7 @@ TEST(Kit_railing, balusters_take_fewer_triangles_in_a_longer_run)
     for (int bays = 1; bays <= 6; ++bays) {
         for (int infill = 1; infill <= 8; ++infill) {
             Kit_parameter_values values = defaults(railing);
-            ASSERT_TRUE(values.set_int("bays", bays));
+            ASSERT_TRUE(set_railing_bays(values, bays));
             ASSERT_TRUE(values.set_int("infill", infill));
             const int          total = bays * infill;
             const unsigned int each  = (total <= 6) ? 124u : ((total <= 12) ? 68u : ((total <= 24) ? 44u : 28u));

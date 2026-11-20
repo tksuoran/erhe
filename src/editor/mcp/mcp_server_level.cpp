@@ -1065,7 +1065,7 @@ public:
             mask.bits |= Kit_connector_types::of(type.value()).bits;
         }
         if (!ok) {
-            return "flow_mask must be an array of connector types (generic, wall, wall-floor, floor), not " + value.dump();
+            return "flow_mask must be an array of connector types (generic, wall, wall-floor, floor, rail), not " + value.dump();
         }
         out_overrides.flow_mask = mask;
     }
@@ -3087,7 +3087,7 @@ auto Mcp_server::action_set_surface_snap_settings(const json& args) -> std::stri
             flow_mask.bits |= Kit_connector_types::of(type.value()).bits;
         }
         if (!ok) {
-            return make_error_content("set_surface_snap_settings: flow_mask must be an array of connector types (generic, wall, wall-floor), not " + value.dump());
+            return make_error_content("set_surface_snap_settings: flow_mask must be an array of connector types (generic, wall, wall-floor, floor, rail), not " + value.dump());
         }
     }
     if (args.contains("connection_step_limit") && (!args.at("connection_step_limit").is_number_integer() || (args.at("connection_step_limit").get<int>() < 1))) {
@@ -3527,6 +3527,7 @@ namespace {
             {"thickness",      pattern.floor.thickness},
             {"wall_thickness", pattern.floor.wall_thickness},
             {"room_height",    pattern.floor.room_height},
+            {"rail_inset",     pattern.floor.rail_inset},
             {"material",       pattern.floor_material},
             {"wall_material",  pattern.floor_wall_material}
         }}
@@ -3635,17 +3636,18 @@ namespace {
     if (object.contains("floor")) {
         const json& floor = object.at("floor");
         if (!floor.is_object()) {
-            return "pattern: floor must be an object {thickness, wall_thickness, room_height, material, wall_material}";
+            return "pattern: floor must be an object {thickness, wall_thickness, room_height, rail_inset, material, wall_material}";
         }
-        const std::string unrecognized_floor = unrecognized_keys(floor, {"thickness", "wall_thickness", "room_height", "material", "wall_material"});
+        const std::string unrecognized_floor = unrecognized_keys(floor, {"thickness", "wall_thickness", "room_height", "rail_inset", "material", "wall_material"});
         if (!unrecognized_floor.empty()) {
-            return "pattern: floor: unrecognized key(s): " + unrecognized_floor + " (accepted: thickness, wall_thickness, room_height, material, wall_material)";
+            return "pattern: floor: unrecognized key(s): " + unrecognized_floor + " (accepted: thickness, wall_thickness, room_height, rail_inset, material, wall_material)";
         }
         std::string floor_error;
         if (
             !read_number(floor, "thickness",      pattern.floor.thickness,      floor_error) ||
             !read_number(floor, "wall_thickness", pattern.floor.wall_thickness, floor_error) ||
-            !read_number(floor, "room_height",    pattern.floor.room_height,    floor_error)
+            !read_number(floor, "room_height",    pattern.floor.room_height,    floor_error) ||
+            !read_number(floor, "rail_inset",     pattern.floor.rail_inset,     floor_error)
         ) {
             return "pattern: floor: " + floor_error;
         }

@@ -1604,10 +1604,12 @@ staircase (`Level_kits::build_floor_generation()`,
   its caps triangulated by ear clipping, so a concave outline fills.
 - Its values (`Kit_layout_pattern::floor`, `Floor_values`, and two material
   names): `thickness` (0.2 m), `wall_thickness` (0.25 m), `room_height`
-  (3 m), `floor_material` (empty: the floor slot's default) and
-  `floor_wall_material` (empty: the wall slot's default). They are rows of the
-  Properties window and the Level Kit window, the `floor` object of a pattern
-  over MCP, and saved in the pattern text (left out at their defaults).
+  (3 m), `rail_inset` (0.1 m, the riders' line, "Riders"), `floor_material`
+  (empty: the floor slot's default) and `floor_wall_material` (empty: the
+  wall slot's default). They are rows of the Properties window and the Level
+  Kit window, the `floor` object of a pattern over MCP, and saved in the
+  pattern text (left out at their defaults; `floor_rail_inset` on its own, so
+  a text written before riders keeps its form).
 - Refusals: an open curve, a scaled or tilted node, values out of range, a
   floor material name that is neither a scene nor a palette material, and an
   outline `check_floor_outline()` refuses: fewer than three or more than 64
@@ -1631,6 +1633,14 @@ staircase (`Level_kits::build_floor_generation()`,
   (`append_curve_follow_ups()`: the edge renames, the shared corners of
   connected floors, moved from where they stood at the drag's begin, and the
   connection follow-up) and undoes them before the next step (K9.3).
+- Rail connectors (C10.2): each edge also has `rail_<i>`, type `rail`, a rail
+  host, on the top at the middle of the edge's rail span, facing up with its
+  up axis toward the inside. The rail span is the edge's line moved
+  `rail_inset` inside, from its crossing with the previous edge's moved line
+  to its crossing with the next one's (`get_floor_rail_span()`), so riders on
+  neighbouring edges meet where their lines cross at any corner angle,
+  reflex corners included. A `rail_inset` edit moves them, and the riders
+  follow ("Riders").
 - Floor connectors: each edge also has `floor_<i>`, type `floor`, on the
   edge's midpoint at the top, facing out, level. Two floors sharing an edge
   connect there (a drag snap, Auto-connect; a floor layout node keeps
@@ -1654,9 +1664,10 @@ staircase (`Level_kits::build_floor_generation()`,
   same edit moves each connection naming one of the floor's connectors to
   the edge nearest the other end's connector when its recorded edge is gone
   or clearly farther, before the other ends follow
-  (`Level_kits::append_floor_edge_renames()`). The two families rename apart,
-  each one connection per edge: `edge_<i>` (walls) and `floor_<i>` (other
-  floors), on the records naming the floor and on the floor's own records; a
+  (`Level_kits::append_floor_edge_renames()`). The three families rename
+  apart (`parse_floor_connector_name()`), each one connection per edge:
+  `edge_<i>` (walls), `floor_<i>` (other floors) and `rail_<i>` (riders), on
+  the records naming the floor and on the floor's own records; a
   connection whose new edge already holds another of its family is dropped,
   with a warning.
 - A curve edit that makes an outline the floor refuses - crossing edges, a
@@ -1845,15 +1856,18 @@ shapes and their connectors are listed in D1.12 of
 `doc/plans/level_tools_design.md`; the nature shapes have none.
 
 Each connector accepts a set of connector types (`Kit_connector_types`,
-`Kit_connector_type`: `generic`, `wall`, `wall-floor`, `floor`;
-`doc/plans/level_kit_connections.md` C1); two connectors are compatible when
-their sets share a type (`is_compatible()`). Every connector is `generic`
-except on the wall run shapes (`architecture.wall`, `architecture.door_wall`,
-the window wall and the timber bay; `type_wall_run_connectors()`): their
-`start` and `end` accept `wall` and `generic` (a wall still meets a tower's or
-a pillar's side) and their `base` accepts `wall-floor` only, so a wall stands
-on nothing but a floor's wall connector. The types ride every
-local, world and in-root frame of the connector.
+`Kit_connector_type`: `generic`, `wall`, `wall-floor`, `floor`, `rail`;
+`doc/plans/level_kit_connections.md` C1, C10); two connectors are compatible
+when their sets share a type (`is_compatible()`). Every connector is
+`generic` except on the wall run shapes (`architecture.wall`,
+`architecture.door_wall`, the window wall and the timber bay;
+`type_wall_run_connectors()`) and the riders: a wall's `start` and `end`
+accept `wall` and `generic` (a wall still meets a tower's or a pillar's side),
+its `base` accepts `wall-floor` only, so a wall stands on nothing but a
+floor's wall connector, and its `top` accepts `rail` and `generic` as a rail
+host; a rider's `base` accepts `rail` and `generic` ("Riders"). The types and
+the rail end (`Kit_connector::rail_end`, `rider` or `host`) ride every local,
+world and in-root frame of the connector.
 
 - A join the author names (`resolve_connect()`: `connect_piece()`, the Level
   Kit window's Connect rows, `level_connect_pieces`, a placement with
@@ -1930,17 +1944,22 @@ shapes: `room.height`, `floor.thickness`, `wall.thickness`, `child.length`
   `property_mappings`). The four wall run shapes map `room.height` to
   `height`, `child.length` to `length`, `wall.material` to slot `wall` and,
   but for the timber bay (no thickness parameter), `wall.thickness` to
-  `thickness` (`set_wall_run_flow()`).
+  `thickness` (`set_wall_run_flow()`). The riders map `child.length` to
+  `length`, the battlement `wall.thickness` to `thickness` too ("Riders").
 - A shape states what a piece supplies over each connector
   (`Kit_shape_definition::get_supply`, into a fixed-size `Kit_supply_list`):
   a wall run shape over `start` and `end` supplies its thickness, its height
-  and its `wall` slot's material at priority 1.
+  and its `wall` slot's material at priority 1, and over `top` its length
+  (`child.length`) and its thickness at priority 1.
 - A floor layout supplies over each edge connector
   (`get_floor_supply()`) at priority 2: the edge's length minus its
   `wall_thickness` (so walls on neighbouring edges meet at their center
   lines; none when that is under 0.1 m, the walls' least length), the wall
   thickness, the room height and its wall material (a resolved name; the
   caller gives the wall slot's default for an empty `floor_wall_material`).
+  Over each rail connector (`get_floor_rail_supply()`) it supplies at
+  priority 2 the length of the edge's rail span (none under 0.1 m).
+  `get_floor_connector_supply()` picks the supply by the connector's name.
 - The property flow reads them ("Property flow").
 
 ### Connector switches
@@ -2148,13 +2167,15 @@ attachment as described below, followed as one ("Attachments").
   Auto-connect) replaces it.
 - Where a connection is recorded (K6.1): on the piece that was connected (the
   joined piece, the snapped piece, the changed piece of Auto-connect), but a
-  `wall-floor` connection always on its wall: a floor snapped or
-  auto-connected onto a wall writes the record on the wall with the ends
-  swapped (`is_floor_end_of_wall_floor_join()`,
+  `wall-floor` connection always on its wall and a `rail` connection always
+  on its rider (C10.7): a floor snapped or auto-connected onto a wall, or a
+  host joined, placed, snapped or auto-connected onto a rider, writes the
+  record on the wall or the rider with the ends swapped
+  (`is_host_end_of_join()`, `Level_kits::make_join_connection()`,
   `make_reversed_attachment()`; the twist and the gap read the same from
-  both ends). So the floor fits and the wall's return to its edge behave the
-  same whichever piece was moved to make the join, and the wall takes the
-  edge's values. A raw record written with the floor as the owner of a
+  both ends). So the floor fits, the wall's return to its edge and the
+  rider's return to its rail behave the same whichever piece was moved to
+  make the join, and the wall or the rider takes the host's values. A raw record written with the floor as the owner of a
   `wall-floor` join is followed in the stored direction (the floor follows
   the wall); the editor writes such a join on the wall.
 - A record list that does not read (a raw write: two entries of one
@@ -2297,6 +2318,48 @@ over the connections (`Level_kits::build_connection_flow()`,
   wall. Joins of generic connectors (an arch's ends) follow
   rigidly as attachments do.
 
+### Riders
+
+A rider (`doc/plans/level_kit_connections.md` L26, C10; design K13) is a
+piece that runs along X with a `length` and stands on a host's edge, taking
+the host's length: `architecture.railing`, `architecture.battlement` and
+`architecture.entablature`.
+
+- Connector type `rail`: a rider's `base` (at its origin, facing down, up
+  +Z; `type_rider_base_connector()`) accepts `rail` and `generic`; the hosts'
+  rail connectors are a wall run shape's `top` (`rail` and `generic`) and a
+  floor layout's `rail_<i>` (`rail`), marked `Kit_rail_end::host`. A rider
+  joined with no twist runs along the host's X: a wall's run, a floor edge,
+  its front toward the floor's inside.
+- Values: the rider maps `child.length` to `length` (the battlement
+  `wall.thickness` to `thickness` too). A wall's top supplies its length
+  and thickness at priority 1; a floor's `rail_<i>` the length of the edge's
+  rail span at priority 2 ("Floor layouts"). So a railing on a floor edge
+  takes the edge less the two corners' inset, and one on a wall's top the
+  wall's length; a floor corner edit that changes a wall's length changes
+  the rider on its top in the same entry and the same live preview, the
+  flow's rounds carrying the wall's new supply on to the rider (C10.6).
+- Spacing (C10.4): a rider that repeats along its run keeps the repeat's
+  length, so a new length changes the count: the railing's bays
+  (`bay_length`, `get_kit_repeat_count()`), the battlement's merlons (from
+  `merlon_width` and `crenel_width`), the entablature's triglyphs.
+- Response (C10.5): a rider follows its host rigidly over the join (the
+  record is on the rider, so it is the follower). A rider the author moved
+  alone goes back onto its rail at the end of the change, at the join's pose
+  (the K5.5 rule of a wall on a floor, `follow_attachments()`), and a live
+  drag shows it there; it does so with `rail` let through the flow mask. A
+  host never responds to its rider: no fit, no follow, no value. Detach
+  frees a rider, which then moves alone.
+- Record (C10.7): a `rail` connection is always recorded on its rider
+  ("Connections"), whichever piece was moved to make it: a wall's top joined
+  onto a free railing's base with `level_connect_pieces` moves the wall and
+  writes the record on the railing, which takes the wall's length.
+- Every join path takes `rail` as it takes the other types: the explicit
+  join, connected placements, the Brush tool's join and its preview values,
+  connector snap, Auto-connect (a floor edit that leaves a free rider's base
+  on a rail connects it, recorded on the rider), Replace, the flow mask
+  (`rail` switch) and the connector indicators (`connector_rail_color`).
+
 ### Flow report
 
 Every recorded change that runs the flow fills a report (C3.13, design K7.6;
@@ -2369,7 +2432,9 @@ C3.10, design K9; `Level_kits::step_layout_preview()`, `run_flow_preview()`):
   So a free wall snapped onto a floor's edge connector shows the edge's
   length, thickness, height and material; a connected wall dragged shows the
   floor fitting and the other walls following and taking their lengths; a
-  wall slid along its edge stays on the edge.
+  wall slid along its edge stays on the edge; a rider dragged off its rail
+  stays on the rail, and a floor corner drag shows the riders on the walls'
+  tops taking the walls' new lengths ("Riders").
 - Unsnapped, or snapped to another pair, the step runs without the pair: the
   values the snap gave come back (L10).
 - A step whose flow is refused (an outline the floor refuses, K0.3) shows the
@@ -2421,9 +2486,10 @@ pieces again ("Attachments"); it previews no value flow.
   the change moved, edited, placed connected, snapped or flowed into, that
   sits within 0.1 mm of a free enabled connector of another kit piece or
   floor layout sharing a typed connector type with it (`wall`,
-  `wall-floor`; generic connectors never auto-connect, so touching tiles do
-  not chain into rigid groups), is connected, the record on the changed
-  piece (a `wall-floor` connection on its wall, "Connections"). The two connectors must face each other (outward axes opposed),
+  `wall-floor`, `floor`, `rail`; generic connectors never auto-connect, so
+  touching tiles do not chain into rigid groups), is connected, the record on
+  the changed piece (a `wall-floor` connection on its wall, a `rail`
+  connection on its rider, "Connections"). The two connectors must face each other (outward axes opposed),
   except two `wall` connectors, which meet at a room corner at an angle but
   not pointing the same way (a duplicate in place); up axes are not
   compared (L7). A piece joined with `attach` false in the change is left
@@ -2452,7 +2518,8 @@ pieces again ("Attachments"); it previews no value flow.
   settings, MCP `set_surface_snap_settings`): Auto-connect (on by default),
   the flow mask (`flow_mask`, one switch per connector type, all on: values
   and poses flow over a connection only where a type both connectors accept
-  is on; with `wall-floor` off no floor fits, with `wall` off no wall fits)
+  is on; with `wall-floor` off no floor fits, with `wall` off no wall fits,
+  with `rail` off no rider takes a host's length or returns to its rail)
   and the Connection Step Limit (the most rounds of a change's flow, 64 by
   default). `Level_kits::set_connector_auto_connect()` takes a
   `Connector_auto_connect`.
@@ -3372,11 +3439,11 @@ so a connector on a face stays visible. A disabled connector is not drawn
   by; the highlight ends with the drag.
 - Colors and size: Settings > Debug Visualizations Style > Connectors
   (`connector_color`, `connector_wall_color`, `connector_wall_floor_color`,
-  `connector_chosen_color`, `connector_moved_color`,
+  `connector_rail_color`, `connector_chosen_color`, `connector_moved_color`,
   `connector_target_color`, `connector_snapped_color`, `connector_size`,
   `connector_width`). A shown connector that accepts the `wall` type takes
-  the wall color, one that accepts `wall-floor` the wall-floor color, the
-  others the plain color (C1.8; `get_connector_indicator_color()`); the
+  the wall color, one that accepts `wall-floor` the wall-floor color, one
+  that accepts `rail` the rail color, the others the plain color (C1.8; `get_connector_indicator_color()`); the
   chosen, moved, target and snapped roles take their own colors.
 - Cost: the enabled local frames are cached per piece and read again only after a
   change of its record or switches (parameters, replace, a switch edit, undo of each, a raw
@@ -4872,6 +4939,24 @@ Kit window and the MCP tools both call; their scene-free parts are in
   and removing its connection; two free walls end to end fitting; a locked
   layout's child taking nothing; four blocks closing a cycle in place and
   moving rigidly; undo and redo of each.
+  Riders (`--only-riders`, C10), in a scene of its own: a floor listing its
+  four `rail` connectors 0.1 m inside its edges and `rail_inset` in its
+  pattern; a railing placed on `rail_0` taking the rail span's 3.8 m from the
+  floor at priority 2, recorded on the railing, standing on the rail; a
+  railing on a wall's top taking the wall's 3.75 m and running along it, a
+  battlement there taking the wall's length and thickness; a wall's top
+  joined onto a free railing with `level_connect_pieces` recording on the
+  railing; a floor outline edit giving the riders on the floor and on the
+  walls' tops their new lengths in one entry, undo and redo; a held corner
+  edit showing the rider on a wall's top taking the wall's new length live,
+  its release equal; a wall length edit reaching its rider, and a rider
+  length edit leaving its wall; a rider moved off its rail going back, and a
+  held drag of a rider on a wall's top showing it back on the top; a moved
+  floor carrying its riders; Detach freeing a rider, Auto-connect of a floor
+  edit joining it again on the rider; `rail` masked off in one call joining
+  without values; a `rail_inset` edit moving a rider and its length; save
+  and load keeping the lengths, the connections recorded on the riders and
+  the inset, and a later outline edit still reaching the riders.
   Flow preview (`--only-flow-preview`, also running the Brush tool's floor
   join and connector join of the Level Kit window steps), in a scene of its own: a held
   `drag_selection` snapping a free wall onto a floor's edge connector

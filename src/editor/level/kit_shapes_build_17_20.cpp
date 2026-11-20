@@ -241,12 +241,18 @@ enum class Railing_style : unsigned int { rail = 0, picket, balustrade, lattice 
     return Railing_style::rail;
 }
 
+// C10.4: the bay count follows the length, so a rider that takes a new length keeps its bays near bay_length.
+[[nodiscard]] auto get_railing_bay_count(const Kit_parameter_values& values) -> int
+{
+    return get_kit_repeat_count(values.get_float("length"), values.get_float("bay_length"), railing_bay_max);
+}
+
 class Railing_form
 {
 public:
     explicit Railing_form(const Kit_parameter_values& values)
         : style  {get_railing_style(values.get_enum("style"))}
-        , bays   {std::clamp(values.get_int("bays"), 1, railing_bay_max)}
+        , bays   {get_railing_bay_count(values)}
         , infill {std::clamp(values.get_int("infill"), 1, railing_infill_max)}
         , half_l {0.5f * values.get_float("length")}
         , height {values.get_float("height")}
@@ -1375,14 +1381,16 @@ void add_build_17_20_shapes(std::vector<Kit_shape_definition>& shapes)
         shape.kit             = "architecture";
         shape.display_name    = "Railing";
         shape.description     =
-            "Railing or fence run along X in equal bays: half posts at its ends (two runs joined make a whole post) and a "
-            "post between two bays, each under a pyramid. Between the posts: level rails, pointed pickets on two "
-            "stringers, turned balusters between a plinth and a handrail, or crossed slats between two rails.";
+            "Railing or fence run along X in equal bays, as many as make each bay nearest the bay length (1 to 6): half "
+            "posts at its ends (two runs joined make a whole post) and a post between two bays, each under a pyramid. "
+            "Between the posts: level rails, pointed pickets on two stringers, turned balusters between a plinth and a "
+            "handrail, or crossed slats between two rails. A rider: its base stands on a wall's top or a floor edge's "
+            "rail connector and takes the host's length.";
         shape.tags            = {"obstacle", "railing", "fence", "tiles", "size:2x1"};
         shape.parameters      = {
             derive_float(make_length_parameter("length",     "Size along X",        2.0f, Kit_default_scale::modules, 0.5f, 16.0f), 1.5f, 4.0f, 0.5f),
             derive_float(make_length_parameter("height",     "Height of the posts", 1.0f, Kit_default_scale::meters,  0.4f, 2.0f),  0.9f, 1.2f, 0.05f),
-            derive_int  (make_count_parameter ("bays",       "Bays between posts",  2, 1, railing_bay_max), 1, 3),
+            derive_float(make_length_parameter("bay_length", "Nominal length of a bay between posts; the bay count is the one whose bays are nearest to it", 1.0f, Kit_default_scale::modules, 0.25f, 8.0f), 0.75f, 2.0f, 0.25f),
             derive_float(make_length_parameter("post_width", "Width and depth of a whole post; at most 0.35 of a bay", 0.12f, Kit_default_scale::meters, 0.04f, 0.3f), 0.1f, 0.16f, 0.02f),
             derive_enum (make_enum_parameter  ("style",      "Rails, pickets, balusters or crossed slats", {"rail", "picket", "balustrade", "lattice"}, 2)),
             derive_int  (make_count_parameter ("infill",     "Pickets, balusters or crosses in a bay; the rail style has a rail for every two", 5, 1, railing_infill_max), 3, 6),
@@ -1399,7 +1407,9 @@ void add_build_17_20_shapes(std::vector<Kit_shape_definition>& shapes)
             add_side_connector(out_connectors, "start", glm::vec3{-half_l, 0.0f, 0.0f}, glm::vec3{-1.0f, 0.0f, 0.0f});
             add_side_connector(out_connectors, "end",   glm::vec3{ half_l, 0.0f, 0.0f}, glm::vec3{ 1.0f, 0.0f, 0.0f});
             out_connectors.push_back(Kit_connector{.name = "base", .position = glm::vec3{0.0f}, .outward = glm::vec3{0.0f, -1.0f, 0.0f}, .up = glm::vec3{0.0f, 0.0f, 1.0f}});
+            type_rider_base_connector(out_connectors);
         };
+        shape.property_mappings = {Kit_property_mapping{.property = Kit_standard_property::child_length, .target = "length"}};
         shapes.push_back(std::move(shape));
     }
     {

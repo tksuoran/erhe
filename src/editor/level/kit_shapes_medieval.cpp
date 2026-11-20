@@ -1140,6 +1140,12 @@ void add_medieval_shapes(std::vector<Kit_shape_definition>& shapes)
             out_connectors.push_back(Kit_connector{.name = "base", .position = glm::vec3{0.0f}, .outward = glm::vec3{0.0f, -1.0f, 0.0f}, .up = glm::vec3{0.0f, 0.0f, 1.0f}});
             add_side_connector(out_connectors, "start", glm::vec3{-half_length, 0.0f, 0.0f}, glm::vec3{-1.0f, 0.0f, 0.0f});
             add_side_connector(out_connectors, "end",   glm::vec3{ half_length, 0.0f, 0.0f}, glm::vec3{ 1.0f, 0.0f, 0.0f});
+            type_rider_base_connector(out_connectors);
+        };
+        // C10.3: a rider on a wall's top takes the wall's length and thickness.
+        shape.property_mappings = {
+            Kit_property_mapping{.property = Kit_standard_property::child_length,   .target = "length"},
+            Kit_property_mapping{.property = Kit_standard_property::wall_thickness, .target = "thickness"}
         };
         shapes.push_back(std::move(shape));
     }

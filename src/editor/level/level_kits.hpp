@@ -525,8 +525,9 @@ public:
 
 // K6: a floor kit layout node (a Curve carrying a floor layout), a connection end like a kit piece.
 [[nodiscard]] auto is_floor_layout(const erhe::scene::Node& node) -> bool;
-// K6.1: a wall-floor connection is recorded on its wall: true when the node is the floor end of such a join.
-[[nodiscard]] auto is_floor_end_of_wall_floor_join(const erhe::scene::Node& node, const Kit_connector& own, const erhe::scene::Node& other, const Kit_connector& other_connector) -> bool;
+// K6.1, K13: a wall-floor connection is recorded on its wall and a rail connection on its rider: true when the node is
+// the floor end of a wall-floor join or the host end of a rail join, whose record goes on the other end.
+[[nodiscard]] auto is_host_end_of_join(const erhe::scene::Node& node, const Kit_connector& own, const erhe::scene::Node& other, const Kit_connector& other_connector) -> bool;
 // The record of the same connection kept on its other end (the join's twist and gap read the same from both ends).
 [[nodiscard]] auto make_reversed_attachment(const Kit_attachment& attachment) -> Kit_attachment;
 // Its edge connectors in its local frame (get_floor_connectors()); the refusal when its outline or values do not read.
@@ -755,6 +756,9 @@ public:
     [[nodiscard]] auto check_attach(const erhe::scene::Node& node, const erhe::scene::Node& target) const -> Kit_attach_check;
     // The record of the join, owned by the node.
     [[nodiscard]] static auto make_connect_attachment(const erhe::scene::Node& node, const Kit_connect& connect) -> Kit_attachment;
+    // K6.1, K13: the connection a join of the node (at the values) to the target records, on the end that holds it: the
+    // node, or the target where the node is the host end (a wall's top joined onto a railing's base).
+    [[nodiscard]] auto make_join_connection(const std::shared_ptr<erhe::scene::Node>& node, const Kit_parameter_values& values, const Kit_connect& connect) const -> Kit_new_connection;
     // The write of the node's attachment (none: removed) as an operation; null when the node has it already.
     [[nodiscard]] static auto make_attachment_operation(const std::shared_ptr<erhe::scene::Node>& node, const std::optional<Kit_attachment>& attachment) -> std::shared_ptr<Operation>;
     // K6.1: the node's connection of the connector removed, the others kept; none when it has no such connection.

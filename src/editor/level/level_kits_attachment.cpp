@@ -183,10 +183,11 @@ auto Level_kits::is_connection_joined(const erhe::scene::Node& owner, const Kit_
     return (own != nullptr) && (target_local != nullptr) && is_joined_now(owner, *own, target, *target_local, attachment);
 }
 
-auto is_floor_end_of_wall_floor_join(const erhe::scene::Node& node, const Kit_connector& own, const erhe::scene::Node& other, const Kit_connector& other_connector) -> bool
+auto is_host_end_of_join(const erhe::scene::Node& node, const Kit_connector& own, const erhe::scene::Node& other, const Kit_connector& other_connector) -> bool
 {
-    return is_floor_layout(node) && !is_floor_layout(other) &&
-           own.types.contains(Kit_connector_type::wall_floor) && other_connector.types.contains(Kit_connector_type::wall_floor);
+    const bool floor_of_wall = is_floor_layout(node) && !is_floor_layout(other) &&
+                               own.types.contains(Kit_connector_type::wall_floor) && other_connector.types.contains(Kit_connector_type::wall_floor);
+    return floor_of_wall || is_rail_host_of(own, other_connector);
 }
 
 auto make_reversed_attachment(const Kit_attachment& attachment) -> Kit_attachment
@@ -211,6 +212,22 @@ auto Level_kits::make_connect_attachment(const erhe::scene::Node& node, const Ki
         .twist_steps      = ((connect.twist_steps % 4) + 4) % 4, // the same join
         .gap              = connect.gap
     };
+}
+
+auto Level_kits::make_join_connection(const std::shared_ptr<erhe::scene::Node>& node, const Kit_parameter_values& values, const Kit_connect& connect) const -> Kit_new_connection
+{
+    const Kit_attachment attachment = make_connect_attachment(*node, connect);
+    std::vector<Kit_connector> own_frames;
+    std::vector<Kit_connector> target_frames;
+    get_shape_connectors(values, own_frames);
+    const Kit_connector* const own    = find_connector(own_frames, connect.connector);
+    const Kit_connector* const target = (connect.target && get_local_connectors(*connect.target, target_frames, Kit_connector_set::all).empty())
+        ? find_connector(target_frames, connect.target_connector)
+        : nullptr;
+    if ((own != nullptr) && (target != nullptr) && is_host_end_of_join(*node, *own, *connect.target, *target)) {
+        return Kit_new_connection{.node = connect.target, .attachment = make_reversed_attachment(attachment), .target = node};
+    }
+    return Kit_new_connection{.node = node, .attachment = attachment, .target = connect.target};
 }
 
 auto Level_kits::make_attachment_operation(const std::shared_ptr<erhe::scene::Node>& node, const std::optional<Kit_attachment>& attachment) -> std::shared_ptr<Operation>
@@ -522,8 +539,8 @@ auto Level_kits::find_snap_attachment(const Kit_snap_pair& snap) const -> std::o
                 .twist_steps      = twist,
                 .gap              = 0.0f
             };
-            // K6.1: a floor snapped onto a wall records the connection on the wall.
-            return is_floor_end_of_wall_floor_join(*snap.piece, *own, *snap.target, *target_local) ? make_reversed_attachment(attachment) : attachment;
+            // K6.1, K13: a floor snapped onto a wall records the connection on the wall, a host snapped onto a rider on the rider.
+            return is_host_end_of_join(*snap.piece, *own, *snap.target, *target_local) ? make_reversed_attachment(attachment) : attachment;
         }
     }
     return std::nullopt;
@@ -823,10 +840,15 @@ void Level_kits::follow_attachments(
     // The followers: a changed attached piece (its own connector moved) and, transitively, every piece whose target is
     // at or below a moved or changed node or an earlier follower.
     m_follow_flow_mask = get_effective_flow_mask();
-    // A wall standing on a floor layout's edge, joined over wall-floor with the type let through the mask.
-    const auto is_floor_wall_join = [](const Attached_piece& piece, const Kit_connector_types mask) -> bool {
-        return piece.target && is_floor_layout(*piece.target) && mask.contains(Kit_connector_type::wall_floor) &&
-               piece.own.types.contains(Kit_connector_type::wall_floor) && piece.target_local.types.contains(Kit_connector_type::wall_floor);
+    // A wall standing on a floor layout's edge, joined over wall-floor, or a rider on its host, joined over rail (C10.5),
+    // with the type let through the mask: the piece goes back onto its join when the user moved it alone.
+    const auto returns_to_join = [](const Attached_piece& piece, const Kit_connector_types mask) -> bool {
+        if (!piece.target) {
+            return false;
+        }
+        const bool wall_on_floor = is_floor_layout(*piece.target) && mask.contains(Kit_connector_type::wall_floor) &&
+                                   piece.own.types.contains(Kit_connector_type::wall_floor) && piece.target_local.types.contains(Kit_connector_type::wall_floor);
+        return wall_on_floor || (mask.contains(Kit_connector_type::rail) && is_rail_host_of(piece.target_local, piece.own));
     };
     for (Attached_piece& piece : attached) {
         piece.done     = false;
@@ -844,10 +866,11 @@ void Level_kits::follow_attachments(
         if (!is_rigid_join(piece, m_follow_flow_mask)) {
             piece.affected = false;
             piece.rigid    = false;
-        } else if ((out_detached != nullptr) && (piece.dormant() == nullptr) && is_floor_wall_join(piece, m_follow_flow_mask) &&
+        } else if ((out_detached != nullptr) && (piece.dormant() == nullptr) && returns_to_join(piece, m_follow_flow_mask) &&
                    is_at_or_below(m_follow_user, piece.node.get()) && !is_at_or_below(m_follow_user, piece.target.get())) {
             // K5.5 (C3.15, L20): a wall the user moved goes back onto its floor edge, upright, once the floor fitted it; a
-            // live parameter drag's following (no out_detached) leaves it where it is.
+            // rider goes back onto its host's rail (C10.5, the host does not fit); a live parameter drag's following (no
+            // out_detached) leaves it where it is.
             piece.affected = true;
         }
     }

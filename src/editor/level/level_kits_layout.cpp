@@ -1740,8 +1740,8 @@ void Level_kits::append_floor_edge_renames(
     }
     // C8.4, K3.8: an edit that adds or removes corners renumbers the edges. The other ends have not moved yet, so each
     // connection naming one of the floor's connectors goes to the edge nearest the other end's connector when its own edge
-    // is gone or clearly farther. The two families rename apart: edge_<i> (walls) and floor_<i> (floors, L25), each one
-    // connection per edge; the floor's own records rename their own connector the same way.
+    // is gone or clearly farther. The three families rename apart: edge_<i> (walls), floor_<i> (floors, L25) and rail_<i>
+    // (riders, C10.2), each one connection per edge; the floor's own records rename their own connector the same way.
     std::vector<glm::vec2> outline;
     if (!read_floor_outline(curve.get_table(), outline).empty() || (outline.size() < 3)) {
         return;
@@ -1754,36 +1754,15 @@ void Level_kits::append_floor_edge_renames(
         const float     t = std::clamp(glm::dot(p - a, d) / std::max(glm::dot(d, d), 1.0e-12f), 0.0f, 1.0f);
         return glm::distance(p, a + (t * d));
     };
-    // The family and edge of one of the floor's connector names; nullopt for a name of neither family.
-    class Floor_connector
-    {
-    public:
-        bool        floor_family{false}; // floor_<i>, else edge_<i>
-        std::size_t edge{0};             // n when the edge is gone
-    };
-    const auto read_name = [n](const std::string& name) -> std::optional<Floor_connector> {
-        const bool floor_family = name.starts_with("floor_");
-        if (!floor_family && !name.starts_with("edge_")) {
-            return std::nullopt;
-        }
-        Floor_connector result{.floor_family = floor_family, .edge = n};
-        for (std::size_t k = 0; k < n; ++k) {
-            if (name == (floor_family ? get_floor_floor_connector_name(k) : get_floor_edge_connector_name(k))) {
-                result.edge = k;
-            }
-        }
-        return result;
-    };
     const std::shared_ptr<erhe::scene::Node> self = std::dynamic_pointer_cast<erhe::scene::Node>(std::const_pointer_cast<erhe::Item_base>(curve.shared_from_this()));
     const std::string uid = curve.get_gltf_uid();
     const glm::mat4   floor_from_world = curve.node_from_world();
-    std::vector<std::size_t> used_edges;  // edge_<i> family
-    std::vector<std::size_t> used_floors; // floor_<i> family
+    std::array<std::vector<std::size_t>, 3> used; // per Floor_connector_family
     std::vector<Kit_connector> frames;
     // The floor's connector of one record renamed by where the other end's connector is, kept or dropped.
     enum class Rename : unsigned int { kept, renamed, dropped };
     const auto rename = [&](const erhe::scene::Node& holder, std::string& floor_connector, const erhe::scene::Node& other_end, const std::string& other_connector) -> Rename {
-        const std::optional<Floor_connector> name = read_name(floor_connector);
+        const std::optional<Floor_connector_name> name = parse_floor_connector_name(floor_connector, n);
         if (!name.has_value() || !get_world_connectors(other_end, frames, Kit_connector_set::all).empty()) {
             return Rename::kept;
         }
@@ -1802,19 +1781,21 @@ void Level_kits::append_floor_edge_renames(
         const std::size_t recorded = name.value().edge;
         const bool keep = (recorded < n) && (distance_to_edge(p, recorded) <= (distance_to_edge(p, nearest) + 0.01f));
         const std::size_t edge = keep ? recorded : nearest;
-        std::vector<std::size_t>& used = name.value().floor_family ? used_floors : used_edges;
-        if (std::find(used.begin(), used.end(), edge) != used.end()) {
+        const Floor_connector_family family = name.value().family;
+        std::vector<std::size_t>& family_used = used[static_cast<std::size_t>(family)];
+        if (std::find(family_used.begin(), family_used.end(), edge) != family_used.end()) {
             log_scene->log(
                 flow_log_level(spdlog::level::warn), "Floor '{}': '{}' loses its connection, its edge {} holds another {}",
-                curve.get_name(), holder.get_name(), edge, name.value().floor_family ? "floor" : "wall"
+                curve.get_name(), holder.get_name(), edge,
+                (family == Floor_connector_family::floor) ? "floor" : ((family == Floor_connector_family::rail) ? "rider" : "wall")
             );
             return Rename::dropped;
         }
-        used.push_back(edge);
+        family_used.push_back(edge);
         if (keep) {
             return Rename::kept;
         }
-        floor_connector = name.value().floor_family ? get_floor_floor_connector_name(edge) : get_floor_edge_connector_name(edge);
+        floor_connector = get_floor_connector_name(family, edge);
         return Rename::renamed;
     };
     std::unordered_map<std::string_view, std::shared_ptr<erhe::scene::Node>> by_uid;

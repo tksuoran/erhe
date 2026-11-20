@@ -70,7 +70,8 @@ enum class Kit_layout_row : unsigned int {
     floor_wall_thickness,
     floor_room_height,
     floor_material,
-    floor_wall_material
+    floor_wall_material,
+    floor_rail_inset
 };
 
 // One row of a layout's snap and seed values.

@@ -21,10 +21,11 @@ enum class Kit_connector_type : unsigned int
     generic = 0,
     wall,
     wall_floor,
-    floor      // floor edge to floor edge: connected floors share their corners
+    floor,     // floor edge to floor edge: connected floors share their corners
+    rail       // a rider (railing, battlement) on a host's edge or top (C10)
 };
 
-inline constexpr std::size_t c_connector_type_count = 4;
+inline constexpr std::size_t c_connector_type_count = 5;
 
 [[nodiscard]] auto c_str(Kit_connector_type type) -> const char*;
 [[nodiscard]] auto parse_connector_type(std::string_view name) -> std::optional<Kit_connector_type>;
@@ -52,6 +53,13 @@ public:
 // "generic", "wall, wall-floor", ...; allocates (messages and reports only).
 [[nodiscard]] auto connector_types_text(Kit_connector_types types) -> std::string;
 
+// C10, design K13: which end of a rail join a connector is; the join's record goes on the rider.
+enum class Kit_rail_end : unsigned int
+{
+    rider = 0,
+    host       // a wall run's top, a floor layout's rail_<i>: it supplies the run and never responds to its rider
+};
+
 // A named frame on a shape where another shape attaches (R5.3, D1.12): unit outward and up axes, up normal to outward.
 // The name is a literal (static storage), so filling and copying connectors allocates nothing.
 class Kit_connector
@@ -62,12 +70,20 @@ public:
     glm::vec3   outward {0.0f, 0.0f, 1.0f};
     glm::vec3   up      {0.0f, 1.0f, 0.0f};
     Kit_connector_types types{};
+    Kit_rail_end        rail_end{Kit_rail_end::rider};
 };
 
 // K1.4: the one compatibility test of every join path.
 [[nodiscard]] inline auto is_compatible(const Kit_connector& a, const Kit_connector& b) -> bool
 {
     return a.types.intersects(b.types);
+}
+
+// K13: own is the host of a rail join with other (both accept rail, own hosts, other rides).
+[[nodiscard]] inline auto is_rail_host_of(const Kit_connector& own, const Kit_connector& other) -> bool
+{
+    return own.types.contains(Kit_connector_type::rail) && other.types.contains(Kit_connector_type::rail) &&
+           (own.rail_end == Kit_rail_end::host) && (other.rail_end == Kit_rail_end::rider);
 }
 
 // A connector switch's state (U33).

@@ -100,6 +100,19 @@ The user's rulings (2026-11-19):
   length adapts, so its far connector stays where it is and its near
   connector stays on the moved wall's (C3.16).
 
+- L26 (2026-11-20, the user: "the shapes which adapt to length parameter,
+  like fences, we want to be attach them to on tops of walls and floors";
+  "You choose initial rulings"; orchestrator choices, for the user's review
+  after a windowed test): shapes that run along X with a `length` are
+  riders (C10). A rider stands on a `rail` connector, a new connector type
+  of its own (not `wall-floor`, so walls do not start stacking and an edge
+  can hold a wall and a rider). A wall run shape's `top` and every floor
+  edge have one. The floor's rider line is inset by a floor value,
+  `rail_inset`. A moved rider goes back onto its edge, as a wall does on a
+  floor; Detach frees it. A host never fits to its rider. A rider whose
+  shape repeats along its run (the railing's bays) keeps the repeat's
+  spacing when its length changes: the count follows the length.
+
 Readings the orchestrator made to fit the rulings together are marked
 "(reading)" where they appear; L12 accepted them.
 
@@ -405,6 +418,47 @@ Readings the orchestrator made to fit the rulings together are marked
   MCP; a single connection is removed with its row's Remove (C6.3).
 - C9.3 `[must]` Detach replaces today's detach of an attachment
   (`doc/editor/level_tools.md` "Attachments").
+
+## C10 Riders
+
+Pieces that run along a host's edge and take its length (L26): a railing on
+a floor's edge or a wall's top, a battlement on a wall.
+
+- C10.1 `[must]` A connector type `rail`, with its switch in the flow mask.
+- C10.2 `[must]` Hosts. A wall run shape's `top` accepts `rail` and
+  `generic` and supplies `child.length`, the wall's length, and
+  `wall.thickness`. A floor layout gives each edge a connector `rail_<i>`,
+  type `rail`, on the edge's top, facing up, inset toward the inside by the
+  floor value `rail_inset` (0.1 m by default); it supplies `child.length`,
+  the edge's length less what makes the riders of two neighbouring edges
+  meet at the crossing of their lines (as L9 does for walls, at any corner
+  angle the floor allows). The floor's `rail_<i>` connections are renamed
+  with their edges as `edge_<i>` and `floor_<i>` are (C8.4).
+- C10.3 `[must]` Riders. `architecture.railing` and
+  `architecture.battlement` map `child.length` to `length` and have a
+  `base` connector that accepts `rail` and `generic`, so that a rider joined
+  with no twist runs along the host's edge. The design lists which further
+  shapes become riders.
+- C10.4 `[must]` Spacing. A rider that repeats along its run states the
+  repeat as a spacing, so a flowed length changes the count and not the
+  stretch of each repeat: the railing has `bay_length` in place of `bays`,
+  and its bay count is the count whose bays are nearest to it.
+- C10.5 `[must]` Response. A rider follows its host over `rail` (a rigid
+  move that re-joins); a rider the author moved goes back onto its edge at
+  the end of the change, at the join's pose (K5.5); a live drag shows it
+  there. A host does not respond to its rider. Detach (C9) frees a rider.
+- C10.6 `[must]` The chain holds: a floor corner drag changes a wall's
+  length, and the rider on that wall's top takes the new length in the same
+  change and the same live preview.
+- C10.7 `[must]` Every join path of C1.3 and Auto-connect (C5) treat `rail`
+  as they treat the other types; a connection record of a `rail` join is
+  written on the rider, whichever piece was moved to make it.
+- C10.8 `[must]` Verification: unit tests of the mappings, the supplies and
+  the railing's bay count; a verify group `--only-riders` of
+  `scripts/level_tools_verify.py`: a railing on a floor edge and one on a
+  wall's top take their lengths, a floor corner drag and a wall length edit
+  change them, a moved rider goes back, Detach frees it, undo and redo, save
+  and load.
 
 ## Later
 

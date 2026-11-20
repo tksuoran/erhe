@@ -482,7 +482,10 @@ void add_classical_shapes(std::vector<Kit_shape_definition>& shapes)
             add_base_and_top_connectors(out_connectors, values.get_float("height"));
             add_side_connector(out_connectors, "start", glm::vec3{-half_length, 0.0f, 0.0f}, glm::vec3{-1.0f, 0.0f, 0.0f});
             add_side_connector(out_connectors, "end",   glm::vec3{ half_length, 0.0f, 0.0f}, glm::vec3{ 1.0f, 0.0f, 0.0f});
+            type_rider_base_connector(out_connectors);
         };
+        // C10.3: a rider on a wall's top takes the wall's length.
+        shape.property_mappings = {Kit_property_mapping{.property = Kit_standard_property::child_length, .target = "length"}};
         shapes.push_back(std::move(shape));
     }
 }

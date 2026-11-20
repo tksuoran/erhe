@@ -243,8 +243,36 @@ void type_wall_run_connectors(std::vector<Kit_connector>& out_connectors)
             connector.types = Kit_connector_types{.bits = Kit_connector_types::of(Kit_connector_type::wall).bits | Kit_connector_types::of(Kit_connector_type::generic).bits};
         } else if (name == "base") {
             connector.types = Kit_connector_types::of(Kit_connector_type::wall_floor);
+        } else if (name == "top") {
+            // C10.2: riders stand on a wall's top; generic too, so a wall top still takes what it took before.
+            connector.types    = Kit_connector_types{.bits = Kit_connector_types::of(Kit_connector_type::rail).bits | Kit_connector_types::of(Kit_connector_type::generic).bits};
+            connector.rail_end = Kit_rail_end::host;
         }
     }
+}
+
+void type_rider_base_connector(std::vector<Kit_connector>& out_connectors)
+{
+    for (Kit_connector& connector : out_connectors) {
+        if (std::string_view{connector.name} == "base") {
+            connector.types    = Kit_connector_types{.bits = Kit_connector_types::of(Kit_connector_type::rail).bits | Kit_connector_types::of(Kit_connector_type::generic).bits};
+            connector.rail_end = Kit_rail_end::rider;
+        }
+    }
+}
+
+auto get_kit_repeat_count(const float length, const float spacing, const int max_count) -> int
+{
+    if (!(length > 0.0f) || !(spacing > 0.0f) || !std::isfinite(length) || !std::isfinite(spacing) || (max_count < 1)) {
+        return 1;
+    }
+    // The two counts around length / spacing; the one whose repeat is nearer the spacing, the smaller on a tie.
+    const float ratio = std::min(length / spacing, static_cast<float>(max_count));
+    const int   lower = std::clamp(static_cast<int>(std::floor(ratio)), 1, max_count);
+    const int   upper = std::clamp(lower + 1, 1, max_count);
+    const float lower_error = std::abs((length / static_cast<float>(lower)) - spacing);
+    const float upper_error = std::abs((length / static_cast<float>(upper)) - spacing);
+    return (upper_error < lower_error) ? upper : lower;
 }
 
 void set_wall_run_flow(Kit_shape_definition& shape, const char* const thickness_parameter)
@@ -265,6 +293,14 @@ void set_wall_run_flow(Kit_shape_definition& shape, const char* const thickness_
     }
     shape.get_supply = [wall_slot, thickness_parameter](const Kit_piece_view& piece, const std::string_view name, Kit_supply_list& out_supply) {
         out_supply.clear();
+        if (name == "top") {
+            // C10.2: a rider on the top runs the wall's length.
+            out_supply.add(Kit_supplied_value{.property = Kit_standard_property::child_length, .priority = c_wall_supply_priority, .length = piece.values->get_float("length")});
+            if (thickness_parameter != nullptr) {
+                out_supply.add(Kit_supplied_value{.property = Kit_standard_property::wall_thickness, .priority = c_wall_supply_priority, .length = piece.values->get_float(thickness_parameter)});
+            }
+            return;
+        }
         if ((name != "start") && (name != "end")) {
             return;
         }

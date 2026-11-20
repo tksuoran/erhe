@@ -36,6 +36,17 @@ constexpr std::array<const char*, c_floor_max_edges> c_floor_edge_names{
     "floor_56", "floor_57", "floor_58", "floor_59", "floor_60", "floor_61", "floor_62", "floor_63"
 };
 
+constexpr std::array<const char*, c_floor_max_edges> c_rail_names{
+    "rail_0", "rail_1", "rail_2", "rail_3", "rail_4", "rail_5", "rail_6", "rail_7",
+    "rail_8", "rail_9", "rail_10", "rail_11", "rail_12", "rail_13", "rail_14", "rail_15",
+    "rail_16", "rail_17", "rail_18", "rail_19", "rail_20", "rail_21", "rail_22", "rail_23",
+    "rail_24", "rail_25", "rail_26", "rail_27", "rail_28", "rail_29", "rail_30", "rail_31",
+    "rail_32", "rail_33", "rail_34", "rail_35", "rail_36", "rail_37", "rail_38", "rail_39",
+    "rail_40", "rail_41", "rail_42", "rail_43", "rail_44", "rail_45", "rail_46", "rail_47",
+    "rail_48", "rail_49", "rail_50", "rail_51", "rail_52", "rail_53", "rail_54", "rail_55",
+    "rail_56", "rail_57", "rail_58", "rail_59", "rail_60", "rail_61", "rail_62", "rail_63"
+};
+
 [[nodiscard]] auto cross2(const glm::vec2& a, const glm::vec2& b) -> float
 {
     return (a.x * b.y) - (a.y * b.x);
@@ -91,6 +102,9 @@ auto check_floor_values(const Floor_values& values) -> std::string
     }
     if (!std::isfinite(values.room_height) || (values.room_height < 0.1f) || (values.room_height > 32.0f)) {
         return fmt::format("floor room_height {} is outside 0.1 - 32 m", values.room_height);
+    }
+    if (!std::isfinite(values.rail_inset) || (values.rail_inset < 0.0f) || (values.rail_inset > 4.0f)) {
+        return fmt::format("floor rail_inset {} is outside 0 - 4 m", values.rail_inset);
     }
     return {};
 }
@@ -291,6 +305,77 @@ auto get_floor_floor_connector_name(const std::size_t edge) -> const char*
     return (edge < c_floor_edge_names.size()) ? c_floor_edge_names[edge] : "";
 }
 
+auto get_floor_rail_connector_name(const std::size_t edge) -> const char*
+{
+    return (edge < c_rail_names.size()) ? c_rail_names[edge] : "";
+}
+
+auto get_floor_connector_name(const Floor_connector_family family, const std::size_t edge) -> const char*
+{
+    switch (family) {
+        case Floor_connector_family::floor: return get_floor_floor_connector_name(edge);
+        case Floor_connector_family::rail:  return get_floor_rail_connector_name(edge);
+        case Floor_connector_family::edge:
+        default:                            return get_floor_edge_connector_name(edge);
+    }
+}
+
+auto parse_floor_connector_name(const std::string_view name, const std::size_t edge_count) -> std::optional<Floor_connector_name>
+{
+    Floor_connector_family family = Floor_connector_family::edge;
+    if (name.starts_with("floor_")) {
+        family = Floor_connector_family::floor;
+    } else if (name.starts_with("rail_")) {
+        family = Floor_connector_family::rail;
+    } else if (!name.starts_with("edge_")) {
+        return std::nullopt;
+    }
+    Floor_connector_name result{.family = family, .edge = edge_count};
+    for (std::size_t k = 0, end = std::min(edge_count, c_floor_max_edges); k < end; ++k) {
+        if (name == get_floor_connector_name(family, k)) {
+            result.edge = k;
+        }
+    }
+    return result;
+}
+
+namespace {
+
+// The crossing of edge (i - 1)'s and edge i's lines, each moved inset along its inward (C10.2).
+[[nodiscard]] auto get_inset_corner(const std::span<const glm::vec2> outline, const float inset, const std::size_t i) -> glm::vec2
+{
+    const std::size_t n        = outline.size();
+    const std::size_t previous = (i + n - 1) % n;
+    const glm::vec2   n0       = get_floor_edge_inward(outline, previous);
+    const glm::vec2   n1       = get_floor_edge_inward(outline, i);
+    const float       det      = cross2(n0, n1);
+    if (std::abs(det) < 1.0e-6f) {
+        return outline[i] + (inset * n1); // the two edges run on one line
+    }
+    // dot(p, n0) = dot(a0, n0) + inset and dot(p, n1) = dot(a1, n1) + inset, solved by Cramer's rule.
+    const float c0 = glm::dot(outline[previous], n0) + inset;
+    const float c1 = glm::dot(outline[i], n1) + inset;
+    return glm::vec2{((c0 * n1.y) - (c1 * n0.y)) / det, ((n0.x * c1) - (n1.x * c0)) / det};
+}
+
+} // anonymous namespace
+
+auto get_floor_rail_span(const std::span<const glm::vec2> outline, const float rail_inset, const std::size_t edge) -> Floor_rail_span
+{
+    const std::size_t n = outline.size();
+    if ((n < 3) || (edge >= n)) {
+        return {};
+    }
+    const glm::vec2 d      = outline[(edge + 1) % n] - outline[edge];
+    const float     length = glm::length(d);
+    if (!(length > 0.0f)) {
+        return {};
+    }
+    const glm::vec2 start = get_inset_corner(outline, rail_inset, edge);
+    const glm::vec2 end   = get_inset_corner(outline, rail_inset, (edge + 1) % n);
+    return Floor_rail_span{.start = start, .end = end, .length = glm::dot(end - start, d / length)};
+}
+
 void get_floor_connectors(const std::span<const glm::vec2> outline, const Floor_values& values, std::vector<Kit_connector>& out_connectors)
 {
     out_connectors.clear();
@@ -325,6 +410,22 @@ void get_floor_connectors(const std::span<const glm::vec2> outline, const Floor_
             }
         );
     }
+    // C10.2: a rider stands on the middle of its edge's rail span, running along the edge, its front toward the inside.
+    for (std::size_t i = 0; i < n; ++i) {
+        const glm::vec2       inward = get_floor_edge_inward(outline, i);
+        const Floor_rail_span span   = get_floor_rail_span(outline, values.rail_inset, i);
+        const glm::vec2       mid    = 0.5f * (span.start + span.end);
+        out_connectors.push_back(
+            Kit_connector{
+                .name     = c_rail_names[i],
+                .position = glm::vec3{mid.x, values.thickness, mid.y},
+                .outward  = glm::vec3{0.0f, 1.0f, 0.0f},
+                .up       = glm::vec3{inward.x, 0.0f, inward.y},
+                .types    = Kit_connector_types::of(Kit_connector_type::rail),
+                .rail_end = Kit_rail_end::host
+            }
+        );
+    }
 }
 
 void get_floor_supply(
@@ -346,6 +447,38 @@ void get_floor_supply(
     out_supply.add(Kit_supplied_value{.property = Kit_standard_property::wall_thickness, .priority = c_floor_supply_priority, .length = values.wall_thickness});
     out_supply.add(Kit_supplied_value{.property = Kit_standard_property::room_height,    .priority = c_floor_supply_priority, .length = values.room_height});
     out_supply.add(Kit_supplied_value{.property = Kit_standard_property::wall_material,  .priority = c_floor_supply_priority, .material = wall_material});
+}
+
+void get_floor_rail_supply(const std::span<const glm::vec2> outline, const Floor_values& values, const std::size_t edge, Kit_supply_list& out_supply)
+{
+    out_supply.clear();
+    if (edge >= outline.size()) {
+        return;
+    }
+    const float length = get_floor_rail_span(outline, values.rail_inset, edge).length;
+    if (length >= c_floor_min_wall_length) {
+        out_supply.add(Kit_supplied_value{.property = Kit_standard_property::child_length, .priority = c_floor_supply_priority, .length = length});
+    }
+}
+
+void get_floor_connector_supply(
+    const std::span<const glm::vec2> outline,
+    const Floor_values&              values,
+    const std::string_view           wall_material,
+    const std::string_view           connector_name,
+    Kit_supply_list&                 out_supply
+)
+{
+    out_supply.clear();
+    const std::optional<Floor_connector_name> name = parse_floor_connector_name(connector_name, outline.size());
+    if (!name.has_value() || (name.value().edge >= outline.size())) {
+        return;
+    }
+    if (name.value().family == Floor_connector_family::edge) {
+        get_floor_supply(outline, values, wall_material, name.value().edge, out_supply);
+    } else if (name.value().family == Floor_connector_family::rail) {
+        get_floor_rail_supply(outline, values, name.value().edge, out_supply);
+    }
 }
 
 auto make_floor_source_text(const std::span<const glm::vec2> outline, const Floor_values& values) -> std::string

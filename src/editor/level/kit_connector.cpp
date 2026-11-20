@@ -161,7 +161,8 @@ auto transform_connector(const Kit_connector& connector, const glm::vec3& positi
         .position = position + (basis * connector.position),
         .outward  = basis * connector.outward,
         .up       = basis * connector.up,
-        .types    = connector.types
+        .types    = connector.types,
+        .rail_end = connector.rail_end
     };
 }
 
@@ -283,7 +284,8 @@ auto connector_in_root(const Kit_connector& connector, const glm::mat4& root_fro
         .position = glm::vec3{root_from_node * glm::vec4{connector.position, 1.0f}},
         .outward  = glm::inverse(glm::transpose(linear)) * connector.outward,
         .up       = linear * connector.up,
-        .types    = connector.types
+        .types    = connector.types,
+        .rail_end = connector.rail_end
     };
 }
 
@@ -309,7 +311,8 @@ auto transform_connector(const Kit_connector& connector, const glm::mat4& world_
         .position = glm::vec3{world_from_node * glm::vec4{connector.position, 1.0f}},
         .outward  = glm::normalize(outward),
         .up       = glm::normalize(up),
-        .types    = connector.types
+        .types    = connector.types,
+        .rail_end = connector.rail_end
     };
 }
 
@@ -493,6 +496,7 @@ auto c_str(const Kit_connector_type type) -> const char*
         case Kit_connector_type::wall:       return "wall";
         case Kit_connector_type::wall_floor: return "wall-floor";
         case Kit_connector_type::floor:      return "floor";
+        case Kit_connector_type::rail:       return "rail";
         default:                             return "?";
     }
 }
