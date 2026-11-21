@@ -1,5 +1,7 @@
 #pragma once
 
+#include "scene/hover_placement.hpp"
+
 #include "erhe_commands/command.hpp"
 
 #include <glm/glm.hpp>
@@ -60,7 +62,7 @@ private:
     bool                               m_has_item    {false};
     bool                               m_open_pending{false};
     bool                               m_shown       {false};
-    std::optional<glm::vec3>           m_world_position;
+    std::optional<Hover_placement>     m_placement;
 };
 
 }

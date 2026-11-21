@@ -17,10 +17,12 @@ viewport, then a click on a menu entry):
 4. Create > Xform with the pointer on a box: the new node is a child of the
    box and its world position is the hovered point. One undo removes it.
 5. Paste with the pointer on a box: the entry names the clipboard's item,
-   and the pasted box is a child of the hovered box at the hovered point.
+   and the pasted box is a child of the hovered box. With the placement
+   mode origin its origin is on the hovered point; with avoid_intersection
+   it rests on the hovered face.
 6. A right drag turns the camera and opens no menu.
 
-    python3 scripts/viewport_context_menu_verify.py [--editor <path>]
+    python3 scripts/viewport_context_menu_verify.py [--editor <path>] [--cwd <dir>]
 
 Launches the headless editor (prepared_asset_verify.Editor: deterministic
 clock, default layout) and stops it at the end. One PASS/FAIL line per check,
@@ -278,32 +280,59 @@ def check_create(s: Session, on_a):
     check("4.7 undo removes the new node", s.node_ids() == before)
 
 
+def paste_on_box(s: Session, on_a, label):
+    """Pastes the clipboard's box with the pointer on box A; returns the pasted node's details, or None."""
+    entries = s.right_click(on_a)
+    if "Paste" not in entries:
+        check(f"{label} the menu offers Paste", False)
+        return None
+    before = s.node_ids()
+    s.click_entry(entries, "Paste")
+    added = sorted(s.node_ids() - before)
+    check(f"{label} one box was pasted", len(added) == 1, str(added))
+    return s.details(added[0]) if len(added) == 1 else None
+
+
+def is_near(position, expected):
+    return (position is not None) and all(abs(p - x) < 0.05 for p, x in zip(position, expected))
+
+
 def check_paste_at_point(s: Session, on_a):
     print("\n== 5. Paste with the pointer on a box ==")
     e = s.e
+    # The pointer is on the middle of box A's +z face, (0, 0.5, 0.5); the boxes are 1 m cubes with a centered origin.
+    mode_before = e.call("set_item_placement_mode")["mode"]
     e.call("clipboard_copy_nodes", {"scene_name": s.scene, "node_ids": [s.box_b]})
     entries = s.right_click(on_a)
     check("5.1 Paste names the clipboard's box", ("Paste" in entries) and (shown(entries["Paste"]) == f'Paste "{BOX_B}"'),
           shown(entries.get("Paste", {})))
-    if "Paste" not in entries:
-        return
-    before = s.node_ids()
-    depth = s.undo_depth()
-    s.click_entry(entries, "Paste")
-    added = sorted(s.node_ids() - before)
-    check("5.2 one box was pasted", len(added) == 1, str(added))
-    if len(added) != 1:
-        return
-    details = s.details(added[0])
-    position = details.get("world_position")
-    expected = [0.0, 0.5, 0.5]
-    close = (position is not None) and all(abs(p - x) < 0.05 for p, x in zip(position, expected))
-    check("5.3 the pasted box is at the hovered point", close, f"position {position}, expected about {expected}")
-    check("5.4 the pasted box is a child of the hovered box", details.get("parent") == BOX_A, f"parent {details.get('parent')}")
-    check("5.5 the paste is one undo entry", s.undo_depth() == depth + 1, f"{depth} -> {s.undo_depth()}")
-    e.call("undo")
-    s.settle()
-    check("5.6 undo removes the pasted box", s.node_ids() == before)
+    s.close_menu()
+    try:
+        e.call("set_item_placement_mode", {"mode": "origin"})
+        before = s.node_ids()
+        depth = s.undo_depth()
+        details = paste_on_box(s, on_a, "5.2 origin:")
+        if details is not None:
+            position = details.get("world_position")
+            check("5.3 origin: the pasted box has its origin on the hovered point", is_near(position, [0.0, 0.5, 0.5]), f"position {position}")
+            check("5.4 the pasted box is a child of the hovered box", details.get("parent") == BOX_A, f"parent {details.get('parent')}")
+            check("5.5 the paste is one undo entry", s.undo_depth() == depth + 1, f"{depth} -> {s.undo_depth()}")
+            e.call("undo")
+            s.settle()
+            check("5.6 undo removes the pasted box", s.node_ids() == before)
+
+        e.call("set_item_placement_mode", {"mode": "avoid_intersection"})
+        details = paste_on_box(s, on_a, "5.7 avoid intersection:")
+        if details is not None:
+            position = details.get("world_position")
+            check("5.8 avoid intersection: the pasted box rests on the hovered face", is_near(position, [0.0, 0.5, 1.0]), f"position {position}")
+            box = details.get("subtree_world_aabb") or {}
+            check("5.9 its bounds start at the face", ("min" in box) and (abs(box["min"][2] - 0.5) < 0.05), str(box.get("min")))
+            e.call("undo")
+            s.settle()
+            check("5.10 undo removes the pasted box", s.node_ids() == before)
+    finally:
+        e.call("set_item_placement_mode", {"mode": mode_before})
 
 
 def check_right_drag(s: Session, on_a):
@@ -321,7 +350,12 @@ def check_right_drag(s: Session, on_a):
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--editor", default=DEFAULT_EDITOR, help=f"editor executable (default {DEFAULT_EDITOR})")
+    parser.add_argument("--cwd", default=None, help="working directory of the editor: its config/, res/ and logs/ (default: the repository root)")
     args = parser.parse_args()
+    if args.cwd is not None:
+        args.editor = args.editor if os.path.isabs(args.editor) else os.path.join(pav.REPO_ROOT, args.editor)
+        pav.REPO_ROOT = os.path.abspath(args.cwd)
+        pav.LOG_PATH  = os.path.join(pav.REPO_ROOT, "logs", "log.txt")
 
     editor = Editor(args.editor)
     try:

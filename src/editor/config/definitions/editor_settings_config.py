@@ -1,7 +1,7 @@
 from erhe_codegen import *
 
 struct("Editor_settings_config",
-    version=20,
+    version=21,
     short_desc="Editor settings",
     long_desc="Runtime-editable settings saved to editor_settings.json.",
     developer=False,
@@ -48,6 +48,9 @@ struct("Editor_settings_config",
         field("hud",                  StructRef("Hud_config"),             added_in=1),
         # Selection behavior (doc/editor/selection.md "Headset selection").
         field("selection",            StructRef("Selection_config"),       added_in=13),
+        # Where Create and Paste of a viewport's context menu put an item
+        # (doc/editor/windows.md "Viewport context menu").
+        field("item_placement",       StructRef("Item_placement_config"),  added_in=21),
         field("id_renderer",          StructRef("Id_renderer_config"),     added_in=1),
         field("ray_trace",            StructRef("Ray_trace_config"),       added_in=1),
         field("ddgi",                 StructRef("Ddgi_config"),            added_in=1),

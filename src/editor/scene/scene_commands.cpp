@@ -634,7 +634,7 @@ auto Scene_commands::get_insert_parent(Scene_root& scene_root, erhe::Hierarchy* 
     return std::static_pointer_cast<erhe::Hierarchy>(scene_root.get_hosted_scene()->get_root_node());
 }
 
-void place_new_item_at(erhe::Hierarchy& new_item, const erhe::Hierarchy& parent, const glm::vec3& world_position)
+void place_new_item_at(erhe::Hierarchy& new_item, const erhe::Hierarchy& parent, const Hover_placement& placement, const Item_placement_mode mode)
 {
     erhe::Hierarchy* root = &new_item;
     for (;;) {
@@ -649,7 +649,8 @@ void place_new_item_at(erhe::Hierarchy& new_item, const erhe::Hierarchy& parent,
         return;
     }
     // The first insert keeps the world transform the item has (Item_insert_remove_operation).
-    node->set_world_from_node(erhe::math::create_translation<float>(world_position) * node->world_from_node());
+    erhe::scene::Node* const nodes[1] = {node};
+    place_nodes_at(nodes, placement, mode);
 }
 
 auto Scene_commands::create_new_camera(erhe::Hierarchy* parent) -> std::shared_ptr<erhe::scene::Camera>

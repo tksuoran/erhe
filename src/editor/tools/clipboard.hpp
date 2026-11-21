@@ -4,6 +4,7 @@
 #include "assets/asset_reference.hpp"
 #include "erhe_commands/command.hpp"
 #include "app_message.hpp"
+#include "scene/hover_placement.hpp"
 #include "erhe_message_bus/message_bus.hpp"
 
 #include <glm/glm.hpp>
@@ -53,11 +54,11 @@ public:
 
     // Commands
     auto try_ready() -> bool;
-    // world_position: the pasted nodes move together so that the first one's origin is there.
+    // placement: the pasted nodes move together to the hovered point (place_nodes_at()).
     auto try_paste(
         const std::shared_ptr<erhe::Hierarchy>& target_parent,
         std::size_t                             index_in_parent,
-        const std::optional<glm::vec3>&         world_position = {}
+        const std::optional<Hover_placement>&   placement = {}
     ) -> bool;
     auto try_paste() -> bool;
 

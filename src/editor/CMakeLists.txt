@@ -796,6 +796,8 @@ erhe_target_sources_grouped(
     scene/analytic_hover_provider.hpp
     scene/draw_list_scene_dependencies.cpp
     scene/draw_list_scene_dependencies.hpp
+    scene/hover_placement.cpp
+    scene/hover_placement.hpp
     scene/item_lookup.cpp
     scene/item_lookup.hpp
     scene/scene_id_capture.cpp
@@ -1228,6 +1230,9 @@ set(_config_sources
     ${_config_out}/selection_config.hpp
     ${_config_out}/selection_config_serialization.hpp
     ${_config_out}/selection_config.cpp
+    ${_config_out}/item_placement_config.hpp
+    ${_config_out}/item_placement_config_serialization.hpp
+    ${_config_out}/item_placement_config.cpp
     ${_config_out}/shader_analytics_config.hpp
     ${_config_out}/shader_analytics_config_serialization.hpp
     ${_config_out}/shader_analytics_config.cpp
@@ -1397,6 +1402,8 @@ set(_config_sources
     ${_config_out}/navigation_mesh_visualization.cpp
     ${_config_out}/mesh_transform_mode.hpp
     ${_config_out}/mesh_transform_mode.cpp
+    ${_config_out}/item_placement_mode.hpp
+    ${_config_out}/item_placement_mode.cpp
     ${_config_out}/editor_settings_config.hpp
     ${_config_out}/editor_settings_config_serialization.hpp
     ${_config_out}/editor_settings_config.cpp

@@ -1,5 +1,7 @@
 #pragma once
 
+#include "scene/hover_placement.hpp"
+
 #include "config/generated/add_cameras_args.hpp"
 #include "config/generated/add_lights_args.hpp"
 #include "config/generated/add_room_args.hpp"
@@ -397,8 +399,8 @@ private:
     std::vector<std::shared_ptr<Rendertarget_imgui_host>> m_keep_alive;
 };
 
-// Moves a prim a Scene_commands::create_new_*() call made, with what it came with (a rendertarget's node), so that its
-// origin is at the world position; its insert under parent keeps that. A prim without a transform is left alone.
-void place_new_item_at(erhe::Hierarchy& new_item, const erhe::Hierarchy& parent, const glm::vec3& world_position);
+// Moves a prim a Scene_commands::create_new_*() call made, with what it came with (a rendertarget's node), to the
+// hovered point (place_nodes_at()); its insert under parent keeps that. A prim without a transform is left alone.
+void place_new_item_at(erhe::Hierarchy& new_item, const erhe::Hierarchy& parent, const Hover_placement& placement, Item_placement_mode mode);
 
 }

@@ -566,6 +566,7 @@ private:
     auto action_generate_texture_coordinates  (const nlohmann::json& args) -> std::string;
     auto action_set_transform_reference_mode  (const nlohmann::json& args) -> std::string;
     auto action_set_transform_mode            (const nlohmann::json& args) -> std::string;
+    auto action_set_item_placement_mode       (const nlohmann::json& args) -> std::string;
     auto action_slide_mesh_components         (const nlohmann::json& args) -> std::string;
     auto action_cancel_component_edit         (const nlohmann::json& args) -> std::string;
     auto action_loop_cut_mesh                 (const nlohmann::json& args) -> std::string;

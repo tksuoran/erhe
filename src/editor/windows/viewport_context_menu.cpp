@@ -127,10 +127,17 @@ auto Viewport_context_menu::open() -> bool
         target = hovered_item;
     }
 
-    m_world_position.reset();
+    m_placement.reset();
     const Hover_entry* const nearest = viewport_scene_view->get_nearest_hover(Hover_entry::content_bit | Hover_entry::grid_bit);
     if ((nearest != nullptr) && nearest->valid && nearest->position.has_value()) {
-        m_world_position = nearest->position;
+        m_placement = Hover_placement{.position = nearest->position.value(), .normal = nearest->normal};
+        // The side of the surface the pointer ray came from is the side an item is placed on.
+        const std::optional<glm::vec3> ray_origin = viewport_scene_view->get_control_ray_origin_in_world();
+        if (m_placement->normal.has_value() && ray_origin.has_value()) {
+            if (glm::dot(m_placement->normal.value(), ray_origin.value() - m_placement->position) < 0.0f) {
+                m_placement->normal = -m_placement->normal.value();
+            }
+        }
     }
 
     m_viewport_scene_view = viewport_scene_view;
@@ -143,7 +150,7 @@ auto Viewport_context_menu::open() -> bool
         "Viewport context menu: scene '{}', target '{}', {}",
         scene_root->get_name(),
         target ? target->get_name() : std::string{"(empty area)"},
-        m_world_position.has_value() ? "at a hovered point" : "no hovered point"
+        m_placement.has_value() ? "at a hovered point" : "no hovered point"
     );
     return true;
 }
@@ -153,7 +160,7 @@ void Viewport_context_menu::reset()
     m_viewport_scene_view.reset();
     m_scene_root.reset();
     m_item.reset();
-    m_world_position.reset();
+    m_placement.reset();
     m_has_item     = false;
     m_open_pending = false;
     m_shown        = false;
@@ -191,9 +198,9 @@ void Viewport_context_menu::imgui(const Viewport_scene_view& viewport_scene_view
         if ((tree != nullptr) && item_valid) {
             bool close{false};
             if (m_has_item) {
-                tree->item_context_menu_entries(item, Context_menu_site::viewport, m_world_position, close);
+                tree->item_context_menu_entries(item, Context_menu_site::viewport, m_placement, close);
             } else {
-                tree->root_context_menu_entries(m_world_position, close);
+                tree->root_context_menu_entries(m_placement, close);
             }
             tree->queue_context_menu_operations();
         } else {

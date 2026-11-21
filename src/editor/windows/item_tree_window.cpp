@@ -1527,18 +1527,18 @@ namespace {
 void Item_tree::item_context_menu_entries(
     const std::shared_ptr<erhe::Item_base>& item,
     const Context_menu_site                 site,
-    const std::optional<glm::vec3>&         world_position,
+    const std::optional<Hover_placement>&   placement,
     bool&                                   close
 )
 {
     const std::shared_ptr<erhe::Hierarchy> hierarchy = std::dynamic_pointer_cast<erhe::Hierarchy>(item);
 
     if (!m_item_context_menu_callbacks.empty()) {
-        m_context_menu_world_position = world_position;
+        m_context_menu_placement = placement;
         for (const Context_menu_callback& cb : m_item_context_menu_callbacks) {
             cb(item, m_operations, close);
         }
-        m_context_menu_world_position.reset();
+        m_context_menu_placement.reset();
         ImGui::Separator();
     }
 
@@ -1631,7 +1631,7 @@ void Item_tree::item_context_menu_entries(
         ImGui::BeginDisabled();
     }
     if (ImGui::MenuItem(make_menu_label("Paste", paste_text).c_str())) {
-        m_context.clipboard->try_paste(paste_target, paste_target->get_child_count(), world_position);
+        m_context.clipboard->try_paste(paste_target, paste_target->get_child_count(), placement);
     }
     if (!can_paste) {
         ImGui::EndDisabled();
@@ -1688,16 +1688,16 @@ void Item_tree::item_context_menu_entries(
     }
 }
 
-void Item_tree::root_context_menu_entries(const std::optional<glm::vec3>& world_position, bool& close)
+void Item_tree::root_context_menu_entries(const std::optional<Hover_placement>& placement, bool& close)
 {
     if (!m_root) {
         return;
     }
-    m_context_menu_world_position = world_position;
+    m_context_menu_placement = placement;
     for (const Context_menu_callback& cb : m_root_context_menu_callbacks) {
         cb(m_root, m_operations, close);
     }
-    m_context_menu_world_position.reset();
+    m_context_menu_placement.reset();
     // Paste is the only built-in empty-area entry; it needs a root that takes children.
     if (is_tree_prim(m_root)) {
         if (!m_root_context_menu_callbacks.empty()) {
@@ -1705,14 +1705,14 @@ void Item_tree::root_context_menu_entries(const std::optional<glm::vec3>& world_
         }
         const std::vector<std::shared_ptr<erhe::Item_base>>& clipboard_contents = m_context.clipboard->get_contents();
         if (ImGui::MenuItem(make_menu_label("Paste", describe_items(clipboard_contents)).c_str(), nullptr, false, !clipboard_contents.empty())) {
-            m_context.clipboard->try_paste(m_root, m_root->get_child_count(), world_position);
+            m_context.clipboard->try_paste(m_root, m_root->get_child_count(), placement);
         }
     }
 }
 
-auto Item_tree::get_context_menu_world_position() const -> const std::optional<glm::vec3>&
+auto Item_tree::get_context_menu_placement() const -> const std::optional<Hover_placement>&
 {
-    return m_context_menu_world_position;
+    return m_context_menu_placement;
 }
 
 void Item_tree::queue_context_menu_operations()

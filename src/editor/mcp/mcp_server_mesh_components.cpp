@@ -10,6 +10,7 @@
 #include "app_scenes.hpp"
 #include "app_settings.hpp"
 #include "config/generated/editor_settings_config.hpp"
+#include "config/generated/item_placement_mode.hpp"
 #include "config/generated/mesh_transform_mode.hpp"
 #include "geometry_graph/geometry_graph_node.hpp"
 #include "operations/item_insert_remove_operation.hpp"
@@ -1876,6 +1877,26 @@ auto Mcp_server::action_set_transform_mode(const json& args) -> std::string
         m_context.app_settings->settings_store().touch();
     }
     return make_json_content(json{{"mode", std::string{::to_string(mode)}}}).dump();
+}
+
+auto Mcp_server::action_set_item_placement_mode(const json& args) -> std::string
+{
+    if (m_context.editor_settings == nullptr) {
+        return make_error_content("Editor settings not available");
+    }
+    // Without a mode the call reads the setting.
+    if (args.contains("mode")) {
+        const std::string   mode_str = args.value("mode", "");
+        Item_placement_mode mode     = Item_placement_mode::avoid_intersection;
+        if (!::from_string(mode_str, mode)) {
+            return make_error_content("Invalid mode: " + mode_str + " (origin, avoid_intersection)");
+        }
+        m_context.editor_settings->item_placement.mode = mode;
+        if (m_context.app_settings != nullptr) {
+            m_context.app_settings->settings_store().touch();
+        }
+    }
+    return make_json_content(json{{"mode", std::string{::to_string(m_context.editor_settings->item_placement.mode)}}}).dump();
 }
 
 auto Mcp_server::action_slide_mesh_components(const json& args) -> std::string

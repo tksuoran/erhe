@@ -1,4 +1,5 @@
 #include "tools/clipboard.hpp"
+#include "config/generated/editor_settings_config.hpp"
 
 #include "app_context.hpp"
 #include "assets/asset_manager.hpp"
@@ -291,7 +292,7 @@ auto Clipboard::try_paste() -> bool
 auto Clipboard::try_paste(
     const std::shared_ptr<erhe::Hierarchy>& target_parent,
     const std::size_t                       index_in_parent,
-    const std::optional<glm::vec3>&         world_position
+    const std::optional<Hover_placement>&   placement
 ) -> bool
 {
     if (!target_parent) {
@@ -327,18 +328,15 @@ auto Clipboard::try_paste(
     }
 
     // The inserts below keep the world transform a pasted node has, so the move is made here.
-    if (world_position.has_value()) {
-        std::optional<glm::mat4> move;
+    if (placement.has_value()) {
+        std::vector<erhe::scene::Node*> pasted_nodes;
         for (const std::shared_ptr<erhe::Hierarchy>& pasted_hierarchy : pasted_hierarchies) {
             erhe::scene::Node* const node = dynamic_cast<erhe::scene::Node*>(pasted_hierarchy.get());
-            if (node == nullptr) {
-                continue;
+            if (node != nullptr) {
+                pasted_nodes.push_back(node);
             }
-            if (!move.has_value()) {
-                move = erhe::math::create_translation<float>(world_position.value() - glm::vec3{node->position_in_world()});
-            }
-            node->set_world_from_node(move.value() * node->world_from_node());
         }
+        place_nodes_at(pasted_nodes, placement.value(), m_context.editor_settings->item_placement.mode);
     }
 
     // Ownership of materials carried by the pasted meshes is decided HERE

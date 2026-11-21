@@ -9462,6 +9462,23 @@
     "name": "set_transform_mode"
   },
   {
+    "description": "Set where Create and Paste of a viewport's context menu put an item relative to the hovered point (doc/editor/windows.md \"Viewport context menu\"): origin (the item's origin on the point) or avoid_intersection (then moved along the hovered surface's normal until its mesh bounds are clear of the surface; the default). Persisted in editor settings. Without mode the call changes nothing. Returns the mode in effect.",
+    "inputSchema": {
+      "properties": {
+        "mode": {
+          "description": "Item placement mode",
+          "enum": [
+            "origin",
+            "avoid_intersection"
+          ],
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "name": "set_item_placement_mode"
+  },
+  {
     "description": "Edge slide or vertex slide of the live mesh-component selection (doc/plans/mesh_modeling.md section 4.6, doc/editor/transform.md 'Scalar edits'), the numeric form of the G key slide: begins the slide, places the vertices for one factor and commits one undoable 'Edge Slide' / 'Vertex Slide' operation (a move of the slid vertices carrying the corner texcoords re-interpolated at their new positions). Edge slide: every selected vertex must be on one or two selected edges, every selected edge manifold or boundary; each vertex slides along its rail on one side of its loop (factor > 0: the first side, < 0: the second), loops oriented against the first slide vertex. Vertex slide: each selected vertex slides toward the neighbour whose direction is nearest to 'direction'; factor 1 lands on it. Returns the slide vertex count, the moved vertex count and (edge) the loop count. An error when the selection cannot slide or another component edit is active.",
     "inputSchema": {
       "properties": {

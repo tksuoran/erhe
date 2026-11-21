@@ -1,6 +1,7 @@
 #pragma once
 
 #include "app_message.hpp"
+#include "scene/hover_placement.hpp"
 
 #include "erhe_message_bus/message_bus.hpp"
 
@@ -119,16 +120,16 @@ public:
     void add_root_context_menu_callback (Context_menu_callback fun);
 
     // The entries of a row's / the empty area's context menu, submitted into the popup the caller has begun.
-    // world_position is the point a viewport menu was opened at; Create places the new item there.
+    // placement is the point a viewport menu was opened at; Create and Paste place the item there.
     void item_context_menu_entries(
         const std::shared_ptr<erhe::Item_base>& item,
         Context_menu_site                       site,
-        const std::optional<glm::vec3>&         world_position,
+        const std::optional<Hover_placement>&   placement,
         bool&                                   close
     );
-    void root_context_menu_entries(const std::optional<glm::vec3>& world_position, bool& close);
+    void root_context_menu_entries(const std::optional<Hover_placement>& placement, bool& close);
     // Valid while the entries are submitted; empty for a menu of the tree itself.
-    [[nodiscard]] auto get_context_menu_world_position() const -> const std::optional<glm::vec3>&;
+    [[nodiscard]] auto get_context_menu_placement() const -> const std::optional<Hover_placement>&;
     // Hands the operations the entries deferred to Imgui_windows::queue().
     void queue_context_menu_operations();
 
@@ -303,7 +304,7 @@ private:
 
     std::shared_ptr<Operation>         m_operation;
     std::vector<std::function<void()>> m_operations;
-    std::optional<glm::vec3>           m_context_menu_world_position;
+    std::optional<Hover_placement>     m_context_menu_placement;
 
     bool                               m_toggled_open{false};
     std::weak_ptr<erhe::Item_base>     m_last_focus_item;

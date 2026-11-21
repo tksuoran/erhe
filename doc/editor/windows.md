@@ -86,18 +86,30 @@ there (`Viewport_context_menu`, `windows/viewport_context_menu.*`).
   and `root_context_menu_entries()`, the same callbacks and clipboard entries
   the row popup submits), without Rename, whose edit field is a row's label.
   Paste is enabled while the clipboard holds items and inserts them as the
-  target's last children, moved together so that the origin of the first
-  pasted node is at the point the click hovered (`Clipboard::try_paste()`
-  with a world position; a click that hovers nothing pastes as on a row).
-- **Create** makes the new item a child of the target, as on a row, and
-  places it at the point the click hovered: the nearest hit of scene content
-  or the grid under the pointer (`Item_tree::get_context_menu_world_position()`,
-  read by the Create callback; `place_new_item_at()` sets the new node's
-  world transform before its insert runs, and the first insert keeps it, so
-  the placement is part of the one undo entry). Level Kit pieces and layouts take the point as their world
-  position. A click that hovers nothing, an item without a transform (a
-  Scope, a resource) and a Bone (its head is where its parent puts it) are
-  created as from a row.
+  target's last children.
+- **Create** makes the new item a child of the target, as on a row. A Bone
+  is created as from a row: its head is where its parent puts it.
+- **Placement.** Create and Paste put the item at the hovered point: the
+  nearest hit of scene content or the grid under the pointer, with the
+  surface normal there turned to the side the pointer ray came from
+  (`Hover_placement`, `scene/hover_placement.*`;
+  `Item_tree::get_context_menu_placement()` hands it to the Create
+  callback, `Clipboard::try_paste()` takes it). A click that hovers nothing
+  creates and pastes as from a row. `place_nodes_at()` sets the world
+  transform of the nodes before their insert runs, and the first insert
+  keeps it, so the placement is part of the one undo entry; pasted nodes
+  move together, the first one deciding. An item without a transform (a
+  Scope, a resource) is not placed. The setting **Create / Paste Placement
+  > Placement Mode** (`Item_placement_config::mode`, `editor_settings.json`,
+  MCP `set_item_placement_mode`) selects where:
+  - **Origin**: the origin of the item on the hovered point.
+  - **Avoid Intersection** (the default): then moved along the normal until
+    no corner of the bounding boxes of the meshes in the item's subtree is
+    behind the plane of the hovered surface, so the item rests on the
+    surface along the normal. An item without mesh bounds stays at the
+    point.
+  Level Kit pieces and layouts take the point as their world position in
+  both modes.
 - The popup is submitted by the viewport's window
   (`Viewport_window::imgui()`), and the menu holds its scene and its target
   weakly: when the scene closes or the target leaves it while the menu is

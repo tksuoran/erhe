@@ -41,6 +41,7 @@
 #include "operations/operation_stack.hpp"
 #include "operations/variant_select_operation.hpp"
 #include "level/kit_layout.hpp"
+#include "config/generated/editor_settings_config.hpp"
 #include "level/level_kit_create_menu.hpp"
 #include "level/kit_piece.hpp"
 #include "level/level_kits.hpp"
@@ -701,15 +702,15 @@ auto Scene_root::make_browser_window(
             }
             if (ImGui::BeginMenu("Create")) {
                 // A menu opened in a viewport places the new item at the point it was opened at.
-                const std::optional<glm::vec3> world_position = m_node_tree_window->get_context_menu_world_position();
+                const std::optional<Hover_placement> placement = m_node_tree_window->get_context_menu_placement();
                 using Create_function = std::shared_ptr<erhe::Hierarchy> (*)(Scene_commands& scene_commands, erhe::Hierarchy& parent);
-                const auto entry = [&context, &parent, &deferred_operations, &close, &world_position](const char* const label, const Create_function create) {
+                const auto entry = [&context, &parent, &deferred_operations, &close, &placement](const char* const label, const Create_function create) {
                     if (ImGui::MenuItem(label)) {
                         deferred_operations.push_back(
-                            [&context, parent, create, world_position]() {
+                            [&context, parent, create, placement]() {
                                 const std::shared_ptr<erhe::Hierarchy> created = create(*context.scene_commands, *parent);
-                                if (created && world_position.has_value()) {
-                                    place_new_item_at(*created, *parent, world_position.value());
+                                if (created && placement.has_value()) {
+                                    place_new_item_at(*created, *parent, placement.value(), context.editor_settings->item_placement.mode);
                                 }
                             }
                         );
@@ -761,7 +762,7 @@ auto Scene_root::make_browser_window(
                 entry("Graph Mesh",             [](Scene_commands& sc, erhe::Hierarchy& p) -> std::shared_ptr<erhe::Hierarchy> { static_cast<void>(sc.create_new_graph_mesh      (&p)); return {}; });
                 ImGui::Separator();
                 // U47: kit pieces and layouts, the same submenu as the main menu's Commands > Create.
-                if (level_kit_create_menu(context, shared_from_this(), parent, world_position)) {
+                if (level_kit_create_menu(context, shared_from_this(), parent, placement.has_value() ? std::optional<glm::vec3>{placement->position} : std::nullopt)) {
                     close = true;
                 }
                 ImGui::EndMenu();
