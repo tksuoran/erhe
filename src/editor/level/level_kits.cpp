@@ -581,14 +581,20 @@ auto Level_kits::get_surface_settings() const -> Surface_options
         return make_surface_options(Surface_snap::off, Surface_orient::off, c_default_surface_direction, c_default_surface_max_distance);
     }
     const Surface_snap_config& config = m_context.editor_settings->surface_snap;
+    // Attach To Surface implies the snap, as Orient To Surface does: a piece attaches where it rests.
     Surface_options options = make_surface_options(
-        config.snap_to_surface   ? Surface_snap::on   : Surface_snap::off,
+        (config.snap_to_surface || config.attach_to_surface) ? Surface_snap::on : Surface_snap::off,
         config.orient_to_surface ? Surface_orient::on : Surface_orient::off,
         c_default_surface_direction,
         config.max_distance
     );
     options.attach = config.attach_to_surface ? Surface_attach::on : Surface_attach::off;
     return options;
+}
+
+auto Level_kits::get_surface_snap() const -> Surface_snap
+{
+    return ((m_context.editor_settings != nullptr) && m_context.editor_settings->surface_snap.snap_to_surface) ? Surface_snap::on : Surface_snap::off;
 }
 
 void Level_kits::set_surface_attach(const Surface_attach attach)

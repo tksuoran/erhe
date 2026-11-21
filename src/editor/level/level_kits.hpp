@@ -627,6 +627,8 @@ public:
 
     // The shared surface pair (Surface_snap_config, D4.6): every UI site reads and writes it here.
     [[nodiscard]] auto get_surface_settings() const -> Surface_options;
+    // The Snap To Surface setting as stored; get_surface_settings() also snaps while Attach To Surface is on.
+    [[nodiscard]] auto get_surface_snap() const -> Surface_snap;
     void set_surface_snap  (Surface_snap snap);
     void set_surface_max_distance(float distance); // the distance must pass check_surface_max_distance()
     // Reports and replaces a surface max distance of the loaded editor settings that check_surface_max_distance() refuses.

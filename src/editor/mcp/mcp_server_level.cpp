@@ -3076,7 +3076,7 @@ namespace {
     const Surface_options options        = level_kits.get_surface_settings();
     const glm::vec3       drag_direction = level_kits.get_surface_drag_direction();
     return json{
-        {"snap",                    options.snap   == Surface_snap::on},
+        {"snap",                    level_kits.get_surface_snap() == Surface_snap::on},
         {"orient",                  options.orient == Surface_orient::on},
         {"attach",                  options.attach == Surface_attach::on},
         {"max_distance",            options.forward_distance}, // the settings search max_distance either way

@@ -10668,8 +10668,8 @@ def check_brush_surface_normal(editor, window_scene):
     click(editor, "Block")
     state = wait_preview(editor, lambda r: r.get("active") and (r.get("shape") == "basic.block"))
     settings_ok = (set_checkbox(editor, "Snap To Module", True) and set_checkbox(editor, "Snap To Surface", True)
-                   and set_checkbox(editor, "Orient To Surface", False) and set_checkbox(editor, "New Seed Per Piece", False)
-                   and set_checkbox(editor, "Place As Layout", False))
+                   and set_checkbox(editor, "Orient To Surface", False) and set_checkbox(editor, "Attach To Surface", True)
+                   and set_checkbox(editor, "New Seed Per Piece", False) and set_checkbox(editor, "Place As Layout", False))
     size = size_of(state.get("bounds") or {"min": [0, 0, 0], "max": [1, 1, 1]})
     check("U51 setup: the Block row enters kit mode in a scene of a wall, a ceiling, a floor, a tilted slab, a stretched wedge and "
           "a room; module and surface snap on, no orient; a 1 m block",
@@ -10716,6 +10716,23 @@ def check_brush_surface_normal(editor, window_scene):
     check("the Brush tool's placement onto the wall attaches the block to it (Attach To Surface on): the wall's child, an active record",
           (piece is not None) and (wall_record.get("target_id") == by_name["wall"]["id"]) and (wall_record.get("state") == "active") and
           (scene_tree(editor, scene)[piece["id"]]["parent_id"] == by_name["wall"]["id"]), json.dumps(wall_record))
+
+    # Attach To Surface implies the snap: with Snap To Surface and Orient To Surface off the placement rests and attaches.
+    snap_off = set_checkbox(editor, "Snap To Surface", False)
+    attach_aim = [1.7, 1.3, wall_front]
+    state = aim_at(viewport, attach_aim, [0.0, 0.0, 1.0], lambda r: r.get("surface_found"))
+    piece = place(viewport, attach_aim, state)
+    attach_record = (piece_by_id(editor, scene, piece["id"]).get("surface_attachment") or {}) if piece else {}
+    settings = editor.call("get_surface_snap_settings", {})
+    check("Attach To Surface alone (Snap To Surface and Orient To Surface off, reported off) snaps the block flush against the "
+          "wall and attaches it: the wall's child, an active record without orient",
+          snap_off and (settings.get("snap") is False) and (settings.get("orient") is False) and (settings.get("attach") is True)
+          and (piece is not None) and (abs(piece["world_aabb"]["min"][2] - wall_front) < TOLERANCE)
+          and (attach_record.get("target_id") == by_name["wall"]["id"]) and (attach_record.get("state") == "active")
+          and (attach_record.get("orient") is False)
+          and (scene_tree(editor, scene)[piece["id"]]["parent_id"] == by_name["wall"]["id"]),
+          describe(state, piece) + " " + json.dumps(attach_record))
+    set_checkbox(editor, "Snap To Surface", True)
 
     viewport = ceiling_view()
     ceiling_aim = [8.3, ceiling_y, 0.4]

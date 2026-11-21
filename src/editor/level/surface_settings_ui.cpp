@@ -46,7 +46,7 @@ constexpr const char* c_camera_ray_label    = "Surface Camera Ray";
 constexpr const char* c_camera_ray_tooltip  = "Surface Camera Ray: a Transform tool drag snaps the transform anchor along the ray from the viewport camera through it; off, along the Surface Drag Direction.";
 constexpr const char* c_orient_tooltip = "Orient To Surface: the moved mesh's up axis takes the surface normal, keeping its heading.";
 constexpr const char* c_attach_label   = "Attach To Surface";
-constexpr const char* c_attach_tooltip = "Attach To Surface: a kit piece snapped onto another kit piece becomes its child and remembers its place there; off, a snap changes no parent.";
+constexpr const char* c_attach_tooltip = "Attach To Surface: placements and drags snap to the surface, and a kit piece snapped onto another kit piece becomes its child and remembers its place there; off, a snap changes no parent.";
 
 void tooltip(const char* text)
 {
@@ -95,7 +95,7 @@ void tooltip(const char* text)
 
 void surface_snap_checkbox(Level_kits& level_kits, const Surface_widget_label label)
 {
-    const bool value = (level_kits.get_surface_settings().snap == Surface_snap::on);
+    const bool value = (level_kits.get_surface_snap() == Surface_snap::on);
     if (checkbox(c_snap_label, "##snap_to_surface", label, value)) {
         level_kits.set_surface_snap(value ? Surface_snap::off : Surface_snap::on);
     }
@@ -273,7 +273,7 @@ void surface_settings_toolbar_buttons(Level_kits& level_kits, ImFont* const icon
 {
     ImGui::PushID("surface_settings_toolbar_buttons");
     const Surface_options options = level_kits.get_surface_settings();
-    const bool snap   = (options.snap   == Surface_snap::on);
+    const bool snap   = (level_kits.get_surface_snap() == Surface_snap::on);
     const bool orient = (options.orient == Surface_orient::on);
     if (toggle_button(icon_font, font_size, ICON_MDI_ARROW_COLLAPSE_DOWN "##snap_to_surface", "Snap##snap_to_surface", c_snap_label, snap)) {
         level_kits.set_surface_snap(snap ? Surface_snap::off : Surface_snap::on);

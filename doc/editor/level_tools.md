@@ -2723,8 +2723,9 @@ changes, A is carried to the same place on the new shape. The code is in
   that is neither a kit piece nor a kit layout node - a group node, another
   plain node or the scene root; a detach moves A, with its subtree, there,
   keeping its world transform.
-- Attaching, with Attach To Surface on ("Surface settings",
-  `Surface_options::attach`; MCP `attach`, true by default):
+- Attaching, with Attach To Surface on ("Surface settings": the setting is
+  off by default and implies the snap; `Surface_options::attach`; the MCP
+  tools' own `attach` argument is true by default and implies nothing):
   - A placement (`place()`: `level_place_pieces`, the Level Kit window, the
     Brush tool's kit mode) with surface options whose rest lies on a support
     is inserted under the support, its record written on the new node,
@@ -3189,10 +3190,13 @@ Transform tool drags and the Brush tool's kit mode: the bounds face leading alon
 direction flush on the surface, or the anchor point - the gizmo anchor, the placed piece's origin -
 on it ("Surface placement", "Transform tool"); with orient on it does not apply, and kit layouts
 always rest the leading face; a file older than version 7 reads the default. Attach To Surface,
-`attach_to_surface` (true by default, version 10; a file older than version 10 reads it on), makes a
-kit piece snapped onto a support its child ("Surface attachments"); `get_surface_settings()` carries
-it in `Surface_options::attach`, which only the callers that attach read, and `set_surface_attach()`
-writes it; MCP `get_surface_snap_settings` / `set_surface_snap_settings` name it `attach`. The settings have one owner:
+`attach_to_surface` (false by default, version 10; a file without it reads it off), makes a
+kit piece snapped onto a support its child ("Surface attachments") and implies the snap, as Orient
+To Surface does: `get_surface_settings()` has `snap` on while Snap To Surface or Attach To Surface
+is on, so a placement or a drag with Attach To Surface alone snaps and attaches, and carries the
+setting in `Surface_options::attach`, which only the callers that attach read. `get_surface_snap()`
+is Snap To Surface as stored, which the widgets and `get_surface_snap_settings` show;
+`set_surface_attach()` writes Attach To Surface; MCP `get_surface_snap_settings` / `set_surface_snap_settings` name it `attach`. The settings have one owner:
 `Level_kits::get_surface_settings()`, `set_surface_snap()`,
 `set_surface_orient()`, `set_surface_max_distance()` (the distance must be
 a finite number >= 0, `check_surface_max_distance()`; the widgets clamp to 0 -
