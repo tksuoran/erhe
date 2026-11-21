@@ -6,7 +6,10 @@
 #include "app_message.hpp"
 #include "erhe_message_bus/message_bus.hpp"
 
+#include <glm/glm.hpp>
+
 #include <memory>
+#include <optional>
 #include <unordered_set>
 #include <vector>
 
@@ -50,7 +53,12 @@ public:
 
     // Commands
     auto try_ready() -> bool;
-    auto try_paste(const std::shared_ptr<erhe::Hierarchy>& target_parent, std::size_t index_in_parent) -> bool;
+    // world_position: the pasted nodes move together so that the first one's origin is there.
+    auto try_paste(
+        const std::shared_ptr<erhe::Hierarchy>& target_parent,
+        std::size_t                             index_in_parent,
+        const std::optional<glm::vec3>&         world_position = {}
+    ) -> bool;
     auto try_paste() -> bool;
 
     // Public API

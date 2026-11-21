@@ -25,6 +25,7 @@
 #include "erhe_graphics/texture.hpp"
 #include "erhe_item/typed.hpp"
 #include "erhe_primitive/material.hpp"
+#include "erhe_math/math_util.hpp"
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/node.hpp"
 #include "erhe_scene/scene.hpp"
@@ -287,7 +288,11 @@ auto Clipboard::try_paste() -> bool
     return try_paste(target, index_in_parent);
 }
 
-auto Clipboard::try_paste(const std::shared_ptr<erhe::Hierarchy>& target_parent, std::size_t index_in_parent) -> bool
+auto Clipboard::try_paste(
+    const std::shared_ptr<erhe::Hierarchy>& target_parent,
+    const std::size_t                       index_in_parent,
+    const std::optional<glm::vec3>&         world_position
+) -> bool
 {
     if (!target_parent) {
         return false;
@@ -319,6 +324,21 @@ auto Clipboard::try_paste(const std::shared_ptr<erhe::Hierarchy>& target_parent,
         clone_of_item->set_name(item->get_name() + " Copy");
 
         pasted_hierarchies.push_back(dst_hierarchy);
+    }
+
+    // The inserts below keep the world transform a pasted node has, so the move is made here.
+    if (world_position.has_value()) {
+        std::optional<glm::mat4> move;
+        for (const std::shared_ptr<erhe::Hierarchy>& pasted_hierarchy : pasted_hierarchies) {
+            erhe::scene::Node* const node = dynamic_cast<erhe::scene::Node*>(pasted_hierarchy.get());
+            if (node == nullptr) {
+                continue;
+            }
+            if (!move.has_value()) {
+                move = erhe::math::create_translation<float>(world_position.value() - glm::vec3{node->position_in_world()});
+            }
+            node->set_world_from_node(move.value() * node->world_from_node());
+        }
     }
 
     // Ownership of materials carried by the pasted meshes is decided HERE

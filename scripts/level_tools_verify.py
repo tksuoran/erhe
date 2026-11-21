@@ -7339,7 +7339,8 @@ def check_layout_tree(editor):
         return next((i for i in items(label, tree) if i["label"] == label), None)
 
     def menu(label):
-        found = [i for i in items(label) if (i["label"] == label) and i["window"].startswith("##Popup")]
+        # A clipboard entry names its target: 'Cut "name"###Cut'.
+        found = [i for i in items(label) if (i["label"].split("###")[-1] == label) and i["window"].startswith("##Popup")]
         return found[0] if found else None
 
     def open_menu(label):

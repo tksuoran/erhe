@@ -1501,6 +1501,29 @@ void Item_tree::item_update_selection(const std::shared_ptr<erhe::Item_base>& it
     }
 }
 
+namespace {
+
+// "Cut "Box"###Cut": the entry names what it acts on, and its ImGui id stays the bare verb.
+[[nodiscard]] auto make_menu_label(const char* const verb, const std::string& target) -> std::string
+{
+    return target.empty()
+        ? fmt::format("{0}###{0}", verb)
+        : fmt::format("{0} {1}###{0}", verb, target);
+}
+
+[[nodiscard]] auto describe_items(const std::vector<std::shared_ptr<erhe::Item_base>>& items) -> std::string
+{
+    if (items.empty()) {
+        return {};
+    }
+    if (items.size() == 1) {
+        return fmt::format("\"{}\"", items.front()->get_name());
+    }
+    return fmt::format("{} items", items.size());
+}
+
+}
+
 void Item_tree::item_context_menu_entries(
     const std::shared_ptr<erhe::Item_base>& item,
     const Context_menu_site                 site,
@@ -1542,6 +1565,11 @@ void Item_tree::item_context_menu_entries(
     // erhe::Item_kind::not_clonable (a texture, a brush, a graph asset)
     // is not copied, cut or duplicated; a subtree clone leaves such
     // descendants out.
+    // A selected item stands for the selection, which is what the entries then act on.
+    const std::string target_text = item->is_selected()
+        ? describe_items(m_context.selection->get_command_target_selection())
+        : fmt::format("\"{}\"", item->get_name());
+    const std::string paste_text  = describe_items(m_context.clipboard->get_contents());
     const bool is_prim   = is_tree_prim(item);
     const bool clonable  = item->is_clonable();
     const bool can_copy  = is_prim && clonable;
@@ -1554,7 +1582,7 @@ void Item_tree::item_context_menu_entries(
     if (!can_cut) {
         ImGui::BeginDisabled();
     }
-    if (ImGui::MenuItem("Cut")) {
+    if (ImGui::MenuItem(make_menu_label("Cut", target_text).c_str())) {
         if (item->is_selected()) {
             m_context.selection->cut_selection();
         } else {
@@ -1576,7 +1604,7 @@ void Item_tree::item_context_menu_entries(
     if (!can_copy) {
         ImGui::BeginDisabled();
     }
-    if (ImGui::MenuItem("Copy")) {
+    if (ImGui::MenuItem(make_menu_label("Copy", target_text).c_str())) {
         if (item->is_selected()) {
             m_context.selection->copy_selection();
         } else {
@@ -1602,8 +1630,8 @@ void Item_tree::item_context_menu_entries(
     if (!can_paste) {
         ImGui::BeginDisabled();
     }
-    if (ImGui::MenuItem("Paste")) {
-        m_context.clipboard->try_paste(paste_target, paste_target->get_child_count());
+    if (ImGui::MenuItem(make_menu_label("Paste", paste_text).c_str())) {
+        m_context.clipboard->try_paste(paste_target, paste_target->get_child_count(), world_position);
     }
     if (!can_paste) {
         ImGui::EndDisabled();
@@ -1612,7 +1640,7 @@ void Item_tree::item_context_menu_entries(
     if (!can_duplicate) {
         ImGui::BeginDisabled();
     }
-    if (ImGui::MenuItem("Duplicate")) {
+    if (ImGui::MenuItem(make_menu_label("Duplicate", target_text).c_str())) {
         if (item->is_selected()) {
             m_context.selection->duplicate_selection();
         } else {
@@ -1639,7 +1667,7 @@ void Item_tree::item_context_menu_entries(
         ImGui::EndDisabled();
     }
 
-    if (ImGui::MenuItem("Delete")) {
+    if (ImGui::MenuItem(make_menu_label("Delete", target_text).c_str())) {
         if (item->is_selected()) {
             m_context.selection->delete_selection();
         } else {
@@ -1675,9 +1703,9 @@ void Item_tree::root_context_menu_entries(const std::optional<glm::vec3>& world_
         if (!m_root_context_menu_callbacks.empty()) {
             ImGui::Separator();
         }
-        const bool clipboard_is_empty = m_context.clipboard->get_contents().empty();
-        if (ImGui::MenuItem("Paste", nullptr, false, !clipboard_is_empty)) {
-            m_context.clipboard->try_paste(m_root, m_root->get_child_count());
+        const std::vector<std::shared_ptr<erhe::Item_base>>& clipboard_contents = m_context.clipboard->get_contents();
+        if (ImGui::MenuItem(make_menu_label("Paste", describe_items(clipboard_contents)).c_str(), nullptr, false, !clipboard_contents.empty())) {
+            m_context.clipboard->try_paste(m_root, m_root->get_child_count(), world_position);
         }
     }
 }
