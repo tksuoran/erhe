@@ -4541,6 +4541,12 @@ public:
         m_default_scene.reset();
         m_default_content_library.reset();
 
+        // The clipboard is declared before the mesh memory, so it is destroyed
+        // after it: the copied meshes release their buffer allocations here.
+        if (m_clipboard) {
+            m_clipboard->set_contents(std::vector<std::shared_ptr<erhe::Item_base>>{});
+        }
+
         // Tear the operation stack down ahead of Scene_builder so any
         // pending or executed operations holding raw Scene_builder*
         // (see Scene_builder_floor_resources_operation) are destroyed
