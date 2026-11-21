@@ -220,8 +220,8 @@ public:
     uint32_t               command_slots{c_count_job_slots};
     std::string            quad_of_slot {"s"};
     // Empty: the defaults (base vertex 3 q, first instance q).
-    std::string            base_vertex_of_slot;
-    std::string            first_instance_of_slot;
+    std::string            base_vertex_of_slot{};
+    std::string            first_instance_of_slot{};
     std::vector<Count_job> jobs;
 };
 

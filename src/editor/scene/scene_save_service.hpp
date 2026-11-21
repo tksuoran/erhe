@@ -69,8 +69,8 @@ public:
     // Main thread, when the save starts running (with the running store job, null
     // for a Save Scene and for an Export's navigation stage, after which it is called
     // again with the Scene_export; its progress is readable on any thread) and when it has finished.
-    std::function<void(const std::shared_ptr<const Scene_export>&)> on_started;
-    std::function<void(const Scene_save_result&)>                   on_finished;
+    std::function<void(const std::shared_ptr<const Scene_export>&)> on_started{};
+    std::function<void(const Scene_save_result&)>                   on_finished{};
 };
 
 // The action a refusal of a store job names: "Export", "Status", "Bake World-Space Meshes" or "Build Navigation Mesh".

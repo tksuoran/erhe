@@ -80,7 +80,7 @@ public:
     Kit_flow_piece        piece;
     Kit_standard_property property{Kit_standard_property::room_height};
     float                 length  {0.0f};  // a length property
-    std::string           material;        // a material property
+    std::string           material{};      // a material property
     Kit_flow_piece        supplier;
     std::string           supplier_connector;
     int                   priority{0};
@@ -94,7 +94,7 @@ public:
     Kit_flow_piece        piece;
     Kit_standard_property property{Kit_standard_property::room_height};
     float                 length  {0.0f};
-    std::string           material;
+    std::string           material{};
     Kit_flow_piece        supplier;
     int                   priority{0};
     Kit_flow_skip         reason  {Kit_flow_skip::higher_priority};

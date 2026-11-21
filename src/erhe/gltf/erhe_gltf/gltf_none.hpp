@@ -495,7 +495,7 @@ class Gltf_export_document
 {
 public:
     std::string                   bytes;
-    std::vector<Gltf_export_file> external_files;
+    std::vector<Gltf_export_file> external_files{};
 
     [[nodiscard]] auto empty         () const -> bool { return bytes.empty(); }
     [[nodiscard]] auto get_byte_count() const -> std::size_t;

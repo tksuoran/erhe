@@ -206,8 +206,8 @@ public:
     // edge_line_vertex_byte_size bytes per endpoint, and
     // edge_line_joint_byte_size bytes per endpoint when the input is skinned
     // (empty otherwise).
-    std::vector<uint8_t>  edge_line_vertex_data;
-    std::vector<uint8_t>  edge_line_joint_data;
+    std::vector<uint8_t>  edge_line_vertex_data{};
+    std::vector<uint8_t>  edge_line_joint_data{};
     [[nodiscard]] auto get_edge_line_vertex_count() const -> std::size_t;
 };
 

@@ -52,7 +52,7 @@ public:
     std::size_t                          job_count{0};
     // The LOD request of a primitive without its own: the scene's export
     // settings', as Export asks (get_export_lod_settings()); none without settings.
-    std::optional<erhe::primitive::Lod_settings> default_lod_settings;
+    std::optional<erhe::primitive::Lod_settings> default_lod_settings{};
 };
 
 // How a build job builds its primitive (Editor_asset_load::prepare_job()).

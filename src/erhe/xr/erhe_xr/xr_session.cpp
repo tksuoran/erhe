@@ -369,7 +369,7 @@ auto Xr_session::locate_xr_views(const XrTime display_time, const std::optional<
     {
         std::lock_guard<std::mutex> lock{m_override_eye_views_mutex};
         if (m_override_eye_views.empty()) {
-            std::vector<XrView> eye_views(m_xr_views.size(), XrView{.type = XR_TYPE_VIEW, .next = nullptr});
+            std::vector<XrView> eye_views(m_xr_views.size(), XrView{.type = XR_TYPE_VIEW, .next = nullptr, .pose = {}, .fov = {}});
             XrViewState view_state{
                 .type           = XR_TYPE_VIEW_STATE,
                 .next           = nullptr,

@@ -99,7 +99,7 @@ class Kit_layout_item
 public:
     std::string              shape;
     std::string              parameters; // Kit_parameter_values canonical text, its derive mask the item's seed mask
-    std::vector<std::string> materials;
+    std::vector<std::string> materials{};
     uint32_t                 weight{1};  // 0 - c_max_scatter_weight; the other kinds take item i modulo the item count
 
     [[nodiscard]] auto operator==(const Kit_layout_item& other) const -> bool = default;

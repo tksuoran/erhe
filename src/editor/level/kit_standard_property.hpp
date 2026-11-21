@@ -50,7 +50,7 @@ public:
     Kit_standard_property property{Kit_standard_property::room_height};
     int                   priority{0};
     float                 length  {0.0f};
-    std::string_view      material;
+    std::string_view      material{};
 };
 
 // At most one value per property: filling it allocates nothing.

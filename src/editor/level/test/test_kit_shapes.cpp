@@ -1186,7 +1186,7 @@ TEST(Kit_derive, derived_values_are_accepted_and_walkable_at_other_level_lengths
     const std::vector<std::string> open_ids = get_union(&Kit_shape_rows::walkability_open);
     const std::set<std::string>    walkability_open{open_ids.begin(), open_ids.end()};
     const Kit_agent agent{};
-    for (const std::pair<float, float> lengths : {std::pair{0.5f, 2.5f}, std::pair{1.0f, 2.4f}, std::pair{2.0f, 4.0f}, std::pair{0.5f, 4.0f}, std::pair{2.0f, 2.4f}, std::pair{0.25f, 2.0f}}) {
+    for (const std::pair<float, float>& lengths : {std::pair{0.5f, 2.5f}, std::pair{1.0f, 2.4f}, std::pair{2.0f, 4.0f}, std::pair{0.5f, 4.0f}, std::pair{2.0f, 2.4f}, std::pair{0.25f, 2.0f}}) {
         for (const Kit_shape_definition& shape : get_library().get_shapes()) {
             int refused   = 0;
             int unwalkable = 0;

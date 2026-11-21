@@ -24,8 +24,8 @@ class Mesh_data
 {
 public:
     std::string             name;
-    std::vector<glm::vec3>  vertices;
-    std::vector<glm::uvec3> triangles;
+    std::vector<glm::vec3>  vertices{};
+    std::vector<glm::uvec3> triangles{};
 };
 
 // Indexed height field grid, n x n quads, 2 * n * n triangles

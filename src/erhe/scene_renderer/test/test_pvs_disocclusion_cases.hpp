@@ -26,8 +26,8 @@ public:
     // faces map world to view with the identity): min, max. A sample of id
     // c grows column c's bounds by the sample's point; a column without
     // samples lies far behind the face.
-    std::vector<glm::vec4>      column_bounds;
-    std::vector<uint8_t>        column_used;
+    std::vector<glm::vec4>      column_bounds{};
+    std::vector<uint8_t>        column_used{};
 };
 
 constexpr uint32_t c_pvs_test_resolution  = 16;

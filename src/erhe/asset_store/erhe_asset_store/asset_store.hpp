@@ -33,10 +33,10 @@ class Item_data
 public:
     Key                        key;
     Item_kind                  kind{Item_kind::editor_data};
-    std::string_view           target;
-    std::string_view           stamp;
-    std::string_view           meta;
-    std::string_view           info;
+    std::string_view           target{};
+    std::string_view           stamp{};
+    std::string_view           meta{};
+    std::string_view           info{};
     std::span<const std::byte> payload;
 };
 

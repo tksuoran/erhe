@@ -29,7 +29,7 @@ class Navigation_record_input
 public:
     std::string                        uid;
     glm::mat4                          root_from_node{1.0f}; // compared bit for bit
-    std::vector<Navigation_shape_hash> shape_hashes;         // parallel to the mesh's primitives
+    std::vector<Navigation_shape_hash> shape_hashes{};       // parallel to the mesh's primitives
 };
 
 // One seed of the flood, named across sessions by its node's glTF uid.

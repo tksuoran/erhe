@@ -6,7 +6,6 @@ add_compile_definitions(JPH_NO_FORCE_INLINE=1)
 # disabled - build with their own warning defaults.
 set(ERHE_GNU_WARNING_FLAGS -Wall;-Wextra;-Wno-unused;-Wno-unknown-pragmas;-Wno-sign-compare;-Wwrite-strings;-Wno-narrowing;-Wno-ignored-qualifiers;-Woverloaded-virtual)
 
-add_compile_options("$<$<COMPILE_LANGUAGE:CXX>:-Woverloaded-virtual>")
 add_compile_options("$<$<COMPILE_LANGUAGE:CXX>:-Wno-empty-body>")
 add_compile_options("$<$<CONFIG:RELEASE>:-O3>")
 add_compile_options("$<$<CONFIG:DEBUG>:-O0;-g3>")

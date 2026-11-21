@@ -4068,9 +4068,9 @@ auto Level_kits::build_floor_fits(
     {
     public:
         std::shared_ptr<erhe::scene::Curve> curve;
-        Kit_layout_data                     data;
-        std::vector<glm::vec2>              outline;
-        std::vector<Edge_line>              lines;
+        Kit_layout_data                     data{};
+        std::vector<glm::vec2>              outline{};
+        std::vector<Edge_line>              lines{};
     };
     std::vector<Floor_fit> fits;
     std::vector<std::shared_ptr<erhe::scene::Node>> walls;
@@ -4307,10 +4307,10 @@ void Level_kits::build_wall_fits(
     {
     public:
         std::shared_ptr<erhe::scene::Node>                              wall;
-        std::optional<glm::vec3>                                        start; // where its start connector goes
-        std::optional<glm::vec3>                                        end;
-        std::vector<std::pair<const erhe::scene::Node*, const erhe::scene::Node*>> pairs;
-        std::vector<const erhe::scene::Node*>                           movers;
+        std::optional<glm::vec3>                                        start{}; // where its start connector goes
+        std::optional<glm::vec3>                                        end{};
+        std::vector<std::pair<const erhe::scene::Node*, const erhe::scene::Node*>> pairs{};
+        std::vector<const erhe::scene::Node*>                           movers{};
     };
     std::vector<Fit> fits;
     std::vector<Kit_connector> moved_frames;

@@ -178,15 +178,15 @@ class Export_texture
 {
 public:
     const erhe::graphics::Texture*                       texture{nullptr};
-    std::shared_ptr<const erhe::gltf::Gltf_image_source> source;
+    std::shared_ptr<const erhe::gltf::Gltf_image_source> source{};
     erhe::graphics::Texture_properties                   properties;
     bool                                                 keyed{false}; // a Basis Universal or PNG / JPEG source: it has a Texture key
     Texture_item_source                                  item_source{Texture_item_source::basis_source};
-    Key                                                  key;
-    Key                                                  basis_key; // basis_texture_item: its Basis texture item
-    std::string                                          meta;
+    Key                                                  key{};
+    Key                                                  basis_key{}; // basis_texture_item: its Basis texture item
+    std::string                                          meta{};
     bool                                                 has_item{false};
-    std::string                                          skip_reason;
+    std::string                                          skip_reason{};
     std::size_t                                          file_index{0}; // R10.2: the file that defines its material
 };
 
@@ -352,8 +352,8 @@ public:
     std::filesystem::path                      source_path; // normalized
     Export_file_role                           role {Export_file_role::scene};
     std::size_t                                depth{0};
-    std::shared_ptr<Editor_asset>              editor_asset;
-    std::map<Item_kind, Export_kind_counts>    counts;
+    std::shared_ptr<Editor_asset>              editor_asset{};
+    std::map<Item_kind, Export_kind_counts>    counts{};
 };
 
 // What a source file states about itself in ERHE_scene: its editor asset (R2.2), its scene id and export settings (R10.5).

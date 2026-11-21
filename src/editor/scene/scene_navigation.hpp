@@ -41,7 +41,7 @@ public:
     std::size_t                                                            mesh_id{0}; // 0: a saved input mesh the opened scene lacks
     std::string                                                            uid;        // the glTF uid, which names it in the saved item
     glm::mat4                                                              root_from_node{1.0f};
-    std::vector<std::shared_ptr<const erhe::primitive::Primitive_render_shape>> shapes; // parallel to the mesh's primitives
+    std::vector<std::shared_ptr<const erhe::primitive::Primitive_render_shape>> shapes{}; // parallel to the mesh's primitives
     std::vector<Navigation_shape_hash>                                     shape_hashes; // parallel to shapes: their content hashes at the build
     bool                                                                   shapes_known{true}; // false: the opened shapes' hashes differ from the saved ones
 };

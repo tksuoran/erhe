@@ -42,7 +42,7 @@
 
 [TASK::navigation-mesh]{started-2026-11-10;branch=main;doc/editor/navigation.md+doc/plans/navigation_mesh.md}
 ✓steps-1-8{core+settings+seeds+job+staleness+visualization+Export-stage+editor-asset-item(Item_kind::navigation_mesh=9-on-main)}
-!traps{Recast-target-built-without--fno-rtti(editor-subclasses-rcContext)+hollow-closed-mesh-gets-inner-walkable-floor(unreachable)+Recast-DebugUtils-fails--Werror-on-GCC->build-named-targets}
+!traps{Recast-target-built-without--fno-rtti(editor-subclasses-rcContext)+hollow-closed-mesh-gets-inner-walkable-floor(unreachable)}
 ?next{open-items-in-doc/plans/navigation_mesh.md|triangle-classification-plan-needs-triangle-visibility(branch-triangle-visibility)}
 
 [TASK::level-tools+curves]{started-2026-11-13;branch=main(UNPUSHED);plans=doc/plans/level_tools_implementation.md+doc/plans/curves.md;state=topics/level_tools.md}

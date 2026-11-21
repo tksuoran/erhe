@@ -98,7 +98,7 @@ public:
     // Light slot Shader_debug::shadow_visibility shows
     // (Base_render_parameters::shadow_debug_light_index).
     uint32_t                                shadow_debug_light_index{0};
-    std::span<const erhe::scene_renderer::Camera_view_input> views; // multiview
+    std::span<const erhe::scene_renderer::Camera_view_input> views{}; // multiview
     // The view's overdraw counting (Viewport_render_state::overdraw): not
     // off, the passes counts_overdraw() accepts draw with those overdraw
     // variants. The render phase context carries the view's count buffer of

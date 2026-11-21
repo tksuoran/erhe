@@ -29,14 +29,14 @@ class Asset_fetch_archive
 {
 public:
     Archive_packaging                  packaging{Archive_packaging::zip};
-    std::string                        url;                  // followed through redirects
-    std::string                        google_drive_file_id; // used when url is empty
-    std::filesystem::path              entry_prefix;         // archive directory taken as the archive's root
+    std::string                        url{};                // followed through redirects
+    std::string                        google_drive_file_id{}; // used when url is empty
+    std::filesystem::path              entry_prefix{};         // archive directory taken as the archive's root
     Archive_selection                  selection{Archive_selection::all_entries};
     std::filesystem::path              gltf_path;            // relative to entry_prefix; required entry
-    std::vector<std::filesystem::path> extra_paths;          // relative to entry_prefix
-    std::vector<std::filesystem::path> root_extra_paths;     // loose_files: relative to url, written as destination/<filename>
-    std::filesystem::path              destination;          // relative to Asset_fetch_source::archive_root
+    std::vector<std::filesystem::path> extra_paths{};        // relative to entry_prefix
+    std::vector<std::filesystem::path> root_extra_paths{};     // loose_files: relative to url, written as destination/<filename>
+    std::filesystem::path              destination{};          // relative to Asset_fetch_source::archive_root
 };
 
 // A node of the generated glTF 2.1 host file instancing a fetched glTF.
@@ -54,8 +54,8 @@ public:
     std::filesystem::path                  archive_root;
     std::filesystem::path                  marker_path; // relative to archive_root; present == already fetched
     std::vector<Asset_fetch_archive>       archives;
-    std::filesystem::path                  host_path;   // relative to archive_root; empty == no host file
-    std::vector<Asset_fetch_host_instance> host_instances;
+    std::filesystem::path                  host_path{}; // relative to archive_root; empty == no host file
+    std::vector<Asset_fetch_host_instance> host_instances{};
 };
 
 [[nodiscard]] auto get_bistro_fetch_source() -> Asset_fetch_source;

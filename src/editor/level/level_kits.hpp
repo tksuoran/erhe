@@ -197,15 +197,15 @@ class Kit_placement
 public:
     const Kit_shape_definition*                shape{nullptr};
     std::optional<Kit_parameter_values>        values;       // none: the defaults at the scene's lengths
-    std::shared_ptr<erhe::Hierarchy>           parent;       // none: the scene root
-    std::optional<std::size_t>                 parent_index; // an earlier placement of the same call
+    std::shared_ptr<erhe::Hierarchy>           parent{};     // none: the scene root
+    std::optional<std::size_t>                 parent_index{}; // an earlier placement of the same call
     glm::vec3                                  position{0.0f};
     glm::quat                                  rotation{1.0f, 0.0f, 0.0f, 0.0f};
     glm::vec3                                  scale{1.0f};  // the node's own scale (a segments layout's piece); 1 with a connect
-    std::string                                name;         // empty: the shape's display name
+    std::string                                name{};       // empty: the shape's display name
     std::vector<Kit_slot_material>             materials;    // by slot index; a slot without an entry takes its default
-    Surface_options                            surface;      // applied after the module snap (D7.3)
-    std::optional<std::size_t>                 index_in_parent; // none: after the parent's children
+    Surface_options                            surface{};    // applied after the module snap (D7.3)
+    std::optional<std::size_t>                 index_in_parent{}; // none: after the parent's children
     std::optional<Kit_connect>                 connect;      // the pose is the join (D3.12): position, rotation, module snap and surface unused
 };
 
@@ -601,8 +601,8 @@ public:
     std::size_t                  runs         {0}; // steps that ran the flow again
     std::size_t                  held_steps   {0}; // steps whose inputs were the shown run's: nothing ran
     std::size_t                  refused_steps{0}; // steps whose flow was refused: the last valid run kept
-    std::string                  refusal;          // of the last step; empty when it stood
-    std::optional<Kit_flow_preview_pair> snap;     // the snap pair of the run shown
+    std::string                  refusal{};        // of the last step; empty when it stood
+    std::optional<Kit_flow_preview_pair> snap{};     // the snap pair of the run shown
 };
 
 class Level_kits
@@ -1382,10 +1382,10 @@ private:
     {
     public:
         std::shared_ptr<erhe::scene::Node> node;
-        std::shared_ptr<erhe::scene::Node> target;       // null: not in the scene, or its uid names more than one node
+        std::shared_ptr<erhe::scene::Node> target{};     // null: not in the scene, or its uid names more than one node
         Kit_attachment                     attachment;
-        Kit_connector                      own;          // local to node
-        Kit_connector                      target_local; // local to target
+        Kit_connector                      own{};        // local to node
+        Kit_connector                      target_local{}; // local to target
         const char*                        link_dormant  {nullptr}; // the target missing, ambiguous or owned by a locked layout
         const char*                        own_dormant   {nullptr}; // the piece's connector missing or disabled
         const char*                        target_dormant{nullptr}; // the target's connector missing or disabled
@@ -1601,9 +1601,9 @@ private:
     {
     public:
         std::shared_ptr<Scene_root>                     scene_root;
-        std::vector<std::weak_ptr<erhe::scene::Mesh>>   pieces;
+        std::vector<std::weak_ptr<erhe::scene::Mesh>>   pieces{};
         std::size_t                                     next{0};
-        Kit_refresh_report                              report;
+        Kit_refresh_report                              report{};
         std::function<void()>                           on_done;
     };
     // Returns true when it made a new brush.

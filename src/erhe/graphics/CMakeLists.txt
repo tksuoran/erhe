@@ -234,7 +234,8 @@ else ()
     if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
         set(_basisu_enum_warning "-Wno-deprecated-anon-enum-enum-conversion")
     else ()
-        set(_basisu_enum_warning "-Wno-deprecated-enum-enum-conversion")
+        # GCC also reports upstream's always-true range checks.
+        set(_basisu_enum_warning "-Wno-deprecated-enum-enum-conversion;-Wno-type-limits")
     endif ()
     set_source_files_properties(
         "${basis_universal_SOURCE_DIR}/transcoder/basisu_transcoder.cpp"
@@ -388,7 +389,7 @@ if (ERHE_USE_FPNG)
     else ()
         set_source_files_properties(
             "${fpng_SOURCE_DIR}/src/fpng.cpp"
-            PROPERTIES COMPILE_OPTIONS "-Wno-error"
+            PROPERTIES COMPILE_OPTIONS "-Wno-error;-Wno-type-limits"
         )
     endif ()
 else ()
