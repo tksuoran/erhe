@@ -22,7 +22,7 @@ namespace editor {
 
 namespace {
 
-// The parent's world pose, where a Create entry puts the new node (at the parent's origin); identity for a non-node.
+// The parent's world pose, where a Create entry puts the new node unless it is given a position; identity for a non-node.
 void get_parent_pose(const erhe::Hierarchy& parent, glm::vec3& out_position, glm::quat& out_rotation)
 {
     const erhe::scene::Node* const node = dynamic_cast<const erhe::scene::Node*>(&parent);
@@ -45,7 +45,12 @@ void disabled_reason(const char* const reason)
 
 } // anonymous namespace
 
-auto level_kit_create_menu(App_context& context, const std::shared_ptr<Scene_root>& scene_root, const std::shared_ptr<erhe::Hierarchy>& parent) -> bool
+auto level_kit_create_menu(
+    App_context&                            context,
+    const std::shared_ptr<Scene_root>&      scene_root,
+    const std::shared_ptr<erhe::Hierarchy>& parent,
+    const std::optional<glm::vec3>&         world_position
+) -> bool
 {
     if (context.level_kits == nullptr) {
         return false;
@@ -85,7 +90,7 @@ auto level_kit_create_menu(App_context& context, const std::shared_ptr<Scene_roo
                 chosen = true;
                 const Kit_shape_definition* const shape_ptr = &shape;
                 context.imgui_windows->queue(
-                    [&context, weak_scene_root, weak_parent, has_parent, shape_ptr]() {
+                    [&context, weak_scene_root, weak_parent, has_parent, shape_ptr, world_position]() {
                         const std::shared_ptr<Scene_root>      target_scene  = weak_scene_root.lock();
                         const std::shared_ptr<erhe::Hierarchy> target_parent = weak_parent.lock();
                         if (!target_scene || !context.app_scenes->is_host_registered(target_scene.get()) || (has_parent && !target_parent)) {
@@ -95,6 +100,9 @@ auto level_kit_create_menu(App_context& context, const std::shared_ptr<Scene_roo
                         glm::quat rotation{1.0f, 0.0f, 0.0f, 0.0f};
                         if (target_parent) {
                             get_parent_pose(*target_parent, position, rotation);
+                        }
+                        if (world_position.has_value()) {
+                            position = world_position.value();
                         }
                         const Kit_place_result result = context.level_kits->add_piece_of_shape(*target_scene, *shape_ptr, target_parent, position, rotation);
                         if (!result.error.empty()) {
@@ -117,7 +125,7 @@ auto level_kit_create_menu(App_context& context, const std::shared_ptr<Scene_roo
             if (ImGui::MenuItem(get_layout_kind_create_label(kind), nullptr, false, kind_refusal == nullptr)) {
                 chosen = true;
                 context.imgui_windows->queue(
-                    [&context, weak_scene_root, weak_parent, has_parent, kind]() {
+                    [&context, weak_scene_root, weak_parent, has_parent, kind, world_position]() {
                         const std::shared_ptr<Scene_root>      target_scene  = weak_scene_root.lock();
                         const std::shared_ptr<erhe::Hierarchy> target_parent = weak_parent.lock();
                         if (!target_scene || !context.app_scenes->is_host_registered(target_scene.get()) || (has_parent && !target_parent)) {
@@ -127,6 +135,9 @@ auto level_kit_create_menu(App_context& context, const std::shared_ptr<Scene_roo
                         glm::quat rotation{1.0f, 0.0f, 0.0f, 0.0f};
                         if (target_parent) {
                             get_parent_pose(*target_parent, position, rotation);
+                        }
+                        if (world_position.has_value()) {
+                            position = world_position.value();
                         }
                         const Kit_layout_result result = context.level_kits->add_layout_of_kind(*target_scene, kind, target_parent, position, rotation, std::nullopt);
                         if (!result.error.empty()) {

@@ -56,6 +56,12 @@ enum class Selection_usage : unsigned int {
     Selection_used
 };
 
+// Where a context menu of an Item_tree is shown: on a row of the tree, or in a viewport (doc/editor/windows.md).
+enum class Context_menu_site : unsigned int {
+    tree = 0,
+    viewport
+};
+
 class Item_tree
 {
 public:
@@ -111,6 +117,20 @@ public:
     void add_item_context_menu_callback (Context_menu_callback fun);
     // Entries of the empty-area context menu; the callbacks get the root as item.
     void add_root_context_menu_callback (Context_menu_callback fun);
+
+    // The entries of a row's / the empty area's context menu, submitted into the popup the caller has begun.
+    // world_position is the point a viewport menu was opened at; Create places the new item there.
+    void item_context_menu_entries(
+        const std::shared_ptr<erhe::Item_base>& item,
+        Context_menu_site                       site,
+        const std::optional<glm::vec3>&         world_position,
+        bool&                                   close
+    );
+    void root_context_menu_entries(const std::optional<glm::vec3>& world_position, bool& close);
+    // Valid while the entries are submitted; empty for a menu of the tree itself.
+    [[nodiscard]] auto get_context_menu_world_position() const -> const std::optional<glm::vec3>&;
+    // Hands the operations the entries deferred to Imgui_windows::queue().
+    void queue_context_menu_operations();
 
     auto drag_and_drop_target(const std::shared_ptr<erhe::Item_base>& node) -> bool;
 
@@ -283,6 +303,7 @@ private:
 
     std::shared_ptr<Operation>         m_operation;
     std::vector<std::function<void()>> m_operations;
+    std::optional<glm::vec3>           m_context_menu_world_position;
 
     bool                               m_toggled_open{false};
     std::weak_ptr<erhe::Item_base>     m_last_focus_item;

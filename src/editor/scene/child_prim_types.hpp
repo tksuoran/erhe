@@ -1,5 +1,6 @@
 #pragma once
 
+#include <memory>
 #include <string_view>
 #include <vector>
 
@@ -18,13 +19,13 @@ class Scene_commands;
 // is the Hierarchy it is and every parent takes any number of these.
 //
 // make(scene_commands, parent) queues the undoable insert of a new prim as
-// the last child of parent via Scene_commands.
+// the last child of parent via Scene_commands and returns the prim.
 class Child_prim_type_info
 {
 public:
     std::string_view key;          // stable catalog key (MCP argument, e.g. "camera")
     std::string_view display_name; // menu label (e.g. "Camera")
-    void (*make)(Scene_commands& scene_commands, erhe::Hierarchy& parent);
+    std::shared_ptr<erhe::Hierarchy> (*make)(Scene_commands& scene_commands, erhe::Hierarchy& parent);
 };
 
 // The user-creatable child prim kinds, in menu order. Built once (static).

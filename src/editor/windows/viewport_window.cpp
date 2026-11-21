@@ -27,6 +27,7 @@
 #include "tools/mesh_component_selection_tool.hpp"
 #include "tools/selection_tool.hpp"
 #include "windows/active_scene_highlight.hpp"
+#include "windows/viewport_context_menu.hpp"
 
 #include "erhe_defer/defer.hpp"
 #include "erhe_imgui/imgui_helpers.hpp"
@@ -583,6 +584,10 @@ void Viewport_window::imgui()
     }
 
     ImGui::EndChild();
+
+    if ((m_app_context.viewport_context_menu != nullptr) && viewport_scene_view) {
+        m_app_context.viewport_context_menu->imgui(*viewport_scene_view);
+    }
 }
 
 void Viewport_window::imgui_viewport()

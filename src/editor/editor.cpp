@@ -178,6 +178,7 @@
 #include "windows/settings_window.hpp"
 #include "windows/transform_update_stats.hpp"
 #include "windows/viewport_config_window.hpp"
+#include "windows/viewport_context_menu.hpp"
 #include "windows/scene_view_config_window.hpp"
 
 #include "mcp/mcp_server.hpp"
@@ -3133,6 +3134,7 @@ public:
             {
                 ERHE_PROFILE_SCOPE("Early parts");
                 m_clipboard            = std::make_unique<Clipboard     >(commands, m_app_context, app_message_bus);
+                m_viewport_context_menu = std::make_unique<Viewport_context_menu>(commands, m_app_context);
                 m_prefab_library       = std::make_unique<Prefab_library>(m_app_context);
                 m_texture_file_loader  = std::make_unique<Texture_file_loader>(m_app_context);
                 m_animation_player     = std::make_unique<Animation_player>(m_app_context, app_message_bus);
@@ -4585,6 +4587,7 @@ public:
         m_app_context.brdf_slice               = m_brdf_slice            .get();
         m_app_context.brush_tool               = m_brush_tool            .get();
         m_app_context.clipboard                = m_clipboard             .get();
+        m_app_context.viewport_context_menu    = m_viewport_context_menu .get();
         m_app_context.clipboard_window         = m_clipboard_window      .get();
         m_app_context.create                   = m_create                .get();
         m_app_context.app_message_bus          = m_app_message_bus       .get();
@@ -5870,6 +5873,7 @@ public:
     std::unique_ptr<Frame_tick_history            > m_frame_tick_history;
 
     std::unique_ptr<Clipboard                              > m_clipboard;
+    std::unique_ptr<Viewport_context_menu                  > m_viewport_context_menu;
     std::unique_ptr<erhe::window::Context_window           > m_window;
     std::unique_ptr<erhe::graphics::Device                 > m_graphics_device;
     // Frame pacing observer mode (implementation plan step P2.1): the pacer

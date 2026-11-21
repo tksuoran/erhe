@@ -1010,6 +1010,8 @@ erhe_target_sources_grouped(
     windows/status_line.hpp
     windows/transform_update_stats.cpp
     windows/transform_update_stats.hpp
+    windows/viewport_context_menu.cpp
+    windows/viewport_context_menu.hpp
     windows/viewport_config_window.cpp
     windows/viewport_config_window.hpp
     windows/viewport_window.cpp

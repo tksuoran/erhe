@@ -1,6 +1,9 @@
 #pragma once
 
+#include <glm/glm.hpp>
+
 #include <memory>
+#include <optional>
 
 namespace erhe { class Hierarchy; }
 
@@ -11,7 +14,13 @@ class Scene_root;
 
 // The Create menu's "Level Kit" submenu (U47, doc/editor/level_tools.md "Create menu"), shared by the Scene Hierarchy
 // window's Create menu and the main menu's Commands > Create: per kit its shapes, and every layout kind. A chosen entry
-// queues its creation under the parent (none: the scene root) of the scene. Returns true when an entry was chosen.
-auto level_kit_create_menu(App_context& context, const std::shared_ptr<Scene_root>& scene_root, const std::shared_ptr<erhe::Hierarchy>& parent) -> bool;
+// queues its creation under the parent (none: the scene root) of the scene, at the world position (none: the parent's
+// origin). Returns true when an entry was chosen.
+auto level_kit_create_menu(
+    App_context&                            context,
+    const std::shared_ptr<Scene_root>&      scene_root,
+    const std::shared_ptr<erhe::Hierarchy>& parent,
+    const std::optional<glm::vec3>&         world_position
+) -> bool;
 
 } // namespace editor

@@ -28,6 +28,7 @@ ImGui window implementations for the editor UI, including viewport display, prop
 
 - **`Property_origin`** (`property_origin.{hpp,cpp}`) -- where a property value comes from, in the terms of the file the scene was opened from (`doc/erhe/usd_compatibility_design.md` X5): the layer, the prim path in it, the composition arc and its target, and the attribute the writer spells the value as. `Dependency_property_rows` appends it to a row's tooltip as `Layer:` / `Prim:` / `Arc:` / `Authored as:` lines, through `Property_editor::set_entry_tooltip_extra`, which runs the provider only while that row is hovered - the derivation walks the item's ancestors and formats strings, so no frame pays it per row. MCP `get_item_properties` reports the same values as each entry's `origin`.
 
+- **`Viewport_context_menu`** -- The right-click menu of a viewport: the Scene Hierarchy window's context menu for the selection or the hovered item ("Viewport context menu" below).
 - **`Item_tree_window`** -- Generic tree view window used for both scene hierarchy browsing and content library browsing. Supports drag-and-drop, context menus, and custom item callbacks. A node row carries right-aligned feature icons, one per attached value group the node carries: rigid body, brush placement, layout, draw mode and geometry-graph mesh. `Icon_set::get_feature_icons()` is the table; each entry asks the group's own `carries_<x>()`, which reads that group's key property, so the row shows exactly the groups the Properties window lists as groups (`doc/erhe/property_system.md` section 4.23).
 
 ## Viewport input and hover
@@ -56,6 +57,51 @@ showing the 3D view), both computed in `Viewport_window::imgui_viewport()`:
 
 An open popup blocks both: the click that closes it stays in ImGui.
 `scripts/viewport_input_focus_verify.py` drives these cases through the MCP
+input gestures.
+
+## Viewport context menu
+
+A right click in a viewport opens the Scene Hierarchy window's context menu
+there (`Viewport_context_menu`, `windows/viewport_context_menu.*`).
+
+- **The click** is the command `Viewport.context_menu`, a mouse button
+  binding on the right button's release. The press readies it and pointer
+  motion before the release drops it, so a right drag stays with the drags
+  bound to the button (the camera turn, the physics drag). A command that
+  consumes the right press comes first: the Brush tool's insert and the
+  material paint tool's pick while their tool is active, a modal mesh
+  component gesture's cancel. A tool handle or a rendertarget's own UI under
+  the pointer takes the click too. The binding is editable in the Input
+  Bindings window like any other.
+- **The target** is decided at the click, for the scene of the viewport:
+  the hovered item when it is selected; else, when the scene has selected
+  items, the active item when it is one of them, else the item selected
+  last; else the hovered item; else none.
+  - With a selection the entries act on the selection (Cut, Copy, Duplicate
+    and Delete take every selected item), as they do on a selected row.
+  - With no selection and a hovered item they act on that item alone.
+  - With neither, the menu is the Hierarchy window's empty-area menu:
+    Create under the scene root node, and Paste.
+- **The entries** are the row menu's own (`Item_tree::item_context_menu_entries()`
+  and `root_context_menu_entries()`, the same callbacks and clipboard entries
+  the row popup submits), without Rename, whose edit field is a row's label.
+  Paste is enabled while the clipboard holds items and inserts them as the
+  target's last children.
+- **Create** makes the new item a child of the target, as on a row, and
+  places it at the point the click hovered: the nearest hit of scene content
+  or the grid under the pointer (`Item_tree::get_context_menu_world_position()`,
+  read by the Create callback; `place_new_item_at()` sets the new node's
+  world transform before its insert runs, and the first insert keeps it, so
+  the placement is part of the one undo entry). Level Kit pieces and layouts take the point as their world
+  position. A click that hovers nothing, an item without a transform (a
+  Scope, a resource) and a Bone (its head is where its parent puts it) are
+  created as from a row.
+- The popup is submitted by the viewport's window
+  (`Viewport_window::imgui()`), and the menu holds its scene and its target
+  weakly: when the scene closes or the target leaves it while the menu is
+  open, the menu closes.
+
+`scripts/viewport_context_menu_verify.py` drives the menu through the MCP
 input gestures.
 
 ## Scene Hierarchy drag and drop

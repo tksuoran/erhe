@@ -1424,7 +1424,9 @@ menu's Commands > Create (the command menu bindings `Create.*`, to which
 - Where: the hierarchy menu creates under the clicked prim (under the scene
   root for the scene row), the main menu under the active scene's root, at
   the parent's origin (its world translation and rotation), as the other
-  Create entries put a new node there. The new node is selected; each entry
+  Create entries put a new node there. The viewport's context menu creates
+  under its target at the point the click hovered (`doc/editor/windows.md`
+  "Viewport context menu"). The new node is selected; each entry
   is one undo entry. The creation is queued (`Imgui_windows::queue()`) with
   the scene and the parent held weakly, and runs only while the scene is
   registered.

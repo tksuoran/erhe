@@ -1501,6 +1501,200 @@ void Item_tree::item_update_selection(const std::shared_ptr<erhe::Item_base>& it
     }
 }
 
+void Item_tree::item_context_menu_entries(
+    const std::shared_ptr<erhe::Item_base>& item,
+    const Context_menu_site                 site,
+    const std::optional<glm::vec3>&         world_position,
+    bool&                                   close
+)
+{
+    const std::shared_ptr<erhe::Hierarchy> hierarchy = std::dynamic_pointer_cast<erhe::Hierarchy>(item);
+
+    if (!m_item_context_menu_callbacks.empty()) {
+        m_context_menu_world_position = world_position;
+        for (const Context_menu_callback& cb : m_item_context_menu_callbacks) {
+            cb(item, m_operations, close);
+        }
+        m_context_menu_world_position.reset();
+        ImGui::Separator();
+    }
+
+    // The rename field replaces a row's label, so only the tree's own menu offers Rename.
+    if (site == Context_menu_site::tree) {
+        // Like the clipboard entries, Rename on a selected row acts on the
+        // selection: with several items selected, the one added last.
+        // A child of a locked kit layout node is not renamed (doc/editor/level_tools.md "Kit layout nodes").
+        const std::optional<std::string> rename_refusal = locked_layout_refusal(*item);
+        if (ImGui::MenuItem("Rename", "F2", false, !rename_refusal.has_value())) {
+            begin_rename(item->is_selected() ? get_rename_target() : item);
+        }
+        if (rename_refusal.has_value() && ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
+            ImGui::SetTooltip("%s", rename_refusal.value().c_str());
+        }
+    }
+
+    if (!hierarchy) {
+        return;
+    }
+    // The clipboard entries apply to every prim of the tree - node,
+    // scope, kind scope or resource alike (doc/erhe/usd_compatibility_design.md
+    // C5). A copy is a clone, so a kind that is
+    // erhe::Item_kind::not_clonable (a texture, a brush, a graph asset)
+    // is not copied, cut or duplicated; a subtree clone leaves such
+    // descendants out.
+    const bool is_prim   = is_tree_prim(item);
+    const bool clonable  = item->is_clonable();
+    const bool can_copy  = is_prim && clonable;
+    // Structure protection (doc/erhe/usd_compatibility_design.md X2): an item
+    // inside a reference instance is not removed, and nothing is
+    // inserted under a carrier or inside one.
+    const std::shared_ptr<erhe::Hierarchy> item_parent = hierarchy->get_parent().lock();
+    const bool can_cut       = can_copy && !is_instance_structure_protected(*item);
+    const bool can_duplicate = can_copy && item_parent && !refuses_instance_child(*item_parent);
+    if (!can_cut) {
+        ImGui::BeginDisabled();
+    }
+    if (ImGui::MenuItem("Cut")) {
+        if (item->is_selected()) {
+            m_context.selection->cut_selection();
+        } else {
+            m_context.clipboard->set_contents(item);
+            auto op = std::make_shared<Item_insert_remove_operation>(
+                Item_insert_remove_operation::Parameters{
+                    .context = m_context,
+                    .item    = hierarchy,
+                    .parent  = hierarchy->get_parent().lock(),
+                    .mode    = Item_insert_remove_operation::Mode::remove,
+                }
+            );
+            m_context.operation_stack->queue(op);
+        }
+    }
+    if (!can_cut) {
+        ImGui::EndDisabled();
+    }
+    if (!can_copy) {
+        ImGui::BeginDisabled();
+    }
+    if (ImGui::MenuItem("Copy")) {
+        if (item->is_selected()) {
+            m_context.selection->copy_selection();
+        } else {
+            std::shared_ptr<erhe::Item_base> clone = item->clone();
+            if (hierarchy && clone) {
+                erhe::Hierarchy* const clone_hierarchy = dynamic_cast<erhe::Hierarchy*>(clone.get());
+                if (clone_hierarchy != nullptr) {
+                    remap_copied_surface_attachments(*hierarchy, *clone_hierarchy); // S1.3
+                }
+            }
+            m_context.clipboard->set_contents(clone);
+        }
+    }
+    if (!can_copy) {
+        ImGui::EndDisabled();
+    }
+
+    // Paste inserts the clipboard contents as the last children of the
+    // row's prim.
+    const std::shared_ptr<erhe::Hierarchy>& paste_target = hierarchy;
+    const std::vector<std::shared_ptr<erhe::Item_base>>& clipboard_contents = m_context.clipboard->get_contents();
+    const bool can_paste = is_prim && !clipboard_contents.empty() && !refuses_instance_child(*paste_target);
+    if (!can_paste) {
+        ImGui::BeginDisabled();
+    }
+    if (ImGui::MenuItem("Paste")) {
+        m_context.clipboard->try_paste(paste_target, paste_target->get_child_count());
+    }
+    if (!can_paste) {
+        ImGui::EndDisabled();
+    }
+
+    if (!can_duplicate) {
+        ImGui::BeginDisabled();
+    }
+    if (ImGui::MenuItem("Duplicate")) {
+        if (item->is_selected()) {
+            m_context.selection->duplicate_selection();
+        } else {
+            // Clones keep the source name; a duplicate wants a
+            // distinguishing name, so rename the duplicate root here.
+            const std::shared_ptr<erhe::Hierarchy> duplicate = std::dynamic_pointer_cast<erhe::Hierarchy>(hierarchy->clone());
+            if (duplicate) {
+                duplicate->set_name(hierarchy->get_name() + " Copy");
+                remap_copied_surface_attachments(*hierarchy, *duplicate);
+            }
+            auto op = std::make_shared<Item_insert_remove_operation>(
+                Item_insert_remove_operation::Parameters{
+                    .context         = m_context,
+                    .item            = duplicate,
+                    .parent          = hierarchy->get_parent().lock(),
+                    .mode            = Item_insert_remove_operation::Mode::insert,
+                    .index_in_parent = hierarchy->get_index_in_parent() + 1
+                }
+            );
+            m_context.operation_stack->queue(op);
+         }
+    }
+    if (!can_duplicate) {
+        ImGui::EndDisabled();
+    }
+
+    if (ImGui::MenuItem("Delete")) {
+        if (item->is_selected()) {
+            m_context.selection->delete_selection();
+        } else {
+            // Same recursive delete as delete_selection: a bare remove
+            // operation would re-parent the item's children to the
+            // grandparent instead of deleting them (and orphan a prefab
+            // instance's sealed interior).
+            m_context.selection->delete_items({item});
+        }
+    }
+    ImGui::Separator();
+    // The M1 namespace path (doc/erhe/usd_compatibility_design.md), the form the
+    // MCP tools and the ERHE_scene entries address items by; a root is
+    // named by its name.
+    if (ImGui::MenuItem("Copy Path")) {
+        const std::string path = hierarchy->get_reference_path();
+        ImGui::SetClipboardText(path.c_str());
+    }
+}
+
+void Item_tree::root_context_menu_entries(const std::optional<glm::vec3>& world_position, bool& close)
+{
+    if (!m_root) {
+        return;
+    }
+    m_context_menu_world_position = world_position;
+    for (const Context_menu_callback& cb : m_root_context_menu_callbacks) {
+        cb(m_root, m_operations, close);
+    }
+    m_context_menu_world_position.reset();
+    // Paste is the only built-in empty-area entry; it needs a root that takes children.
+    if (is_tree_prim(m_root)) {
+        if (!m_root_context_menu_callbacks.empty()) {
+            ImGui::Separator();
+        }
+        const bool clipboard_is_empty = m_context.clipboard->get_contents().empty();
+        if (ImGui::MenuItem("Paste", nullptr, false, !clipboard_is_empty)) {
+            m_context.clipboard->try_paste(m_root, m_root->get_child_count());
+        }
+    }
+}
+
+auto Item_tree::get_context_menu_world_position() const -> const std::optional<glm::vec3>&
+{
+    return m_context_menu_world_position;
+}
+
+void Item_tree::queue_context_menu_operations()
+{
+    for (std::function<void()>& fun : m_operations) {
+        m_context.imgui_windows->queue(std::move(fun));
+    }
+    m_operations.clear();
+}
+
 void Item_tree::item_popup_menu(const std::shared_ptr<erhe::Item_base>& item)
 {
     const auto& hierarchy = std::dynamic_pointer_cast<erhe::Hierarchy>(item);
@@ -1545,149 +1739,7 @@ void Item_tree::item_popup_menu(const std::shared_ptr<erhe::Item_base>& item)
     );
     if (begin_popup_context_item) {
         bool close{false};
-
-        if (!m_item_context_menu_callbacks.empty()) {
-            for (const Context_menu_callback& cb : m_item_context_menu_callbacks) {
-                cb(item, m_operations, close);
-            }
-            ImGui::Separator();
-        }
-
-        // Like the clipboard entries, Rename on a selected row acts on the
-        // selection: with several items selected, the one added last.
-        // A child of a locked kit layout node is not renamed (doc/editor/level_tools.md "Kit layout nodes").
-        const std::optional<std::string> rename_refusal = locked_layout_refusal(*item);
-        if (ImGui::MenuItem("Rename", "F2", false, !rename_refusal.has_value())) {
-            begin_rename(item->is_selected() ? get_rename_target() : item);
-        }
-        if (rename_refusal.has_value() && ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
-            ImGui::SetTooltip("%s", rename_refusal.value().c_str());
-        }
-
-        if (hierarchy) {
-        // The clipboard entries apply to every prim of the tree - node,
-        // scope, kind scope or resource alike (doc/erhe/usd_compatibility_design.md
-        // C5). A copy is a clone, so a kind that is
-        // erhe::Item_kind::not_clonable (a texture, a brush, a graph asset)
-        // is not copied, cut or duplicated; a subtree clone leaves such
-        // descendants out.
-        const bool is_prim   = is_tree_prim(item);
-        const bool clonable  = item->is_clonable();
-        const bool can_copy  = is_prim && clonable;
-        // Structure protection (doc/erhe/usd_compatibility_design.md X2): an item
-        // inside a reference instance is not removed, and nothing is
-        // inserted under a carrier or inside one.
-        const std::shared_ptr<erhe::Hierarchy> item_parent = hierarchy->get_parent().lock();
-        const bool can_cut       = can_copy && !is_instance_structure_protected(*item);
-        const bool can_duplicate = can_copy && item_parent && !refuses_instance_child(*item_parent);
-        if (!can_cut) {
-            ImGui::BeginDisabled();
-        }
-        if (ImGui::MenuItem("Cut")) {
-            if (item->is_selected()) {
-                m_context.selection->cut_selection();
-            } else {
-                m_context.clipboard->set_contents(item);
-                auto op = std::make_shared<Item_insert_remove_operation>(
-                    Item_insert_remove_operation::Parameters{
-                        .context = m_context,
-                        .item    = hierarchy,
-                        .parent  = hierarchy->get_parent().lock(),
-                        .mode    = Item_insert_remove_operation::Mode::remove,
-                    }
-                );
-                m_context.operation_stack->queue(op);
-            }
-        }
-        if (!can_cut) {
-            ImGui::EndDisabled();
-        }
-        if (!can_copy) {
-            ImGui::BeginDisabled();
-        }
-        if (ImGui::MenuItem("Copy")) {
-            if (item->is_selected()) {
-                m_context.selection->copy_selection();
-            } else {
-                std::shared_ptr<erhe::Item_base> clone = item->clone();
-                if (hierarchy && clone) {
-                    erhe::Hierarchy* const clone_hierarchy = dynamic_cast<erhe::Hierarchy*>(clone.get());
-                    if (clone_hierarchy != nullptr) {
-                        remap_copied_surface_attachments(*hierarchy, *clone_hierarchy); // S1.3
-                    }
-                }
-                m_context.clipboard->set_contents(clone);
-            }
-        }
-        if (!can_copy) {
-            ImGui::EndDisabled();
-        }
-
-        // Paste inserts the clipboard contents as the last children of the
-        // row's prim.
-        const std::shared_ptr<erhe::Hierarchy>& paste_target = hierarchy;
-        const std::vector<std::shared_ptr<erhe::Item_base>>& clipboard_contents = m_context.clipboard->get_contents();
-        const bool can_paste = is_prim && !clipboard_contents.empty() && !refuses_instance_child(*paste_target);
-        if (!can_paste) {
-            ImGui::BeginDisabled();
-        }
-        if (ImGui::MenuItem("Paste")) {
-            m_context.clipboard->try_paste(paste_target, paste_target->get_child_count());
-        }
-        if (!can_paste) {
-            ImGui::EndDisabled();
-        }
-
-        if (!can_duplicate) {
-            ImGui::BeginDisabled();
-        }
-        if (ImGui::MenuItem("Duplicate")) {
-            if (item->is_selected()) {
-                m_context.selection->duplicate_selection();
-            } else {
-                // Clones keep the source name; a duplicate wants a
-                // distinguishing name, so rename the duplicate root here.
-                const std::shared_ptr<erhe::Hierarchy> duplicate = std::dynamic_pointer_cast<erhe::Hierarchy>(hierarchy->clone());
-                if (duplicate) {
-                    duplicate->set_name(hierarchy->get_name() + " Copy");
-                    remap_copied_surface_attachments(*hierarchy, *duplicate);
-                }
-                auto op = std::make_shared<Item_insert_remove_operation>(
-                    Item_insert_remove_operation::Parameters{
-                        .context         = m_context,
-                        .item            = duplicate,
-                        .parent          = hierarchy->get_parent().lock(),
-                        .mode            = Item_insert_remove_operation::Mode::insert,
-                        .index_in_parent = hierarchy->get_index_in_parent() + 1
-                    }
-                );
-                m_context.operation_stack->queue(op);
-             }
-        }
-        if (!can_duplicate) {
-            ImGui::EndDisabled();
-        }
-
-        if (ImGui::MenuItem("Delete")) {
-            if (item->is_selected()) {
-                m_context.selection->delete_selection();
-            } else {
-                // Same recursive delete as delete_selection: a bare remove
-                // operation would re-parent the item's children to the
-                // grandparent instead of deleting them (and orphan a prefab
-                // instance's sealed interior).
-                m_context.selection->delete_items({item});
-            }
-        }
-        ImGui::Separator();
-        // The M1 namespace path (doc/erhe/usd_compatibility_design.md), the form the
-        // MCP tools and the ERHE_scene entries address items by; a root is
-        // named by its name.
-        if (ImGui::MenuItem("Copy Path")) {
-            const std::string path = hierarchy->get_reference_path();
-            ImGui::SetClipboardText(path.c_str());
-        }
-        } // if (hierarchy)
+        item_context_menu_entries(item, Context_menu_site::tree, std::nullopt, close);
 
         ImGui::EndPopup();
         if (close) {
@@ -1876,19 +1928,7 @@ void Item_tree::root_popup_menu()
     );
     if (begin_popup_context_item) {
         bool close{false};
-
-        for (const Context_menu_callback& cb : m_root_context_menu_callbacks) {
-            cb(m_root, m_operations, close);
-        }
-        if (root_takes_paste) {
-            if (!m_root_context_menu_callbacks.empty()) {
-                ImGui::Separator();
-            }
-            const bool clipboard_is_empty = m_context.clipboard->get_contents().empty();
-            if (ImGui::MenuItem("Paste", nullptr, false, !clipboard_is_empty)) {
-                m_context.clipboard->try_paste(m_root, m_root->get_child_count());
-            }
-        }
+        root_context_menu_entries(std::nullopt, close);
 
         ImGui::EndPopup();
         if (close) {
@@ -2690,10 +2730,7 @@ void Item_tree::imgui_tree(float ui_scale)
     // The context menu's deferred operations (child prim creation,
     // imports, flag edits) run out of the ImGui iteration, in the next
     // prepare phase (Imgui_windows::flush_queue).
-    for (std::function<void()>& fun : m_operations) {
-        m_context.imgui_windows->queue(std::move(fun));
-    }
-    m_operations.clear();
+    queue_context_menu_operations();
 
     if (m_operation) {
         m_context.operation_stack->queue(m_operation);

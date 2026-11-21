@@ -74,6 +74,7 @@ class Brdf_slice;
 class Brush_preview;
 class Brush_tool;
 class Clipboard;
+class Viewport_context_menu;
 class Clipboard_window;
 class Create;
 class Debug_renderer;
@@ -348,6 +349,7 @@ public:
     Brdf_slice*                        brdf_slice           {nullptr};
     Brush_tool*                        brush_tool           {nullptr};
     Clipboard*                         clipboard            {nullptr};
+    Viewport_context_menu*             viewport_context_menu{nullptr};
     Clipboard_window*                  clipboard_window     {nullptr};
     Create*                            create               {nullptr};
     App_message_bus*                   app_message_bus      {nullptr};

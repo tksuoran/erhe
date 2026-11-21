@@ -155,7 +155,7 @@ void App_windows::viewport_menu(erhe::imgui::Imgui_host& imgui_host)
             if (ImGui::BeginMenu("Create")) {
                 ImGui::Separator();
                 const std::shared_ptr<Scene_root> scene_root = (m_context.selection != nullptr) ? m_context.selection->get_active_scene_root() : std::shared_ptr<Scene_root>{};
-                static_cast<void>(level_kit_create_menu(m_context, scene_root, {}));
+                static_cast<void>(level_kit_create_menu(m_context, scene_root, {}, std::nullopt));
                 ImGui::EndMenu();
             }
             ImGui::EndMenu();

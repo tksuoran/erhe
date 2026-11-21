@@ -700,23 +700,29 @@ auto Scene_root::make_browser_window(
                 ImGui::BeginDisabled();
             }
             if (ImGui::BeginMenu("Create")) {
-                using Create_function = void (*)(Scene_commands& scene_commands, erhe::Hierarchy& parent);
-                const auto entry = [&context, &parent, &deferred_operations, &close](const char* const label, const Create_function create) {
+                // A menu opened in a viewport places the new item at the point it was opened at.
+                const std::optional<glm::vec3> world_position = m_node_tree_window->get_context_menu_world_position();
+                using Create_function = std::shared_ptr<erhe::Hierarchy> (*)(Scene_commands& scene_commands, erhe::Hierarchy& parent);
+                const auto entry = [&context, &parent, &deferred_operations, &close, &world_position](const char* const label, const Create_function create) {
                     if (ImGui::MenuItem(label)) {
                         deferred_operations.push_back(
-                            [&context, parent, create]() {
-                                create(*context.scene_commands, *parent);
+                            [&context, parent, create, world_position]() {
+                                const std::shared_ptr<erhe::Hierarchy> created = create(*context.scene_commands, *parent);
+                                if (created && world_position.has_value()) {
+                                    place_new_item_at(*created, *parent, world_position.value());
+                                }
                             }
                         );
                         close = true;
                     }
                 };
-                entry("Xform", [](Scene_commands& sc, erhe::Hierarchy& p) { static_cast<void>(sc.create_new_xform(&p)); });
+                entry("Xform", [](Scene_commands& sc, erhe::Hierarchy& p) -> std::shared_ptr<erhe::Hierarchy> { return sc.create_new_xform(&p); });
                 // A Scope: children and nothing else (C5).
-                entry("Scope", [](Scene_commands& sc, erhe::Hierarchy& p) { static_cast<void>(sc.create_new_scope(&p)); });
+                entry("Scope", [](Scene_commands& sc, erhe::Hierarchy& p) -> std::shared_ptr<erhe::Hierarchy> { return sc.create_new_scope(&p); });
                 // Skeleton editing R5 (doc/plans/rigging/skeleton_editing.md):
                 // a bone under any node, the scene root included; refused
                 // under a bone a skin lists (R9), so the entry is greyed there.
+                // A bone's head is where its parent puts it, also from a viewport menu.
                 const std::shared_ptr<erhe::scene::Node> parent_node = std::dynamic_pointer_cast<erhe::scene::Node>(parent);
                 if (parent_node) {
                     const std::optional<std::string> bone_refusal = erhe::scene::is_bone(parent_node.get())
@@ -743,18 +749,19 @@ auto Scene_root::make_browser_window(
                 for (const Child_prim_type_info& type_info : get_child_prim_types()) {
                     entry(std::string{type_info.display_name}.c_str(), type_info.make);
                 }
-                entry("Rendertarget", [](Scene_commands& sc, erhe::Hierarchy& p) { static_cast<void>(sc.create_new_rendertarget(&p)); });
+                entry("Rendertarget", [](Scene_commands& sc, erhe::Hierarchy& p) -> std::shared_ptr<erhe::Hierarchy> { return sc.create_new_rendertarget(&p); });
                 ImGui::Separator();
-                entry("Material",               [](Scene_commands& sc, erhe::Hierarchy& p) { static_cast<void>(sc.create_new_material        (&p)); });
-                entry("Physics Material",       [](Scene_commands& sc, erhe::Hierarchy& p) { static_cast<void>(sc.create_new_physics_material(&p)); });
-                entry("Collision Filter",       [](Scene_commands& sc, erhe::Hierarchy& p) { static_cast<void>(sc.create_new_collision_filter(&p)); });
-                entry("Physics Joint Settings", [](Scene_commands& sc, erhe::Hierarchy& p) { static_cast<void>(sc.create_new_joint_settings  (&p)); });
-                entry("Style",                  [](Scene_commands& sc, erhe::Hierarchy& p) { static_cast<void>(sc.create_new_style           (&p)); });
-                entry("Graph Texture",          [](Scene_commands& sc, erhe::Hierarchy& p) { static_cast<void>(sc.create_new_graph_texture   (&p)); });
-                entry("Graph Mesh",             [](Scene_commands& sc, erhe::Hierarchy& p) { static_cast<void>(sc.create_new_graph_mesh      (&p)); });
+                // Resources have no transform: nothing to place.
+                entry("Material",               [](Scene_commands& sc, erhe::Hierarchy& p) -> std::shared_ptr<erhe::Hierarchy> { static_cast<void>(sc.create_new_material        (&p)); return {}; });
+                entry("Physics Material",       [](Scene_commands& sc, erhe::Hierarchy& p) -> std::shared_ptr<erhe::Hierarchy> { static_cast<void>(sc.create_new_physics_material(&p)); return {}; });
+                entry("Collision Filter",       [](Scene_commands& sc, erhe::Hierarchy& p) -> std::shared_ptr<erhe::Hierarchy> { static_cast<void>(sc.create_new_collision_filter(&p)); return {}; });
+                entry("Physics Joint Settings", [](Scene_commands& sc, erhe::Hierarchy& p) -> std::shared_ptr<erhe::Hierarchy> { static_cast<void>(sc.create_new_joint_settings  (&p)); return {}; });
+                entry("Style",                  [](Scene_commands& sc, erhe::Hierarchy& p) -> std::shared_ptr<erhe::Hierarchy> { static_cast<void>(sc.create_new_style           (&p)); return {}; });
+                entry("Graph Texture",          [](Scene_commands& sc, erhe::Hierarchy& p) -> std::shared_ptr<erhe::Hierarchy> { static_cast<void>(sc.create_new_graph_texture   (&p)); return {}; });
+                entry("Graph Mesh",             [](Scene_commands& sc, erhe::Hierarchy& p) -> std::shared_ptr<erhe::Hierarchy> { static_cast<void>(sc.create_new_graph_mesh      (&p)); return {}; });
                 ImGui::Separator();
                 // U47: kit pieces and layouts, the same submenu as the main menu's Commands > Create.
-                if (level_kit_create_menu(context, shared_from_this(), parent)) {
+                if (level_kit_create_menu(context, shared_from_this(), parent, world_position)) {
                     close = true;
                 }
                 ImGui::EndMenu();

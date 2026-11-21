@@ -1,18 +1,23 @@
 #include "scene/child_prim_types.hpp"
 
+#include "scene/joint.hpp"
 #include "scene/scene_commands.hpp"
 
 #include "erhe_item/hierarchy.hpp"
+#include "erhe_scene/camera.hpp"
+#include "erhe_scene/curve.hpp"
+#include "erhe_scene/light.hpp"
+#include "erhe_scene/mesh.hpp"
 
 namespace editor {
 
 namespace {
 
-void make_camera(Scene_commands& sc, erhe::Hierarchy& parent) { sc.create_new_camera(&parent); }
-void make_light (Scene_commands& sc, erhe::Hierarchy& parent) { sc.create_new_light (&parent); }
-void make_mesh  (Scene_commands& sc, erhe::Hierarchy& parent) { sc.create_new_mesh  (&parent); }
-void make_joint (Scene_commands& sc, erhe::Hierarchy& parent) { sc.create_new_joint (&parent); }
-void make_curve (Scene_commands& sc, erhe::Hierarchy& parent) { sc.create_new_curve (&parent); }
+auto make_camera(Scene_commands& sc, erhe::Hierarchy& parent) -> std::shared_ptr<erhe::Hierarchy> { return sc.create_new_camera(&parent); }
+auto make_light(Scene_commands& sc, erhe::Hierarchy& parent) -> std::shared_ptr<erhe::Hierarchy> { return sc.create_new_light(&parent); }
+auto make_mesh(Scene_commands& sc, erhe::Hierarchy& parent) -> std::shared_ptr<erhe::Hierarchy> { return sc.create_new_mesh(&parent); }
+auto make_joint(Scene_commands& sc, erhe::Hierarchy& parent) -> std::shared_ptr<erhe::Hierarchy> { return sc.create_new_joint(&parent); }
+auto make_curve(Scene_commands& sc, erhe::Hierarchy& parent) -> std::shared_ptr<erhe::Hierarchy> { return sc.create_new_curve(&parent); }
 
 } // anonymous namespace
 

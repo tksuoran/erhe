@@ -914,6 +914,7 @@ Editor-specific render graph nodes:
 
 ImGui window implementations:
 - `Viewport_window` -- hosts a `Viewport_scene_view` in an ImGui window
+- `Viewport_context_menu` -- a right click in a viewport opens the Hierarchy row menu for the selection or the hovered item (`doc/editor/windows.md` "Viewport context menu")
 - `Properties` -- inspects selected item properties (camera, light, mesh, material, etc.)
 - `Settings_window` -- application settings
 - `Item_tree_window` -- tree view of scene hierarchy or content library. A row's context menu holds the item callbacks (`add_item_context_menu_callback`) and the clipboard / rename / delete entries; the empty area's menu holds only the root callbacks (`add_root_context_menu_callback`; the Hierarchy registers Create, under the scene root) and Paste when the root is a prim, and does not open when it would be empty (Asset Browser)
