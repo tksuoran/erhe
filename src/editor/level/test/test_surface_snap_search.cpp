@@ -432,4 +432,106 @@ TEST(Surface_support, the_property_labels_are_the_enum_names)
     }
 }
 
+// S2.2: the offset names the supporting hit, lines[line].hits[hit], whose mesh is the support.
+[[nodiscard]] auto support_of(
+    const std::vector<std::vector<Surface_hit_point>>& hits,
+    const float                                        span,
+    const Surface_support                              support
+) -> Surface_offset
+{
+    std::vector<Surface_line> lines;
+    for (const std::vector<Surface_hit_point>& line_hits : hits) {
+        lines.push_back(Surface_line{.hits = line_hits, .span = span});
+    }
+    return editor::find_support_height(lines, editor::Surface_search_window{.forward_distance = 1.0f, .backward_distance = 1.0f}, support);
+}
+
+TEST(Surface_support_hit, names_the_hit_the_base_rests_on)
+{
+    const std::vector<std::vector<Surface_hit_point>> hits{
+        {
+            Surface_hit_point{.height =  0.8f, .surface = false},
+            Surface_hit_point{.height = -0.8f, .surface = true},
+            Surface_hit_point{.height = -0.3f, .surface = true},
+            Surface_hit_point{.height = -0.5f, .surface = false}
+        }
+    };
+    const Surface_offset offset = support_of(hits, 0.2f, Surface_support::five_lines);
+    ASSERT_TRUE(offset.found);
+    EXPECT_EQ(offset.height, -0.3f);
+    EXPECT_EQ(offset.line, 0u);
+    EXPECT_EQ(offset.hit, 2u);
+}
+
+TEST(Surface_support_hit, the_base_center_line_comes_first_at_the_place)
+{
+    // A corner line's hit is nearer by less than the tolerance: the height is the corner's, the support the center's.
+    const float center = -0.3f - (0.5f * editor::c_surface_snap_tolerance);
+    const std::vector<std::vector<Surface_hit_point>> hits{
+        {Surface_hit_point{.height = -0.9f, .surface = true}, Surface_hit_point{.height = center, .surface = true}},
+        {},
+        {Surface_hit_point{.height = -0.3f, .surface = true}},
+        {Surface_hit_point{.height = -0.3f, .surface = true}},
+        {}
+    };
+    for (const Surface_support support : {Surface_support::five_lines, Surface_support::center_blocks, Surface_support::center_fallback}) {
+        const Surface_offset offset = support_of(hits, 0.2f, support);
+        ASSERT_TRUE(offset.found);
+        EXPECT_EQ(offset.height, -0.3f);
+        EXPECT_EQ(offset.line, 0u);
+        EXPECT_EQ(offset.hit, 1u);
+    }
+}
+
+TEST(Surface_support_hit, a_corner_line_supports_where_the_center_has_no_hit_at_the_place)
+{
+    // The center's surface is 0.2 m lower: the first corner line resting at the place is the support.
+    const std::vector<std::vector<Surface_hit_point>> hits{
+        {Surface_hit_point{.height = -0.5f, .surface = true}},
+        {},
+        {Surface_hit_point{.height = -0.3f, .surface = true}},
+        {Surface_hit_point{.height = -0.3f, .surface = true}},
+        {}
+    };
+    const Surface_offset offset = support_of(hits, 0.2f, Surface_support::center_blocks);
+    ASSERT_TRUE(offset.found);
+    EXPECT_EQ(offset.height, -0.3f);
+    EXPECT_EQ(offset.line, 2u);
+    EXPECT_EQ(offset.hit, 0u);
+}
+
+TEST(Surface_support_hit, the_center_fallback_rests_on_the_center_line)
+{
+    // Under one corner a ledge 0.2 m down with a table's underside 0.1 m up: no place fits the 0.5 m piece, and the
+    // fallback rests the center on the floor 0.6 m down.
+    const std::vector<std::vector<Surface_hit_point>> hits{
+        {Surface_hit_point{.height = -0.6f, .surface = true}},
+        {Surface_hit_point{.height = 0.1f, .surface = false}, Surface_hit_point{.height = -0.2f, .surface = true}, Surface_hit_point{.height = -0.6f, .surface = true}},
+        {Surface_hit_point{.height = -0.6f, .surface = true}},
+        {Surface_hit_point{.height = -0.6f, .surface = true}},
+        {Surface_hit_point{.height = -0.6f, .surface = true}}
+    };
+    EXPECT_FALSE(support_of(hits, 0.5f, Surface_support::five_lines).found);
+    const Surface_offset fallback = support_of(hits, 0.5f, Surface_support::center_fallback);
+    ASSERT_TRUE(fallback.found);
+    EXPECT_EQ(fallback.height, -0.6f);
+    EXPECT_EQ(fallback.line, 0u);
+    EXPECT_EQ(fallback.hit, 0u);
+}
+
+TEST(Surface_support_hit, a_point_rest_names_its_hit)
+{
+    const std::vector<Surface_hit_point> hits{
+        Surface_hit_point{.height = -0.7f, .surface = true},
+        Surface_hit_point{.height =  0.1f, .surface = false},
+        Surface_hit_point{.height = -0.4f, .surface = true}
+    };
+    const editor::Point_rest rest = editor::find_point_rest(
+        glm::vec3{0.0f}, glm::vec3{0.0f, -1.0f, 0.0f}, Surface_line{.hits = hits, .span = 0.0f},
+        editor::Surface_search_window{.forward_distance = 1.0f, .backward_distance = 1.0f}
+    );
+    ASSERT_TRUE(rest.found);
+    EXPECT_EQ(rest.hit, 2u);
+}
+
 } // anonymous namespace

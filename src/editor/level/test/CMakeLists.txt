@@ -22,7 +22,7 @@ add_executable(${_target}
     # surface base frame glm and erhe::math; the surface options fmt; the kit
     # layout node values erhe::scene; the kit layout values and outlines
     # nlohmann_json; the piece record (the attachment) erhe::scene and nlohmann_json; the light frames glm and fmt; the snap to
-    # surface search (surface_snap_search.hpp) is header-only.
+    # surface search (surface_snap_search.hpp) is header-only; the surface attachment carry glm and erhe::math.
     ${CMAKE_CURRENT_SOURCE_DIR}/../kit_connection_flow.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../kit_connector.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../kit_layout.cpp
@@ -57,6 +57,7 @@ add_executable(${_target}
     ${CMAKE_CURRENT_SOURCE_DIR}/../kit_shapes_nature_terrain.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../kit_shapes_nature_rocks.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../kit_shapes_roof.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../kit_surface_attachment.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../level_group.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../level_region.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../level_repeat.cpp
@@ -96,6 +97,7 @@ add_executable(${_target}
     test_kit_shapes_nature.cpp
     test_kit_shapes_nature_plants.cpp
     test_kit_shapes_nature_rocks.cpp
+    test_kit_surface_attachment.cpp
     test_level_group.cpp
     test_level_region.cpp
     test_level_repeat.cpp

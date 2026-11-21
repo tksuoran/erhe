@@ -1,4 +1,5 @@
 #include "prefabs/prefab_library.hpp"
+#include "level/kit_piece.hpp"
 #include "editor_item_bits.hpp"
 
 #include "assets/asset_load_task.hpp"
@@ -1089,6 +1090,8 @@ void attach_prefab_instance(
             continue;
         }
         derive_instance_uids(*clone_prim, *child, node->get_gltf_uid());
+        // S1.3: a surface attachment inside the template names the instance's node.
+        remap_copied_surface_attachments(*child, *clone_prim);
         // Retarget meshes BEFORE parenting: node may already be hosted in a
         // live scene, and parenting registers meshes into
         // the scene by their layer_id at that moment (Scene::register_mesh).

@@ -111,6 +111,19 @@ an empty scene and checks over MCP:
   oriented rests on a wedge (snap + orient) answer 0 and keep their rotation
   when rested again, from placement, a held drag and its release, a layout and
   a crease between the slope and the ground, and go to the top of a slab stack;
+- surface attachment (doc/plans/level_kit_surface_attachment.md), in a scene of
+  its own (closed afterwards): level_snap_to_surface names each node's support
+  (a table top, the ground, a wall searched sideways, the tile under the base
+  center where a corner rests on the ground at the same height, with orient
+  the table) and null where no place is found; a record written raw on a
+  child of the table reads active in level_get_pieces, one naming the ground
+  or no node inert, one that does not read inert with its reason; in a
+  second scene, attaching and detaching (placement, snap, Transform release,
+  nudge, move off, connector join, level_detach_piece, reparent_item, a
+  chain) with undo and redo of each; following (supports' shape changes,
+  off_surface, chains, live parameter drags); locked and floor layouts
+  (the lock ends at an attached piece, re-home, keep, detach, live handle
+  edits, lock and unlock); copies, mirror, Replace, delete, save and load;
 - spatial queries (doc/editor/level_tools.md "Spatial queries"), in a scene of
   its own (closed afterwards): level_get_support_report over a ground slab, a
   block resting on it, one stacked on that, a floating block and one over
@@ -236,7 +249,7 @@ layout.
 Usage: python3 scripts/level_tools_verify.py [--editor <binary>] [--image <png path>] [--surface-image <png path>]
        [--walkable-image <png path>] [--window-image <png path>] [--properties-image <png path>] [--queries-image <png path>]
        [--layout-image <png path>] [--group-image <png path>] [--path-image <png path>] [--only-walkable] [--only-transform] [--only-layouts]
-       [--only-path-layouts] [--only-window-layout] [--only-replace] [--only-layout-selection] [--only-scatter] [--only-connectors] [--only-attachments] [--only-connector-types] [--only-polygon-floor] [--only-connection-records] [--only-property-flow] [--only-riders] [--only-flow-preview] [--only-connector-snap]
+       [--only-path-layouts] [--only-window-layout] [--only-replace] [--only-layout-selection] [--only-scatter] [--only-connectors] [--only-attachments] [--only-connector-types] [--only-polygon-floor] [--only-connection-records] [--only-property-flow] [--only-riders] [--only-surface-attachment] [--only-flow-preview] [--only-connector-snap]
        [--only-layout-indicators] [--only-region-handles] [--only-layout-handles] [--only-segment-handles] [--only-more-shapes] [--only-former-ids] [--only-layout-connectors] [--only-stairs-layout] [--only-stairs-drag-uploads]
        [--only-piece-lights] [--piece-lights-shape <shape id>] [--only-wrap-with-path] [--only-create-menu]
        [--only-thumbnails] [--thumbnails-image <png path>] [--only-machine-kit]
@@ -1682,6 +1695,1007 @@ def check_snap_to_surface(editor):
               (len(actual) == 3) and positions_match(actual, expected_positions, TOLERANCE), f"{[fmt3(p) for p in actual]} vs {[fmt3(p) for p in expected_positions]}")
     editor.close(scene)
     check_oriented_snap_to_surface(editor)
+
+
+def check_surface_attachment(editor):
+    """doc/plans/level_kit_surface_attachment.md step 1 (S2.2): level_snap_to_surface names each node's support, the mesh owning
+    the face it rests on - a table top, the ground, a wall searched sideways, the face under the base center where the base
+    center's line and a corner's rest at the same height on different meshes, the surface of the turn with orient - and null
+    where no place is found."""
+    scene = create_scene(editor)
+    editor.call("set_active_scene", {"scene_name": scene})
+    made = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [
+        {"shape": "basic.floor_slab", "position": [0.0, -0.2, 0.0], "name": "ground", "parameters": {"width": 40.0, "depth": 40.0, "thickness": 0.2}},
+        {"shape": "basic.floor_slab", "position": [21.0, -0.2, 0.0], "name": "tile", "parameters": {"width": 2.0, "depth": 2.0, "thickness": 0.2}},
+        {"shape": "basic.block", "position": [3.0, 0.0, 0.0], "name": "table"},
+        {"shape": "architecture.wall", "position": [0.0, 0.0, -5.0], "name": "wall"}]})["pieces"]
+    editor.wait_idle()
+    ids = {p["name"]: p["id"] for p in made}
+    small = {"width": 0.5, "depth": 0.5, "height": 0.5}
+    crates = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [
+        {"shape": "basic.block", "position": [3.0, 1.4, 0.0], "name": "on table", "parameters": small},
+        {"shape": "basic.block", "position": [-3.0, 0.5, 0.0], "name": "on ground", "parameters": small},
+        {"shape": "basic.block", "position": [100.0, 5.0, 100.0], "name": "over nothing", "parameters": small},
+        {"shape": "basic.block", "position": [20.1, 0.3, -0.5], "name": "center on tile", "parameters": small},
+        {"shape": "basic.block", "position": [19.9, 0.3, 0.5], "name": "center on ground", "parameters": small},
+        {"shape": "basic.block", "position": [0.0, 1.5, -4.0], "name": "by wall", "parameters": small}]})["pieces"]
+    editor.wait_idle()
+    crate_ids = {p["name"]: p["id"] for p in crates}
+
+    def snap(name, **extra):
+        return editor.call("level_snap_to_surface", dict({"scene_name": scene, "node_ids": [crate_ids[name]], "query_only": True}, **extra))["nodes"][0]
+
+    def support_id(node):
+        support = node.get("support")
+        return None if support is None else support.get("id")
+
+    for name, support_name in (("on table", "table"), ("on ground", "ground"), ("center on tile", "tile"), ("center on ground", "ground")):
+        node = snap(name)
+        check(f"level_snap_to_surface names the support of a block '{name}': {support_name}",
+              node["surface_found"] and (support_id(node) == ids[support_name]) and (node["support"].get("name") == support_name),
+              json.dumps(node.get("support")))
+    oriented = snap("on table", orient=True)
+    check("with orient the support is the mesh under the base center (the table)",
+          oriented["surface_found"] and (support_id(oriented) == ids["table"]), json.dumps(oriented.get("support")))
+    sideways = snap("by wall", direction=[0.0, 0.0, -1.0])
+    check("a block searched toward a wall names the wall as its support",
+          sideways["surface_found"] and (support_id(sideways) == ids["wall"]), json.dumps(sideways.get("support")))
+    nothing = snap("over nothing")
+    check("a block with no place within the distance has support null",
+          (not nothing["surface_found"]) and ("support" in nothing) and (nothing["support"] is None), json.dumps(nothing))
+    applied = editor.call("level_snap_to_surface", {"scene_name": scene, "node_ids": [crate_ids["on table"], crate_ids["on ground"]]})
+    editor.wait_idle()
+    check("an applied level_snap_to_surface names the same supports",
+          [support_id(n) for n in applied["nodes"]] == [ids["table"], ids["ground"]], json.dumps([n.get("support") for n in applied["nodes"]]))
+    rested = editor.call("level_snap_to_surface", {"scene_name": scene, "node_ids": [crate_ids["on table"]], "query_only": True})["nodes"][0]
+    check("a rested block keeps its support and answers distance 0",
+          rested["surface_found"] and (rested["distance"] == 0.0) and (support_id(rested) == ids["table"]), json.dumps(rested))
+
+    # Step 2 (S1.1, S1.2, S7.2): a record written raw on a child of the table is active; one naming another uid is inert.
+    vase = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [
+        {"shape": "basic.block", "position": [0.1, 1.0, 0.2], "name": "vase", "parent_id": ids["table"], "parameters": small}]})["pieces"][0]
+    editor.wait_idle()
+    by_name = {p["name"]: p for p in pieces(editor, scene)}
+    check("a piece records no surface attachment until one is written", by_name["vase"].get("surface_attachment", "absent") is None,
+          json.dumps(by_name["vase"].get("surface_attachment", "absent")))
+
+    def write_record(target_uid, position=(0.6, 1.0, 0.7)):
+        record = {"direction": [(0.0).hex(), (-1.0).hex(), (0.0).hex()], "on_surface": True, "orient": False, "position": [float(v).hex() for v in position],
+                  "rest": "leading_face", "target": target_uid}
+        editor.call("set_item_property", {"scene_name": scene, "item_id": vase["id"], "property": "Kit_piece.surface_attachment",
+                                          "value": json.dumps(record, sort_keys=True)})
+        editor.wait_idle()
+        return piece_by_id(editor, scene, vase["id"]).get("surface_attachment")
+
+    active = write_record(by_name["table"]["uid"])
+    check("a record naming the parent's uid reads active, naming the table, with its position, direction, orient and rest",
+          (active is not None) and (active["state"] == "active") and (active["target_id"] == ids["table"]) and (active["target_name"] == "table") and
+          (active["target_uid"] == by_name["table"]["uid"]) and (active["position"] == [0.6, 1.0, 0.7]) and (active["direction"] == [0.0, -1.0, 0.0]) and
+          (active["orient"] is False) and (active["rest"] == "leading_face") and (active["reason"] == ""), json.dumps(active))
+    inert = write_record(by_name["ground"]["uid"])
+    check("a record naming another node's uid (the ground, not the parent) reads inert with a reason, naming the ground",
+          (inert is not None) and (inert["state"] == "inert") and (inert["target_id"] == ids["ground"]) and (inert["reason"] != ""), json.dumps(inert))
+    missing = write_record("NoSuchUid0000001")
+    check("a record naming a uid no node carries reads inert, its target null",
+          (missing is not None) and (missing["state"] == "inert") and (missing["target_id"] is None), json.dumps(missing))
+    editor.call("set_item_property", {"scene_name": scene, "item_id": vase["id"], "property": "Kit_piece.surface_attachment", "value": "{}"})
+    editor.wait_idle()
+    unreadable = piece_by_id(editor, scene, vase["id"]).get("surface_attachment")
+    check("a record that does not read reads inert, naming why",
+          (unreadable is not None) and (unreadable["state"] == "inert") and ("does not read" in unreadable["reason"]), json.dumps(unreadable))
+    editor.call("set_item_property", {"scene_name": scene, "item_id": vase["id"], "property": "Kit_piece.surface_attachment", "value": ""})
+    editor.wait_idle()
+    check("an empty record is no record", piece_by_id(editor, scene, vase["id"]).get("surface_attachment", "absent") is None, "")
+    editor.close(scene)
+
+
+def check_surface_attaching(editor):
+    """doc/plans/level_kit_surface_attachment.md step 3 (S2.1 - S2.7, S6): placement, snap, Transform release, nudges, moves off,
+    connector joins, Detach and a chain; undo and redo of each restore parent, pose and record."""
+    scene = create_scene(editor)
+    editor.call("set_active_scene", {"scene_name": scene})
+    small = {"width": 0.5, "depth": 0.5, "height": 0.5}
+    group = editor.call("create_node", {"scene_name": scene, "name": "group"})
+    editor.wait_idle()
+    made = editor.call("level_place_pieces", {"scene_name": scene, "attach": False, "pieces": [
+        {"shape": "basic.floor_slab", "position": [0.0, -0.2, 0.0], "name": "ground", "parameters": {"width": 40.0, "depth": 40.0, "thickness": 0.2}},
+        {"shape": "basic.block", "position": [3.0, 0.0, 0.0], "name": "table"},
+        {"shape": "basic.block", "position": [9.0, 0.0, 0.0], "name": "table b"},
+        {"shape": "basic.block", "position": [6.0, 0.0, 0.0], "name": "table g", "parent_id": group.get("node_id", group.get("id"))},
+        {"shape": "architecture.wall", "position": [0.0, 0.0, -5.0], "name": "wall"},
+        {"shape": "architecture.wall", "position": [0.0, 0.0, 8.0], "name": "free wall"}]})["pieces"]
+    editor.call("create_shape", {"scene_name": scene, "shape": "box", "name": "rock", "size": [2.0, 0.5, 2.0], "position": [-6.0, 0.25, 0.0], "motion_mode": "static"})
+    editor.wait_idle()
+    ids = {p["name"]: p["id"] for p in made}
+    ids["group"] = group.get("node_id", group.get("id"))
+    root_id = scene_tree(editor, scene)[ids["ground"]]["parent_id"]
+
+    def parent(node_id):
+        return scene_tree(editor, scene)[node_id]["parent_id"]
+
+    def record(node_id):
+        return piece_by_id(editor, scene, node_id).get("surface_attachment")
+
+    def state(node_ids):
+        tree = scene_tree(editor, scene)
+        by_id = pieces_by_id(editor, scene)
+        out = {}
+        for i in node_ids:
+            if i not in by_id:
+                out[i] = None
+                continue
+            sa = by_id[i].get("surface_attachment")
+            out[i] = (tree[i]["parent_id"], [round(v, 4) for v in by_id[i]["position"]],
+                      None if sa is None else (sa["state"], sa["target_id"], [round(v, 6) for v in sa["position"]]))
+        return out
+
+    def undo_redo(label, node_ids, before):
+        after = state(node_ids)
+        editor.call("undo")
+        editor.wait_idle()
+        undone = state(node_ids)
+        editor.call("redo")
+        editor.wait_idle()
+        redone = state(node_ids)
+        check(f"{label}: undo restores parent, pose and record, redo the change", (undone == before) and (redone == after),
+              json.dumps({"before": before, "undone": undone, "after": after, "redone": redone})[:600])
+
+    def attached(node_id, support_name):
+        sa = record(node_id)
+        return (parent(node_id) == ids[support_name]) and (sa is not None) and (sa["state"] == "active") and (sa["target_id"] == ids[support_name])
+
+    def move(node_id, translation, surface_snap):
+        editor.call("select_items", {"scene_name": scene, "ids": [node_id]})
+        editor.wait_idle()
+        reply = editor.call("transform_selection", {"translation": translation, "surface_snap": surface_snap})
+        editor.wait_idle()
+        return reply
+
+    # S2.1: placement onto the table and the wall makes children with active records, the world pose as without attach.
+    placed = editor.call("level_place_pieces", {"scene_name": scene, "surface_snap": True, "pieces": [
+        {"shape": "basic.block", "position": [3.0, 1.4, 0.2], "name": "crate", "parameters": small}]})["pieces"][0]
+    editor.wait_idle()
+    ids["crate"] = placed["id"]
+    check("level_place_pieces with surface_snap onto the table inserts the crate under the table with an active record naming it",
+          attached(ids["crate"], "table") and (placed.get("support") or {}).get("id") == ids["table"], json.dumps([placed.get("support"), record(ids["crate"])]))
+    # The same placement on table b (equal to the table) with attach false: the same pose relative to the table, under the root.
+    plain = editor.call("level_place_pieces", {"scene_name": scene, "surface_snap": True, "attach": False, "pieces": [
+        {"shape": "basic.block", "position": [9.0, 1.4, 0.2], "name": "plain crate", "parameters": small}]})["pieces"][0]
+    editor.wait_idle()
+    plain_position = piece_by_id(editor, scene, plain["id"])["position"]
+    crate_position = piece_by_id(editor, scene, ids["crate"])["position"]
+    check("attach false places the same pose under the scene root with no record",
+          (parent(plain["id"]) == root_id) and (record(plain["id"]) is None) and (plain.get("support") is None) and
+          (plain_position == [crate_position[0] + 6.0, crate_position[1], crate_position[2]]), json.dumps([plain_position, crate_position]))
+    editor.call("undo")
+    editor.wait_idle()
+    undo_redo("the attaching placement", [ids["crate"]], {ids["crate"]: None})
+    picture = editor.call("level_place_pieces", {"scene_name": scene, "surface_snap": True, "surface_direction": [0.0, 0.0, -1.0], "pieces": [
+        {"shape": "basic.block", "position": [1.0, 1.5, -4.0], "name": "picture", "parameters": {"width": 0.6, "depth": 0.05, "height": 0.4}}]})["pieces"][0]
+    editor.wait_idle()
+    ids["picture"] = picture["id"]
+    check("a piece placed into the wall (surface_direction -z) is the wall's child, its record's direction +z... in the wall's frame",
+          attached(ids["picture"], "wall") and (record(ids["picture"])["direction"] == [0.0, 0.0, -1.0]), json.dumps(record(ids["picture"])))
+
+    # level_snap_to_surface of an existing piece attaches it; a snap onto a mesh that is no kit piece detaches it to its home.
+    loose = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [
+        {"shape": "basic.block", "position": [-3.0, 0.6, 0.0], "name": "loose", "parameters": small}]})["pieces"][0]
+    editor.wait_idle()
+    ids["loose"] = loose["id"]
+    before = state([ids["loose"]])
+    snapped = editor.call("level_snap_to_surface", {"scene_name": scene, "node_ids": [ids["loose"]]})["nodes"][0]
+    editor.wait_idle()
+    check("level_snap_to_surface of a loose block over the ground attaches it to the ground (attached_to names it)",
+          attached(ids["loose"], "ground") and ((snapped.get("attached_to") or {}).get("id") == ids["ground"]), json.dumps(snapped))
+    undo_redo("the attaching snap", [ids["loose"]], before)
+    resnap = editor.call("level_snap_to_surface", {"scene_name": scene, "node_ids": [ids["loose"]], "query_only": True})["nodes"][0]
+    check("a query_only snap of the attached block reports it attached to the ground", (resnap.get("attached_to") or {}).get("id") == ids["ground"], json.dumps(resnap))
+    move(ids["loose"], [-6.0, 0.6, 0.0], False)
+    before = state([ids["loose"]])
+    onto_rock = editor.call("level_snap_to_surface", {"scene_name": scene, "node_ids": [ids["loose"]]})["nodes"][0]
+    editor.wait_idle()
+    check("moved over the rock (no kit piece) it detached to the scene root; snapped onto the rock it stays there, unattached",
+          (parent(ids["loose"]) == root_id) and (record(ids["loose"]) is None) and onto_rock["surface_found"] and (onto_rock.get("attached_to") is None),
+          json.dumps([before, onto_rock]))
+
+    # A piece on a table inside a group detaches to the group (its home) when moved off.
+    grouped = editor.call("level_place_pieces", {"scene_name": scene, "surface_snap": True, "pieces": [
+        {"shape": "basic.block", "position": [6.0, 1.4, 0.0], "name": "grouped", "parameters": small}]})["pieces"][0]
+    editor.wait_idle()
+    ids["grouped"] = grouped["id"]
+    check("a piece snapped onto the table inside the group is the table's child", attached(ids["grouped"], "table g"), json.dumps(record(ids["grouped"])))
+    before = state([ids["grouped"]])
+    move(ids["grouped"], [6.0, 3.0, 0.0], False)
+    check("moved up off the table without a snap it detaches to its home, the group, keeping its world pose",
+          (parent(ids["grouped"]) == ids["group"]) and (record(ids["grouped"]) is None) and
+          close(piece_by_id(editor, scene, ids["grouped"])["position"], [6.0, 3.0, 0.0], TOLERANCE), json.dumps(state([ids["grouped"]])))
+    undo_redo("the move off the table", [ids["grouped"]], before)
+
+    # S6.1, S6.2: a snapped Transform release onto another table re-parents; a nudge on the top keeps the record at its new place.
+    before = state([ids["crate"]])
+    reply = move(ids["crate"], [9.0, 1.4, 0.2], True)
+    check("a transform_selection with surface_snap onto table b re-parents the crate there",
+          attached(ids["crate"], "table b") and (reply.get("surface_found_count") == 1), json.dumps([reply.get("surface_found_count"), state([ids["crate"]])]))
+    undo_redo("the snapped move to table b", [ids["crate"]], before)
+    on_b = record(ids["crate"])
+    before = state([ids["crate"]])
+    move(ids["crate"], [9.1, 1.0, 0.2], False)
+    nudged = record(ids["crate"])
+    check("a nudge along table b's top without a snap keeps the attachment, its position written again",
+          attached(ids["crate"], "table b") and (nudged["position"] != on_b["position"]) and (abs(nudged["position"][0] - (on_b["position"][0] + 0.1)) < 1.0e-4),
+          json.dumps([on_b["position"], nudged["position"]]))
+    undo_redo("the nudge", [ids["crate"]], before)
+
+    # S2.4: a piece with a connection does not attach; a join made on an attached piece removes its record and re-homes it.
+    joined = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [
+        {"shape": "architecture.wall", "name": "joined wall", "connect": {"connector": "start", "to_piece_id": ids["free wall"], "to_connector": "end"}}]})["pieces"][0]
+    editor.wait_idle()
+    ids["joined wall"] = joined["id"]
+    joined_snap = editor.call("level_snap_to_surface", {"scene_name": scene, "node_ids": [ids["joined wall"]]})["nodes"][0]
+    editor.wait_idle()
+    check("a wall holding a connection, snapped onto the ground, takes no surface attachment",
+          (parent(ids["joined wall"]) == root_id) and (record(ids["joined wall"]) is None) and (joined_snap.get("attached_to") is None), json.dumps(joined_snap))
+    standing = editor.call("level_place_pieces", {"scene_name": scene, "surface_snap": True, "pieces": [
+        {"shape": "architecture.wall", "name": "standing wall", "position": [10.0, 0.3, 8.0]}]})["pieces"][0]
+    editor.wait_idle()
+    ids["standing wall"] = standing["id"]
+    check("a wall placed snapped onto the ground is the ground's child", attached(ids["standing wall"], "ground"), json.dumps(record(ids["standing wall"])))
+    before = state([ids["standing wall"]])
+    editor.call("level_connect_pieces", {"scene_name": scene, "node_id": ids["standing wall"], "connector": "start", "to_piece_id": ids["joined wall"], "to_connector": "end"})
+    editor.wait_idle()
+    check("a connector join of the attached wall removes its surface record and moves it to the scene root",
+          (parent(ids["standing wall"]) == root_id) and (record(ids["standing wall"]) is None), json.dumps(state([ids["standing wall"]])))
+    undo_redo("the join of the attached wall", [ids["standing wall"]], before)
+
+    # S6.3: level_detach_piece of the picture.
+    before = state([ids["picture"]])
+    editor.call("level_detach_piece", {"scene_name": scene, "node_id": ids["picture"]})
+    editor.wait_idle()
+    check("level_detach_piece of the picture moves it to the scene root, keeping its world pose, without a record",
+          (parent(ids["picture"]) == root_id) and (record(ids["picture"]) is None) and
+          (state([ids["picture"]])[ids["picture"]][1] == before[ids["picture"]][1]), json.dumps(state([ids["picture"]])))
+    undo_redo("the detach", [ids["picture"]], before)
+
+    # S6.5: a reparent by the author removes the record.
+    before = state([ids["crate"]])
+    editor.call("reparent_item", {"scene_name": scene, "item_id": ids["crate"], "parent_id": ids["group"]})
+    editor.wait_idle()
+    check("reparent_item of the attached crate into the group removes its record in the same entry",
+          (parent(ids["crate"]) == ids["group"]) and (record(ids["crate"]) is None), json.dumps(state([ids["crate"]])))
+    undo_redo("the reparent", [ids["crate"]], before)
+
+    # S4.1: a chain built by three placements.
+    chain = []
+    for name, y, parameters in (("chain a", 0.4, {}), ("chain b", 1.4, {}), ("chain c", 2.4, small)):
+        chain.append(editor.call("level_place_pieces", {"scene_name": scene, "surface_snap": True, "pieces": [
+            {"shape": "basic.block", "position": [14.0, y, 0.0], "name": name, "parameters": parameters}]})["pieces"][0]["id"])
+        editor.wait_idle()
+    ids["chain a"], ids["chain b"], ids["chain c"] = chain
+    check("three placements build a chain: c on b on a on the ground",
+          attached(ids["chain a"], "ground") and attached(ids["chain b"], "chain a") and attached(ids["chain c"], "chain b"),
+          json.dumps(state(chain)))
+    editor.call("select_items", {"scene_name": scene, "ids": []})
+    editor.wait_idle()
+    editor.close(scene)
+
+
+def check_surface_following(editor):
+    """doc/plans/level_kit_surface_attachment.md step 4 (S3, S4, S6.4): a support's shape change carries its attached pieces
+    proportionally and rests them again, in the change's one undo entry; off_surface; chains; a mixed chain over connectors;
+    a snap of a support with its attached piece leaves the piece riding."""
+    scene = create_scene(editor)
+    editor.call("set_active_scene", {"scene_name": scene})
+    small = {"width": 0.4, "depth": 0.4, "height": 0.4}
+    made = editor.call("level_place_pieces", {"scene_name": scene, "attach": False, "pieces": [
+        {"shape": "basic.floor_slab", "position": [0.0, -0.2, 0.0], "name": "ground", "parameters": {"width": 60.0, "depth": 60.0, "thickness": 0.2}},
+        {"shape": "basic.block", "position": [3.0, 0.0, 0.0], "name": "table"},
+        {"shape": "architecture.wall", "position": [0.0, 0.0, -5.0], "name": "wall"},
+        {"shape": "nature.hill", "position": [12.0, 0.0, 0.0], "name": "hill", "parameters": {"seed": 2, "height": 1.0, "derive": []}},
+        {"shape": "basic.floor_slab", "position": [24.0, 0.0, 0.0], "name": "deck", "parameters": {"width": 6.0, "depth": 6.0, "thickness": 0.2}},
+        {"shape": "architecture.wall", "position": [0.0, 0.0, 12.0], "name": "host wall"}]})["pieces"]
+    editor.wait_idle()
+    ids = {p["name"]: p["id"] for p in made}
+    by = lambda: pieces_by_id(editor, scene)
+
+    def place(name, position, parameters=None, direction=None):
+        call = {"scene_name": scene, "surface_snap": True, "pieces": [dict({"shape": "basic.block", "position": position, "name": name}, **({"parameters": parameters} if parameters else {}))]}
+        if direction is not None:
+            call["surface_direction"] = direction
+        piece = editor.call("level_place_pieces", call)["pieces"][0]
+        editor.wait_idle()
+        ids[name] = piece["id"]
+        return piece
+
+    def record(name):
+        return by()[ids[name]].get("surface_attachment")
+
+    def parent(name):
+        return scene_tree(editor, scene)[ids[name]]["parent_id"]
+
+    def world(name):
+        return by()[ids[name]]["position"]
+
+    def aabb(name):
+        return by()[ids[name]]["world_aabb"]
+
+    def set_parameters(name, parameters):
+        reply = editor.call("level_set_piece_parameters", {"scene_name": scene, "node_id": ids[name], "parameters": parameters})
+        editor.wait_idle()
+        return reply
+
+    def undo_restores(label, names, before):
+        depth_after = undo_depth(editor)
+        after = {n: (world(n), record(n)) for n in names}
+        editor.call("undo")
+        editor.wait_idle()
+        undone = {n: (world(n), record(n)) for n in names}
+        editor.call("redo")
+        editor.wait_idle()
+        redone = {n: (world(n), record(n)) for n in names}
+        check(f"{label}: one undo restores the attached pieces' poses and records, redo the change", (undone == before) and (redone == after),
+              json.dumps({"before": before, "undone": undone, "after": after})[:700])
+        return depth_after
+
+    # S3.2: a table's height change keeps the crate on the top, its proportion kept.
+    place("crate", [3.1, 1.3, 0.1], small)
+    before = {"crate": (world("crate"), record("crate"))}
+    depth = undo_depth(editor)
+    set_parameters("table", {"height": 1.6})
+    crate = world("crate")
+    check("a table height change (1 -> 1.6 m) carries the crate onto the new top, x and z kept, the record's position kept, in one entry",
+          close(crate, [3.1, 1.6, 0.1], 1.0e-4) and (record("crate")["position"] == before["crate"][1]["position"]) and
+          (record("crate")["state"] == "active") and (undo_depth(editor) == depth + 1), json.dumps([crate, record("crate")]))
+    undo_restores("the table height change", ["crate"], before)
+
+    # A wall's length change keeps a picture at its proportion along and up.
+    place("picture", [-1.0, 1.5, -4.0], {"width": 0.6, "depth": 0.05, "height": 0.4}, [0.0, 0.0, -1.0])
+    wall_before = aabb("wall")
+    picture_before = world("picture")
+    fraction = (picture_before[0] - wall_before["min"][0]) / (wall_before["max"][0] - wall_before["min"][0])
+    before = {"picture": (picture_before, record("picture"))}
+    set_parameters("wall", {"length": 8.0})
+    wall_after = aabb("wall")
+    picture = world("picture")
+    check("a wall length change (4 -> 8 m) keeps the picture at its proportion along the wall, its height and its face",
+          (abs((picture[0] - wall_after["min"][0]) / (wall_after["max"][0] - wall_after["min"][0]) - fraction) < 1.0e-4) and
+          (abs(picture[1] - picture_before[1]) < 1.0e-4) and (abs(picture[2] - picture_before[2]) < 1.0e-4),
+          json.dumps([fraction, picture_before, picture, wall_after]))
+    undo_restores("the wall length change", ["picture"], before)
+
+    # S3.3: a hill's form change rests the piece again on the new surface.
+    place("stone", [12.3, 1.6, 0.2], small)
+    stone_before = world("stone")
+    check("a block snapped onto the hill is the hill's child", parent("stone") == ids["hill"], json.dumps(record("stone")))
+    before = {"stone": (stone_before, record("stone"))}
+    set_parameters("hill", {"height": 1.6})
+    stone = world("stone")
+    query = editor.call("level_snap_to_surface", {"scene_name": scene, "node_ids": [ids["stone"]], "query_only": True})["nodes"][0]
+    check("a hill height change rests the stone again on the hill's new surface (a query snap answers 0) and writes its place again",
+          (stone[1] > stone_before[1] + 0.05) and (abs(query["distance"]) <= TOLERANCE) and ((query.get("support") or {}).get("id") == ids["hill"]) and
+          (record("stone")["state"] == "active"), json.dumps([stone_before, stone, query.get("distance"), record("stone")]))
+    undo_restores("the hill change", ["stone"], before)
+
+    # S3.4: a record whose place lies beside the table carries off the surface (off_surface), and back on a later change.
+    def write_position(name, position):
+        text = dict(record(name))
+        raw = {"direction": [float(v).hex() for v in text["direction"]], "on_surface": text["state"] == "active", "orient": text["orient"],
+               "position": [float(v).hex() for v in position], "rest": text["rest"], "target": text["target_uid"]}
+        editor.call("set_item_property", {"scene_name": scene, "item_id": ids[name], "property": "Kit_piece.surface_attachment", "value": json.dumps(raw, sort_keys=True)})
+        editor.wait_idle()
+
+    inside = record("crate")["position"]
+    write_position("crate", [1.8, inside[1], inside[2]])
+    set_parameters("table", {"height": 1.2})
+    off = record("crate")
+    check("a carry whose place lies beside the table finds no face of it: the crate stays at the carried pose and reads off_surface, its proportion kept",
+          (off["state"] == "off_surface") and (abs(off["position"][0] - 1.8) < 1.0e-9) and (parent("crate") == ids["table"]) and
+          close(world("crate"), [3.0 + 1.3, 1.2, 0.1], 1.0e-4), json.dumps([off, world("crate")]))
+    write_position("crate", inside)
+    set_parameters("table", {"height": 1.0})
+    check("with its place over the table again, the next change rests it and it reads active",
+          (record("crate")["state"] == "active") and close(world("crate"), [3.1, 1.0, 0.1], 1.0e-4), json.dumps([record("crate"), world("crate")]))
+
+    # S4: a chain vase on box on deck: the deck moved (nothing recorded), the deck resized (box carried, vase rides), the box resized.
+    place("box", [25.0, 0.6, 1.0])
+    place("vase", [25.1, 1.6, 1.1], small)
+    check("the chain is built: vase on box on deck", (parent("vase") == ids["box"]) and (parent("box") == ids["deck"]), json.dumps([record("box"), record("vase")]))
+    records = (record("box"), record("vase"))
+    deck = by()[ids["deck"]]
+    box_world, vase_world = world("box"), world("vase")
+    editor.call("set_node_transform", {"scene_name": scene, "node_id": ids["deck"], "translation": [deck["position"][0] + 1.0, deck["position"][1], deck["position"][2]]})
+    editor.wait_idle()
+    check("moving the deck carries box and vase rigidly and writes neither record (S3.1)",
+          close(world("box"), [box_world[0] + 1.0, box_world[1], box_world[2]], 1.0e-4) and close(world("vase"), [vase_world[0] + 1.0, vase_world[1], vase_world[2]], 1.0e-4) and
+          ((record("box"), record("vase")) == records), json.dumps([world("box"), world("vase")]))
+    editor.call("undo")
+    editor.wait_idle()
+    before = {n: (world(n), record(n)) for n in ("box", "vase")}
+    set_parameters("deck", {"width": 12.0, "thickness": 0.4})
+    box_after, vase_after = world("box"), world("vase")
+    check("resizing the deck carries the box proportionally onto its new top and the vase rides the box (its record unchanged)",
+          (abs(box_after[0] - (24.0 + 2.0)) < 1.0e-4) and (abs(box_after[1] - 0.4) < 1.0e-4) and
+          close([vase_after[i] - box_after[i] for i in range(3)], [vase_world[i] - box_world[i] for i in range(3)], 1.0e-4) and
+          (record("vase") == records[1]), json.dumps([box_after, vase_after]))
+    undo_restores("the deck resize", ["box", "vase"], before)
+    set_parameters("box", {"height": 1.5})
+    check("the box's height change carries the vase onto the box's new top",
+          abs(world("vase")[1] - (world("box")[1] + 1.5)) < 1.0e-4, json.dumps([world("box"), world("vase")]))
+    editor.call("undo")
+    editor.wait_idle()
+
+    # S6.4: the vase's own height change rests it again on the box (its base stays on the top).
+    vase_base = world("vase")
+    set_parameters("vase", {"height": 0.9, "width": 0.2})
+    check("the vase's own parameter change keeps its base on the box's top, attached", close(world("vase"), vase_base, 1.0e-4) and (record("vase")["state"] == "active"),
+          json.dumps([vase_base, world("vase")]))
+    editor.call("undo")
+    editor.wait_idle()
+
+    # S3.1, S4.7: a snap of the box together with the vase leaves the vase riding the box.
+    vase_world, box_world = world("vase"), world("box")
+    editor.call("set_node_transform", {"scene_name": scene, "node_id": ids["box"], "translation": [box_world[0], 1.0, box_world[2]]})
+    editor.wait_idle()
+    raised = (world("box"), world("vase"))
+    snapped = editor.call("level_snap_to_surface", {"scene_name": scene, "node_ids": [ids["box"], ids["vase"]]})
+    editor.wait_idle()
+    check("a snap of the box with its vase drops both by the box's snap: the vase rides it, attached to the box",
+          (parent("vase") == ids["box"]) and close([world("vase")[i] - world("box")[i] for i in range(3)], [raised[1][i] - raised[0][i] for i in range(3)], 1.0e-4) and
+          (abs(world("box")[1] - 0.4) < 1.0e-4), json.dumps([raised, world("box"), world("vase"), snapped.get("moved_count")]))
+
+    # S4.5: a mixed chain: a wall joined to the host wall's end, a block on its top; moving the host wall carries both.
+    joined = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [
+        {"shape": "architecture.wall", "name": "joined wall", "connect": {"connector": "start", "to_piece_id": ids["host wall"], "to_connector": "end"}}]})["pieces"][0]
+    editor.wait_idle()
+    ids["joined wall"] = joined["id"]
+    joined_box = aabb("joined wall")
+    center = [(joined_box["min"][i] + joined_box["max"][i]) * 0.5 for i in range(3)]
+    place("top", [center[0], joined_box["max"][1] + 0.3, center[2]], {"width": 0.2, "depth": 0.2, "height": 0.2})
+    check("a block snapped onto the joined wall's top is its child", parent("top") == ids["joined wall"], json.dumps(record("top")))
+    top_world = world("top")
+    along = (top_world[0] - joined_box["min"][0]) / (joined_box["max"][0] - joined_box["min"][0])
+    host = by()[ids["host wall"]]
+    depth = undo_depth(editor)
+    editor.call("set_node_transform", {"scene_name": scene, "node_id": ids["host wall"], "translation": [host["position"][0] + 2.0, host["position"][1], host["position"][2]]})
+    editor.wait_idle()
+    fitted = aabb("joined wall")
+    top = world("top")
+    # C3.16: the joined wall fits the moved host (a length change), so the block is carried at its proportion along the top.
+    check("moving the host wall fits the joined wall to it, and the block on its top is carried at its proportion along it, in one entry (S4.5)",
+          (abs((fitted["max"][0] - fitted["min"][0]) - (joined_box["max"][0] - joined_box["min"][0])) > 0.5) and
+          (abs((top[0] - fitted["min"][0]) / (fitted["max"][0] - fitted["min"][0]) - along) < 1.0e-4) and (abs(top[1] - fitted["max"][1]) < 1.0e-4) and
+          (record("top")["state"] == "active") and (undo_depth(editor) == depth + 1),
+          json.dumps([joined_box, fitted, top_world, top, record("top")]))
+
+    # S4.5: a floor outline edit that gives the wall on its edge a new length carries the picture on the wall, one entry.
+    floor = editor.call("level_create_layout", {"scene_name": scene, "name": "room floor", "position": [40.0, 0.0, 20.0], "pattern": {"kind": "floor"}})
+    editor.wait_idle()
+    edge_wall = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [{"shape": "architecture.wall", "name": "edge wall",
+                            "connect": {"connector": "base", "to_piece_id": floor["id"], "to_connector": "edge_0"}}]})["pieces"][0]
+    editor.wait_idle()
+    ids["edge wall"] = edge_wall["id"]
+    box = aabb("edge wall")
+    extent = [box["max"][i] - box["min"][i] for i in range(3)]
+    long_axis, thin_axis = (0, 2) if extent[0] > extent[2] else (2, 0)
+    center = [(box["min"][i] + box["max"][i]) * 0.5 for i in range(3)]
+    inward = 1.0 if (40.0, 0.0, 20.0)[thin_axis] > center[thin_axis] else -1.0
+    start = list(center)
+    start[long_axis] = box["min"][long_axis] + 0.3 * extent[long_axis]
+    start[1] = 1.2
+    start[thin_axis] = center[thin_axis] + inward * 0.6
+    direction = [0.0, 0.0, 0.0]
+    direction[thin_axis] = -inward
+    place("poster", start, {"width": 0.3, "depth": 0.3, "height": 0.3}, direction)
+    check("a block snapped against the edge wall from inside the room is the wall's child", parent("poster") == ids["edge wall"], json.dumps(record("poster")))
+    poster_before = world("poster")
+    along = (poster_before[long_axis] - box["min"][long_axis]) / extent[long_axis]
+    before = {"poster": (poster_before, record("poster"))}
+    points = [p["position"] for p in editor.call("get_curve", {"scene_name": scene, "curve_id": floor["id"]})["points"]]
+    stretched = [[p[0] * (1.5 if long_axis == 0 else 1.0), p[1], p[2] * (1.5 if long_axis == 2 else 1.0)] for p in points]
+    depth = undo_depth(editor)
+    editor.call("set_curve", {"scene_name": scene, "curve_id": floor["id"], "closed": True, "points": [{"position": p} for p in stretched]})
+    editor.wait_idle()
+    box_after = aabb("edge wall")
+    extent_after = [box_after["max"][i] - box_after["min"][i] for i in range(3)]
+    poster = world("poster")
+    check("the floor outline edit lengthens the edge wall and carries the poster at its proportion along it, in the same entry",
+          (extent_after[long_axis] > extent[long_axis] + 0.5) and
+          (abs((poster[long_axis] - box_after["min"][long_axis]) / extent_after[long_axis] - along) < 1.0e-3) and (undo_depth(editor) == depth + 1),
+          json.dumps([extent, extent_after, poster_before, poster]))
+    undo_restores("the floor outline edit", ["poster"], before)
+    editor.call("select_items", {"scene_name": scene, "ids": []})
+    editor.wait_idle()
+    editor.close(scene)
+
+
+def check_surface_copies(editor, directory):
+    """doc/plans/level_kit_surface_attachment.md step 6: copies keep attachments inside the copy (S1.3), a mirror keeps them,
+    a save and a load keep them (S1.4), Replace carries them, deleting a support deletes them and undo brings all back (P3)."""
+    scene = create_scene(editor)
+    editor.call("set_active_scene", {"scene_name": scene})
+    made = editor.call("level_place_pieces", {"scene_name": scene, "attach": False, "pieces": [
+        {"shape": "basic.floor_slab", "position": [0.0, -0.2, 0.0], "name": "ground", "parameters": {"width": 60.0, "depth": 60.0, "thickness": 0.2}},
+        {"shape": "basic.block", "position": [3.0, 0.0, 0.0], "name": "table"}]})["pieces"]
+    editor.wait_idle()
+    ids = {p["name"]: p["id"] for p in made}
+    vase = editor.call("level_place_pieces", {"scene_name": scene, "surface_snap": True, "pieces": [
+        {"shape": "basic.block", "position": [3.1, 1.3, 0.1], "name": "vase", "parameters": {"width": 0.3, "depth": 0.3, "height": 0.3}}]})["pieces"][0]
+    editor.wait_idle()
+    ids["vase"] = vase["id"]
+
+    def tree():
+        return scene_tree(editor, scene)
+
+    def record(node_id, scene_name=None):
+        return piece_by_id(editor, scene_name or scene, node_id).get("surface_attachment")
+
+    def children_named(parent_id, name):
+        return [i for i, n in tree().items() if (n["parent_id"] == parent_id) and (n["name"] == name)]
+
+    def attached_to(node_id, support_id, scene_name=None):
+        sa = record(node_id, scene_name)
+        return (sa is not None) and (sa["state"] == "active") and (sa["target_id"] == support_id) and (scene_tree(editor, scene_name or scene)[node_id]["parent_id"] == support_id)
+
+    check("the vase is the table's child", attached_to(ids["vase"], ids["table"]), json.dumps(record(ids["vase"])))
+    # S1.3: a duplicate of the table's subtree attaches the copied vase to the copied table.
+    copy = editor.call("level_duplicate_group", {"scene_name": scene, "group_id": ids["table"], "offset": [5.0, 0.0, 0.0]})
+    editor.wait_idle()
+    copy_id = copy.get("id", copy.get("node_id"))
+    copied_vase = children_named(copy_id, "vase")
+    check("level_duplicate_group of the table copies the vase under the copied table, attached to it (its record names the copy)",
+          (len(copied_vase) == 1) and attached_to(copied_vase[0], copy_id), json.dumps([copy_id, copied_vase, record(copied_vase[0]) if copied_vase else None]))
+    editor.call("undo")
+    editor.wait_idle()
+    # A copy of the vase alone under the same table stays attached.
+    alone = editor.call("level_duplicate_group", {"scene_name": scene, "group_id": ids["vase"], "offset": [0.0, 0.0, 0.3]})
+    editor.wait_idle()
+    alone_id = alone.get("id", alone.get("node_id"))
+    check("a copy of the vase alone, under the same table, is attached to the table", attached_to(alone_id, ids["table"]), json.dumps(record(alone_id)))
+    editor.call("undo")
+    editor.wait_idle()
+    # Clipboard copy and paste of the table subtree under the scene root; of the vase alone, an inert record a move removes.
+    editor.call("clipboard_copy_nodes", {"scene_name": scene, "node_ids": [ids["table"]]})
+    editor.call("clipboard_paste", {"scene_name": scene})
+    editor.wait_idle()
+    pasted = [i for i, n in tree().items() if n["name"] == "table Copy"]
+    pasted_vase = children_named(pasted[0], "vase") if pasted else []
+    check("a pasted copy of the table carries its vase attached to the pasted table",
+          (len(pasted_vase) == 1) and attached_to(pasted_vase[0], pasted[0]), json.dumps([pasted, pasted_vase]))
+    editor.call("undo")
+    editor.wait_idle()
+    editor.call("clipboard_copy_nodes", {"scene_name": scene, "node_ids": [ids["vase"]]})
+    editor.call("clipboard_paste", {"scene_name": scene})
+    editor.wait_idle()
+    loose = [i for i, n in tree().items() if n["name"] == "vase Copy"]
+    loose_state = (record(loose[0]) or {}).get("state") if loose else None
+    if loose:
+        editor.call("set_node_transform", {"scene_name": scene, "node_id": loose[0], "translation": [10.0, 0.0, 10.0]})
+        editor.wait_idle()
+    check("a pasted copy of the vase alone under the scene root reads inert, and its first move removes the record (S1.2)",
+          bool(loose) and (loose_state == "inert") and (record(loose[0]) is None), json.dumps([loose, loose_state]))
+    editor.call("undo")
+    editor.wait_idle()
+    editor.call("undo")
+    editor.wait_idle()
+
+    # S7.3: a mirror of a group holding table and vase keeps the vase attached, resting on the table.
+    group = editor.call("level_group_nodes", {"scene_name": scene, "node_ids": [ids["table"]], "name": "mirror group"})
+    editor.wait_idle()
+    group_id = group.get("id", group.get("node_id"))
+    editor.call("level_mirror_group", {"scene_name": scene, "group_id": group_id, "axis": "x"})
+    editor.wait_idle()
+    query = editor.call("level_snap_to_surface", {"scene_name": scene, "node_ids": [ids["vase"]], "query_only": True})["nodes"][0]
+    check("mirroring the group keeps the vase attached to the table and resting on it",
+          attached_to(ids["vase"], ids["table"]) and (abs(query["distance"]) <= TOLERANCE) and ((query.get("support") or {}).get("id") == ids["table"]),
+          json.dumps([record(ids["vase"]), query]))
+    editor.call("undo")
+    editor.wait_idle()
+    editor.call("undo")
+    editor.wait_idle()
+
+    # Replace: the table becomes a taller block (another shape): the vase is carried onto its top; the vase replaced rests again.
+    replaced = editor.call("level_replace_pieces", {"scene_name": scene, "node_ids": [ids["table"]], "shape": "basic.cylinder", "parameters": {"height": 1.6}})
+    editor.wait_idle()
+    top = piece_by_id(editor, scene, ids["table"])["world_aabb"]["max"][1]
+    check("Replace of the table by a 1.6 m cylinder keeps its node and carries the vase onto the new top",
+          attached_to(ids["vase"], ids["table"]) and (abs(piece_by_id(editor, scene, ids["vase"])["world_aabb"]["min"][1] - top) < 1.0e-4) and (abs(top - 1.6) < 1.0e-4),
+          json.dumps([replaced.get("replaced_count"), top, piece_by_id(editor, scene, ids["vase"])["world_aabb"]]))
+    editor.call("level_replace_pieces", {"scene_name": scene, "node_ids": [ids["vase"]], "shape": "basic.wedge"})
+    editor.wait_idle()
+    check("Replace of the vase by a wedge keeps it attached, resting on the table's top",
+          attached_to(ids["vase"], ids["table"]) and (abs(piece_by_id(editor, scene, ids["vase"])["world_aabb"]["min"][1] - top) < 1.0e-4),
+          json.dumps(piece_by_id(editor, scene, ids["vase"])["world_aabb"]))
+    editor.call("undo")
+    editor.wait_idle()
+    editor.call("undo")
+    editor.wait_idle()
+
+    # P3: deleting the table deletes the vase; undo brings both back, attached.
+    editor.call("delete_nodes", {"scene_name": scene, "ids": [ids["table"]]})
+    editor.wait_idle()
+    gone = (ids["table"] not in tree()) and (ids["vase"] not in tree())
+    editor.call("undo")
+    editor.wait_idle()
+    check("deleting the table deletes the vase with it; undo brings both back with the vase attached", gone and attached_to(ids["vase"], ids["table"]),
+          json.dumps(record(ids["vase"])))
+
+    # S1.4: a save and a load keep the parent link and the record; the loaded vase follows a support change.
+    path = os.path.join(directory, "surface_attachment.glb")
+    editor.save(scene, path)
+    editor.close(scene)
+    loaded = editor.load(path)
+    by_name = {p["name"]: p for p in pieces(editor, loaded)}
+    table_id, vase_id = by_name["table"]["id"], by_name["vase"]["id"]
+    sa = record(vase_id, loaded) or {}
+    check("after a save and a load the vase is the table's child with an active record naming the loaded table's uid",
+          attached_to(vase_id, table_id, loaded) and (sa.get("target_uid") == by_name["table"]["uid"]), json.dumps(sa))
+    editor.call("level_set_piece_parameters", {"scene_name": loaded, "node_id": table_id, "parameters": {"height": 1.4}})
+    editor.wait_idle()
+    check("the loaded vase follows the loaded table's height change", abs(piece_by_id(editor, loaded, vase_id)["world_aabb"]["min"][1] - 1.4) < 1.0e-4,
+          json.dumps(piece_by_id(editor, loaded, vase_id)["world_aabb"]))
+    editor.close(loaded)
+
+
+def check_surface_layouts(editor):
+    """doc/plans/level_kit_surface_attachment.md step 5 (S5): the lock of a locked kit layout ends at an attached piece; a
+    regeneration keeps, re-homes (to the new element, carried) or detaches attached pieces; its preview steps carry them."""
+    scene = create_scene(editor)
+    editor.call("set_active_scene", {"scene_name": scene})
+    editor.call("level_place_pieces", {"scene_name": scene, "attach": False, "pieces": [
+        {"shape": "basic.floor_slab", "position": [0.0, -0.2, 0.0], "name": "ground", "parameters": {"width": 80.0, "depth": 80.0, "thickness": 0.2}}]})
+    editor.wait_idle()
+    wall = [{"shape": "architecture.wall", "parameters": {"length": 4.0}}]
+    points = [[0.0, 0.0, 30.0], [6.0, 0.0, 30.0], [6.0, 0.0, 36.0]]
+    run = editor.call("level_create_layout", {"scene_name": scene, "name": "run", "position": [0.0, 0.0, 0.0], "items": wall,
+                                               "pattern": {"kind": "segments"}, "points": [{"position": c} for c in points], "closed": False})
+    editor.wait_idle()
+
+    def layout():
+        return layouts_by_id(editor, scene)[run["id"]]
+
+    def element(i):
+        return layout()["children"][i]
+
+    def piece(node_id):
+        return piece_by_id(editor, scene, node_id)
+
+    def parent(node_id):
+        return scene_tree(editor, scene)[node_id]["parent_id"]
+
+    def fraction_along_x(node_id, of):
+        box = piece(of["id"])["world_aabb"]
+        return (piece(node_id)["position"][0] - box["min"][0]) / (box["max"][0] - box["min"][0])
+
+    def state(node_id):
+        p = piece(node_id)
+        sa = p.get("surface_attachment")
+        return (parent(node_id), [round(v, 4) for v in p["position"]], None if sa is None else (sa["state"], sa["target_uid"], [round(v, 6) for v in sa["position"]]))
+
+    # S5.1: a piece placed onto a locked layout's element is the element's child, the author's.
+    picture = editor.call("level_place_pieces", {"scene_name": scene, "surface_snap": True, "surface_direction": [0.0, 0.0, 1.0], "pieces": [
+        {"shape": "basic.block", "position": [2.0, 1.5, 29.0], "name": "run picture", "parameters": {"width": 0.6, "depth": 0.05, "height": 0.4}}]})["pieces"][0]
+    editor.wait_idle()
+    e0 = element(0)
+    sa = piece(picture["id"]).get("surface_attachment") or {}
+    check("a picture snapped onto element 0 of a locked segments layout is the element's child with an active record",
+          (parent(picture["id"]) == e0["id"]) and (sa.get("state") == "active") and (sa.get("target_id") == e0["id"]), json.dumps(sa))
+    editor.call("select_items", {"scene_name": scene, "ids": [picture["id"]]})
+    editor.wait_idle()
+    selection = [i["id"] for i in editor.call("get_selection")["items"]]
+    check("selecting the picture selects the picture, not the locked layout", selection == [picture["id"]], json.dumps(selection))
+    editor.call("select_items", {"scene_name": scene, "ids": []})
+    editor.wait_idle()
+    resnapped = editor.call("level_snap_to_surface", {"scene_name": scene, "node_ids": [picture["id"]], "direction": [0.0, 0.0, 1.0]})["nodes"][0]
+    editor.wait_idle()
+    edited = editor.call("level_set_piece_parameters", {"scene_name": scene, "node_id": picture["id"], "parameters": {"height": 0.5}})
+    editor.wait_idle()
+    element_error = call_error(editor, "level_set_piece_parameters", {"scene_name": scene, "node_id": e0["id"], "parameters": {"height": 2.5}})
+    check("the picture takes a snap and a parameter edit, while element 0 itself still refuses an edit (locked)",
+          ((resnapped.get("attached_to") or {}).get("id") == e0["id"]) and ("error" not in edited) and (element_error is not None),
+          json.dumps([resnapped.get("attached_to"), element_error]))
+    editor.call("undo")
+    editor.wait_idle()
+
+    # S5.2: a control point move that changes element 0's length replaces it; the picture goes to the new element 0.
+    picture2 = editor.call("level_place_pieces", {"scene_name": scene, "surface_snap": True, "surface_direction": [-1.0, 0.0, 0.0], "pieces": [
+        {"shape": "basic.block", "position": [7.0, 1.5, 33.0], "name": "kept picture", "parameters": {"width": 0.05, "depth": 0.6, "height": 0.4}}]})["pieces"][0]
+    editor.wait_idle()
+    e1 = element(1)
+    check("a second picture on element 1 is its child", parent(picture2["id"]) == e1["id"], json.dumps(piece(picture2["id"]).get("surface_attachment")))
+    kept_before = state(picture2["id"])
+    before = state(picture["id"])
+    fraction = fraction_along_x(picture["id"], e0)
+    depth = undo_depth(editor)
+    longer = [[-2.0, 0.0, 30.0], points[1], points[2]]
+    editor.call("set_curve", {"scene_name": scene, "curve_id": run["id"], "closed": False, "points": [{"position": c} for c in longer]})
+    editor.wait_idle()
+    new_e0 = element(0)
+    sa = piece(picture["id"]).get("surface_attachment") or {}
+    check("lengthening segment 0 replaces element 0: the picture is under the new element 0, its record naming it, at its proportion, in one entry",
+          (new_e0["id"] != e0["id"]) and (parent(picture["id"]) == new_e0["id"]) and (sa.get("target_id") == new_e0["id"]) and (sa.get("state") == "active") and
+          (abs(fraction_along_x(picture["id"], new_e0) - fraction) < 1.0e-3) and (undo_depth(editor) == depth + 1),
+          json.dumps([e0["id"], new_e0["id"], fraction, fraction_along_x(picture["id"], new_e0), sa]))
+    check("element 1 is kept, and its picture with it, untouched", (element(1)["id"] == e1["id"]) and (state(picture2["id"]) == kept_before),
+          json.dumps([kept_before, state(picture2["id"])]))
+    after = state(picture["id"])
+    editor.call("undo")
+    editor.wait_idle()
+    undone = state(picture["id"])
+    editor.call("redo")
+    editor.wait_idle()
+    check("undo puts the old element 0 back with the picture as it was; redo the new one",
+          (undone == before) and (state(picture["id"]) == after), json.dumps([before, undone, after, state(picture["id"])]))
+
+    # S5.4: a held segment handle edit regenerates live; the picture shows where the release puts it, and the release records once.
+    editor.call("level_select_segment_handle", {"scene_name": scene, "layout_id": run["id"], "index": 1})
+    editor.wait_idle()
+    editor.wait_idle()
+    handle = editor.call("level_get_segment_handles")["handles"][1]["position"]
+    depth = undo_depth(editor)
+    fraction = fraction_along_x(picture["id"], element(0))
+    editor.call("transform_selection", {"translation": [handle[0] + 1.0, handle[1], handle[2]], "end_edit": False})
+    editor.wait_idle()
+    live_fraction = fraction_along_x(picture["id"], element(0))
+    live = state(picture["id"])
+    check("a held segment 1 handle edit lengthens element 0 live: the picture is on it at its proportion, no undo entry",
+          (abs(live_fraction - fraction) < 1.0e-3) and (live[0] == element(0)["id"]) and (undo_depth(editor) == depth), json.dumps([fraction, live_fraction, live]))
+    editor.call("transform_selection", {"translation": [handle[0] + 1.0, handle[1], handle[2]], "end_edit": True})
+    editor.wait_idle()
+    released = state(picture["id"])
+    check("its release records one entry with the picture where the held step showed it",
+          (undo_depth(editor) == depth + 1) and (released[1] == live[1]) and (released[0] == element(0)["id"]), json.dumps([live, released]))
+    editor.call("undo")
+    editor.wait_idle()
+    editor.call("level_select_segment_handle", {"scene_name": scene, "layout_id": run["id"]})
+    editor.call("select_items", {"scene_name": scene, "ids": []})
+    editor.wait_idle()
+
+    # S5.5: unlocking and locking (which replaces every child) keep the attachment.
+    before_lock = piece(picture["id"])["position"]
+    editor.call("level_set_layout_lock", {"scene_name": scene, "layout_id": run["id"], "locked": False})
+    editor.wait_idle()
+    editor.call("level_set_layout_lock", {"scene_name": scene, "layout_id": run["id"], "locked": True})
+    editor.wait_idle()
+    sa = piece(picture["id"]).get("surface_attachment") or {}
+    check("unlock and lock (every child replaced) keep the picture attached to element 0 at its place",
+          (parent(picture["id"]) == element(0)["id"]) and (sa.get("target_id") == element(0)["id"]) and close(piece(picture["id"])["position"], before_lock, 1.0e-3),
+          json.dumps([before_lock, piece(picture["id"])["position"], sa]))
+
+    # S5.3, P7: a shrink to one segment removes element 1: its picture is detached at its world pose to the scene root.
+    root_id = scene_tree(editor, scene)[run["id"]]["parent_id"]
+    world_before = piece(picture2["id"])["position"]
+    with open(os.path.join(pav.REPO_ROOT, "logs", "log.txt"), "r", errors="replace") as f:
+        log_start = len(f.read())
+    editor.call("set_curve", {"scene_name": scene, "curve_id": run["id"], "closed": False, "points": [{"position": c} for c in points[0:2]]})
+    editor.wait_idle()
+    with open(os.path.join(pav.REPO_ROOT, "logs", "log.txt"), "r", errors="replace") as f:
+        log_tail = f.read()[log_start:]
+    check("removing segment 1 removes element 1 and detaches its picture to the scene root at its world pose, with an info line",
+          (len(layout()["children"]) == 1) and (parent(picture2["id"]) == root_id) and (piece(picture2["id"]).get("surface_attachment") is None) and
+          close(piece(picture2["id"])["position"], world_before, 1.0e-4) and ("'kept picture' detached from" in log_tail),
+          json.dumps([world_before, piece(picture2["id"])["position"], parent(picture2["id"])]))
+    editor.call("undo")
+    editor.wait_idle()
+    check("undo of the shrink puts element 1 back with the picture on it", parent(picture2["id"]) == element(1)["id"], json.dumps(state(picture2["id"])))
+
+    # A floor layout: a crate on the generated floor follows a corner move (P5) and reads off_surface over a notch.
+    floor = editor.call("level_create_layout", {"scene_name": scene, "name": "attach floor", "position": [20.0, 0.0, 0.0], "pattern": {"kind": "floor"}})
+    editor.wait_idle()
+    corners = [p["position"] for p in editor.call("get_curve", {"scene_name": scene, "curve_id": floor["id"]})["points"]]
+    xs, zs = [c[0] for c in corners], [c[2] for c in corners]
+    floor_child = layouts_by_id(editor, scene)[floor["id"]]["children"][0]
+    top = 0.2  # the floor's default thickness, its slab from y 0 up
+    crate_at = [20.0 + min(xs) + 0.85 * (max(xs) - min(xs)), top + 0.3, min(zs) + 0.85 * (max(zs) - min(zs))]
+    crate = editor.call("level_place_pieces", {"scene_name": scene, "surface_snap": True, "pieces": [
+        {"shape": "basic.block", "position": crate_at, "name": "floor crate", "parameters": {"width": 0.3, "depth": 0.3, "height": 0.3}}]})["pieces"][0]
+    editor.wait_idle()
+    check("a crate snapped onto the floor layout's generated floor is its child", parent(crate["id"]) == floor_child["id"], json.dumps(state(crate["id"])))
+    wider = [[c[0] * 1.5, c[1], c[2]] for c in corners]
+    depth = undo_depth(editor)
+    editor.call("set_curve", {"scene_name": scene, "curve_id": floor["id"], "closed": True, "points": [{"position": c} for c in wider]})
+    editor.wait_idle()
+    new_floor = layouts_by_id(editor, scene)[floor["id"]]["children"][0]
+    moved = piece(crate["id"])["position"]
+    new_corners = [p["position"] for p in editor.call("get_curve", {"scene_name": scene, "curve_id": floor["id"]})["points"]]
+    box = {"min": [20.0 + min(c[0] for c in new_corners), 0.0, 0.0], "max": [20.0 + max(c[0] for c in new_corners), 0.0, 0.0]}
+    check("widening the floor moves the crate proportionally on the new floor, its child, one entry",
+          (parent(crate["id"]) == new_floor["id"]) and (abs((moved[0] - box["min"][0]) / (box["max"][0] - box["min"][0]) - 0.85) < 0.02) and
+          (undo_depth(editor) == depth + 1), json.dumps([moved, box]))
+    editor.call("undo")
+    editor.wait_idle()
+    cx, cz = (min(xs) + max(xs)) * 0.5, (min(zs) + max(zs)) * 0.5
+    notched = [[min(xs), 0.0, min(zs)], [min(xs), 0.0, max(zs)], [cx, 0.0, max(zs)], [cx, 0.0, cz], [max(xs), 0.0, cz], [max(xs), 0.0, min(zs)]]
+    editor.call("set_curve", {"scene_name": scene, "curve_id": floor["id"], "closed": True, "points": [{"position": c} for c in notched]})
+    editor.wait_idle()
+    sa = piece(crate["id"]).get("surface_attachment") or {}
+    check("an outline with a notch where the crate stood leaves it attached to the new floor, off_surface",
+          (sa.get("state") == "off_surface") and (parent(crate["id"]) == layouts_by_id(editor, scene)[floor["id"]]["children"][0]["id"]), json.dumps(sa))
+    editor.call("undo")
+    editor.wait_idle()
+
+    # S3.7: a held floor edge handle edit fits the wall on edge 0 live, and the poster on that wall follows at its proportion.
+    edge_wall = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [{"shape": "architecture.wall", "name": "floor edge wall",
+                            "connect": {"connector": "base", "to_piece_id": floor["id"], "to_connector": "edge_0"}}]})["pieces"][0]
+    editor.wait_idle()
+    box = piece(edge_wall["id"])["world_aabb"]
+    extent = [box["max"][i] - box["min"][i] for i in range(3)]
+    long_axis, thin_axis = (0, 2) if extent[0] > extent[2] else (2, 0)
+    center = [(box["min"][i] + box["max"][i]) * 0.5 for i in range(3)]
+    inward = 1.0 if [20.0, 0.0, 0.0][thin_axis] > center[thin_axis] else -1.0
+    start = list(center)
+    start[long_axis] = box["min"][long_axis] + 0.3 * extent[long_axis]
+    start[1] = 1.2
+    start[thin_axis] = center[thin_axis] + inward * 0.6
+    direction = [0.0, 0.0, 0.0]
+    direction[thin_axis] = -inward
+    poster = editor.call("level_place_pieces", {"scene_name": scene, "surface_snap": True, "surface_direction": direction, "pieces": [
+        {"shape": "basic.block", "position": start, "name": "floor poster", "parameters": {"width": 0.3, "depth": 0.3, "height": 0.3}}]})["pieces"][0]
+    editor.wait_idle()
+    check("a poster snapped onto the floor's edge wall is the wall's child", parent(poster["id"]) == edge_wall["id"], json.dumps(state(poster["id"])))
+
+    def along():
+        b = piece(edge_wall["id"])["world_aabb"]
+        return (piece(poster["id"])["position"][long_axis] - b["min"][long_axis]) / (b["max"][long_axis] - b["min"][long_axis]), b["max"][long_axis] - b["min"][long_axis]
+
+    fraction, length = along()
+    handles = editor.call("level_select_segment_handle", {"scene_name": scene, "layout_id": floor["id"], "index": 1})["handles"]
+    editor.wait_idle()
+    editor.wait_idle()
+    handle, normal = handles[1]["position"], handles[1]["normal"]
+    depth = undo_depth(editor)
+    editor.call("transform_selection", {"translation": [handle[i] + normal[i] for i in range(3)], "end_edit": False})
+    editor.wait_idle()
+    live_fraction, live_length = along()
+    live = state(poster["id"])
+    check("a held floor edge 1 handle edit lengthens the edge wall live and the poster stays at its proportion along it, no entry",
+          (abs(live_length - length) > 0.5) and (abs(live_fraction - fraction) < 1.0e-3) and (undo_depth(editor) == depth),
+          json.dumps([fraction, live_fraction, length, live_length]))
+    editor.call("transform_selection", {"translation": [handle[i] + normal[i] for i in range(3)], "end_edit": True})
+    editor.wait_idle()
+    check("the release records one entry with the poster where the held step showed it", (undo_depth(editor) == depth + 1) and (state(poster["id"])[1] == live[1]),
+          json.dumps([live, state(poster["id"])]))
+    editor.call("undo")
+    editor.wait_idle()
+    editor.call("level_select_segment_handle", {"scene_name": scene, "layout_id": floor["id"]})
+    editor.call("select_items", {"scene_name": scene, "ids": []})
+    editor.wait_idle()
+
+    # S5.4: a held drag of segment 1's handle cancelled gives the picture its parent, pose and record back, no entry.
+    editor.call("level_select_segment_handle", {"scene_name": scene, "layout_id": run["id"], "index": 1})
+    editor.wait_idle()
+    editor.wait_idle()
+    before = state(picture["id"])
+    depth = undo_depth(editor)
+    handle = editor.call("level_get_segment_handles")["handles"][1]["position"]
+    editor.call("transform_selection", {"translation": [handle[0] + 1.0, handle[1], handle[2]], "end_edit": False})
+    editor.wait_idle()
+    held = state(picture["id"])
+    editor.call("key_press", {"key": "escape"})
+    editor.wait_idle()
+    check("a held segment handle drag moves the picture with its element, and its cancel restores parent, pose and record, no entry",
+          (held != before) and (state(picture["id"]) == before) and (undo_depth(editor) == depth), json.dumps([before, held, state(picture["id"])]))
+    editor.call("level_select_segment_handle", {"scene_name": scene, "layout_id": run["id"]})
+    editor.call("select_items", {"scene_name": scene, "ids": []})
+    editor.wait_idle()
+
+    # A stairs layout: a crate on the staircase goes to the new staircase when a curve edit regenerates it.
+    stairs = editor.call("level_create_layout", {"scene_name": scene, "name": "attach stairs", "position": [40.0, 0.0, 40.0], "pattern": {"kind": "stairs"}})
+    editor.wait_idle()
+    stairs_child = layouts_by_id(editor, scene)[stairs["id"]]["children"][0]["id"]
+    step = editor.call("level_place_pieces", {"scene_name": scene, "surface_snap": True, "pieces": [
+        {"shape": "basic.block", "position": [40.3, 0.6, 40.0], "name": "step crate", "parameters": {"width": 0.2, "depth": 0.2, "height": 0.2}}]})["pieces"][0]
+    editor.wait_idle()
+    check("a crate snapped onto the generated staircase is its child", parent(step["id"]) == stairs_child, json.dumps(state(step["id"])))
+    editor.call("set_curve", {"scene_name": scene, "curve_id": stairs["id"], "points": [{"position": [0.0, 0.0, 0.0]}, {"position": [3.6, 2.0, 0.0]}]})
+    editor.wait_idle()
+    new_stairs = layouts_by_id(editor, scene)[stairs["id"]]["children"][0]["id"]
+    sa = piece(step["id"]).get("surface_attachment") or {}
+    check("the curve edit regenerates the staircase; the crate is under the new one, attached to it",
+          (new_stairs != stairs_child) and (parent(step["id"]) == new_stairs) and (sa.get("target_id") == new_stairs) and (sa.get("state") in ("active", "off_surface")),
+          json.dumps([stairs_child, new_stairs, sa]))
+    editor.close(scene)
+
+
+def check_surface_live_drag(editor, scene):
+    """S3.7: a held parameter drag of a support shows its attached piece where the release puts it at each step; the release
+    records once; deselecting mid-drag restores."""
+    properties = "Properties"
+    made = editor.call("level_place_pieces", {"scene_name": scene, "attach": False, "pieces": [
+        {"shape": "basic.block", "position": [0.0, 0.0, 60.0], "name": "live table"}]})["pieces"][0]
+    editor.wait_idle()
+    vase = editor.call("level_place_pieces", {"scene_name": scene, "surface_snap": True, "pieces": [
+        {"shape": "basic.block", "position": [0.1, 1.3, 60.1], "name": "live vase", "parameters": {"width": 0.3, "depth": 0.3, "height": 0.3}}]})["pieces"][0]
+    editor.wait_idle()
+    check("the live vase is attached to the live table", (piece_by_id(editor, scene, vase["id"]).get("surface_attachment") or {}).get("target_id") == made["id"], "")
+    editor.call("set_window_visibility", {"title": properties, "visible": True, "focus": True})
+    editor.call("select_items", {"scene_name": scene, "ids": [made["id"]]})
+    editor.wait_idle()
+    header = next((i for i in editor.call("get_imgui_items", {"window": properties, "limit": 1000, "visible_only": False, "label_contains": "Kit Piece"}).get("items", [])
+                   if i.get("display_label") == "Kit Piece"), None)
+    if (header is not None) and not header.get("status", {}).get("opened"):
+        editor.call("imgui_scroll_to_item", {"window": properties, "label": "Kit Piece"})
+        editor.call("imgui_click", {"window": properties, "label": "Kit Piece"})
+        editor.wait_idle()
+    depth = undo_depth(editor)
+    start_vase = piece_by_id(editor, scene, vase["id"])["position"]
+    drag_row(editor, properties, "height", 60.0)
+    editor.wait_idle()
+    table_mid = piece_by_id(editor, scene, made["id"])["world_aabb"]["max"][1]
+    vase_mid = piece_by_id(editor, scene, vase["id"])["position"]
+    check("mid-drag the vase stands on the previewed table top, no undo entry and its record unchanged",
+          (table_mid > 1.05) and (abs(vase_mid[1] - table_mid) < 1.0e-4) and (undo_depth(editor) == depth), json.dumps([table_mid, vase_mid]))
+    editor.call("mouse_release", {})
+    editor.wait_idle()
+    table_end = piece_by_id(editor, scene, made["id"])["world_aabb"]["max"][1]
+    vase_end = piece_by_id(editor, scene, vase["id"])["position"]
+    check("the release records one entry with the vase on the final top", (undo_depth(editor) == depth + 1) and (abs(vase_end[1] - table_end) < 1.0e-4),
+          json.dumps([table_end, vase_end, undo_depth(editor) - depth]))
+    editor.call("undo")
+    editor.wait_idle()
+    check("undo of the drag puts the vase back", close(piece_by_id(editor, scene, vase["id"])["position"], start_vase, 1.0e-4), "")
+    drag_row(editor, properties, "height", 60.0)
+    editor.wait_idle()
+    moved_mid = piece_by_id(editor, scene, vase["id"])["position"]
+    editor.call("select_items", {"scene_name": scene, "ids": []})
+    editor.wait_idle()
+    editor.call("mouse_release", {})
+    editor.wait_idle()
+    check("deselecting the table mid-drag restores the vase's pose with no entry",
+          (moved_mid[1] > start_vase[1] + 0.05) and close(piece_by_id(editor, scene, vase["id"])["position"], start_vase, 1.0e-4) and (undo_depth(editor) == depth),
+          json.dumps([moved_mid, piece_by_id(editor, scene, vase["id"])["position"]]))
+    # S6.4, S3.7: a picture mounted on a wall by its back face: a drag of its depth (the block grows about its center) keeps it
+    # flush against the wall at each step only through the rest again.
+    live_wall = editor.call("level_place_pieces", {"scene_name": scene, "attach": False, "pieces": [
+        {"shape": "basic.block", "position": [5.0, 0.0, 60.0], "name": "live wall", "parameters": {"width": 2.0, "height": 2.0, "depth": 0.5}}]})["pieces"][0]
+    editor.wait_idle()
+    plate = editor.call("level_place_pieces", {"scene_name": scene, "surface_snap": True, "surface_direction": [0.0, 0.0, -1.0], "pieces": [
+        {"shape": "basic.block", "position": [5.0, 1.0, 61.0], "name": "live plate", "parameters": {"width": 0.4, "depth": 0.1, "height": 0.4}}]})["pieces"][0]
+    editor.wait_idle()
+    face = piece_by_id(editor, scene, live_wall["id"])["world_aabb"]["max"][2]
+    check("a plate mounted on the live wall's face is the wall's child, flush",
+          ((piece_by_id(editor, scene, plate["id"]).get("surface_attachment") or {}).get("target_id") == live_wall["id"]) and
+          (abs(piece_by_id(editor, scene, plate["id"])["world_aabb"]["min"][2] - face) < 1.0e-4), json.dumps(piece_by_id(editor, scene, plate["id"])["world_aabb"]))
+    editor.call("select_items", {"scene_name": scene, "ids": [plate["id"]]})
+    editor.wait_idle()
+    depth = undo_depth(editor)
+    drag_row(editor, properties, "depth", 60.0)
+    editor.wait_idle()
+    plate_mid = piece_by_id(editor, scene, plate["id"])["world_aabb"]
+    check("mid-drag of the plate's depth it stays flush against the wall (rested again at the step), thicker, no entry",
+          (abs(plate_mid["min"][2] - face) < 1.0e-4) and (plate_mid["max"][2] - plate_mid["min"][2] > 0.15) and (undo_depth(editor) == depth), json.dumps(plate_mid))
+    editor.call("mouse_release", {})
+    editor.wait_idle()
+    plate_end = piece_by_id(editor, scene, plate["id"])["world_aabb"]
+    check("the release records one entry with the plate flush", (undo_depth(editor) == depth + 1) and (abs(plate_end["min"][2] - face) < 1.0e-4), json.dumps(plate_end))
+    editor.call("undo")
+    editor.wait_idle()
+    # S6.3: the Properties "On" row's Detach.
+    root_id = scene_tree(editor, scene)[made["id"]]["parent_id"]
+    editor.call("select_items", {"scene_name": scene, "ids": [plate["id"]]})
+    editor.wait_idle()
+    editor.call("imgui_scroll_to_item", {"window": properties, "label": "Detach"})
+    editor.call("imgui_click", {"window": properties, "label": "Detach"})
+    editor.wait_idle()
+    editor.wait_idle()
+    check("the Properties On row's Detach removes the plate's attachment and moves it to the scene root, one entry",
+          (piece_by_id(editor, scene, plate["id"]).get("surface_attachment") is None) and (scene_tree(editor, scene)[plate["id"]]["parent_id"] == root_id) and
+          (undo_depth(editor) == depth + 1), json.dumps(scene_tree(editor, scene)[plate["id"]]))
+    editor.call("undo")
+    editor.wait_idle()
+    # S6.4, S3.7: a drag of the vase's own width rests it on the table at each step (its base stays on the top).
+    editor.call("select_items", {"scene_name": scene, "ids": [vase["id"]]})
+    editor.wait_idle()
+    depth = undo_depth(editor)
+    drag_row(editor, properties, "width", 60.0)
+    editor.wait_idle()
+    vase_mid = piece_by_id(editor, scene, vase["id"])
+    table_top = piece_by_id(editor, scene, made["id"])["world_aabb"]["max"][1]
+    check("mid-drag of the vase's width it rests on the table top, attached, no entry",
+          (abs(vase_mid["world_aabb"]["min"][1] - table_top) < 1.0e-4) and (undo_depth(editor) == depth) and
+          ((vase_mid.get("surface_attachment") or {}).get("target_id") == made["id"]), json.dumps([vase_mid["world_aabb"], table_top]))
+    editor.call("select_items", {"scene_name": scene, "ids": []})
+    editor.wait_idle()
+    editor.call("mouse_release", {})
+    editor.wait_idle()
 
 
 def check_oriented_snap_to_surface(editor):
@@ -9697,6 +10711,10 @@ def check_brush_surface_normal(editor, window_scene):
           state.get("surface_found") and same_rotation(state.get("rotation_xyzw", [9, 9, 9, 9]), upright)
           and close(state.get("position", [9, 9, 9]), [round(hovered[0]), round(hovered[1]), wall_front + 0.5 * size[2]], 1.0e-4)
           and (piece is not None) and (abs(piece["world_aabb"]["min"][2] - wall_front) < TOLERANCE), describe(state, piece))
+    wall_record = (piece_by_id(editor, scene, piece["id"]).get("surface_attachment") or {}) if piece else {}
+    check("the Brush tool's placement onto the wall attaches the block to it (Attach To Surface on): the wall's child, an active record",
+          (piece is not None) and (wall_record.get("target_id") == by_name["wall"]["id"]) and (wall_record.get("state") == "active") and
+          (scene_tree(editor, scene)[piece["id"]]["parent_id"] == by_name["wall"]["id"]), json.dumps(wall_record))
 
     viewport = ceiling_view()
     ceiling_aim = [8.3, ceiling_y, 0.4]
@@ -10494,7 +11512,8 @@ def check_transform_surface(editor, image_path):
     """D4.6: the shared surface pair in three UI sites, and the Transform tool's drags resting the lead's leading face (U60 default)."""
     saved = Saved_tool_settings(editor)
     windows = shown_windows(editor, editor.scene_names())
-    editor.call("set_surface_snap_settings", {"snap": False, "orient": False})
+    # Attach off: the drags here check the rest; place_at() writes local translations of pieces under the scene root.
+    editor.call("set_surface_snap_settings", {"snap": False, "orient": False, "attach": False})
     scene = create_scene(editor)
     fixtures = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [
         {"shape": "basic.floor_slab", "position": [-2.0, 0.0, 0.0], "name": "slab", "parameters": {"width": 4.0, "depth": 4.0}},
@@ -11973,7 +12992,8 @@ def check_replace_snap(editor):
     child = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [
         {"shape": "basic.block", "position": [42.0, top + 0.8, 0.0], "name": "rs child", "parent_id": parent}]})["pieces"][0]["id"]
     editor.wait_idle()
-    reply = editor.call("level_replace_pieces", {"scene_name": scene, "node_ids": [child, parent], "shape": "basic.cylinder", "surface_snap": True})
+    # attach false: the search order is checked here; the child staying under its parent is what attach would change (S2.1).
+    reply = editor.call("level_replace_pieces", {"scene_name": scene, "node_ids": [child, parent], "shape": "basic.cylinder", "surface_snap": True, "attach": False})
     editor.wait_idle()
     check("a child piece and its parent piece replaced with snap each rest on the ground (the child's search starts where the parent's snap carries it)",
           (reply["snapped_count"] == 2) and close([base(parent), base(child)], [top, top], 1.0e-3) and
@@ -19203,6 +20223,7 @@ def main():
     parser.add_argument("--only-transform-rows", action="store_true", help="run the Properties transform row move hook checks alone")
     parser.add_argument("--only-drag-cancel", action="store_true", help="run the Transform tool drag cancel checks alone")
     parser.add_argument("--only-snap-to-surface", action="store_true", help="run the snap to surface agreement checks alone")
+    parser.add_argument("--only-surface-attachment", action="store_true", help="run the surface attachment checks (doc/plans/level_kit_surface_attachment.md) alone")
     parser.add_argument("--only-anchor-snap", action="store_true", help="run the Transform drag snap of the anchor checks alone (U51)")
     parser.add_argument("--only-layout-surface-search", action="store_true", help="run the kit layout search direction and distance checks alone (U51)")
     parser.add_argument("--only-layout-surface-support", action="store_true", help="run the kit layout support rule checks alone (U52)")
@@ -19385,6 +20406,9 @@ def main():
             groups = [("transform drag cancel", check_transform_drag_cancel), ("transform record rule", check_transform_record_rule)]
         elif args.only_snap_to_surface:
             groups = [("snap to surface", check_snap_to_surface)]
+        elif args.only_surface_attachment:
+            groups = [("surface attachment", check_surface_attachment), ("surface attaching", check_surface_attaching), ("surface following", check_surface_following),
+                      ("surface layouts", check_surface_layouts), ("surface copies", check_surface_copies, work), ("Level Kit window surface drag", level_kit_window(lambda e, s, _: check_surface_live_drag(e, s)))]
         elif args.only_anchor_snap:
             groups = [("anchor snap", check_anchor_snap)]
         elif args.only_rotated_mesh_snap:
@@ -19483,6 +20507,11 @@ def main():
                 ("transform drag cancel", check_transform_drag_cancel),
                 ("transform record rule", check_transform_record_rule),
                 ("snap to surface", check_snap_to_surface),
+                ("surface attachment", check_surface_attachment),
+                ("surface attaching", check_surface_attaching),
+                ("surface following", check_surface_following),
+                ("surface layouts", check_surface_layouts),
+                ("surface copies", check_surface_copies, work),
                 ("rotated mesh snap", check_rotated_mesh_snap),
                 ("layout surface search", check_layout_surface_search),
                 ("layout surface support", check_layout_surface_support, work),

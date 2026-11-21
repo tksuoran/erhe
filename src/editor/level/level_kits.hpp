@@ -106,6 +106,28 @@ public:
     std::string                        reason; // dormant: why
 };
 
+// Whether a piece's surface attachment holds (doc/editor/level_tools.md "Surface attachments").
+enum class Kit_surface_attachment_state : unsigned int {
+    none = 0,    // no record
+    active,      // the record names the piece's parent, a mesh node
+    off_surface, // active, but the last carry found no face of the support on the piece's line (S3.4)
+    inert        // kept, not followed: the reason says why
+};
+
+[[nodiscard]] auto c_str(Kit_surface_attachment_state state) -> const char*;
+
+// Active or off_surface: the piece is attached to its parent and follows it.
+[[nodiscard]] auto is_surface_attached(Kit_surface_attachment_state state) -> bool;
+
+class Kit_surface_attachment_status
+{
+public:
+    Kit_surface_attachment_state       state{Kit_surface_attachment_state::none};
+    Kit_surface_attachment             attachment;
+    std::shared_ptr<erhe::scene::Node> target; // the support: the parent when active, else the scene's node of the uid or null
+    std::string                        reason; // inert: why
+};
+
 // Why a join records no attachment (step 41).
 enum class Kit_attach_refusal : unsigned int {
     none = 0,
@@ -233,6 +255,7 @@ public:
     glm::quat rotation{1.0f, 0.0f, 0.0f, 0.0f};
     glm::vec3 surface_direction{c_default_surface_direction}; // the search direction the pose was found along
     bool      surface_found{false};
+    const erhe::scene::Mesh* support_mesh{nullptr}; // Surface_placement::support_mesh; valid until the scene changes
 };
 
 class Kit_piece_data;
@@ -252,6 +275,29 @@ public:
     std::size_t follow_count {0};
     std::size_t problem_count{0};
     std::size_t light_change_count{0}; // light nodes moved to, added at or removed from their frames (D3.15)
+};
+
+// S5.2: an attached piece of a removed layout child, parked until the child's successor (element `element`) is inserted.
+class Kit_parked_piece
+{
+public:
+    std::shared_ptr<erhe::scene::Node> node;
+    std::size_t                        element{0};
+};
+
+// Whether the surface carry of a change writes the records (a release) or moves the pieces only (a preview step, S3.7).
+enum class Kit_surface_carry_record : unsigned int {
+    write = 0,
+    skip
+};
+
+// S3.2 - S3.4: a piece's local transform carried onto its support's bounds and rested again on the support's faces, and the
+// record that pose writes (none when the record stays as it is).
+class Kit_surface_carry
+{
+public:
+    erhe::scene::Trs_transform            local;
+    std::optional<Kit_surface_attachment> record;
 };
 
 enum class Kit_snap_apply : unsigned int {
@@ -276,6 +322,7 @@ public:
     glm::vec3                                  position{0.0f};
     glm::quat                                  rotation{1.0f, 0.0f, 0.0f, 0.0f};
     bool                                       surface_found{false}; // false also when no surface option was set
+    std::shared_ptr<erhe::scene::Node>         support; // S2.1: the support the piece was inserted under; null when none
 };
 
 class Kit_place_result
@@ -585,6 +632,8 @@ public:
     // Reports and replaces a surface max distance of the loaded editor settings that check_surface_max_distance() refuses.
     void validate_surface_settings();
     void set_surface_orient(Surface_orient orient);
+    // S2.7 Attach To Surface; get_surface_settings() carries it in Surface_options::attach.
+    void set_surface_attach(Surface_attach attach);
     // U60: what Transform tool drags and Brush tool kit placement rest with orient off; get_surface_settings() leaves it leading_face.
     [[nodiscard]] auto get_surface_rest() const -> Surface_snap_rest;
     void set_surface_rest(Surface_snap_rest rest);
@@ -752,6 +801,8 @@ public:
     void get_attachment_statuses(const erhe::scene::Node& node, std::vector<Kit_attachment_status>& out_statuses) const;
     // The status of one entry of the node's record: its target and whether it is followed.
     [[nodiscard]] auto get_attachment_status(const erhe::scene::Node& node, const Kit_attachment& attachment) const -> Kit_attachment_status;
+    // S1.2: the node's surface attachment is active while its parent is the mesh node the record names. Allocates.
+    [[nodiscard]] auto get_surface_attachment_status(const erhe::scene::Node& node) const -> Kit_surface_attachment_status;
     // Whether the node may record an attachment to the target.
     [[nodiscard]] auto check_attach(const erhe::scene::Node& node, const erhe::scene::Node& target) const -> Kit_attach_check;
     // The record of the join, owned by the node.
@@ -802,8 +853,80 @@ public:
         std::span<const std::shared_ptr<erhe::scene::Node>> changed_pieces,
         const Kit_snap_pair*                                snap = nullptr,
         std::span<const std::shared_ptr<erhe::scene::Node>> requesting = {},
-        std::span<const Kit_new_connection>                 new_connections = {}
+        std::span<const Kit_new_connection>                 new_connections = {},
+        std::span<const Kit_surface_snap>                   surface_snaps = {}
     ) -> std::shared_ptr<Operation>;
+
+    // Surface attachments (doc/editor/level_tools.md "Surface attachments", level_kits_surface_attachment.cpp).
+    [[nodiscard]] static auto has_surface_attachments(const Scene_root& scene_root) -> bool;
+    // S2.3: the node a piece resting on the mesh attaches to; null when the mesh is no support.
+    [[nodiscard]] static auto find_surface_support(const erhe::scene::Mesh* mesh) -> std::shared_ptr<erhe::scene::Node>;
+    // P1: the first ancestor of the node that is neither a kit piece nor a kit layout node (the scene root at the latest).
+    [[nodiscard]] static auto get_surface_home(const erhe::scene::Node& node) -> std::shared_ptr<erhe::Hierarchy>;
+    // S2.4: the node holds a connector connection: a record of its own, or another node's record naming it.
+    [[nodiscard]] static auto has_connection(const Scene_root& scene_root, const erhe::scene::Node& node) -> bool;
+    // The record of the node at its world pose under the support, the direction in world space; none for a pose without bounds.
+    [[nodiscard]] static auto make_surface_record(
+        const erhe::math::Aabb&  piece_bounds,
+        const glm::mat4&         world_from_node,
+        const erhe::scene::Node& support,
+        const glm::vec3&         direction,
+        Surface_orient           orient,
+        Surface_snap_rest        rest
+    ) -> std::optional<Kit_surface_attachment>;
+    // Writes or (none) removes the node's record; null when it holds that already.
+    [[nodiscard]] static auto make_surface_record_operation(const std::shared_ptr<erhe::scene::Node>& node, const std::optional<Kit_surface_attachment>& record) -> std::shared_ptr<Operation>;
+    // S6.5: the author's parent change of the child; the removal of a record the new parent makes inert, null when none.
+    [[nodiscard]] static auto make_reparent_surface_follow_up(const erhe::Hierarchy& child, const erhe::Hierarchy* new_parent) -> std::shared_ptr<Operation>;
+    // The surface pass of a change's follow operation (S1.2, S2.1, S2.4, S2.5, S6): appended, not executed.
+    void build_surface_attachment_follow_ups(
+        Scene_root&                                         scene_root,
+        std::span<const std::shared_ptr<erhe::scene::Node>> moved_nodes,
+        std::span<const Kit_surface_snap>                   surface_snaps,
+        std::span<const std::shared_ptr<erhe::scene::Node>> connected,
+        std::vector<std::shared_ptr<Operation>>&            out_operations
+    );
+    // S3.2 - S3.4: the carry of the piece (a child of the support, attached to it) at the support's and its own present bounds.
+    [[nodiscard]] auto compute_surface_carry(
+        Scene_root&                   scene_root,
+        const erhe::scene::Mesh&      piece,
+        const erhe::scene::Mesh&      support,
+        const Kit_surface_attachment& record
+    ) const -> std::optional<Kit_surface_carry>;
+    // S3, S4, S6.4: carries the attached children of the changed pieces, parents before children, and the changed attached
+    // pieces themselves, executing each operation as it is appended (a carried piece's children rest on its new pose). The
+    // nodes the user moved are left to the surface judgement; out_carried lists the carried pieces.
+    void build_surface_carry_follow_ups(
+        Scene_root&                                         scene_root,
+        std::span<const std::shared_ptr<erhe::scene::Node>> changed_pieces,
+        std::span<const std::shared_ptr<erhe::scene::Node>> moved_nodes,
+        Kit_surface_carry_record                            record_mode,
+        std::vector<std::shared_ptr<Operation>>&            out_operations,
+        std::vector<const erhe::scene::Node*>&              out_carried
+    );
+    // A layout generation's removal of the children not kept, from the last back, each subtree deepest first without the
+    // attached pieces: those of child j park under the scene root when element j has a successor (j < successor_count),
+    // else detach to their home (S5.2, S5.3, P7). Counts the removed children.
+    void append_generation_removals(
+        Scene_root&                                          scene_root,
+        const std::vector<std::shared_ptr<erhe::Hierarchy>>& children,
+        const std::vector<bool>&                             kept,
+        std::size_t                                          successor_count,
+        std::vector<std::shared_ptr<Operation>>&             out_operations,
+        std::vector<Kit_parked_piece>&                       out_parked,
+        std::size_t&                                         io_removed_count
+    );
+    // S5.2: after the inserts, the parked pieces go under their successors (local transforms kept, records naming them) and a
+    // follow operation carries them on the new shapes.
+    void append_generation_arrivals(
+        Scene_root&                                            scene_root,
+        std::span<const Kit_parked_piece>                      parked,
+        std::span<const std::shared_ptr<erhe::scene::Node>>    successors,
+        std::vector<std::shared_ptr<Operation>>&               out_operations
+    );
+    // S6.3: the detach of a node's surface attachment to its home, appended; nothing when it has no record.
+    void append_surface_detach(const std::shared_ptr<erhe::scene::Node>& node, std::vector<std::shared_ptr<Operation>>& out_operations);
+    [[nodiscard]] auto is_flow_previewing() const -> bool;
     // The follow operation of each scene of the nodes, whose moves are earlier operations of the same entry.
     void append_attachment_follow_ups(std::span<const std::shared_ptr<erhe::scene::Node>> moved_nodes, std::vector<std::shared_ptr<Operation>>& out_operations);
     // A write of Kit_piece.parameters or Kit_piece.shape outside these entry points (a paste, a raw row): the follow operation.
@@ -1033,7 +1156,8 @@ public:
         Scene_root&                                         scene_root,
         std::span<const std::shared_ptr<erhe::scene::Node>> moved_nodes,
         std::vector<std::shared_ptr<Operation>>&            out_operations,
-        const Kit_snap_pair*                                snap = nullptr
+        const Kit_snap_pair*                                snap = nullptr,
+        std::span<const Kit_surface_snap>                   surface_snaps = {}
     );
 
     // D3.9: the items' translation, rotation or scale written outside the Transform tool (a Properties row, a paste,
@@ -1190,7 +1314,8 @@ private:
         const std::shared_ptr<erhe::geometry::Geometry>& geometry,
         const std::string&                               material_name,
         const std::string&                               source,
-        std::vector<std::shared_ptr<Operation>>&         out_operations
+        std::vector<std::shared_ptr<Operation>>&         out_operations,
+        std::shared_ptr<erhe::scene::Node>*              out_node = nullptr // the inserted child
     ) -> std::string;
 
     // The refusal of a stairs material name: neither a scene material nor a palette material.
@@ -1215,7 +1340,8 @@ private:
         const std::shared_ptr<erhe::geometry::Geometry>& geometry,
         const std::string&                               material_name,
         const std::string&                               source,
-        std::vector<std::shared_ptr<Operation>>&         out_operations
+        std::vector<std::shared_ptr<Operation>>&         out_operations,
+        std::shared_ptr<erhe::scene::Node>*              out_node = nullptr
     ) -> std::string;
 
     // C8: the generation of a floor layout: the one generated slab the closed curve and the values make.
@@ -1347,6 +1473,9 @@ private:
     // Gives the preview's followers their poses from before it; forgets them.
     void restore_follow_preview(Follow_preview& preview);
     void step_parameter_follow_preview(const std::shared_ptr<erhe::scene::Node>& node, const Kit_parameter_values& values);
+    // S3.7, S6.4: a parameter drag step rests the dragged piece on its support and carries its attached children; a node
+    // first moved adds its pose to io_moves.
+    void step_surface_carry_preview(Scene_root& scene_root, const erhe::scene::Mesh& dragged, std::vector<Follow_move>& io_moves);
     Kit_connector_types m_follow_flow_mask{Kit_connector_types::all()}; // C3.9: read at each following
     // The piece of the attach-none join connect_piece() is building; each follow operation made meanwhile keeps a copy.
     std::vector<std::shared_ptr<erhe::scene::Node>> m_auto_connect_excluded;

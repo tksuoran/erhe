@@ -1,8 +1,11 @@
 #pragma once
 
 #include "level/kit_connector.hpp"
+#include "level/surface_options.hpp"
 
 #include "erhe_property/dependency_property.hpp"
+
+#include <glm/glm.hpp>
 
 #include <memory>
 #include <optional>
@@ -10,6 +13,7 @@
 #include <string_view>
 #include <vector>
 
+namespace erhe         { class Hierarchy; }
 namespace erhe::scene { class Xformable; using Node = Xformable; }
 
 namespace editor {
@@ -39,6 +43,8 @@ public:
     static const erhe::property::Property<std::string> disabled_connectors_property;
     // The persistent connector join (R5.3, plan step 41): make_attachment_text(); empty when not attached.
     static const erhe::property::Property<std::string> attachment_property;
+    // The surface attachment (doc/editor/level_tools.md "Surface attachments"): make_surface_attachment_text(); empty when none.
+    static const erhe::property::Property<std::string> surface_attachment_property;
 
     [[nodiscard]] static auto all_properties() -> const std::vector<const erhe::property::Dependency_property*>&;
 };
@@ -97,5 +103,35 @@ public:
 
 // The node's own connections (entries naming another owner dropped); empty when the record does not read. Allocates.
 [[nodiscard]] auto read_kit_attachments(const erhe::scene::Node& node) -> std::vector<Kit_attachment>;
+
+// The place of a piece on the piece it rests on, its support and parent (doc/editor/level_tools.md "Surface attachments").
+class Kit_surface_attachment
+{
+public:
+    std::string       target;                                   // the glTF uid of the support
+    glm::dvec3        position {0.0};                           // the rest point: 0 at the support's bounds minimum, 1 at its maximum
+    glm::vec3         direction{c_default_surface_direction};   // unit search direction in the support's node space
+    Surface_orient    orient   {Surface_orient::off};
+    Surface_snap_rest rest     {Surface_snap_rest::leading_face};
+    bool              on_surface{true}; // S3.4: false after a carry whose rest again found no face of the support
+
+    [[nodiscard]] auto operator==(const Kit_surface_attachment& other) const -> bool = default;
+};
+
+// The canonical text of Kit_piece.surface_attachment: a JSON object with sorted keys, the floats hexadecimal.
+[[nodiscard]] auto make_surface_attachment_text(const Kit_surface_attachment& attachment) -> std::string;
+// Returns the problem, empty when the text reads.
+[[nodiscard]] auto parse_surface_attachment_text(std::string_view text, Kit_surface_attachment& out_attachment) -> std::string;
+
+// The node's record from its local value: none when it has none. A record that does not read sets out_problem.
+[[nodiscard]] auto read_kit_surface_attachment(const erhe::scene::Node& node, std::string* out_problem = nullptr) -> std::optional<Kit_surface_attachment>;
+
+// S1.2, S5.1: the node's record names its parent, a mesh node: it is attached there (active or off_surface), the author's
+// piece, and the lock of a locked kit layout node above ends at it.
+[[nodiscard]] auto is_surface_attached_to_parent(const erhe::scene::Node& node) -> bool;
+
+// S1.3: in a copy of a subtree (the same structure as the source, not yet inserted), a surface attachment record naming a
+// node of the source names that node's copy, so the copy is attached as its source is.
+void remap_copied_surface_attachments(const erhe::Hierarchy& source, erhe::Hierarchy& copy);
 
 } // namespace editor

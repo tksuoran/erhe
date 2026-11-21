@@ -4,14 +4,16 @@ from erhe_codegen import *
 # "Surface settings"): kit placement, the Level Kit window, the viewport toolbar and
 # the Transform tool's Move settings read and write it. v8: connector_snap_orientation off | rotate | full (keep and align read as off and full).
 # v9: the connection settings of doc/plans/level_kit_connections.md: auto-connect, the flow mask and the step limit.
+# v10: attach_to_surface (doc/plans/level_kit_surface_attachment.md S2.7).
 struct("Surface_snap_config",
-    version=9,
+    version=10,
     short_desc="Surface Snap",
     long_desc="Snap To Surface and Orient To Surface: kit placement snaps placed pieces and the Transform tool's translate drags snap the transform anchor to a surface.",
     developer=False,
     fields=[
         field("snap_to_surface",   Bool, added_in=1, default="false", short_desc="Snap To Surface",   long_desc="Snap a placed piece's base, or a translate drag's transform anchor, to the nearest surface along the search direction."),
         field("orient_to_surface", Bool, added_in=1, default="false", short_desc="Orient To Surface", long_desc="Turn a placed piece's or a moved mesh's up axis to the surface normal, keeping its heading."),
+        field("attach_to_surface", Bool, added_in=10, default="true", short_desc="Attach To Surface", long_desc="A snap to surface of a kit piece onto another kit piece makes the snapped piece a child of the piece it rests on, remembering its place there."),
         field("max_distance",      Float, added_in=3, default="1.0f", short_desc="Surface Max Distance", long_desc="Meters: snap to surface moves a mesh at most this far along the snap direction, either way, to the nearest place where it rests and fits; beyond, it stays."),
         field("rest", EnumRef("Surface_snap_rest"), added_in=7, default="Surface_snap_rest::leading_face", short_desc="Surface Rest", long_desc="With Orient To Surface off, Transform tool drags and Brush tool kit placement rest the bounds face leading along the search direction flush on the surface, or land the anchor point (the gizmo anchor; the piece origin) on it."),
         field("drag_direction_mode", EnumRef("Surface_drag_direction"), added_in=6, default="Surface_drag_direction::explicit_vector", short_desc="Surface Drag Direction Mode", long_desc="A Transform tool drag snaps the transform anchor along the explicit Surface Drag Direction, or along the ray from the viewport camera through the anchor."),

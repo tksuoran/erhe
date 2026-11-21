@@ -84,6 +84,35 @@ public:
     std::shared_ptr<erhe::scene::Node> target;
 };
 
+// S5.2: moves an attached piece under another parent keeping its local transform, its place in the element's node space;
+// the parent it leaves is read at the first execute.
+class Kit_surface_rehome_operation : public Operation
+{
+public:
+    Kit_surface_rehome_operation(const std::shared_ptr<erhe::scene::Node>& node, const std::shared_ptr<erhe::Hierarchy>& parent);
+
+    // Implements Operation
+    void execute(App_context& context) override;
+    void undo   (App_context& context) override;
+    void collect_item_references(std::unordered_set<const erhe::Item_base*>& out_items) const override;
+
+private:
+    std::shared_ptr<erhe::scene::Node> m_node;
+    std::shared_ptr<erhe::Hierarchy>   m_parent_after;
+    std::shared_ptr<erhe::Hierarchy>   m_parent_before;
+    std::size_t                        m_index_before{0};
+    bool                               m_executed{false};
+};
+
+// A move of a node that ended surface snapped with these options (S2.1, S6.1): the change's follow operation attaches the
+// node to the support it rests on, or detaches it where it rests on none.
+class Kit_surface_snap
+{
+public:
+    std::shared_ptr<erhe::scene::Node> node;
+    Surface_options                    options;
+};
+
 // Step 41: appended last to a change's entry; its first execute asks Level_kits::build_attachment_follow_ups() for the
 // followers' moves and the detaches and runs them; redo runs them again, undo undoes them in reverse.
 class Kit_attachment_follow_operation : public Operation
@@ -96,7 +125,8 @@ public:
         std::vector<std::shared_ptr<erhe::scene::Node>>&& requesting,
         std::vector<Kit_new_connection>&&                 new_connections,
         const std::optional<Kit_flow_overrides>&          flow_overrides,
-        const std::vector<std::shared_ptr<erhe::scene::Node>>& auto_connect_excluded
+        const std::vector<std::shared_ptr<erhe::scene::Node>>& auto_connect_excluded,
+        std::vector<Kit_surface_snap>&&                   surface_snaps
     );
     ~Kit_attachment_follow_operation() noexcept override;
 
@@ -116,6 +146,7 @@ private:
     std::vector<Kit_new_connection>                 m_new_connections; // the explicit joins' records, for the report
     std::optional<Kit_flow_overrides>               m_flow_overrides;  // C6.2: the overrides of the call that made the entry
     std::vector<std::shared_ptr<erhe::scene::Node>> m_auto_connect_excluded; // the attach-none join's piece, which takes no record
+    std::vector<Kit_surface_snap>                   m_surface_snaps;         // the nodes the change snapped to the surface
     bool                                            m_recorded{false};
     std::vector<std::shared_ptr<Operation>>         m_operations;
 };

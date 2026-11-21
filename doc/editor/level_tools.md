@@ -298,7 +298,9 @@ placement:
   material ("Materials"), found in the scene's content library by name or
   created and inserted there the first time a piece needs it;
 - the surface options of the placement (`Kit_placement::surface`, "Surface
-  placement") move and turn the module-snapped transform;
+  placement") move and turn the module-snapped transform; with
+  `Surface_options::attach` the piece goes under the support its rest lies
+  on, with a surface attachment record ("Surface attachments");
 - `make_brush_instance_insert()` (`brushes/brush.hpp`) makes the node with a
   static rigid body, a mesh primitive per brush part with that slot's
   material, and its insert operation; the node takes the given name
@@ -511,7 +513,8 @@ as the glTF node hierarchy. Every group tool is one undo entry.
   insert `set_copied_brush_collision_shapes()` gives each brush instance the
   collision shape of its brush (`doc/editor/brushes.md` "Copies"). A copied
   piece is an ordinary piece: a parameter change of the copy leaves the
-  original alone.
+  original alone. A surface attachment inside the copy names the copied
+  support ("Surface attachments").
 - `Level_kits::mirror(scene_root, group, axis)`: every node below the group
   node is reflected across the plane through the group node's origin whose
   normal is the group's local `Mirror_axis` x, y or z; the group node stays.
@@ -692,9 +695,11 @@ edited directly; unlocked, it leaves them alone and they are ordinary pieces.
   derive their masked parameters from it, so the run's derived values are
   stable across regenerations; a segments element then spans its chord by
   the x bounds of its own seeded geometry. Child i is kept when it already is element i:
-  a piece without children whose record (shape and parameter text), slot
+  a piece without children but its kit lights and surface attached pieces
+  whose record (shape and parameter text), slot
   materials by name and local pose (translation, rotation and scale) equal the element's. The other
-  children are removed with their subtrees, last child first, and the
+  children are removed with their subtrees, last child first (their
+  attached pieces leave them first, "Kit layout nodes"), and the
   missing elements are placed at their indices through the placement path
   of `place()` (`prepare_placements()`), named after the shape and the
   element number from 1. A node whose world scale is not 1 is refused.
@@ -828,6 +833,28 @@ edited directly; unlocked, it leaves them alone and they are ordinary pieces.
     The recursive Lightmap and No Transform Update entries on the layout
     node's own row reach its children through the layout node, which is an
     edit of the layout, not of a child.
+  - The lock ends at a surface attached piece (S5.1, "Surface
+    attachments"): `find_locking_kit_layout()` stops at the first node, the
+    item itself or an ancestor, whose surface attachment record names its
+    parent (`is_surface_attached_to_parent()`), and every rule above goes
+    through it, so a piece attached to a child of a locked layout, and what
+    is below it, is selected, moved, edited, deleted and detached as any
+    piece. An insert under a locked layout's child stays refused; the attach
+    paths insert and reparent onto a support directly.
+- A regeneration keeps a layout's attached pieces (S5.2, S5.3): a child is
+  kept when its children are kit lights and attached pieces
+  (`has_only_kit_light_and_attached_children()`; a generated floor or
+  staircase, attached pieces alone), and keeps them untouched. A replaced
+  child's attached pieces leave it before its removal
+  (`append_generation_removals()`): parked under the scene root, keeping
+  their local transforms (`Kit_surface_rehome_operation`), and after the
+  inserts moved under the element's new child, their records naming it,
+  then carried on its shape by a follow operation
+  (`append_generation_arrivals()`). The attached pieces of a child removed
+  without a successor (the count shrank) are detached to their home at
+  their world poses, with an `editor.scene` info line each (P7). The same
+  holds for locked and unlocked layouts, a lock (which replaces every
+  child) included; a preview step does the same and is undone with it.
   The message names the node and the layout ("'Block 2' is a child of the
   locked kit layout node 'Wall run'; edit the layout's values, or unlock it to
   edit its children"), and the refused call changes nothing. The physics
@@ -1540,7 +1567,8 @@ to a height profile) and `level/stairs_mesh.hpp` (the staircase mesh along a
   `Kit_layout_generated.source`, the text of the curve's points and the
   stairs values it was generated from and the generator's version
   (`make_stairs_source_text()`, hexadecimal floats,
-  `c_stairs_generator_version`). A generation keeps the child when its
+  `c_stairs_generator_version`). A generation keeps the child when it has no
+  children but surface attached pieces and its
   source text, its material's name and its identity local transform match -
   tested before any mesh is made, so a kept child costs the fit alone - and
   else replaces every child by a new one; so `refresh_layout()` and an edit
@@ -1742,7 +1770,9 @@ one; taken through a bodiless shape and back it gets a fresh body
 Palette materials the new slots need are inserted first in the same entry.
 The node keeps its id, name, parent, children, group and selection; undo
 gives back the shape, parameters, mesh primitives with their materials,
-brush, collision shape, body, navigation flag and transform exactly.
+brush, collision shape, body, navigation flag and transform exactly. A
+replaced support carries its attached pieces onto the new shape, and a
+replaced attached piece rests again on its support ("Surface attachments").
 
 - Snap (U24): with `surface` snapping (Snap To Surface on, or Orient To
   Surface, which implies the snap as for placement) each replaced piece
@@ -2624,7 +2654,8 @@ parameter changes of the target (`level/level_kits_attachment.cpp`).
   moved piece), which keeps it (C3.14); a target that followed another
   piece does not keep it. A dormant piece moved together with its target keeps
   its record; moved without it, it loses the record. `detach_piece()` (the
-  Properties window's Detach, `level_detach_piece`) removes it as one entry.
+  Properties window's Detach, `level_detach_piece`) removes it as one entry,
+  with the piece's surface attachment ("Surface attachments").
 - Dormant: the record stays while the target is not in the piece's scene (it
   was deleted; an undo of the delete brings it back), the target uid is
   ambiguous, either connector is missing from the shape or disabled
@@ -2639,6 +2670,161 @@ parameter changes of the target (`level/level_kits_attachment.cpp`).
   `uid` and per entry (`attachments`) `state`, `reason`, `target_uid`,
   `target_id`, `target_name`, `connector`, `target_connector`, `twist_steps`
   and `gap`.
+
+### Surface attachments
+
+A surface attachment (`doc/plans/level_kit_surface_attachment.md`, GitHub
+issue 304) is the place of a kit piece A on the piece B it rests on, its
+support: A is a child of B in the scene graph and carries the record of
+where on B it rests. When B moves, A rides the scene graph; when B's shape
+changes, A is carried to the same place on the new shape. The code is in
+`level/level_kits_surface_attachment.cpp`, the scene-free parts in
+`level/kit_surface_attachment.hpp` and `level/kit_piece.hpp`.
+
+- Record: `Kit_piece.surface_attachment` on A, a canonical JSON text with
+  sorted keys (`Kit_surface_attachment`, `make_surface_attachment_text()`,
+  `parse_surface_attachment_text()`, `read_kit_surface_attachment()`), every
+  key required:
+  - `target`: B's glTF uid;
+  - `position`: A's rest point as a proportion of B's node-space bounds, 0
+    at their minimum and 1 at their maximum on each axis, 0 on an axis
+    without extent (three hexadecimal doubles);
+  - `direction`: the unit search direction in B's node space (three
+    hexadecimal floats);
+  - `orient` (true or false) and `rest` (`leading_face` or `anchor`): the
+    snap that rests A;
+  - `on_surface`: false after a carry that found no face of B under A.
+
+  The rest point is the point of A that lies on the surface, in A's node
+  space (`get_surface_rest_point()`): the center of the bounds face the
+  snap rests ("Surface placement": the face leading along the direction, or
+  the -Y face with orient) or A's origin with the `anchor` rest. Only the
+  local value counts, and no record is no local value. A record that does
+  not read is named by an `editor.scene` error at its write and at a scene
+  load. Paste Properties does not paste it. The record and the parent link
+  are saved and loaded with the scene, so a loaded A is attached to the
+  loaded B.
+- Status (`Level_kits::get_surface_attachment_status()`): `none` without a
+  record; `active` while A's parent is a mesh node whose uid is the
+  record's `target` (`is_surface_attached_to_parent()`) and `on_surface` is
+  true; `off_surface` while it is false, attached and followed as active
+  (`is_surface_attached()`); `inert` otherwise - another parent, no parent,
+  a parent that is no mesh node, a record that does not read - with the
+  reason. The status's target is the parent when attached, else the scene's
+  one node of the uid. The first change that judges an inert record removes
+  it; the piece stays where it is.
+- Support (`Level_kits::find_surface_support()`): the mesh owning the face
+  A's rest was found on (`Surface_placement::support_mesh`) when it is a kit
+  piece or a kit layout's generated mesh (a floor's slab, a staircase), a
+  child of a locked kit layout node included. Content that is no kit piece
+  is no support. Home (`Level_kits::get_surface_home()`): A's first ancestor
+  that is neither a kit piece nor a kit layout node - a group node, another
+  plain node or the scene root; a detach moves A, with its subtree, there,
+  keeping its world transform.
+- Attaching, with Attach To Surface on ("Surface settings",
+  `Surface_options::attach`; MCP `attach`, true by default):
+  - A placement (`place()`: `level_place_pieces`, the Level Kit window, the
+    Brush tool's kit mode) with surface options whose rest lies on a support
+    is inserted under the support, its record written on the new node,
+    unless the placement names a parent or joins a connector. The Brush
+    tool's insert snaps again from the hover's rested pose, which finds its
+    support itself. Place As Layout puts the layout node under the scene
+    root.
+  - A snap of an existing piece - `Level_kits::snap_to_surface()` (the Level
+    Kit window's snap buttons, `level_snap_to_surface`), a Transform tool
+    release whose last surface step rested the piece (gizmo drags,
+    `transform_selection`, `drag_selection`), Replace's re-snap - hands the
+    change's follow operation (`Kit_attachment_follow_operation`) a
+    `Kit_surface_snap` per snapped node. The operation's surface pass finds
+    the rest the node holds now (0.1 mm either way along the snap's
+    direction, the change's moved and snapped subtrees excluded) and moves
+    the node under that rest's support with an
+    `Item_parent_change_operation`, which keeps its world transform, and the
+    record write. A snap that rests on no support detaches an attached
+    piece. A snap call that holds a support and a piece attached at or
+    below it does not snap the piece: it rides its support.
+  - Nothing attaches a piece holding a connector connection (a record of its
+    own or another piece's record naming it, `has_connection()`), a kit
+    layout's element (a child of a kit layout node), a node that is no mesh,
+    or with Attach To Surface off. A piece that takes part in a new
+    connection of a change is detached to its home in the same entry:
+    connectors come first.
+- Following: the surface pass of a change's follow operation runs after the
+  connector follows, the value flow and auto-connect have settled, first
+  carrying, then judging the moved pieces.
+  - Carry (`build_surface_carry_follow_ups()`): the change's changed pieces -
+    `set_parameters()`, raw and pasted writes of `Kit_piece.parameters` and
+    `Kit_piece.shape`, Replace, the pieces the value flow wrote into, the
+    walls a floor or wall fit changed - are walked parents before children.
+    Each attached direct child of a changed piece, and each changed
+    attached piece itself, is carried (`compute_surface_carry()`):
+    `carry_surface_attachment()` puts the rest point at the record's
+    proportion of the support's present bounds, A's local rotation and scale
+    kept (a carried translation within 1e-6 m, relative, of the present one
+    is the present one, so an unchanged support moves nothing; at unchanged
+    bounds the carry computes in double and gives the translation back).
+    Then the snap of "Surface placement" runs from the carried pose along
+    the record's direction, with its orient and rest, against the support's
+    mesh alone (the `only` filter), the surface settings' max distance
+    either way. Found, A takes the rest and, when the rest moved it, its
+    place is written again; not found, A keeps the carried pose and the
+    record its position with `on_surface` false, and a later carry that
+    finds the face sets it true. Each carry's operations run as they are
+    appended, so A's own attached pieces rest on A's new pose; the walk goes
+    below a carried piece only where that piece is itself a changed piece.
+    A moved support's pieces ride the scene graph and no record is read for
+    them; a piece mirrored with its support (`level_mirror_group`) has its
+    place written again from the mirrored poses.
+  - The author's moves: every moved node with a record whose support was not
+    moved in the same change is judged. Still at rest on a face of its
+    support within 0.1 mm (the record's direction, orient and rest, the
+    support's mesh alone), it keeps the attachment and its place is written
+    again; otherwise it is detached to its home with the `editor.scene` info
+    line `Kit piece '<A>' detached from '<B>': <why>`.
+  - Every attach, carry and detach is part of the change's one undo entry;
+    undo gives back the parent, the local transform and the record. A parent
+    change announces the child as touched, so the Transform tool reads its
+    baselines again.
+- Locked and generated layouts: `find_locking_kit_layout()` stops at an
+  attached piece, so A on a locked layout's child is the author's piece
+  ("Kit layout nodes"). A regeneration keeps A on a kept child, moves it to
+  the new child of a replaced element (its local transform kept, its record
+  naming the new child, then carried on the new shape: a crate on a floor
+  follows the outline proportionally and reads `off_surface` over a notch),
+  and detaches it to its home when its element goes.
+- Live: a flow preview step (a Transform tool drag, a layout's curve point,
+  floor corner or edge drag, a layout value drag) runs the follow operation
+  with the carry moving the pieces without writing records and without the
+  judgement, undone with the step; a dragged piece attaches or detaches at
+  the release only. A parameter drag (`preview_parameters()`) rests the
+  dragged attached piece on its support and carries its attached children
+  at every step from their poses before the drag
+  (`step_surface_carry_preview()`; the step's mesh is in the raytrace
+  scene), restored with the connector followers at the release, a cancel
+  and an undo; the release's entry carries them once.
+- Detach: `detach_pieces()` (the Properties window's Detach,
+  `level_detach_piece`, `level_detach_pieces`) removes the surface
+  attachment with the connections, moving the piece to its home. A parent
+  change made by the author - an item tree drag, Attach (operations window),
+  `reparent_item`, `level_group_nodes` - under any node but the support the
+  record names removes the record in the same entry
+  (`make_reparent_surface_follow_up()`). Deleting a support deletes its
+  attached pieces with its subtree; undo brings all back attached.
+- Copies (`remap_copied_surface_attachments()`): a copy of a subtree - the
+  group copy (`level_duplicate_group`), Duplicate, Copy and Paste
+  (`clipboard_copy_nodes`, `clipboard_paste`), a prefab instance - rewrites
+  each copied record naming a copied node to name that node's copy, so the
+  copy is attached as its source is. A copy of A alone under the same
+  support stays attached; a copy of A alone elsewhere is inert.
+- Viewing: the Properties window's Kit Piece group shows the row "On" with
+  the support's name and the status while a record exists, and its Detach
+  row; the rows are read with the piece's record (on a record write, a
+  rename of a piece, the selection). `level_get_pieces` reports
+  `surface_attachment` per piece (`state`, `reason`, `target_uid`,
+  `target_id`, `target_name`, `position`, `direction`, `orient`, `rest`),
+  null without a record; `level_place_pieces` gives each piece's `support`,
+  `level_snap_to_surface` each node's `support` (the mesh it rests on) and
+  `attached_to` (its support after the call).
 
 ## Parameter rows
 
@@ -2762,8 +2948,9 @@ piece rests and fits (U23, U51); a backward distance of 0 searches along the
 direction only. A kit layout takes its own direction and distances
 ("Kit layout nodes"; 1 m forward and 0 m backward by default); the surface
 settings' callers - the Brush tool's kit mode,
-`level_snap_to_surface`, `transform_selection`, the MCP placement tools and
-`make_placement_pose()` - search their one max distance either way
+`level_snap_to_surface`, `transform_selection`, the MCP placement tools,
+`make_placement_pose()` and the carry of a surface attachment ("Surface
+attachments", which also attach what they snap) - search their one max distance either way
 (`make_surface_options()`); a Transform tool drag snaps its anchor, one point,
 along its own direction ("Transform tool"); `make_placement_pose()` searches against the
 normal of the surface under the pointer (U51). The excluded meshes - the ones being moved - are not there, and
@@ -2897,6 +3084,24 @@ search of `level_queries.cpp` asks).
 - With no place within the distance the pose is unchanged and
   `surface_found` is false; a kit layout element (a path layout's included)
   then stays where its pattern puts it.
+- The placement names its support, `Surface_placement::support_mesh`: the
+  mesh owning the face the rest was found on, null when no place was found.
+  Each hit point of a line carries its mesh (`Surface_hit_point::mesh`), and
+  the search's offset names the supporting hit (`Surface_offset::line` and
+  `hit`). For snap alone it is the supporting hit of the taken place, the
+  first line resting there within 0.1 mm, the base center's line first
+  (`with_first_supporting_line()`), so the support is the mesh under the
+  base center wherever the center rests at the place; for orient the face
+  under the base center whose normal the turn takes; for the anchor rest
+  the face the origin lands on. A start already at rest names its support
+  too. `make_placement_pose()` passes it on in
+  `Kit_placement_pose::support_mesh`, and `Level_kits::snap_to_surface()` in
+  each `Kit_snap_result`'s placement; `level_snap_to_surface` replies it per
+  node as `support` `{id, name}` (null without a place). The support is
+  reported whatever mesh it is.
+- `only`, an optional span of meshes beside `excluded`: when it is not
+  empty, no other mesh is a surface for the search (`is_surface_mesh()`), so
+  a piece can be rested against one support's faces alone.
 
 Snap to surface is idempotent for one exclusion set: only hit points within the
 piece's span at a candidate within the search window are read, so the answer
@@ -2981,7 +3186,11 @@ reads the defaults. Surface Rest, `rest` (`Surface_snap_rest`: `leading_face`, t
 Transform tool drags and the Brush tool's kit mode: the bounds face leading along the search
 direction flush on the surface, or the anchor point - the gizmo anchor, the placed piece's origin -
 on it ("Surface placement", "Transform tool"); with orient on it does not apply, and kit layouts
-always rest the leading face; a file older than version 7 reads the default. The settings have one owner:
+always rest the leading face; a file older than version 7 reads the default. Attach To Surface,
+`attach_to_surface` (true by default, version 10; a file older than version 10 reads it on), makes a
+kit piece snapped onto a support its child ("Surface attachments"); `get_surface_settings()` carries
+it in `Surface_options::attach`, which only the callers that attach read, and `set_surface_attach()`
+writes it; MCP `get_surface_snap_settings` / `set_surface_snap_settings` name it `attach`. The settings have one owner:
 `Level_kits::get_surface_settings()`, `set_surface_snap()`,
 `set_surface_orient()`, `set_surface_max_distance()` (the distance must be
 a finite number >= 0, `check_surface_max_distance()`; the widgets clamp to 0 -
@@ -2997,7 +3206,8 @@ change (`level/surface_settings_ui.hpp`), so all of them show the same state:
 
 - the Level Kit window's checkboxes, its "Surface Rest" combo (Leading Face,
   Anchor) and "Surface Max Distance" drag after Snap To Surface, its "Surface Drag Direction Mode" combo (Explicit, Camera
-  Ray) and "Surface Drag Direction" drag after Orient To Surface, its "Connector Snap" drag, its "Connector Snap On Axis" checkbox and
+  Ray) and "Surface Drag Direction" drag after Orient To Surface (with the "Attach To Surface" checkbox
+  between them), its "Connector Snap" drag, its "Connector Snap On Axis" checkbox and
   its "Connector Snap Orientation" combo (Off, Rotate, Full);
 - two toggle buttons with a narrow Surface Max Distance drag between them
   (named "Surface Max Distance") and a narrow Connector Snap drag, labelled with the
@@ -3018,7 +3228,7 @@ change (`level/surface_settings_ui.hpp`), so all of them show the same state:
   Off and Full, axis-y-rotate-counterclockwise for Rotate, "Turn", "Rotate" and
   "Full" without the icon font; named "Connector Snap Orientation", its id the
   same in every mode);
-- the rows "Snap To Surface", "Surface Rest", "Surface Max Distance", "Orient To Surface",
+- the rows "Snap To Surface", "Surface Rest", "Surface Max Distance", "Orient To Surface", "Attach To Surface",
   "Surface Drag Direction Mode", "Surface Drag Direction", "Connector Snap", "Connector Snap On Axis" and "Connector Snap Orientation" of the Transform
   window's Move tool group, after "Snap Enable".
 
@@ -3133,13 +3343,15 @@ MCP calls take explicit arguments instead of the UI pair
 (`doc/agents/mcp_api_guidelines.md`):
 
 - `transform_selection {..., surface_snap, surface_orient,
-  surface_max_distance}` (default false, false, 1 m): after all edits of the
+  surface_max_distance, attach}` (default false, false, 1 m, true; `attach`
+  as "Surface attachments" states, echoed in the reply): after all edits of the
   call, `snap_to_surface()` with those options - an edit, not a drag: each
   moved mesh rests by its own bounds as "Surface placement" places it,
   searching down; they need a translation of a node selection. The reply adds `surface_snap`, `surface_orient`,
   `surface_max_distance`, `surface_found_count` and per node `surface_found`.
 - `drag_selection {..., surface_snap, surface_orient, surface_max_distance,
-  surface_direction, surface_direction_mode}` (default false, false, 1 m,
+  surface_direction, surface_direction_mode, attach}` (`attach` true by
+  default, "Surface attachments"; the others default false, false, 1 m,
   (0, -1, 0), `explicit_vector`; never the UI's settings; read when the drag
   starts; refused on a rotate or scale drag; a zero or non-finite direction
   and a mode other than `explicit_vector` or `camera_ray` are refused): every
@@ -3475,7 +3687,8 @@ after the file is read:
 
 - its record, transform, name and a mesh primitive per slot with that slot's
   material (the palette materials come back by name, so a placement after the
-  load finds them and adds none);
+  load finds them and adds none); its parent and its surface attachment record,
+  naming the loaded support's uid ("Surface attachments");
 - a static body with a collision shape `KHR_physics_rigid_bodies` rebuilt from
   the piece's own saved mesh (a convex hull or a triangle mesh) or, for a box,
   from the box collider of the synthesized child node the save wrote, folded
@@ -3931,7 +4144,7 @@ surface placement.
   the defaults its image shows). A script waits for the thumbnails by
   reading this until no shape is `none`, `queued` or `building`.
 - `level_place_pieces {scene_name, snap, surface_snap, surface_orient,
-  surface_direction, surface_max_distance, pieces: [{shape, parameters, position, rotation_xyzw,
+  surface_direction, surface_max_distance, surface_rest, attach, pieces: [{shape, parameters, position, rotation_xyzw,
   name, materials, parent_id, parent_index, surface_snap, surface_orient}]}`:
   one undo entry. `materials` maps slot names to material names: a material
   of the scene, else a palette material (added to the scene the first time it
@@ -3949,7 +4162,9 @@ surface placement.
   `id`, `name`, `shape`, the effective `parameters` (with `derive`, the masked names), the placed `position` and
   `rotation_xyzw`, `surface_found` (false also without a surface option),
   `world_aabb`, `triangle_count`, `materials` (slot name to material name),
-  `brush_id` and `mesh_key`;
+  `brush_id`, `mesh_key` and `support` (`{id, name}` of the support the piece
+  was inserted under with `attach`, true by default; null when none, "Surface
+  attachments");
   pieces of equal `brush_id` share one mesh. `flow_mask` and `auto_connect`
   at the top level override the settings for the call ("Auto-connect and the
   connection settings"), and the reply carries `flow` ("Flow report").
@@ -4063,7 +4278,8 @@ surface placement.
   names and the palette materials the scene does not hold yet.
 - `level_replace_pieces {scene_name, node_ids, shape, parameters,
   materials, surface_snap, surface_orient, surface_direction,
-  surface_max_distance}`: `replace_shape()` ("Replace") for the listed
+  surface_max_distance, attach}` (`attach` true by default: the re-snapped
+  pieces attach as "Surface attachments" states): `replace_shape()` ("Replace") for the listed
   nodes, else the selected nodes of the scene; `parameters` merge over each
   piece's carried values as `level_set_piece_parameters` merges them over a
   piece's values, `materials` read as `level_place_pieces` reads them, and
@@ -4108,7 +4324,7 @@ surface placement.
 - `level_get_flow_report {}`: "Flow report".
 - `level_get_flow_preview {}`: "Flow preview".
 - `level_detach_piece {scene_name, node_id}`: `detach_piece()`, one undo
-  entry; the reply gives `changed`.
+  entry, connections and the surface attachment; the reply gives `changed`.
 - `level_set_piece_connectors {scene_name, node_id, connectors_enabled,
   connectors}` ("Connector switches"): `set_connector_switches()` with the
   piece switch and, in `connectors`, a switch per connector name (`{"left":
@@ -4121,15 +4337,19 @@ surface placement.
 - `level_select_region_handle {scene_name, layout_id, index}` and
   `level_get_region_handles {}`: "Layout handles".
 - `level_snap_to_surface {scene_name, node_ids, orient, direction,
-  max_distance, query_only}` (`max_distance` 1 m by default): `Level_kits::snap_to_surface()`, which runs
+  max_distance, query_only, attach}` (`max_distance` 1 m by default, `attach`
+  true): `Level_kits::snap_to_surface()`, which runs
   `find_surface_placement()` with snap, and orient when asked, for any mesh
   nodes, the listed nodes excluded from the hits. The nodes that found a
   place move by one `Node_transform_operation` each, all in one undo entry
-  (none when no node moves); `query_only` moves nothing. The
+  (none when no node moves or attaches, "Surface attachments"); `query_only`
+  moves nothing. The
   reply: `moved_count` and per node `id`, `name`, the resting world
-  `position` and `rotation_xyzw`, `distance` and `surface_found` (false when
-  no place lies within `max_distance`, "Surface placement"); the reply also
-  echoes `max_distance`.
+  `position` and `rotation_xyzw`, `distance`, `surface_found` (false when
+  no place lies within `max_distance`, "Surface placement") and `support`
+  (`{id, name}` of the mesh node it rests on, null without a place) and
+  `attached_to` (its support after the call, null when it is not attached);
+  the reply also echoes `max_distance` and `attach`.
 - `level_get_region_contents {scene_name, box: {min, max} | sphere: {center,
   radius}}` (read-only): `find_region_contents()`; exactly one of box and
   sphere, a box's min not above its max, a sphere's radius positive. The reply
@@ -4183,8 +4403,8 @@ surface placement.
   `flowed`, and with it the supplied `parameters` and `materials` the
   preview shows, "Placing in the viewport");
   `level_place_pieces` with that `connect` places the same pose.
-- `get_surface_snap_settings {}` and `set_surface_snap_settings {snap, orient}`:
-  the shared pair ("Surface settings").
+- `get_surface_snap_settings {}` and `set_surface_snap_settings {snap, orient, attach, ...}`:
+  the shared settings ("Surface settings").
 - `level_get_pieces {scene_name}`: every node carrying `Kit_piece`, in node id
   order: its record (`parameters` with `derive`, and `parameters_text`), `mesh_key`, world
   position and rotation, `world_aabb`, `materials` (slot name to material
@@ -4199,8 +4419,9 @@ surface placement.
   shape's at the piece's values) and `lights` (its kit light nodes: `id`,
   `name`, `frame`, local `position` and `direction`, and the light's own
   values, "Lights on pieces"); `uid`, `attachments` (one status per
-  connection the piece records, "Connections") and `attachment` (the first
-  of them, null for none).
+  connection the piece records, "Connections"), `attachment` (the first
+  of them, null for none) and `surface_attachment` ("Surface attachments",
+  null for none).
 
 ## Walkable area reads
 
@@ -5482,7 +5703,31 @@ Kit window and the MCP tools both call; their scene-free parts are in
   `logs/level_tools_brush_connect.png`), and
   `--only-layout-drags` the live layout preview checks,
   `--only-drag-cancel` the Transform drag cancel checks,
-  `--only-snap-to-surface` the snap to surface checks, `--only-replace`
+  `--only-snap-to-surface` the snap to surface checks,
+  `--only-surface-attachment` the surface attachment checks (the support
+  `level_snap_to_surface` names: a table top, the ground, a wall searched
+  sideways, the mesh under the base center where a corner rests on another
+  at the same height, orient, and null without a place; a record written
+  raw on a child of the table read active, one naming another node or no
+  node inert, one that does not read inert with its reason; placements onto
+  a table and a wall attaching, `attach` false not; a snap attaching to the
+  ground and one onto a mesh that is no kit piece detaching; a move off a
+  table inside a group detaching to the group; a snapped `transform_selection`
+  re-parenting; a nudge keeping the attachment at its new place; a connected
+  wall not attaching and a join detaching; `level_detach_piece`;
+  `reparent_item`; a chain of three placements; undo and redo of each; a
+  support's shape changes carrying its pieces, `off_surface`, chains, a
+  held parameter drag; a picture on a locked segments layout's element:
+  selectable and editable, re-homed to the replaced element, kept on a
+  kept one, detached when its element goes, live during a held segment
+  handle edit, kept through unlock and lock; a crate on a floor layout
+  following its outline and reading `off_surface` over a notch; a held
+  floor edge edit carrying a poster on the fitted wall; a cancelled held
+  segment handle edit; a crate on a regenerated staircase; copies (group
+  copy, clipboard copy and paste), a mirror, Replace of the support and of
+  the piece, deleting the support, a save and a load; the Brush tool's
+  placement and the Properties Detach row),
+  `--only-replace`
   the replace checks (with the Level Kit window checks its window check
   needs), `--only-layout-selection` the selection paths of a locked
   layout's children, `--only-scatter` the scatter layout checks,

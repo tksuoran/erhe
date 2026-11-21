@@ -43,6 +43,7 @@
 #include "operations/property_set_operation.hpp"
 #include "physics/physics_tool.hpp"
 #include "level/kit_layout.hpp"
+#include "level/kit_piece.hpp"
 #include "level/level_kits.hpp"
 #include "prefabs/instance_structure.hpp"
 #include "time.hpp"
@@ -1506,7 +1507,7 @@ namespace {
 [[nodiscard]] auto read_surface_arguments(const json& args, Surface_options& out_options, std::string& out_error) -> bool
 {
     out_options = make_surface_options(Surface_snap::off, Surface_orient::off, c_default_surface_direction, c_default_surface_max_distance);
-    for (const char* key : {"surface_snap", "surface_orient"}) {
+    for (const char* key : {"surface_snap", "surface_orient", "attach"}) {
         if (args.contains(key) && !args.at(key).is_boolean()) {
             out_error = std::string{key} + " must be a boolean, not " + args.at(key).dump();
             return false;
@@ -1514,6 +1515,7 @@ namespace {
     }
     out_options.snap   = args.value("surface_snap",   false) ? Surface_snap::on   : Surface_snap::off;
     out_options.orient = args.value("surface_orient", false) ? Surface_orient::on : Surface_orient::off;
+    out_options.attach = args.value("attach",         true)  ? Surface_attach::on : Surface_attach::off;
     if (args.contains("surface_max_distance")) {
         const json& value = args.at("surface_max_distance");
         if (!value.is_number() || !check_surface_max_distance(value.get<float>()).empty()) {
@@ -1839,6 +1841,7 @@ auto Mcp_server::action_transform_selection(const json& args) -> std::string
         {"surface_snap",        surface.snap == Surface_snap::on},
         {"surface_orient",      surface.orient == Surface_orient::on},
         {"surface_max_distance", surface.forward_distance},
+        {"attach",              surface.attach == Surface_attach::on},
         {"surface_found_count", surface_found_count},
         {"connector_snap_distance", connector_snap_distance},
         {"connector_snap_orientation", std::string{to_string(connector_snap_orientation)}},
@@ -4052,13 +4055,18 @@ auto Mcp_server::action_reparent_item(const json& args) -> std::string
         return make_error_content(refusal.value());
     }
 
+    std::shared_ptr<Operation> parent_change = std::make_shared<Item_parent_change_operation>(
+        new_parent,
+        item,
+        std::shared_ptr<erhe::Hierarchy>{},
+        std::shared_ptr<erhe::Hierarchy>{}
+    );
+    // S6.5: a surface attachment record the new parent makes inert goes in the same entry.
+    std::shared_ptr<Operation> surface_follow_up = Level_kits::make_reparent_surface_follow_up(*item, new_parent.get());
     m_context.operation_stack->queue(
-        std::make_shared<Item_parent_change_operation>(
-            new_parent,
-            item,
-            std::shared_ptr<erhe::Hierarchy>{},
-            std::shared_ptr<erhe::Hierarchy>{}
-        )
+        surface_follow_up
+            ? std::make_shared<Compound_operation>(Compound_operation::Parameters{.operations = {std::move(parent_change), std::move(surface_follow_up)}})
+            : std::move(parent_change)
     );
 
     return make_json_content({
@@ -4196,7 +4204,13 @@ auto Mcp_server::action_clipboard_copy_nodes(const json& args) -> std::string
         if (!copied_ids.insert(item->get_id()).second) {
             continue; // find_items_by_ids reports a camera or light prim once per list it is in
         }
-        clones.push_back(item->clone());
+        std::shared_ptr<erhe::Item_base> clone = item->clone();
+        const erhe::Hierarchy* const source_hierarchy = dynamic_cast<const erhe::Hierarchy*>(item.get());
+        erhe::Hierarchy* const       clone_hierarchy  = dynamic_cast<erhe::Hierarchy*>(clone.get());
+        if ((source_hierarchy != nullptr) && (clone_hierarchy != nullptr)) {
+            remap_copied_surface_attachments(*source_hierarchy, *clone_hierarchy); // S1.3
+        }
+        clones.push_back(std::move(clone));
         copied.push_back(item->get_name());
     }
     if (clones.empty()) {

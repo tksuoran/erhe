@@ -32,6 +32,7 @@ public:
     Surface_pose pose;          // the resting pose; the start pose itself when no place was found or the start already rests
     float        distance{0.0f}; // how far the base moved along the direction; negative when it rose
     bool         surface_found{false}; // false when no resting place lies within the maximum distance
+    const erhe::scene::Mesh* support_mesh{nullptr}; // S2.2: the mesh owning the face the rest was found on; null when none
 };
 
 // Bounds of the mesh's primitives in the mesh's own space.
@@ -40,14 +41,16 @@ public:
 [[nodiscard]] auto mesh_local_bounds(std::span<const erhe::scene::Mesh_primitive> primitives) -> erhe::math::Aabb;
 
 // D7.3: finds the nearest resting place along the direction for `local_bounds` placed at `start` through the scene's
-// raytrace scene (committed here); `excluded` meshes are not there. Every mesh rests on its local -Y face (U51); the
-// options' support rule chooses the base lines that support and block without orient (U52).
+// raytrace scene (committed here); `excluded` meshes are not there, and when `only` is not empty no other mesh is.
+// Every mesh rests on its local -Y face (U51); the options' support rule chooses the base lines that support and block
+// without orient (U52).
 [[nodiscard]] auto find_surface_placement(
     Scene_root&                              scene_root,
     const erhe::math::Aabb&                  local_bounds,
     const Surface_pose&                      start,
     const Surface_options&                   options,
-    std::span<const erhe::scene::Mesh* const> excluded
+    std::span<const erhe::scene::Mesh* const> excluded,
+    std::span<const erhe::scene::Mesh* const> only = {}
 ) -> Surface_placement;
 
 // The same against a raytrace scene the caller committed after its last change, so a caller
@@ -57,7 +60,8 @@ public:
     const erhe::math::Aabb&                  local_bounds,
     const Surface_pose&                      start,
     const Surface_options&                   options,
-    std::span<const erhe::scene::Mesh* const> excluded
+    std::span<const erhe::scene::Mesh* const> excluded,
+    std::span<const erhe::scene::Mesh* const> only = {}
 ) -> Surface_placement;
 
 class Point_surface

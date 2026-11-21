@@ -756,6 +756,7 @@ public:
     glm::vec3 surface_direction{0.0f, -1.0f, 0.0f};
     float     surface_max_distance{c_default_surface_max_distance};
     Surface_snap_rest surface_rest     {Surface_snap_rest::leading_face};
+    bool      attach           {true}; // S2.7: a piece snapped onto a support becomes its child
 };
 
 [[nodiscard]] auto read_placement_options(const json& args, Placement_options& out_options) -> std::string
@@ -771,6 +772,7 @@ public:
     out_options.surface_orient    = read_bool(args, "surface_orient", surface_error).value_or(false);
     out_options.surface_direction = read_direction(args, "surface_direction", surface_error);
     out_options.surface_max_distance = read_max_distance(args, "surface_max_distance", c_default_surface_max_distance, surface_error);
+    out_options.attach            = read_bool(args, "attach", surface_error).value_or(true);
     if (surface_error.empty() && args.contains("surface_rest")) {
         const std::string rest_error = read_surface_rest(args.at("surface_rest"), out_options.surface_rest);
         if (!rest_error.empty()) {
@@ -790,7 +792,8 @@ public:
         options.surface_direction,
         options.surface_max_distance
     );
-    placement.surface.rest = options.surface_rest;
+    placement.surface.rest   = options.surface_rest;
+    placement.surface.attach = options.attach ? Surface_attach::on : Surface_attach::off;
     return error;
 }
 
@@ -1108,6 +1111,37 @@ private:
     };
 }
 
+// S7.2: the support a node is attached to after a call, {id, name}; null when its surface attachment is not active.
+[[nodiscard]] auto attached_to_json(const Level_kits& level_kits, const erhe::scene::Node& node) -> json
+{
+    const Kit_surface_attachment_status status = level_kits.get_surface_attachment_status(node);
+    if (!is_surface_attached(status.state) || !status.target) {
+        return json(nullptr);
+    }
+    return json{{"id", status.target->get_id()}, {"name", status.target->get_name()}};
+}
+
+// S7.2: the piece's surface attachment (doc/editor/level_tools.md "Surface attachments"); null without a record.
+[[nodiscard]] auto surface_attachment_json(const Level_kits& level_kits, const erhe::scene::Node& node) -> json
+{
+    const Kit_surface_attachment_status status = level_kits.get_surface_attachment_status(node);
+    if (status.state == Kit_surface_attachment_state::none) {
+        return json(nullptr);
+    }
+    const Kit_surface_attachment& record = status.attachment;
+    return json{
+        {"state",       c_str(status.state)},
+        {"reason",      status.reason},
+        {"target_uid",  record.target},
+        {"target_id",   status.target ? json(status.target->get_id()) : json(nullptr)},
+        {"target_name", status.target ? json(status.target->get_name()) : json(nullptr)},
+        {"position",    json::array({record.position.x, record.position.y, record.position.z})},
+        {"direction",   vec3_json(record.direction)},
+        {"orient",      record.orient == Surface_orient::on},
+        {"rest",        surface_rest_name(record.rest)}
+    };
+}
+
 // Every connection the piece records, one status each (K6.0), in the record's connector order.
 [[nodiscard]] auto attachments_json(const Level_kits& level_kits, const erhe::scene::Node& node) -> json
 {
@@ -1162,7 +1196,8 @@ private:
             {"triangle_count", brush_triangle_count(*placed.brush)},
             {"materials",      piece_materials_json(*placed.node, placed.values.get_shape())},
             {"brush_id",       placed.brush->get_id()},
-            {"mesh_key",       Level_kits::get_mesh_key(placed.values)}
+            {"mesh_key",       Level_kits::get_mesh_key(placed.values)},
+            {"support",        placed.support ? json{{"id", placed.support->get_id()}, {"name", placed.support->get_name()}} : json()}
         });
     }
     return pieces;
@@ -1180,6 +1215,7 @@ private:
         {"surface_direction", vec3_json(options.surface_direction)},
         {"surface_max_distance", options.surface_max_distance},
         {"surface_rest",      surface_rest_name(options.surface_rest)},
+        {"attach",            options.attach},
         {"level",             {{"module", lengths.module}, {"wall_height", lengths.wall_height}}},
         {"count",             pieces.size()},
         {"pieces",            pieces}
@@ -1191,7 +1227,7 @@ private:
 auto Mcp_server::action_level_place_pieces(const json& args) -> std::string
 {
     const std::vector<std::string_view> top_keys{
-        "scene_name", "snap", "surface_snap", "surface_orient", "surface_direction", "surface_max_distance", "surface_rest", "pieces", "flow_mask", "auto_connect"
+        "scene_name", "snap", "surface_snap", "surface_orient", "surface_direction", "surface_max_distance", "surface_rest", "attach", "pieces", "flow_mask", "auto_connect"
     };
     const std::vector<std::string_view> piece_keys{
         "shape", "parameters", "position", "rotation_xyzw", "name", "materials", "parent_id", "parent_index", "surface_snap", "surface_orient", "connect"
@@ -1201,7 +1237,7 @@ auto Mcp_server::action_level_place_pieces(const json& args) -> std::string
         if (!unrecognized.empty()) {
             return make_error_content(
                 "level_place_pieces: unrecognized argument(s): " + unrecognized +
-                " (accepted: scene_name, snap, surface_snap, surface_orient, surface_direction, surface_max_distance, surface_rest, pieces, flow_mask, auto_connect)"
+                " (accepted: scene_name, snap, surface_snap, surface_orient, surface_direction, surface_max_distance, surface_rest, attach, pieces, flow_mask, auto_connect)"
             );
         }
     }
@@ -1982,6 +2018,7 @@ auto Mcp_server::query_level_pieces(const json& args) -> std::string
         };
         piece["attachments"] = attachments_json(*m_context.level_kits, *node);
         piece["attachment"]  = piece["attachments"].empty() ? json(nullptr) : piece["attachments"].front();
+        piece["surface_attachment"] = surface_attachment_json(*m_context.level_kits, *node);
         if (shape != nullptr) {
             Kit_parameter_values values{*shape};
             const std::string error = parse_canonical_text(*shape, record.parameters, values);
@@ -2178,12 +2215,12 @@ auto Mcp_server::action_level_replace_pieces(const json& args) -> std::string
 {
     const std::size_t serial = get_recording_serial();
     const std::string unrecognized = unrecognized_keys(
-        args, {"scene_name", "node_ids", "shape", "parameters", "materials", "surface_snap", "surface_orient", "surface_direction", "surface_max_distance"}
+        args, {"scene_name", "node_ids", "shape", "parameters", "materials", "surface_snap", "surface_orient", "surface_direction", "surface_max_distance", "attach"}
     );
     if (!unrecognized.empty()) {
         return make_error_content(
             "level_replace_pieces: unrecognized argument(s): " + unrecognized +
-            " (accepted: scene_name, node_ids, shape, parameters, materials, surface_snap, surface_orient, surface_direction, surface_max_distance)"
+            " (accepted: scene_name, node_ids, shape, parameters, materials, surface_snap, surface_orient, surface_direction, surface_max_distance, attach)"
         );
     }
     const std::string scene_name = args.value("scene_name", "");
@@ -2206,7 +2243,8 @@ auto Mcp_server::action_level_replace_pieces(const json& args) -> std::string
     const Surface_orient  surface_orient = read_bool(args, "surface_orient", surface_error).value_or(false) ? Surface_orient::on : Surface_orient::off;
     const glm::vec3       surface_direction = read_direction(args, "surface_direction", surface_error);
     const float           surface_max_distance = read_max_distance(args, "surface_max_distance", c_default_surface_max_distance, surface_error);
-    const Surface_options surface = make_surface_options(surface_snap, surface_orient, surface_direction, surface_max_distance);
+    Surface_options       surface = make_surface_options(surface_snap, surface_orient, surface_direction, surface_max_distance);
+    surface.attach = read_bool(args, "attach", surface_error).value_or(true) ? Surface_attach::on : Surface_attach::off;
     if (!surface_error.empty()) {
         return make_error_content("level_replace_pieces: " + surface_error + tail);
     }
@@ -2373,10 +2411,10 @@ auto Mcp_server::action_level_replace_pieces(const json& args) -> std::string
 
 auto Mcp_server::action_level_snap_to_surface(const json& args) -> std::string
 {
-    const std::string unrecognized = unrecognized_keys(args, {"scene_name", "node_ids", "orient", "direction", "max_distance", "query_only"});
+    const std::string unrecognized = unrecognized_keys(args, {"scene_name", "node_ids", "orient", "direction", "max_distance", "query_only", "attach"});
     if (!unrecognized.empty()) {
         return make_error_content(
-            "level_snap_to_surface: unrecognized argument(s): " + unrecognized + " (accepted: scene_name, node_ids, orient, direction, max_distance, query_only)"
+            "level_snap_to_surface: unrecognized argument(s): " + unrecognized + " (accepted: scene_name, node_ids, orient, direction, max_distance, query_only, attach)"
         );
     }
     const std::string scene_name = args.value("scene_name", "");
@@ -2387,6 +2425,7 @@ auto Mcp_server::action_level_snap_to_surface(const json& args) -> std::string
     std::string argument_error{};
     const bool      orient     = read_bool(args, "orient",     argument_error).value_or(false);
     const bool      query_only = read_bool(args, "query_only", argument_error).value_or(false);
+    const bool      attach     = read_bool(args, "attach",     argument_error).value_or(true);
     const glm::vec3 direction  = read_direction(args, "direction", argument_error);
     const float     max_distance = read_max_distance(args, "max_distance", c_default_surface_max_distance, argument_error);
     if (!argument_error.empty()) {
@@ -2419,7 +2458,8 @@ auto Mcp_server::action_level_snap_to_surface(const json& args) -> std::string
     }
 
     // The moved nodes are no surfaces for each other (D7.3).
-    const Surface_options options = make_surface_options(Surface_snap::on, orient ? Surface_orient::on : Surface_orient::off, direction, max_distance);
+    Surface_options options = make_surface_options(Surface_snap::on, orient ? Surface_orient::on : Surface_orient::off, direction, max_distance);
+    options.attach = attach ? Surface_attach::on : Surface_attach::off;
     std::vector<Kit_snap_result> snapped;
     std::string refusal;
     const std::size_t moved_count = m_context.level_kits->snap_to_surface(
@@ -2430,13 +2470,16 @@ auto Mcp_server::action_level_snap_to_surface(const json& args) -> std::string
     }
     json results = json::array();
     for (const Kit_snap_result& result : snapped) {
+        const erhe::scene::Mesh* const support = result.placement.support_mesh;
         results.push_back({
             {"id",            result.mesh->get_id()},
             {"name",          result.mesh->get_name()},
             {"position",      vec3_json(result.placement.pose.position)},
             {"rotation_xyzw", quat_json(result.placement.pose.rotation)},
             {"distance",      result.placement.distance},
-            {"surface_found", result.placement.surface_found}
+            {"surface_found", result.placement.surface_found},
+            {"support",       (support != nullptr) ? json{{"id", support->get_id()}, {"name", support->get_name()}} : json()},
+            {"attached_to",   attached_to_json(*m_context.level_kits, *result.mesh)}
         });
     }
     return make_json_content({
@@ -2445,6 +2488,7 @@ auto Mcp_server::action_level_snap_to_surface(const json& args) -> std::string
         {"direction",   vec3_json(direction)},
         {"max_distance", max_distance},
         {"query_only",  query_only},
+        {"attach",      attach},
         {"moved_count", moved_count},
         {"nodes",       results}
     }).dump();
@@ -3034,6 +3078,7 @@ namespace {
     return json{
         {"snap",                    options.snap   == Surface_snap::on},
         {"orient",                  options.orient == Surface_orient::on},
+        {"attach",                  options.attach == Surface_attach::on},
         {"max_distance",            options.forward_distance}, // the settings search max_distance either way
         {"rest",                    surface_rest_name(level_kits.get_surface_rest())},
         {"drag_direction_mode",     std::string{to_string(level_kits.get_surface_drag_direction_mode())}},
@@ -3061,13 +3106,13 @@ auto Mcp_server::query_surface_snap_settings(const json& args) -> std::string
 auto Mcp_server::action_set_surface_snap_settings(const json& args) -> std::string
 {
     const std::string unrecognized = unrecognized_keys(
-        args, {"snap", "orient", "max_distance", "rest", "drag_direction_mode", "drag_direction", "connector_snap_distance", "connector_snap_axis_mode", "connector_snap_orientation",
+        args, {"snap", "orient", "attach", "max_distance", "rest", "drag_direction_mode", "drag_direction", "connector_snap_distance", "connector_snap_axis_mode", "connector_snap_orientation",
                "auto_connect", "flow_mask", "connection_step_limit"}
     );
     if (!unrecognized.empty()) {
         return make_error_content(
             "set_surface_snap_settings: unrecognized argument(s): " + unrecognized +
-            " (accepted: snap, orient, max_distance, rest, drag_direction_mode, drag_direction, connector_snap_distance, connector_snap_axis_mode, connector_snap_orientation, auto_connect, flow_mask, connection_step_limit)"
+            " (accepted: snap, orient, attach, max_distance, rest, drag_direction_mode, drag_direction, connector_snap_distance, connector_snap_axis_mode, connector_snap_orientation, auto_connect, flow_mask, connection_step_limit)"
         );
     }
     // C3.8, C3.9, C5.5: the connection settings.
@@ -3140,7 +3185,7 @@ auto Mcp_server::action_set_surface_snap_settings(const json& args) -> std::stri
     if (!max_distance_error.empty()) {
         return make_error_content("set_surface_snap_settings: " + max_distance_error);
     }
-    for (const char* key : {"snap", "orient"}) {
+    for (const char* key : {"snap", "orient", "attach"}) {
         if (args.contains(key) && !args.at(key).is_boolean()) {
             return make_error_content(std::string{"set_surface_snap_settings: "} + key + " must be a boolean, not " + args.at(key).dump());
         }
@@ -3152,6 +3197,9 @@ auto Mcp_server::action_set_surface_snap_settings(const json& args) -> std::stri
         }
     }
     Level_kits& level_kits = *m_context.level_kits;
+    if (args.contains("attach")) {
+        level_kits.set_surface_attach(args.at("attach").get<bool>() ? Surface_attach::on : Surface_attach::off);
+    }
     if (args.contains("snap")) {
         level_kits.set_surface_snap(args.at("snap").get<bool>() ? Surface_snap::on : Surface_snap::off);
     }

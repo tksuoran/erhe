@@ -1,4 +1,5 @@
 #include "level/kit_layout.hpp"
+#include "level/kit_piece.hpp"
 
 #include "erhe_item/hierarchy.hpp"
 #include "erhe_property/attached_group.hpp"
@@ -360,12 +361,20 @@ auto find_locking_kit_layout(const erhe::Item_base& item) -> std::shared_ptr<erh
     if (hierarchy == nullptr) {
         return {};
     }
+    // S5.1: the lock ends at a surface attached piece, the item itself or an ancestor: what is at or below it is the author's.
+    const erhe::scene::Node* const self = dynamic_cast<const erhe::scene::Node*>(hierarchy);
+    if ((self != nullptr) && is_surface_attached_to_parent(*self)) {
+        return {};
+    }
     std::shared_ptr<erhe::scene::Node> found;
     std::shared_ptr<erhe::Hierarchy>   parent = hierarchy->get_parent().lock();
     while (parent) {
         const std::shared_ptr<erhe::scene::Node> node = std::dynamic_pointer_cast<erhe::scene::Node>(parent);
         if (node && is_locked_kit_layout(*node)) {
             found = node;
+        }
+        if (node && is_surface_attached_to_parent(*node)) {
+            break;
         }
         parent = parent->get_parent().lock();
     }

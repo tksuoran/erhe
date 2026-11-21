@@ -87,6 +87,7 @@ public:
     bool         found   {false};
     Surface_pose pose;           // the start pose itself when nothing was found or the start already rests
     float        distance{0.0f}; // how far the origin moved along the direction; negative when it rose
+    std::size_t  hit     {0};    // the line's supporting hit, when found
 };
 
 // U60 rest anchor without orient: the start pose's origin moved along the direction onto the line's nearest surface,

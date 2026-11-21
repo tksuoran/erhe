@@ -26,6 +26,12 @@ enum class Surface_orient : unsigned int {
     on      // the up axis takes the surface normal, the heading is kept (R5.11)
 };
 
+// S2.7: whether a snap of a kit piece onto a support makes the piece its child (doc/editor/level_tools.md "Surface attachments").
+enum class Surface_attach : unsigned int {
+    off = 0,
+    on
+};
+
 class Surface_options
 {
 public:
@@ -36,6 +42,7 @@ public:
     float          forward_distance {c_default_surface_forward_distance};  // meters from the start base along the direction
     float          backward_distance{c_default_surface_backward_distance}; // meters from the start base against it
     Surface_support support {Surface_support::five_lines}; // U52: kit layouts' base lines rule; the others keep five_lines
+    Surface_attach attach   {Surface_attach::off};    // read by the callers that attach, never by the search
 };
 
 // The surface settings' search (Brush tool, Transform tool, the MCP placement tools): max_distance either way.

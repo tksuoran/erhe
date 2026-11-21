@@ -102,6 +102,40 @@ void Kit_piece_parameters_operation::collect_item_references(std::unordered_set<
     out_items.insert(m_mesh.get());
 }
 
+Kit_surface_rehome_operation::Kit_surface_rehome_operation(const std::shared_ptr<erhe::scene::Node>& node, const std::shared_ptr<erhe::Hierarchy>& parent)
+    : m_node        {node}
+    , m_parent_after{parent}
+{
+    set_description(fmt::format("[{}] Kit surface attachment re-homed: {} under {}", get_serial(), node->get_name(), parent->get_name()));
+}
+
+void Kit_surface_rehome_operation::execute(App_context& context)
+{
+    static_cast<void>(context);
+    if (!m_executed) {
+        m_parent_before = m_node->get_parent().lock();
+        m_index_before  = m_node->get_index_in_parent();
+        m_executed      = true;
+    }
+    // The base class set_parent keeps the local transform; the world transform is written again from it.
+    const erhe::scene::Trs_transform local = m_node->parent_from_node_transform();
+    m_node->erhe::Hierarchy::set_parent(m_parent_after, m_parent_after->get_child_count());
+    m_node->set_parent_from_node(local);
+}
+
+void Kit_surface_rehome_operation::undo(App_context& context)
+{
+    static_cast<void>(context);
+    const erhe::scene::Trs_transform local = m_node->parent_from_node_transform();
+    m_node->erhe::Hierarchy::set_parent(m_parent_before, m_index_before);
+    m_node->set_parent_from_node(local);
+}
+
+void Kit_surface_rehome_operation::collect_item_references(std::unordered_set<const erhe::Item_base*>& out_items) const
+{
+    out_items.insert(m_node.get());
+}
+
 Kit_attachment_follow_operation::Kit_attachment_follow_operation(
     std::vector<std::shared_ptr<erhe::scene::Node>>&& moved_nodes,
     std::vector<std::shared_ptr<erhe::scene::Node>>&& changed_pieces,
@@ -109,7 +143,8 @@ Kit_attachment_follow_operation::Kit_attachment_follow_operation(
     std::vector<std::shared_ptr<erhe::scene::Node>>&& requesting,
     std::vector<Kit_new_connection>&&                 new_connections,
     const std::optional<Kit_flow_overrides>&          flow_overrides,
-    const std::vector<std::shared_ptr<erhe::scene::Node>>& auto_connect_excluded
+    const std::vector<std::shared_ptr<erhe::scene::Node>>& auto_connect_excluded,
+    std::vector<Kit_surface_snap>&&                   surface_snaps
 )
     : m_moved_nodes    {std::move(moved_nodes)}
     , m_changed_pieces {std::move(changed_pieces)}
@@ -118,6 +153,7 @@ Kit_attachment_follow_operation::Kit_attachment_follow_operation(
     , m_new_connections{std::move(new_connections)}
     , m_flow_overrides {flow_overrides}
     , m_auto_connect_excluded{auto_connect_excluded}
+    , m_surface_snaps  {std::move(surface_snaps)}
 {
     set_description(fmt::format("[{}] Kit attachments follow", get_serial()));
 }
@@ -139,6 +175,11 @@ void Kit_attachment_follow_operation::execute(App_context& context)
             if ((scene_root == nullptr) && node) {
                 scene_root = dynamic_cast<Scene_root*>(node->get_item_host());
             }
+        }
+    }
+    for (const Kit_surface_snap& snap : m_surface_snaps) {
+        if ((scene_root == nullptr) && snap.node) {
+            scene_root = dynamic_cast<Scene_root*>(snap.node->get_item_host());
         }
     }
     if ((scene_root == nullptr) && m_snap.has_value() && m_snap.value().piece) {
@@ -241,14 +282,52 @@ auto Kit_attachment_follow_operation::record(App_context& context, Scene_root& s
     const std::size_t connect_begin = m_operations.size();
     level_kits.build_auto_connections(scene_root, pieces, m_auto_connect_excluded, m_operations, owners);
     refusal = run(connect_begin);
-    if (!refusal.empty() || owners.empty()) {
+    if (!refusal.empty()) {
         return refusal;
     }
     std::vector<std::shared_ptr<erhe::scene::Node>> reflowed;
-    const std::size_t reflow_begin = m_operations.size();
-    // C3.6: the author's edit of this change is kept in the reflow too.
-    level_kits.build_connection_flow(scene_root, m_changed_pieces, owners, nullptr, m_operations, reflowed);
-    return run(reflow_begin);
+    if (!owners.empty()) {
+        const std::size_t reflow_begin = m_operations.size();
+        // C3.6: the author's edit of this change is kept in the reflow too.
+        level_kits.build_connection_flow(scene_root, m_changed_pieces, owners, nullptr, m_operations, reflowed);
+        refusal = run(reflow_begin);
+        if (!refusal.empty()) {
+            return refusal;
+        }
+    }
+    // The surface pass, after the connections and the flow settled (S4.5): first the supports whose shape changed carry
+    // their attached pieces (a preview step moves them without writing records, S3.7), then the moved and snapped nodes
+    // are judged (a preview step attaches and detaches nothing).
+    changed.insert(changed.end(), reflowed.begin(), reflowed.end());
+    std::vector<std::shared_ptr<erhe::scene::Node>> judged_elsewhere = m_moved_nodes;
+    for (const Kit_surface_snap& snap : m_surface_snaps) {
+        judged_elsewhere.push_back(snap.node);
+    }
+    scene_root.get_scene().update_node_transforms();
+    std::vector<const erhe::scene::Node*> carried;
+    level_kits.build_surface_carry_follow_ups(
+        scene_root, changed, judged_elsewhere,
+        level_kits.is_flow_previewing() ? Kit_surface_carry_record::skip : Kit_surface_carry_record::write,
+        m_operations, carried
+    );
+    if (level_kits.is_flow_previewing()) {
+        return {};
+    }
+    std::vector<std::shared_ptr<erhe::scene::Node>> connected = m_requesting;
+    for (const Kit_new_connection& connection : m_new_connections) {
+        connected.push_back(connection.node);
+        connected.push_back(connection.target);
+    }
+    connected.insert(connected.end(), owners.begin(), owners.end());
+    if (m_snap.has_value()) {
+        connected.push_back(m_snap.value().piece);
+        connected.push_back(m_snap.value().target);
+    }
+    std::erase(connected, std::shared_ptr<erhe::scene::Node>{});
+    scene_root.get_scene().update_node_transforms();
+    const std::size_t surface_begin = m_operations.size();
+    level_kits.build_surface_attachment_follow_ups(scene_root, m_moved_nodes, m_surface_snaps, connected, m_operations);
+    return run(surface_begin);
 }
 
 void Kit_attachment_follow_operation::undo(App_context& context)

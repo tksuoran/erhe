@@ -16,6 +16,7 @@ enum class Surface_widget_label : unsigned int {
 
 void surface_snap_checkbox  (Level_kits& level_kits, Surface_widget_label label);
 void surface_orient_checkbox(Level_kits& level_kits, Surface_widget_label label);
+void surface_attach_checkbox(Level_kits& level_kits, Surface_widget_label label);
 // U60: what snap without orient rests, the leading bounds face or the anchor point.
 void surface_rest_combo(Level_kits& level_kits, Surface_widget_label label);
 // The surface max distance in meters (U30).

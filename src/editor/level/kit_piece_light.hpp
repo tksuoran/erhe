@@ -98,5 +98,8 @@ private:
 
 // Every child of the node is a kit light (a piece of a kit layout may have these children and still match its element).
 [[nodiscard]] auto has_only_kit_light_children(const erhe::scene::Node& node) -> bool;
+// The same with surface attached pieces allowed too (S5.2: a layout's kept element keeps them); and attached pieces alone.
+[[nodiscard]] auto has_only_kit_light_and_attached_children(const erhe::scene::Node& node) -> bool;
+[[nodiscard]] auto has_only_attached_children(const erhe::scene::Node& node) -> bool;
 
 } // namespace editor

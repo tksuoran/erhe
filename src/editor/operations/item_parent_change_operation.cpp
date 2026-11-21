@@ -1,6 +1,7 @@
 #include "operations/item_parent_change_operation.hpp"
 
 #include "app_context.hpp"
+#include "app_message_bus.hpp"
 #include "editor_log.hpp"
 #include "tools/selection_tool.hpp"
 
@@ -8,6 +9,19 @@
 #include "erhe_verify/verify.hpp"
 
 namespace editor {
+
+namespace {
+
+// The child's local transform changed with its parent: the Transform tool's baselines read it again.
+void announce_touched(App_context& context, const std::shared_ptr<erhe::Hierarchy>& child)
+{
+    erhe::scene::Node* const node = dynamic_cast<erhe::scene::Node*>(child.get());
+    if ((node != nullptr) && (context.app_message_bus != nullptr)) {
+        context.app_message_bus->node_touched.send_message(Node_touched_message{.source = Node_touch_source::operation_stack, .node = node});
+    }
+}
+
+} // anonymous namespace
 
 Item_parent_change_operation::Item_parent_change_operation() = default;
 
@@ -39,7 +53,6 @@ Item_parent_change_operation::Item_parent_change_operation(
 
 void Item_parent_change_operation::execute(App_context& context)
 {
-    static_cast<void>(context);
     log_operations->trace("Op Execute {}", describe());
 
     ERHE_VERIFY(m_child->get_parent().lock() == m_parent_before);
@@ -60,6 +73,7 @@ void Item_parent_change_operation::execute(App_context& context)
     } else {
         m_child->set_parent({});
     }
+    announce_touched(context, m_child);
 
 #if !defined(NDEBUG)
     context.selection->sanity_check();
@@ -68,7 +82,6 @@ void Item_parent_change_operation::execute(App_context& context)
 
 void Item_parent_change_operation::undo(App_context& context)
 {
-    static_cast<void>(context);
     log_operations->trace("Op Undo {}", describe());
 
     ERHE_VERIFY(m_child->get_parent().lock() == m_parent_after);
@@ -83,6 +96,7 @@ void Item_parent_change_operation::undo(App_context& context)
     } else if (m_parent_after) {
         m_child->set_parent({});
     }
+    announce_touched(context, m_child);
 
 #if !defined(NDEBUG)
     context.selection->sanity_check();

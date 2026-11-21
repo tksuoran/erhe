@@ -15,6 +15,7 @@
 #include "scene/scene_root.hpp"
 
 #include "erhe_item/item_host.hpp"
+#include "erhe_scene/mesh.hpp"
 #include "erhe_scene/node.hpp"
 #include "erhe_scene/scene.hpp"
 
@@ -286,6 +287,58 @@ void Level_kits::get_attachment_statuses(const erhe::scene::Node& node, std::vec
     }
 }
 
+auto c_str(const Kit_surface_attachment_state state) -> const char*
+{
+    switch (state) {
+        case Kit_surface_attachment_state::none:   return "none";
+        case Kit_surface_attachment_state::active: return "active";
+        case Kit_surface_attachment_state::off_surface: return "off_surface";
+        case Kit_surface_attachment_state::inert:  return "inert";
+    }
+    return "?";
+}
+
+auto is_surface_attached(const Kit_surface_attachment_state state) -> bool
+{
+    return (state == Kit_surface_attachment_state::active) || (state == Kit_surface_attachment_state::off_surface);
+}
+
+auto Level_kits::get_surface_attachment_status(const erhe::scene::Node& node) const -> Kit_surface_attachment_status
+{
+    Kit_surface_attachment_status status;
+    std::string problem;
+    const std::optional<Kit_surface_attachment> record = read_kit_surface_attachment(node, &problem);
+    if (!record.has_value()) {
+        if (!problem.empty()) {
+            status.state  = Kit_surface_attachment_state::inert;
+            status.reason = "the record does not read: " + problem;
+        }
+        return status;
+    }
+    status.attachment = record.value();
+    status.state      = Kit_surface_attachment_state::inert;
+    const std::shared_ptr<erhe::scene::Node> parent = node.get_parent_node();
+    if (parent && (parent->get_gltf_uid() == status.attachment.target)) {
+        status.target = parent;
+        if (dynamic_cast<const erhe::scene::Mesh*>(parent.get()) == nullptr) {
+            status.reason = "the parent is not a mesh node";
+            return status;
+        }
+        status.state = status.attachment.on_surface ? Kit_surface_attachment_state::active : Kit_surface_attachment_state::off_surface;
+        if (!status.attachment.on_surface) {
+            status.reason = "the last change of the support left no face of it on the piece's line";
+        }
+        return status;
+    }
+    const Scene_root* const scene_root = dynamic_cast<const Scene_root*>(node.get_item_host());
+    const Uid_lookup target = (scene_root != nullptr) ? find_uid(*scene_root, status.attachment.target) : Uid_lookup{};
+    status.target = (target.count == 1) ? target.node : std::shared_ptr<erhe::scene::Node>{};
+    status.reason = !parent
+        ? std::string{"the piece has no parent; the record names its support"}
+        : fmt::format("the parent '{}' is not the support the record names", parent->get_name());
+    return status;
+}
+
 auto Level_kits::get_attachment_status(const erhe::scene::Node& node, const Kit_attachment& attachment) const -> Kit_attachment_status
 {
     Kit_attachment_status status;
@@ -387,6 +440,10 @@ auto Level_kits::detach_pieces(Scene_root& scene_root, const std::span<const std
             return true;
         }
     );
+    // S6.3: the surface attachments go too, each piece to its home.
+    for (const std::shared_ptr<erhe::scene::Node>& node : nodes) {
+        append_surface_detach(node, operations);
+    }
     if (operations.empty()) {
         return result;
     }
@@ -658,13 +715,14 @@ auto Level_kits::make_attachment_follow_operation(
     const std::span<const std::shared_ptr<erhe::scene::Node>> changed_pieces,
     const Kit_snap_pair* const                                snap,
     const std::span<const std::shared_ptr<erhe::scene::Node>> requesting,
-    const std::span<const Kit_new_connection>                 new_connections
+    const std::span<const Kit_new_connection>                 new_connections,
+    const std::span<const Kit_surface_snap>                   surface_snaps
 ) -> std::shared_ptr<Operation>
 {
     const bool snapped = (snap != nullptr) && snap->piece && snap->target;
     // With Auto-connect on, any change of pieces may connect them, attachments in the scene or not (C5).
     const bool may_connect = get_effective_auto_connect() && (!moved_nodes.empty() || !changed_pieces.empty());
-    if (!snapped && requesting.empty() && !may_connect && !has_attachments(scene_root)) {
+    if (!snapped && requesting.empty() && !may_connect && surface_snaps.empty() && !has_attachments(scene_root) && !has_surface_attachments(scene_root)) {
         return {};
     }
     return std::make_shared<Kit_attachment_follow_operation>(
@@ -674,7 +732,8 @@ auto Level_kits::make_attachment_follow_operation(
         std::vector<std::shared_ptr<erhe::scene::Node>>{requesting.begin(), requesting.end()},
         std::vector<Kit_new_connection>{new_connections.begin(), new_connections.end()},
         m_flow_overrides,
-        m_auto_connect_excluded
+        m_auto_connect_excluded,
+        std::vector<Kit_surface_snap>{surface_snaps.begin(), surface_snaps.end()}
     );
 }
 
@@ -1457,12 +1516,20 @@ void Level_kits::step_parameter_follow_preview(const std::shared_ptr<erhe::scene
         restore_follow_preview(preview);
     }
     // Gathered once at the drag's begin; each step reads only the dragged piece's connectors from the step's values.
+    const erhe::scene::Mesh* const support = dynamic_cast<const erhe::scene::Mesh*>(node.get());
     if (preview.scene_root == nullptr) {
-        if (!has_attachments(*scene_root)) {
-            return;
+        if (has_attachments(*scene_root)) {
+            gather_attachments(*scene_root, preview.attached);
         }
-        gather_attachments(*scene_root, preview.attached);
-        if (preview.attached.empty()) {
+        // S3.7: the pieces attached to the dragged piece's surface follow its step's mesh too.
+        const bool carries = (support != nullptr) && (support->has_local_value(Kit_piece::surface_attachment_property.get()) || std::any_of(
+            support->get_children().begin(), support->get_children().end(),
+            [](const std::shared_ptr<erhe::Hierarchy>& child) -> bool {
+                const erhe::scene::Node* const child_node = dynamic_cast<const erhe::scene::Node*>(child.get());
+                return (child_node != nullptr) && child_node->has_local_value(Kit_piece::surface_attachment_property.get());
+            }
+        ));
+        if (preview.attached.empty() && !carries) {
             return;
         }
         preview.scene_root       = scene_root;
@@ -1477,7 +1544,12 @@ void Level_kits::step_parameter_follow_preview(const std::shared_ptr<erhe::scene
             piece.target_dormant = resolve_connector_of_values(values, preview.changed_switches, piece.attachment.target_connector, piece.target_local);
         }
     }
-    follow_attachments(*scene_root, preview.attached, {}, preview.changed, preview.moves, nullptr);
+    if (!preview.attached.empty()) {
+        follow_attachments(*scene_root, preview.attached, {}, preview.changed, preview.moves, nullptr);
+    }
+    if (support != nullptr) {
+        step_surface_carry_preview(*scene_root, *support, preview.moves);
+    }
 }
 
 } // namespace editor

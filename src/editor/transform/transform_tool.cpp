@@ -1601,6 +1601,7 @@ auto Transform_tool::snap_anchor_to_surface(const Surface_options& options, cons
     ERHE_PROFILE_FUNCTION();
 
     clear_surface_found();
+    m_surface_snapped_options.reset();
     if (!any_surface_option(options) || shared.component_mode || shared.entries.empty()) {
         return 0;
     }
@@ -1675,6 +1676,7 @@ auto Transform_tool::snap_anchor_to_surface(const Surface_options& options, cons
             entry.surface_found = true;
             ++moved_count;
         }
+        m_surface_snapped_options = options;
         // The anchor turns with the set: Local-mode handle axes and the BBox origin indicator follow.
         if (turn == identity) {
             shared.world_from_anchor.set_translation(rest.position);
@@ -1696,6 +1698,7 @@ auto Transform_tool::snap_to_surface(const Surface_options& options) -> std::siz
     for (Transform_entry& entry : shared.entries) {
         entry.surface_found = false;
     }
+    m_surface_snapped_options.reset();
     if (!any_surface_option(options) || shared.component_mode || shared.entries.empty()) {
         return 0;
     }
@@ -1758,6 +1761,7 @@ auto Transform_tool::snap_to_surface(const Surface_options& options) -> std::siz
     if (found_count == 0) {
         return 0;
     }
+    m_surface_snapped_options = options;
 
     // The anchor is an average over the entries: it moves by their average move, an entry below a
     // rested one moving with it.
@@ -3894,13 +3898,19 @@ void Transform_tool::record_transform_operation()
             };
         }
         m_moved_nodes.clear();
+        // S2.1, S6.1: the entries the last surface step rested attach to their supports.
+        std::vector<Kit_surface_snap> surface_snaps;
         for (const Transform_entry& entry : shared.entries) {
             m_moved_nodes.push_back(entry.node);
+            if (m_surface_snapped_options.has_value() && entry.surface_found && entry.node) {
+                surface_snaps.push_back(Kit_surface_snap{.node = entry.node, .options = m_surface_snapped_options.value()});
+            }
         }
         m_context.level_kits->append_layout_move_operations(
-            *scene_root, m_moved_nodes, compompound_parameters.operations, snap.has_value() ? &snap.value() : nullptr
+            *scene_root, m_moved_nodes, compompound_parameters.operations, snap.has_value() ? &snap.value() : nullptr, surface_snaps
         );
         m_moved_nodes.clear();
+        m_surface_snapped_options.reset();
     }
 
     m_context.operation_stack->queue(

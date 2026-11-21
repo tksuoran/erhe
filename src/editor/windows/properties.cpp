@@ -1280,8 +1280,21 @@ void Properties::kit_piece_properties(const std::shared_ptr<erhe::scene::Mesh>& 
     if (!m_kit_piece_editor.get_message().empty()) {
         add_entry(Property_row_id::properties_message, "Message", [this]() { kit_message_line(m_kit_piece_editor.get_message()); });
     }
-    // C6.3, C9: the piece's connections, each with Remove, and Detach of them all (doc/editor/level_tools.md "Connections").
-    kit_connection_properties(m_kit_piece_editor.get_connection_rows());
+    // S7.1: the support the piece is attached to (doc/editor/level_tools.md "Surface attachments").
+    if (!m_kit_piece_editor.get_surface_attachment_text().empty()) {
+        add_entry(Property_row_id::properties_kit_surface_attachment, "On", [this]() {
+            ImGui::TextUnformatted(m_kit_piece_editor.get_surface_attachment_text().c_str());
+            if (ImGui::IsItemHovered()) {
+                ImGui::SetTooltip("%s", "The support of the piece's surface attachment: active while it is the piece's parent, else inert.");
+            }
+        });
+    }
+    // C6.3, C9: the piece's connections, each with Remove, and Detach of them all and of the surface attachment
+    // (doc/editor/level_tools.md "Connections").
+    kit_connection_properties(
+        m_kit_piece_editor.get_connection_rows(),
+        m_kit_piece_editor.get_surface_attachment_text().empty() ? Kit_detach_row::with_connections : Kit_detach_row::shown
+    );
     // U33: the piece switch and one switch per connector of the shape (doc/editor/level_tools.md "Connector switches").
     const std::vector<Kit_connector>& connectors = m_kit_piece_editor.get_connectors();
     if (connectors.empty()) {
@@ -1321,7 +1334,7 @@ void Properties::kit_piece_properties(const std::shared_ptr<erhe::scene::Mesh>& 
     }
 }
 
-void Properties::kit_connection_properties(Kit_connection_rows& connection_rows)
+void Properties::kit_connection_properties(Kit_connection_rows& connection_rows, const Kit_detach_row detach_row)
 {
     const std::vector<Kit_connection_rows::Row>& rows = connection_rows.get_rows();
     for (std::size_t i = 0, end = rows.size(); i < end; ++i) {
@@ -1340,13 +1353,13 @@ void Properties::kit_connection_properties(Kit_connection_rows& connection_rows)
             ImGui::TextUnformatted(current[i].text.c_str());
         });
     }
-    if (!rows.empty()) {
+    if (!rows.empty() || (detach_row == Kit_detach_row::shown)) {
         add_entry(Property_row_id::properties_kit_connectors_detach, "Detach", [&connection_rows]() {
             if (ImGui::SmallButton("Detach")) {
                 connection_rows.detach();
             }
             if (ImGui::IsItemHovered()) {
-                ImGui::SetTooltip("%s", "Removes every connection of the node (one undo entry); it stays where it is and drags alone.");
+                ImGui::SetTooltip("%s", "Removes every connection of the node and its surface attachment (one undo entry); a surface attached piece moves to its home keeping its place in the world.");
             }
         });
     }

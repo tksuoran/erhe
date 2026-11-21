@@ -16,6 +16,7 @@
 #include "assets/asset_manager.hpp"
 #include "input_state.hpp"
 #include "level/kit_layout.hpp"
+#include "level/kit_piece.hpp"
 #include "graphics/icon_set.hpp"
 #include "operations/compound_operation.hpp"
 #include "operations/item_insert_remove_operation.hpp"
@@ -725,7 +726,13 @@ auto Selection::copy_selection() -> bool
 
     std::vector<std::shared_ptr<erhe::Item_base>> selection_clone;
     for (const auto& item : m_selection) {
-        selection_clone.push_back(item->clone());
+        std::shared_ptr<erhe::Item_base> clone = item->clone();
+        const erhe::Hierarchy* const source_hierarchy = dynamic_cast<const erhe::Hierarchy*>(item.get());
+        erhe::Hierarchy* const       clone_hierarchy  = dynamic_cast<erhe::Hierarchy*>(clone.get());
+        if ((source_hierarchy != nullptr) && (clone_hierarchy != nullptr)) {
+            remap_copied_surface_attachments(*source_hierarchy, *clone_hierarchy);
+        }
+        selection_clone.push_back(std::move(clone));
     }
     m_context.clipboard->set_contents(selection_clone);
     return true;
@@ -760,6 +767,7 @@ auto Selection::duplicate_selection() -> bool
                 continue;
             }
             duplicate->set_name(hierarchy->get_name() + " Copy");
+            remap_copied_surface_attachments(*hierarchy, *duplicate);
             compound_parameters.operations.push_back(
                 std::make_shared<Item_insert_remove_operation>(
                     Item_insert_remove_operation::Parameters{

@@ -709,6 +709,11 @@ auto Brush_tool::try_insert_kit_piece() -> bool
     placement.values   = m_kit_values;
     placement.position = m_kit_pose.value().position;
     placement.rotation = m_kit_pose.value().rotation;
+    // S2.1: the snap runs again from the rested pose (it stays bit for bit) so the insert finds its support itself.
+    if (m_kit_pose.value().surface_found && !m_kit_join.has_value()) {
+        placement.surface           = m_context.level_kits->get_placement_settings().surface;
+        placement.surface.direction = m_kit_pose.value().surface_direction;
+    }
     if (m_kit_join.has_value()) {
         // Step 40: the same join level_place_pieces connect makes; a target removed since the hover is refused by place().
         const Kit_brush_join& join = m_kit_join.value();

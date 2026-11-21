@@ -162,6 +162,8 @@ public:
 
     // C6.3: the piece's connection rows, read with the record.
     [[nodiscard]] auto get_connection_rows() -> Kit_connection_rows&;
+    // S7.1: the support and status of the piece's surface attachment, read with the record; empty without a record.
+    [[nodiscard]] auto get_surface_attachment_text() const -> const std::string&;
 
 private:
     App_context&                     m_context;
@@ -176,6 +178,7 @@ private:
     std::vector<Kit_connector>       m_connectors;
     Kit_connector_switches           m_connector_switches;
     Kit_connection_rows              m_connection_rows;
+    std::string                      m_surface_attachment_text;
 };
 
 } // namespace editor

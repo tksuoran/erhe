@@ -447,6 +447,8 @@ erhe_target_sources_grouped(
     level/kit_shapes_nature_terrain.cpp
     level/kit_shapes_nature_rocks.cpp
     level/kit_shapes_roof.cpp
+    level/kit_surface_attachment.cpp
+    level/kit_surface_attachment.hpp
     level/kit_thumbnails.cpp
     level/kit_thumbnails.hpp
     level/level_kit_create_menu.cpp
@@ -457,6 +459,7 @@ erhe_target_sources_grouped(
     level/level_kits.hpp
     level/level_kits_attachment.cpp
     level/level_kits_layout.cpp
+    level/level_kits_surface_attachment.cpp
     level/level_group.cpp
     level/level_group.hpp
     level/level_queries.cpp

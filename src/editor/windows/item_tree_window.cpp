@@ -27,6 +27,7 @@
 #include "operations/operation_stack.hpp"
 #include "operations/property_set_operation.hpp"
 #include "level/kit_layout.hpp"
+#include "level/level_kits.hpp"
 #include "prefabs/instance_structure.hpp"
 #include "prefabs/prefab_library.hpp"
 #include "preview/brush_preview.hpp"
@@ -600,6 +601,11 @@ void Item_tree::reposition(
                 (placement == Placement::After_anchor ) ? anchor_hierarchy : std::shared_ptr<erhe::Hierarchy>{}
             )
         );
+        // S6.5: a surface attachment record the new parent makes inert goes in the same entry.
+        std::shared_ptr<Operation> surface_follow_up = Level_kits::make_reparent_surface_follow_up(*hierarchy, anchor_hierarchy->get_parent().lock().get());
+        if (surface_follow_up) {
+            compound_parameters.operations.push_back(std::move(surface_follow_up));
+        }
         return;
     }
 
@@ -693,6 +699,11 @@ void Item_tree::try_add_to_attach(
             std::shared_ptr<erhe::Hierarchy>{}
         )
     );
+    // S6.5: a surface attachment record the new parent makes inert goes in the same entry.
+    std::shared_ptr<Operation> surface_follow_up = Level_kits::make_reparent_surface_follow_up(*hierarchy, target_hierarchy.get());
+    if (surface_follow_up) {
+        compound_parameters.operations.push_back(std::move(surface_follow_up));
+    }
 }
 
 void Item_tree::attach_selection_to(const std::shared_ptr<erhe::Item_base>& target, erhe::Item_base* payload_item)
@@ -1598,7 +1609,14 @@ void Item_tree::item_popup_menu(const std::shared_ptr<erhe::Item_base>& item)
             if (item->is_selected()) {
                 m_context.selection->copy_selection();
             } else {
-                m_context.clipboard->set_contents(item->clone());
+                std::shared_ptr<erhe::Item_base> clone = item->clone();
+                if (hierarchy && clone) {
+                    erhe::Hierarchy* const clone_hierarchy = dynamic_cast<erhe::Hierarchy*>(clone.get());
+                    if (clone_hierarchy != nullptr) {
+                        remap_copied_surface_attachments(*hierarchy, *clone_hierarchy); // S1.3
+                    }
+                }
+                m_context.clipboard->set_contents(clone);
             }
         }
         if (!can_copy) {
@@ -1632,6 +1650,7 @@ void Item_tree::item_popup_menu(const std::shared_ptr<erhe::Item_base>& item)
                 const std::shared_ptr<erhe::Hierarchy> duplicate = std::dynamic_pointer_cast<erhe::Hierarchy>(hierarchy->clone());
                 if (duplicate) {
                     duplicate->set_name(hierarchy->get_name() + " Copy");
+                    remap_copied_surface_attachments(*hierarchy, *duplicate);
                 }
                 auto op = std::make_shared<Item_insert_remove_operation>(
                     Item_insert_remove_operation::Parameters{

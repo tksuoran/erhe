@@ -45,6 +45,8 @@ constexpr const char* c_drag_vector_tooltip = "Surface Drag Direction: the world
 constexpr const char* c_camera_ray_label    = "Surface Camera Ray";
 constexpr const char* c_camera_ray_tooltip  = "Surface Camera Ray: a Transform tool drag snaps the transform anchor along the ray from the viewport camera through it; off, along the Surface Drag Direction.";
 constexpr const char* c_orient_tooltip = "Orient To Surface: the moved mesh's up axis takes the surface normal, keeping its heading.";
+constexpr const char* c_attach_label   = "Attach To Surface";
+constexpr const char* c_attach_tooltip = "Attach To Surface: a kit piece snapped onto another kit piece becomes its child and remembers its place there; off, a snap changes no parent.";
 
 void tooltip(const char* text)
 {
@@ -107,6 +109,15 @@ void surface_orient_checkbox(Level_kits& level_kits, const Surface_widget_label 
         level_kits.set_surface_orient(value ? Surface_orient::off : Surface_orient::on);
     }
     tooltip(c_orient_tooltip);
+}
+
+void surface_attach_checkbox(Level_kits& level_kits, const Surface_widget_label label)
+{
+    const bool value = (level_kits.get_surface_settings().attach == Surface_attach::on);
+    if (checkbox(c_attach_label, "##attach_to_surface", label, value)) {
+        level_kits.set_surface_attach(value ? Surface_attach::off : Surface_attach::on);
+    }
+    tooltip(c_attach_tooltip);
 }
 
 void surface_max_distance_input(Level_kits& level_kits, const Surface_widget_label label)
@@ -222,6 +233,7 @@ void surface_settings_checkboxes(Level_kits& level_kits)
     surface_rest_combo           (level_kits, Surface_widget_label::shown);
     surface_max_distance_input   (level_kits, Surface_widget_label::shown);
     surface_orient_checkbox      (level_kits, Surface_widget_label::shown);
+    surface_attach_checkbox      (level_kits, Surface_widget_label::shown);
     surface_drag_direction_mode_combo(level_kits, Surface_widget_label::shown);
     surface_drag_direction_input (level_kits, Surface_widget_label::shown);
     connector_snap_distance_input(level_kits, Surface_widget_label::shown);

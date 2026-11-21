@@ -612,6 +612,7 @@ private:
     bool                                m_scripted_drag_active{false};
     // The surface options of the running translate drag (D4.6); off outside one.
     Surface_options                     m_drag_surface{};
+    std::optional<Surface_options>      m_surface_snapped_options; // the options of the last snap that rested entries (S2.1)
     Surface_drag_direction              m_drag_surface_direction{Surface_drag_direction::explicit_vector};
     // Orient's half turn of the running drag, decided once from where it started (a camera ray flips sign at eye height).
     std::optional<Orient_half_turn>     m_drag_orient_half_turn;

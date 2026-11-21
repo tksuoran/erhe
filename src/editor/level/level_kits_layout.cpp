@@ -548,7 +548,7 @@ auto Level_kits::build_layout_generation(
     // kit lights (D3.15), which a kept child has put on its frames below.
     const auto matches = [this, &layout_from_world](const erhe::Hierarchy& child, const Kit_placement& element) -> bool {
         const erhe::scene::Mesh* const mesh = dynamic_cast<const erhe::scene::Mesh*>(&child);
-        if ((mesh == nullptr) || !has_only_kit_light_children(*mesh)) {
+        if ((mesh == nullptr) || !has_only_kit_light_and_attached_children(*mesh)) {
             return false;
         }
         const std::optional<Kit_piece_data> record = read_kit_piece(*mesh);
@@ -594,30 +594,12 @@ auto Level_kits::build_layout_generation(
         }
     }
 
-    // Removed from the last child back, each subtree deepest first, so an undo puts every node back at its index.
+    // Removed from the last child back, each subtree deepest first, so an undo puts every node back at its index; the
+    // attached pieces of a removed child leave it first (S5.2, S5.3).
     std::vector<std::shared_ptr<Operation>> operations;
-    std::vector<std::shared_ptr<erhe::Hierarchy>> subtree;
-    for (std::size_t j = children.size(); j > 0; --j) {
-        if (kept[j - 1]) {
-            ++result.kept_count;
-            continue;
-        }
-        ++result.removed_count;
-        subtree.clear();
-        collect_subtree_deepest_first(children[j - 1], subtree);
-        for (const std::shared_ptr<erhe::Hierarchy>& item : subtree) {
-            operations.push_back(
-                std::make_shared<Item_insert_remove_operation>(
-                    Item_insert_remove_operation::Parameters{
-                        .context = m_context,
-                        .item    = item,
-                        .parent  = item->get_parent().lock(),
-                        .mode    = Item_insert_remove_operation::Mode::remove
-                    }
-                )
-            );
-        }
-    }
+    std::vector<Kit_parked_piece>           parked;
+    result.kept_count = static_cast<std::size_t>(std::count(kept.begin(), kept.end(), true));
+    append_generation_removals(scene_root, children, kept, elements.size(), operations, parked, result.removed_count);
     // A kept child's lights go to its frames, as every regeneration puts them (D3.15).
     for (std::size_t i = 0, end = std::min(children.size(), elements.size()); i < end; ++i) {
         if (kept[i]) {
@@ -626,11 +608,13 @@ auto Level_kits::build_layout_generation(
     }
     // Inserted in element order: every earlier element stands at its index by then.
     std::vector<Kit_placement> added;
+    std::vector<std::size_t>   added_elements;
     for (std::size_t i = 0, end = elements.size(); i < end; ++i) {
         if ((i < kept.size()) && kept[i]) {
             continue;
         }
         added.push_back(elements[i]);
+        added_elements.push_back(i);
     }
     if (!added.empty()) {
         Kit_place_result                        placed;
@@ -640,6 +624,13 @@ auto Level_kits::build_layout_generation(
         }
         for (std::shared_ptr<Operation>& operation : insert_operations) {
             operations.push_back(std::move(operation));
+        }
+        if (!parked.empty()) {
+            std::vector<std::shared_ptr<erhe::scene::Node>> successors(elements.size());
+            for (std::size_t k = 0, end = placed.pieces.size(); k < end; ++k) {
+                successors[added_elements[k]] = placed.pieces[k].node;
+            }
+            append_generation_arrivals(scene_root, parked, successors, operations);
         }
     }
     result.added_count = added.size();
@@ -693,7 +684,7 @@ auto Level_kits::build_stairs_generation(
             ? std::string_view{data.pattern.stairs_material}
             : ((palette != nullptr) ? std::string_view{palette->name} : std::string_view{});
         if (
-            (mesh != nullptr) && (mesh->get_child_count() == 0) && (read_layout_generated_source(*mesh) == source) &&
+            (mesh != nullptr) && has_only_attached_children(*mesh) && (read_layout_generated_source(*mesh) == source) &&
             (mesh->get_primitives().size() == 1) && mesh->get_primitives().front().material &&
             (mesh->get_primitives().front().material->get_name() == expected_material)
         ) {
@@ -715,30 +706,17 @@ auto Level_kits::build_stairs_generation(
         result.kept_count = 1;
         return {};
     }
-    // Removed from the last child back, each subtree deepest first, so an undo puts every node back at its index.
-    std::vector<std::shared_ptr<Operation>>       operations;
-    std::vector<std::shared_ptr<erhe::Hierarchy>> subtree;
-    for (std::size_t j = children.size(); j > 0; --j) {
-        ++result.removed_count;
-        subtree.clear();
-        collect_subtree_deepest_first(children[j - 1], subtree);
-        for (const std::shared_ptr<erhe::Hierarchy>& item : subtree) {
-            operations.push_back(
-                std::make_shared<Item_insert_remove_operation>(
-                    Item_insert_remove_operation::Parameters{
-                        .context = m_context,
-                        .item    = item,
-                        .parent  = item->get_parent().lock(),
-                        .mode    = Item_insert_remove_operation::Mode::remove
-                    }
-                )
-            );
-        }
-    }
-    error = make_stairs_insert(scene_root, node, world_from_layout, geometry, data.pattern.stairs_material, source, operations);
+    // Removed from the last child back, each subtree deepest first, so an undo puts every node back at its index; the
+    // staircase's attached pieces go to the new one (S5.2).
+    std::vector<std::shared_ptr<Operation>> operations;
+    std::vector<Kit_parked_piece>           parked;
+    append_generation_removals(scene_root, children, {}, 1, operations, parked, result.removed_count);
+    std::shared_ptr<erhe::scene::Node> successor;
+    error = make_stairs_insert(scene_root, node, world_from_layout, geometry, data.pattern.stairs_material, source, operations, &successor);
     if (!error.empty()) {
         return error;
     }
+    append_generation_arrivals(scene_root, parked, std::span<const std::shared_ptr<erhe::scene::Node>>{&successor, 1}, operations);
     result.added_count = 1;
     out_operations = std::move(operations);
     return {};
@@ -789,7 +767,7 @@ auto Level_kits::build_floor_generation(
             ? std::string_view{data.pattern.floor_material}
             : ((palette != nullptr) ? std::string_view{palette->name} : std::string_view{});
         if (
-            (mesh != nullptr) && (mesh->get_child_count() == 0) && (read_layout_generated_source(*mesh) == source) &&
+            (mesh != nullptr) && has_only_attached_children(*mesh) && (read_layout_generated_source(*mesh) == source) &&
             (mesh->get_primitives().size() == 1) && mesh->get_primitives().front().material &&
             (mesh->get_primitives().front().material->get_name() == expected_material)
         ) {
@@ -802,32 +780,19 @@ auto Level_kits::build_floor_generation(
     if (!error.empty()) {
         return error;
     }
-    std::vector<std::shared_ptr<Operation>>       operations;
-    std::vector<std::shared_ptr<erhe::Hierarchy>> subtree;
-    for (std::size_t j = children.size(); j > 0; --j) {
-        ++result.removed_count;
-        subtree.clear();
-        collect_subtree_deepest_first(children[j - 1], subtree);
-        for (const std::shared_ptr<erhe::Hierarchy>& item : subtree) {
-            operations.push_back(
-                std::make_shared<Item_insert_remove_operation>(
-                    Item_insert_remove_operation::Parameters{
-                        .context = m_context,
-                        .item    = item,
-                        .parent  = item->get_parent().lock(),
-                        .mode    = Item_insert_remove_operation::Mode::remove
-                    }
-                )
-            );
-        }
-    }
+    // The floor's attached pieces go to the new floor (S5.2).
+    std::vector<std::shared_ptr<Operation>> operations;
+    std::vector<Kit_parked_piece>           parked;
+    append_generation_removals(scene_root, children, {}, 1, operations, parked, result.removed_count);
+    std::shared_ptr<erhe::scene::Node> successor;
     error = make_generated_child_insert(
         Generated_child{.name = "Floor", .slot = c_floor_material_slot, .what = "floor material", .crease_degrees = 30.0f},
-        scene_root, node, world_from_layout, geometry, data.pattern.floor_material, source, operations
+        scene_root, node, world_from_layout, geometry, data.pattern.floor_material, source, operations, &successor
     );
     if (!error.empty()) {
         return error;
     }
+    append_generation_arrivals(scene_root, parked, std::span<const std::shared_ptr<erhe::scene::Node>>{&successor, 1}, operations);
     result.added_count = 1;
     out_operations = std::move(operations);
     return {};
@@ -1606,14 +1571,15 @@ void Level_kits::append_layout_move_operations(
     Scene_root&                                               scene_root,
     const std::span<const std::shared_ptr<erhe::scene::Node>> moved_nodes,
     std::vector<std::shared_ptr<Operation>>&                  out_operations,
-    const Kit_snap_pair* const                                snap
+    const Kit_snap_pair* const                                snap,
+    const std::span<const Kit_surface_snap>                   surface_snaps
 )
 {
     std::vector<std::shared_ptr<erhe::scene::Node>> layouts;
     collect_moved_layouts(scene_root, moved_nodes, layouts);
     append_layout_regenerations(scene_root, layouts, "after the move", out_operations);
     // Step 41: the pieces attached to the moved nodes follow, last in the entry.
-    std::shared_ptr<Operation> follow = make_attachment_follow_operation(scene_root, moved_nodes, {}, snap);
+    std::shared_ptr<Operation> follow = make_attachment_follow_operation(scene_root, moved_nodes, {}, snap, {}, {}, surface_snaps);
     if (follow) {
         out_operations.push_back(std::move(follow));
     }

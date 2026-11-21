@@ -1,5 +1,6 @@
 #include "level/kit_piece_light.hpp"
 #include "level/kit_light.hpp"
+#include "level/kit_piece.hpp"
 #include "level/kit_shape.hpp"
 
 #include "app_context.hpp"
@@ -113,6 +114,32 @@ auto has_only_kit_light_children(const erhe::scene::Node& node) -> bool
     for (const std::shared_ptr<erhe::Hierarchy>& child : node.get_children()) {
         const erhe::scene::Light* const light = dynamic_cast<const erhe::scene::Light*>(child.get());
         if ((light == nullptr) || !read_kit_light_frame(*light).has_value() || (light->get_child_count() > 0)) {
+            return false;
+        }
+    }
+    return true;
+}
+
+auto has_only_kit_light_and_attached_children(const erhe::scene::Node& node) -> bool
+{
+    for (const std::shared_ptr<erhe::Hierarchy>& child : node.get_children()) {
+        const erhe::scene::Node* const child_node = dynamic_cast<const erhe::scene::Node*>(child.get());
+        if ((child_node != nullptr) && is_surface_attached_to_parent(*child_node)) {
+            continue;
+        }
+        const erhe::scene::Light* const light = dynamic_cast<const erhe::scene::Light*>(child.get());
+        if ((light == nullptr) || !read_kit_light_frame(*light).has_value() || (light->get_child_count() > 0)) {
+            return false;
+        }
+    }
+    return true;
+}
+
+auto has_only_attached_children(const erhe::scene::Node& node) -> bool
+{
+    for (const std::shared_ptr<erhe::Hierarchy>& child : node.get_children()) {
+        const erhe::scene::Node* const child_node = dynamic_cast<const erhe::scene::Node*>(child.get());
+        if ((child_node == nullptr) || !is_surface_attached_to_parent(*child_node)) {
             return false;
         }
     }

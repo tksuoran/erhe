@@ -76,9 +76,10 @@ ask the user which to pick. Item 14 starts with writing its plan. Items 15,
     Curve hover gizmo (U62 - U65) waits for the
     user's windowed review; its last commit (the miniature scale) is not
     built.
-20. Level kit surface attachments (GitHub issue 304): the user's rulings on
-    the open questions of `doc/plans/level_kit_surface_attachment.md`, then
-    its build order.
+20. Level kit surface attachments (GitHub issue 304): every step is built.
+    The user's windowed test ("State") and the review of the planner's
+    choices ("For the user to review") of
+    `doc/plans/level_kit_surface_attachment.md`.
 
 ## Quest session follow-ups
 

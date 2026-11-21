@@ -98,7 +98,15 @@ void App_context::on_item_property_changed(erhe::Item_base& item, const erhe::pr
             log_scene->error("Kit piece '{}' (id {}): its connections do not read ({}); none is followed", node->get_name(), node->get_id(), problem);
         }
     }
-    if ((app_message_bus != nullptr) && (connector_switch || renamed_piece || (&property == &Kit_piece::attachment_property.get()))) {
+    const bool surface_attachment = (&property == &Kit_piece::surface_attachment_property.get());
+    if (surface_attachment) {
+        const erhe::scene::Node* const node = dynamic_cast<const erhe::scene::Node*>(&item);
+        std::string problem;
+        if ((node != nullptr) && !read_kit_surface_attachment(*node, &problem).has_value() && !problem.empty()) {
+            log_scene->error("Kit piece '{}' (id {}): its surface attachment does not read ({})", node->get_name(), node->get_id(), problem);
+        }
+    }
+    if ((app_message_bus != nullptr) && (connector_switch || renamed_piece || surface_attachment || (&property == &Kit_piece::attachment_property.get()))) {
         app_message_bus->kit_piece_connectors_changed.queue_message(Kit_piece_connectors_changed_message{});
     }
 

@@ -8,6 +8,7 @@
 #include "app_message_bus.hpp"
 #include "items.hpp"
 #include "level/kit_layout.hpp"
+#include "level/kit_piece.hpp"
 #include "operations/compound_operation.hpp"
 #include "operations/library_attach_operation.hpp"
 #include "operations/item_insert_remove_operation.hpp"
@@ -308,6 +309,9 @@ auto Clipboard::try_paste(const std::shared_ptr<erhe::Hierarchy>& target_parent,
         }
         std::shared_ptr<erhe::Item_base> clone_of_item = item->clone();
         const auto& dst_hierarchy = std::dynamic_pointer_cast<erhe::Hierarchy>(clone_of_item);
+        if (dst_hierarchy) {
+            remap_copied_surface_attachments(*src_hierarchy, *dst_hierarchy);
+        }
 
         // Clones keep the source name; pasting is where a duplicate
         // wants a distinguishing name, so rename the pasted root here

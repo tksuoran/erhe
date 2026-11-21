@@ -1915,6 +1915,10 @@ void Dependency_property_rows::paste_properties()
             if (entry.property == &Kit_piece::attachment_property.get()) {
                 continue;
             }
+            // S1.3: a surface attachment belongs to the piece under its support; a pasted one would name another place.
+            if (entry.property == &Kit_piece::surface_attachment_property.get()) {
+                continue;
+            }
             if (registry.find_for_object(item->get_property_owner_type(), registry.qualified_name(*entry.property)) == entry.property) {
                 filtered.set(*entry.property, entry.value);
             }

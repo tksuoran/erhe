@@ -205,12 +205,13 @@ auto get_anchor_rest(
         return Anchor_rest{.found = false, .pose = start, .distance = 0.0f};
     }
     if (rest.distance == 0.0f) {
-        return Anchor_rest{.found = true, .pose = start, .distance = 0.0f};
+        return Anchor_rest{.found = true, .pose = start, .distance = 0.0f, .hit = rest.hit};
     }
     return Anchor_rest{
         .found    = true,
         .pose     = Surface_pose{.position = rest.position, .rotation = start.rotation, .scale = start.scale},
-        .distance = rest.distance
+        .distance = rest.distance,
+        .hit      = rest.hit
     };
 }
 

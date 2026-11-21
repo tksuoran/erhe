@@ -55,6 +55,7 @@ void Move_tool::imgui(Property_editor& property_editor)
         p.add_entry(Property_row_id::move_surface_rest, "Surface Rest", [this]() { surface_rest_combo(*m_context.level_kits, Surface_widget_label::hidden); });
         p.add_entry(Property_row_id::move_surface_max_distance, "Surface Max Distance", [this]() { surface_max_distance_input(*m_context.level_kits, Surface_widget_label::hidden); });
         p.add_entry(Property_row_id::move_orient_to_surface, "Orient To Surface", [this]() { surface_orient_checkbox(*m_context.level_kits, Surface_widget_label::hidden); });
+        p.add_entry(Property_row_id::move_attach_to_surface, "Attach To Surface", [this]() { surface_attach_checkbox(*m_context.level_kits, Surface_widget_label::hidden); });
         p.add_entry(Property_row_id::move_surface_drag_direction_mode, "Surface Drag Direction Mode", [this]() { surface_drag_direction_mode_combo(*m_context.level_kits, Surface_widget_label::hidden); });
         p.add_entry(Property_row_id::move_surface_drag_direction, "Surface Drag Direction", [this]() { surface_drag_direction_input(*m_context.level_kits, Surface_widget_label::hidden); });
         p.add_entry(Property_row_id::move_connector_snap, "Connector Snap", [this]() { connector_snap_distance_input(*m_context.level_kits, Surface_widget_label::hidden); });

@@ -6,6 +6,7 @@
 #include "level/kit_piece.hpp"
 #include "level/kit_piece_light.hpp"
 #include "level/kit_piece_operation.hpp"
+#include "level/kit_surface_attachment.hpp"
 
 #include "app_context.hpp"
 #include "app_message_bus.hpp"
@@ -580,12 +581,25 @@ auto Level_kits::get_surface_settings() const -> Surface_options
         return make_surface_options(Surface_snap::off, Surface_orient::off, c_default_surface_direction, c_default_surface_max_distance);
     }
     const Surface_snap_config& config = m_context.editor_settings->surface_snap;
-    return make_surface_options(
+    Surface_options options = make_surface_options(
         config.snap_to_surface   ? Surface_snap::on   : Surface_snap::off,
         config.orient_to_surface ? Surface_orient::on : Surface_orient::off,
         c_default_surface_direction,
         config.max_distance
     );
+    options.attach = config.attach_to_surface ? Surface_attach::on : Surface_attach::off;
+    return options;
+}
+
+void Level_kits::set_surface_attach(const Surface_attach attach)
+{
+    if (m_context.editor_settings == nullptr) {
+        return;
+    }
+    m_context.editor_settings->surface_snap.attach_to_surface = (attach == Surface_attach::on);
+    if (m_context.app_settings != nullptr) {
+        m_context.app_settings->settings_store().touch();
+    }
 }
 
 void Level_kits::validate_surface_settings()
@@ -939,7 +953,8 @@ auto Level_kits::make_placement_pose(
         .position          = placement.pose.position,
         .rotation          = placement.pose.rotation,
         .surface_direction = surface.direction,
-        .surface_found     = placement.surface_found
+        .surface_found     = placement.surface_found,
+        .support_mesh      = placement.support_mesh
     };
 }
 
@@ -1086,12 +1101,13 @@ auto Level_kits::make_stairs_insert(
     const std::shared_ptr<erhe::geometry::Geometry>& geometry,
     const std::string&                               material_name,
     const std::string&                               source,
-    std::vector<std::shared_ptr<Operation>>&         out_operations
+    std::vector<std::shared_ptr<Operation>>&         out_operations,
+    std::shared_ptr<erhe::scene::Node>* const        out_node
 ) -> std::string
 {
     return make_generated_child_insert(
         Generated_child{.name = "Stairs", .slot = c_stairs_material_slot, .what = "stairs material", .crease_degrees = c_stairs_crease_angle_degrees},
-        scene_root, layout, world_from_layout, geometry, material_name, source, out_operations
+        scene_root, layout, world_from_layout, geometry, material_name, source, out_operations, out_node
     );
 }
 
@@ -1103,7 +1119,8 @@ auto Level_kits::make_generated_child_insert(
     const std::shared_ptr<erhe::geometry::Geometry>& geometry,
     const std::string&                               material_name,
     const std::string&                               source,
-    std::vector<std::shared_ptr<Operation>>&         out_operations
+    std::vector<std::shared_ptr<Operation>>&         out_operations,
+    std::shared_ptr<erhe::scene::Node>* const        out_node
 ) -> std::string
 {
     const std::shared_ptr<Content_library> library = scene_root.get_content_library();
@@ -1168,6 +1185,9 @@ auto Level_kits::make_generated_child_insert(
         out_operations.push_back(std::move(operation));
     }
     out_operations.push_back(insert.operation);
+    if (out_node != nullptr) {
+        *out_node = insert.node;
+    }
     return {};
 }
 
@@ -1261,6 +1281,10 @@ void Level_kits::refresh_scene(const std::shared_ptr<Scene_root>& scene_root, st
             const std::string problem = (text.has_value() && !text.value().empty()) ? parse_attachments_text(text.value(), attachments) : std::string{};
             if (!problem.empty()) {
                 log_scene->error("Kit piece '{}' (id {}): its connections do not read ({}); none is followed", node->get_name(), node->get_id(), problem);
+            }
+            std::string surface_problem;
+            if (!read_kit_surface_attachment(*node, &surface_problem).has_value() && !surface_problem.empty()) {
+                log_scene->error("Kit piece '{}' (id {}): its surface attachment does not read ({})", node->get_name(), node->get_id(), surface_problem);
             }
             return true;
         }
@@ -1399,6 +1423,7 @@ class Surface_snap_request
 public:
     std::shared_ptr<erhe::scene::Mesh> mesh;
     erhe::math::Aabb                   local_bounds;
+    bool                               rides{false}; // S3.1, S4.7: attached below another node of the call, it is not snapped
 };
 
 class Surface_snap_plan
@@ -1471,6 +1496,11 @@ void plan_surface_snaps(
         const erhe::scene::Trs_transform world = moved.has_value() ? erhe::scene::Trs_transform{moved.value()} : mesh->world_from_node_transform();
         const Surface_pose start{.position = world.get_translation(), .rotation = world.get_rotation(), .scale = world.get_scale()};
         Surface_snap_plan& plan = out_plans[i];
+        if (requests[i].rides) {
+            // Where its support's snap carries it, resting as before.
+            plan.placement = Surface_placement{.pose = start, .distance = 0.0f, .surface_found = true};
+            continue;
+        }
         plan.placement = find_surface_placement(committed_rt_scene, requests[i].local_bounds, start, options, excluded);
         plan.moved = plan.placement.surface_found &&
             ((plan.placement.pose.position != start.position) || (plan.placement.pose.rotation != start.rotation));
@@ -1518,10 +1548,21 @@ auto Level_kits::snap_to_surface(
     requests.reserve(meshes.size());
     for (const std::shared_ptr<erhe::scene::Mesh>& mesh : meshes) {
         excluded.push_back(mesh.get());
-        requests.push_back(Surface_snap_request{.mesh = mesh, .local_bounds = mesh_local_bounds(*mesh)});
+    }
+    for (const std::shared_ptr<erhe::scene::Mesh>& mesh : meshes) {
+        // An attached piece whose support is at or below another node of the call rides it (S3.1, S4.7).
+        bool rides = false;
+        if (is_surface_attached(get_surface_attachment_status(*mesh).state)) {
+            for (const erhe::scene::Node* i = mesh->get_parent_node().get(); (i != nullptr) && !rides; i = i->get_parent_node().get()) {
+                rides = std::find(excluded.begin(), excluded.end(), dynamic_cast<const erhe::scene::Mesh*>(i)) != excluded.end();
+            }
+        }
+        requests.push_back(Surface_snap_request{.mesh = mesh, .local_bounds = mesh_local_bounds(*mesh), .rides = rides});
     }
     std::vector<std::shared_ptr<Operation>>         operations;
     std::vector<std::shared_ptr<erhe::scene::Node>> moved_nodes;
+    std::vector<Kit_surface_snap>                   surface_snaps;
+    bool                                            surface_change{false}; // an attach or a detach with no move (S2.1, S2.5)
     if (any_surface_option(options)) {
         erhe::raytrace::IScene& rt_scene = scene_root.get_raytrace_scene();
         rt_scene.commit();
@@ -1532,6 +1573,18 @@ auto Level_kits::snap_to_surface(
             if ((apply == Kit_snap_apply::move) && plans[i].operation) {
                 operations.push_back(plans[i].operation);
                 moved_nodes.push_back(meshes[i]);
+            }
+            if ((apply == Kit_snap_apply::move) && (options.attach == Surface_attach::on) && !requests[i].rides) {
+                surface_snaps.push_back(Kit_surface_snap{.node = meshes[i], .options = options});
+                const std::shared_ptr<erhe::scene::Node> support = plans[i].placement.surface_found
+                    ? find_surface_support(plans[i].placement.support_mesh)
+                    : std::shared_ptr<erhe::scene::Node>{};
+                const Kit_surface_attachment_status status = get_surface_attachment_status(*meshes[i]);
+                const bool attached_there = is_surface_attached(status.state) && (status.target == support);
+                const std::shared_ptr<erhe::scene::Node> parent = meshes[i]->get_parent_node();
+                const bool layout_element = parent && carries_kit_layout(*parent); // S2.6: records nothing
+                const bool attachable     = support && !attached_there && !layout_element && !has_connection(scene_root, *meshes[i]);
+                surface_change = surface_change || attachable || (!support && (status.state != Kit_surface_attachment_state::none));
             }
         }
     } else {
@@ -1544,9 +1597,10 @@ auto Level_kits::snap_to_surface(
         }
     }
     const std::size_t moved_count = operations.size();
-    if (!operations.empty()) {
-        // Step 41: the pieces attached to the snapped pieces follow (and a snapped attached piece off its join detaches).
-        std::shared_ptr<Operation> follow = make_attachment_follow_operation(scene_root, moved_nodes, {});
+    if (!operations.empty() || surface_change) {
+        // Step 41: the pieces attached to the snapped pieces follow (and a snapped attached piece off its join detaches);
+        // S2.1: the snapped pieces attach to their supports.
+        std::shared_ptr<Operation> follow = make_attachment_follow_operation(scene_root, moved_nodes, {}, nullptr, {}, {}, surface_snaps);
         if (follow) {
             operations.push_back(std::move(follow));
         }
@@ -1746,6 +1800,22 @@ auto Level_kits::prepare_placements(
         if (placement.parent_index.has_value()) {
             parent = result.pieces[placement.parent_index.value()].node;
         }
+        // S2.1: a piece placed snapped onto a support is inserted under it, unless the call names its parent or joins it.
+        std::shared_ptr<erhe::scene::Node>    support;
+        std::optional<Kit_surface_attachment> surface_record;
+        if ((placement.surface.attach == Surface_attach::on) && surface.surface_found && !joins[i].has_value() && !parent) {
+            support = find_surface_support(surface.support_mesh);
+            if (support) {
+                surface_record = make_surface_record(
+                    brush->get_bounding_box(), world_from_node, *support, placement.surface.direction, placement.surface.orient, placement.surface.rest
+                );
+            }
+            if (surface_record.has_value()) {
+                parent = support;
+            } else {
+                support.reset();
+            }
+        }
         if (!parent) {
             parent = scene_root.get_scene().get_root_node();
         }
@@ -1768,6 +1838,9 @@ auto Level_kits::prepare_placements(
             insert.node->enable_flag_bits(Editor_item_flags::pass_through);
         }
         write_kit_piece(*insert.node.get(), Kit_piece_data{.shape = shape.id, .parameters = values[i].to_canonical_text()});
+        if (surface_record.has_value()) {
+            insert.node->set_value(Kit_piece::surface_attachment_property, make_surface_attachment_text(surface_record.value()));
+        }
         // Step 41: a join records its attachment on the new piece (in no chain yet), unless a locked layout owns either side;
         // K13: a new host joined onto a rider records it on the rider, written after the inserts.
         if (placement.connect.has_value() && (placement.connect.value().attach == Kit_attach::attach) &&
@@ -1791,7 +1864,8 @@ auto Level_kits::prepare_placements(
                 .values        = values[i],
                 .position      = position,
                 .rotation      = rotation,
-                .surface_found = surface.surface_found
+                .surface_found = surface.surface_found,
+                .support       = support
             }
         );
     }
@@ -2468,6 +2542,11 @@ auto Level_kits::group(Scene_root& scene_root, const std::span<const std::shared
         parameters.operations.push_back(
             std::make_shared<Item_parent_change_operation>(group_node, node, std::shared_ptr<erhe::Hierarchy>{}, std::shared_ptr<erhe::Hierarchy>{})
         );
+        // S6.5: a piece grouped away from its support loses its surface attachment record.
+        std::shared_ptr<Operation> surface_follow_up = make_reparent_surface_follow_up(*node, group_node.get());
+        if (surface_follow_up) {
+            parameters.operations.push_back(std::move(surface_follow_up));
+        }
     }
     result.error = execute_entry(std::make_shared<Compound_operation>(std::move(parameters)));
     result.node  = result.error.empty() ? group_node : std::shared_ptr<erhe::scene::Node>{};
@@ -2521,6 +2600,7 @@ auto Level_kits::duplicate(Scene_root& scene_root, const std::shared_ptr<erhe::s
         return result;
     }
     clone->set_name(copy.name.empty() ? (node->get_name() + " Copy") : copy.name);
+    remap_copied_surface_attachments(*node, *clone);
     glm::mat4 world_from_node = node->world_from_node();
     const glm::vec3 source_position{world_from_node[3]};
     const glm::vec3 position = (copy.placement == Kit_copy_placement::position) ? copy.value : (source_position + copy.value);
@@ -2623,6 +2703,41 @@ auto Level_kits::mirror(Scene_root& scene_root, const std::shared_ptr<erhe::scen
         );
         if (image == Mirror_image::not_exact) {
             ++result.not_exact_count;
+        }
+    }
+    // S7.3: a piece mirrored with its support (its parent, in the group too) keeps its attachment, the place written again
+    // from the mirrored poses.
+    for (const std::shared_ptr<erhe::scene::Node>& node : nodes) {
+        const erhe::scene::Mesh* const piece = dynamic_cast<const erhe::scene::Mesh*>(node.get());
+        if ((piece == nullptr) || !is_surface_attached_to_parent(*node)) {
+            continue;
+        }
+        const std::shared_ptr<erhe::scene::Node> parent = node->get_parent_node();
+        const erhe::scene::Mesh* const support = dynamic_cast<const erhe::scene::Mesh*>(parent.get());
+        const std::map<const erhe::scene::Node*, glm::mat4>::const_iterator parent_new = new_worlds.find(parent.get());
+        const std::map<const erhe::scene::Node*, glm::mat4>::const_iterator node_new   = new_worlds.find(node.get());
+        std::optional<Kit_surface_attachment> record = read_kit_surface_attachment(*node);
+        if ((support == nullptr) || (parent_new == new_worlds.end()) || (node_new == new_worlds.end()) || !record.has_value()) {
+            continue;
+        }
+        const glm::mat4                  support_from_world = glm::inverse(parent_new->second);
+        const erhe::scene::Trs_transform local{support_from_world * node_new->second};
+        const glm::vec3 old_direction = glm::normalize(glm::mat3{parent->world_from_node()} * record.value().direction);
+        const glm::vec3 reflected     = old_direction - (2.0f * glm::dot(old_direction, result.plane_normal) * result.plane_normal);
+        const glm::vec3 direction     = glm::normalize(glm::mat3{support_from_world} * reflected);
+        const std::optional<glm::dvec3> position = make_surface_attachment_position(
+            mesh_local_bounds(*support), mesh_local_bounds(*piece),
+            Surface_pose{.position = local.get_translation(), .rotation = local.get_rotation(), .scale = local.get_scale()},
+            direction, record.value().orient, record.value().rest
+        );
+        if (!position.has_value()) {
+            continue;
+        }
+        record.value().position  = position.value();
+        record.value().direction = direction;
+        std::shared_ptr<Operation> write = make_surface_record_operation(node, record);
+        if (write) {
+            operations.push_back(std::move(write));
         }
     }
     // Step 41: the pieces attached to the group's content follow it; its pieces moved off a join outside it detach.
@@ -3311,7 +3426,14 @@ auto Level_kits::replace_shape(
             replaced_nodes.push_back(piece.mesh);
         }
     }
-    std::shared_ptr<Operation> follow = make_attachment_follow_operation(scene_root, {}, replaced_nodes);
+    // S2.1: the re-snapped pieces attach to what they rest on, as a snap of an existing piece does.
+    std::vector<Kit_surface_snap> surface_snaps;
+    if (snap && (surface.attach == Surface_attach::on)) {
+        for (const std::size_t index : snap_pieces) {
+            surface_snaps.push_back(Kit_surface_snap{.node = result.pieces[index].mesh, .options = surface});
+        }
+    }
+    std::shared_ptr<Operation> follow = make_attachment_follow_operation(scene_root, {}, replaced_nodes, nullptr, {}, {}, surface_snaps);
     if (follow) {
         parameters.operations.push_back(std::move(follow));
     }

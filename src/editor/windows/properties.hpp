@@ -56,6 +56,12 @@ class Rendertarget_mesh;
 class Scene_root;
 enum class Prepared_drop : unsigned int; // assets/prepared_status.hpp
 
+// The Detach row of the kit piece rows: with the connection rows, or also for a surface attachment alone (S7.1).
+enum class Kit_detach_row : unsigned int {
+    with_connections = 0,
+    shown
+};
+
 class Properties : public erhe::imgui::Imgui_window, public Property_editor
 {
 public:
@@ -128,7 +134,7 @@ private:
     void texture_properties           (const std::shared_ptr<erhe::graphics::Texture>& texture);
     void kit_piece_properties         (const std::shared_ptr<erhe::scene::Mesh>& piece);
     void kit_layout_properties        (const std::shared_ptr<erhe::scene::Node>& layout);
-    void kit_connection_properties    (Kit_connection_rows& connection_rows);
+    void kit_connection_properties    (Kit_connection_rows& connection_rows, Kit_detach_row detach_row = Kit_detach_row::with_connections);
     void curve_properties             (const std::shared_ptr<erhe::scene::Curve>& curve);
     // One curve edit: a widget edit applies live; its end records one Curve_set_operation from the path at its start.
     void curve_edit(const std::shared_ptr<erhe::scene::Curve>& curve, const erhe::math::Curve_path& after, const char* what);

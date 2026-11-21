@@ -5,7 +5,10 @@
 #include <glm/glm.hpp>
 
 #include <cmath>
+#include <cstddef>
 #include <span>
+
+namespace erhe::scene { class Mesh; }
 
 // The snap to surface search of D7.3 surface placement, free of rays (doc/editor/level_tools.md "Surface placement").
 namespace editor {
@@ -20,6 +23,7 @@ public:
     float     height {0.0f};
     bool      surface{false}; // the face's normal is against the snap direction: a piece can rest on it
     glm::vec3 normal {0.0f, 1.0f, 0.0f};
+    const erhe::scene::Mesh* mesh{nullptr}; // the mesh owning the face; null where the caller traces no scene
 };
 
 // The hits on one base point's line within the search window, and the piece's extent above the base point.
@@ -57,6 +61,8 @@ class Surface_offset
 public:
     bool  found {false};
     float height{0.0f}; // the base's rise against the snap direction; negative when it moves along it
+    std::size_t line{0}; // the supporting hit, lines[line].hits[hit], when found
+    std::size_t hit {0};
 };
 
 // The search window of one snap (U51): heights from forward_distance along the snap direction to backward_distance against it.
@@ -76,9 +82,11 @@ public:
 ) -> Surface_offset
 {
     Surface_offset best{};
-    for (const Surface_line& candidate_line : support_lines) {
-        for (const Surface_hit_point& hit : candidate_line.hits) {
-            const float height = hit.height;
+    for (std::size_t line_index = 0, line_end = support_lines.size(); line_index < line_end; ++line_index) {
+        const std::span<const Surface_hit_point> hits = support_lines[line_index].hits;
+        for (std::size_t hit_index = 0, hit_end = hits.size(); hit_index < hit_end; ++hit_index) {
+            const Surface_hit_point& hit    = hits[hit_index];
+            const float              height = hit.height;
             if (
                 !hit.surface ||
                 (height < -(window.forward_distance + c_surface_snap_tolerance)) ||
@@ -90,7 +98,7 @@ public:
                 continue;
             }
             if (lines_are_free(blocking_lines, height)) {
-                best = Surface_offset{.found = true, .height = height};
+                best = Surface_offset{.found = true, .height = height, .line = line_index, .hit = hit_index};
             }
         }
     }
@@ -103,7 +111,24 @@ public:
     return find_snap_height(lines, lines, window);
 }
 
-// U52: the kit layout support rule over the base lines, the base center's line first.
+// S2.2: the supporting hit moves to the first line, the base center's first, with a surface hit at the place.
+[[nodiscard]] inline auto with_first_supporting_line(const std::span<const Surface_line> lines, const Surface_offset offset) -> Surface_offset
+{
+    if (!offset.found) {
+        return offset;
+    }
+    for (std::size_t line_index = 0; line_index < offset.line; ++line_index) {
+        const std::span<const Surface_hit_point> hits = lines[line_index].hits;
+        for (std::size_t hit_index = 0, hit_end = hits.size(); hit_index < hit_end; ++hit_index) {
+            if (hits[hit_index].surface && (std::abs(hits[hit_index].height - offset.height) <= c_surface_snap_tolerance)) {
+                return Surface_offset{.found = true, .height = offset.height, .line = line_index, .hit = hit_index};
+            }
+        }
+    }
+    return offset;
+}
+
+// U52: the kit layout support rule over the base lines, the base center's line first; the offset names the supporting hit.
 [[nodiscard]] inline auto find_support_height(
     const std::span<const Surface_line> lines,
     const Surface_search_window         window,
@@ -115,16 +140,16 @@ public:
     }
     switch (support) {
         case Surface_support::five_lines: {
-            return find_snap_height(lines, lines, window);
+            return with_first_supporting_line(lines, find_snap_height(lines, lines, window));
         }
         case Surface_support::center_blocks: {
-            return find_snap_height(lines, lines.first(1), window);
+            return with_first_supporting_line(lines, find_snap_height(lines, lines.first(1), window));
         }
         case Surface_support::center_fallback: {
             // The nearest place of any line, taken when it fits; no farther place is searched.
             const Surface_offset nearest = find_snap_height(lines, std::span<const Surface_line>{}, window);
             if (!nearest.found || lines_are_free(lines, nearest.height)) {
-                return nearest;
+                return with_first_supporting_line(lines, nearest);
             }
             // Refused: the nearest surface on the base center's line along the direction, with no fit test.
             const Surface_line center_rest{.hits = lines.front().hits, .span = 0.0f};
@@ -144,6 +169,7 @@ public:
     float     height  {0.0f};  // the rise against the direction; negative when the point moves along it
     glm::vec3 position{0.0f};  // the point moved along the direction onto the surface
     float     distance{0.0f};  // how far it moved along the direction; negative when against it
+    std::size_t hit   {0};     // the line's supporting hit, when found
 };
 
 // U51 (Transform tool drags): a point's rest on its one line (span 0: nothing to fit); a point already within the tolerance
@@ -160,9 +186,9 @@ public:
         return Point_rest{};
     }
     if (std::abs(offset.height) <= c_surface_snap_tolerance) {
-        return Point_rest{.found = true, .height = offset.height, .position = point, .distance = 0.0f};
+        return Point_rest{.found = true, .height = offset.height, .position = point, .distance = 0.0f, .hit = offset.hit};
     }
-    return Point_rest{.found = true, .height = offset.height, .position = point - (offset.height * direction), .distance = -offset.height};
+    return Point_rest{.found = true, .height = offset.height, .position = point - (offset.height * direction), .distance = -offset.height, .hit = offset.hit};
 }
 
 } // namespace editor

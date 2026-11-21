@@ -2086,6 +2086,11 @@ void Operations::attach_selection_to_active()
                 std::shared_ptr<erhe::Hierarchy>{}
             )
         );
+        // S6.5: a surface attachment record the new parent makes inert goes in the same entry.
+        std::shared_ptr<Operation> surface_follow_up = Level_kits::make_reparent_surface_follow_up(*node, active_node.get());
+        if (surface_follow_up) {
+            compound_operation_parameters.operations.push_back(std::move(surface_follow_up));
+        }
     }
     if (ancestor_count > 0) {
         log_operations->warn(

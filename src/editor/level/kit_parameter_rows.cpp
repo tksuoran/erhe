@@ -278,6 +278,15 @@ void Kit_piece_editor::update(const std::shared_ptr<erhe::scene::Mesh>& piece)
     m_connector_switches = read_piece_connector_switches(*piece);
     // C6.3: the connections, both ends' records, each with its status (read when the piece is read; a cold path).
     m_connection_rows.read(piece);
+    const Kit_surface_attachment_status surface = m_context.level_kits->get_surface_attachment_status(*piece);
+    if (surface.state == Kit_surface_attachment_state::none) {
+        m_surface_attachment_text.clear();
+    } else {
+        const std::string support = surface.target ? fmt::format("'{}'", surface.target->get_name()) : std::string{"(missing)"};
+        m_surface_attachment_text = (surface.state == Kit_surface_attachment_state::active)
+            ? fmt::format("{} - active", support)
+            : fmt::format("{} - {}: {}", support, c_str(surface.state), surface.reason);
+    }
 }
 
 Kit_connection_rows::Kit_connection_rows(App_context& context)
@@ -428,6 +437,11 @@ void Kit_piece_editor::set_connector(const char* const connector_name, const Kit
         m_context, m_piece,
         Kit_connector_switch_edit{.piece = {}, .connectors = {Kit_connector_switch_edit::Connector{.name = connector_name, .state = state}}}
     );
+}
+
+auto Kit_piece_editor::get_surface_attachment_text() const -> const std::string&
+{
+    return m_surface_attachment_text;
 }
 
 auto Kit_piece_editor::get_connection_rows() -> Kit_connection_rows&
