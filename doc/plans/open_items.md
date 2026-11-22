@@ -182,6 +182,13 @@ Plans: `doc/plans/prepared_assets_design.md` (D8 per-step "Open" notes),
 
 ## Editor defects found in passing
 
+- `Weight_paint_tool` reads `Geometry::get_vertex_corners()` for every
+  painted vertex (`weight_paint_tool.cpp`, the GPU patch of a dab) without
+  checking `has_connectivity()`. A Geometry loaded from a scene file has
+  no connectivity tables, so a weight stroke on a loaded skinned mesh is
+  expected to abort in the `ERHE_VERIFY` there; not reproduced. The
+  stroke needs a corner grouping of its own, as `Channel_paint_stroke`
+  has.
 - A mouse drag that is active when its tool loses priority keeps the mouse:
   `Commands::on_mouse_button_event()` skips bindings whose host is disabled,
   so the release never reaches the command, it stays Active and
