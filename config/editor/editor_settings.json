@@ -1,5 +1,5 @@
 {
-    "_version": 20,
+    "_version": 22,
     "camera_controls": {
         "invert_x": false,
         "invert_y": false,
@@ -14,7 +14,7 @@
         "zoom_glide_direction": "follow_view"
     },
     "debug_visualizations_style": {
-        "_version": 15,
+        "_version": 17,
         "anti_aliased_lines": true,
         "shadow_fit_casters_color": [0.2,1,0.3,0.6],
         "shadow_fit_casters_culled_color": [1,0.2,0.2,0.4],
@@ -94,6 +94,7 @@
         "connector_snapped_color": [1,0.2,0.9,1],
         "connector_wall_color": [1,0.55,0.15,1],
         "connector_wall_floor_color": [0.2,0.75,1,1],
+        "connector_rail_color": [0.95,0.35,0.35,1],
         "connector_size": 0.04,
         "connector_width": -2,
         "kit_layout_color": [1,0.6,0.15,1],
@@ -102,6 +103,8 @@
         "kit_layout_footprint_color": [0.9,0.9,0.3,0.8],
         "kit_layout_spacing_color": [0.4,0.8,1,0.6],
         "kit_layout_circle_width": -1.5,
+        "foliage_paint_color": [0.35,0.95,0.35,1],
+        "foliage_remove_color": [1,0.35,0.25,1],
         "skin_bone_color_a": [0,1,1,1],
         "skin_bone_color_b": [1,0,1,1],
         "skin_bone_width": 7.1,
@@ -280,6 +283,7 @@
         "summon_offset_z": 0
     },
     "selection": { "openxr_selection_mode": "single" },
+    "item_placement": { "mode": "avoid_intersection" },
     "id_renderer": {
         "_version": 2,
         "enabled": false
@@ -359,13 +363,13 @@
     },
     "level_kit": {
         "_version": 10,
-        "snap_to_module": true,
-        "rotation_step_degrees": 90,
-        "new_seed_per_piece": false,
+        "snap_to_module": false,
+        "rotation_step_degrees": 15,
+        "new_seed_per_piece": true,
         "layout_pattern": "",
         "layout_spacing_from_item": true,
         "layout_module_snap": false,
-        "layout_surface_snap": false,
+        "layout_surface_snap": true,
         "layout_surface_direction": [0,-1,0],
         "layout_surface_forward_distance": 1,
         "layout_surface_backward_distance": 0,
@@ -384,19 +388,29 @@
         "place_as_layout": false
     },
     "surface_snap": {
-        "_version": 9,
+        "_version": 10,
         "snap_to_surface": false,
         "orient_to_surface": false,
+        "attach_to_surface": false,
         "max_distance": 1,
         "rest": "leading_face",
         "drag_direction_mode": "explicit_vector",
         "drag_direction": [0,-1,0],
         "connector_snap_distance": 0.2,
         "connector_snap_axis_mode": "full_offset",
-        "connector_snap_orientation": "off",
+        "connector_snap_orientation": "full",
         "connector_auto_connect": true,
         "connector_flow_off": 0,
         "connection_step_limit": 64
+    },
+    "foliage_paint": {
+        "brush_radius": 2,
+        "paint_density": 0.5,
+        "remove_density": 1,
+        "align_to_surface": false,
+        "remove_only_palette_shapes": false,
+        "seed": 1,
+        "palette": ""
     },
     "export_settings": {
         "_version": 6,

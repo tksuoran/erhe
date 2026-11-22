@@ -31,7 +31,7 @@
         "light_mixer": false,
         "lightmap": false,
         "lightmap_texture": false,
-        "lod": true,
+        "lod": false,
         "log_settings": false,
         "network": false,
         "node_pproperties": false,
