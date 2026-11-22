@@ -16,38 +16,40 @@ namespace editor {
 
 namespace {
 
-// Peek the drag-drop payload and, if it carries an erhe::Item_base* of an allowed type, return it.
-// Drag sources (item tree, content library) set the payload type to the item's leaf class name and
-// the data to an erhe::Item_base* (see windows/item_tree_window.cpp). Those class names match
-// erhe::Item_type::label(), so each set bit of allowed_types maps to one acceptable payload
-// type string. Note: a mask using a base-type bit (e.g. imageable) does not match a leaf
-// payload string (e.g. "Mesh"); pass the leaf type bits whose class-name labels you want to accept.
-[[nodiscard]] auto try_accept_item_payload(const uint64_t allowed_types) -> std::shared_ptr<erhe::Item_base>
+// Drag sources (item tree, content library, this widget) set the payload type to the item's leaf
+// class name (erhe::Item_type::label() of its class) and the data to an erhe::Item_base*. A payload
+// whose type names an item class is read; the item is accepted when one of its type bits is in
+// allowed_types (a base-type bit such as texture_reference included) and it is shown in the UI.
+[[nodiscard]] auto is_shown(const App_context& context, const erhe::Item_base& item) -> bool
 {
-    const auto read_item = [](const ImGuiPayload* payload) -> erhe::Item_base* {
-        if ((payload == nullptr) || (payload->Data == nullptr) || (payload->DataSize != sizeof(erhe::Item_base*))) {
-            return nullptr;
-        }
-        return *static_cast<erhe::Item_base**>(payload->Data);
-    };
+    return item.is_shown_in_ui() || (context.developer_mode && ((item.get_flag_bits() & Editor_item_flags::show_in_developer_ui) != 0));
+}
 
+[[nodiscard]] auto try_accept_item_payload(App_context& context, const uint64_t allowed_types) -> std::shared_ptr<erhe::Item_base>
+{
+    const ImGuiPayload* const payload = ImGui::GetDragDropPayload();
+    if ((payload == nullptr) || (payload->Data == nullptr) || (payload->DataSize != sizeof(erhe::Item_base*))) {
+        return {};
+    }
+    bool names_item_class = false;
     for (uint64_t i = 1; i < erhe::Item_type::index_count; ++i) {
-        const uint64_t bit = (uint64_t{1} << i);
-        if ((allowed_types & bit) == 0) {
-            continue;
-        }
         const char* const type_label = erhe::Item_type::label(i);
-        if (type_label == nullptr) {
-            continue;
-        }
-        erhe::Item_base* const raw = read_item(ImGui::AcceptDragDropPayload(type_label));
-        if ((raw != nullptr) && ((raw->get_type() & allowed_types) != 0)) {
-            return raw->shared_from_this();
+        if ((type_label != nullptr) && payload->IsDataType(type_label)) {
+            names_item_class = true;
+            break;
         }
     }
-
-
-    return {};
+    if (!names_item_class) {
+        return {};
+    }
+    erhe::Item_base* const raw = *static_cast<erhe::Item_base* const*>(payload->Data);
+    if ((raw == nullptr) || ((raw->get_type() & allowed_types) == 0) || !is_shown(context, *raw)) {
+        return {};
+    }
+    if (ImGui::AcceptDragDropPayload(payload->DataType) == nullptr) {
+        return {}; // hovered, not yet released
+    }
+    return raw->shared_from_this();
 }
 
 } // anonymous namespace
@@ -82,7 +84,7 @@ auto item_reference_imgui(
     const float value_w  = std::max(ImGui::GetContentRegionAvail().x - reserved, 1.0f);
     ImGui::Button(have_value ? io_value->get_name().c_str() : options.none_text, ImVec2{value_w, 0.0f});
 
-    if (have_value && erhe::imgui::begin_drag_drop_source(ImGuiDragDropFlags_SourceAllowNullID)) {
+    if (have_value && is_shown(context, *io_value) && erhe::imgui::begin_drag_drop_source(ImGuiDragDropFlags_SourceAllowNullID)) {
         erhe::Item_base* const raw = io_value.get();
         ImGui::SetDragDropPayload(io_value->get_type_name().data(), &raw, sizeof(raw));
         context.icon_set->item_icon(io_value, 1.0f);
@@ -93,7 +95,7 @@ auto item_reference_imgui(
     // No ImGuiDragDropFlags_AcceptNoDrawDefaultRect here: that lets ImGui draw the standard
     // drop-target highlight rectangle while a compatible payload hovers (GitHub issue #231).
     if (ImGui::BeginDragDropTarget()) {
-        const std::shared_ptr<erhe::Item_base> dropped = try_accept_item_payload(allowed_types);
+        const std::shared_ptr<erhe::Item_base> dropped = try_accept_item_payload(context, allowed_types);
         if (dropped && (dropped != io_value)) {
             io_value = dropped;
             changed  = true;

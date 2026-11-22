@@ -40,7 +40,13 @@ Indexes a scene's reusable resources - materials, brushes, styles, textures, phy
   `Animations`, `Skins`, `Graph Meshes`, `Graph Textures`), creating it on
   the first resource of that kind and keeping it afterwards - a kind no
   resource ever reached adds no prim, and a folder the user made under a
-  scope survives emptying it. A kind scope and the resource prims below it
+  scope survives emptying it. A kind scope is a child of the prim root,
+  except `Graph Textures`, which is a child of the `Textures` scope
+  (`get_kind_parent_type_bit()`, `get_kind_scope_parent()`); an operation
+  that needs both places `Textures` first. A glTF file carries no kind
+  scopes, so its load puts graph textures in `Textures/Graph Textures`; a USD
+  stage's `Graph_Textures` scope is adopted as the kind scope where it
+  stands. A kind scope and the resource prims below it
   carry `Item_flags::show_in_ui` but not `Item_flags::content`, which is what
   keeps the glTF node writer from writing them as nodes
   (`doc/editor/scene_serialization.md`). A scene loaded from a file brings its kind

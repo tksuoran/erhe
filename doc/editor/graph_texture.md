@@ -57,7 +57,16 @@ asset name; the baked output belongs to its output node.
 slot, that is, white.
 
 - It is a distinct `Item_type` with its own content-library kind, which keeps
-  plain textures (and `get_scene_textures`) separate from graph assets.
+  plain textures (and `get_scene_textures`) separate from graph assets. Its
+  kind scope, `Graph Textures`, sits inside the `Textures` scope, so a graph
+  texture's library path is `Textures/Graph Textures/<name>`.
+- It is the one item of a texture graph the user sees and binds. The baked
+  output textures of its output nodes are content-library textures without
+  `Item_flags::show_in_ui`: no item tree row, reference picker or drag source
+  offers them, so a material slot set from the UI holds the `Graph_texture`,
+  which a scene save persists (the `material_bindings` table). The Material
+  output node still binds its own bakes into its material's slots and binds
+  them again after a load.
 - It is `not_clonable`, like `erhe::graphics::Texture`: a deep copy would need
   the node factory's `App_context`. Duplicating a graph goes through
   serialization instead.

@@ -1101,7 +1101,10 @@ table, see D2a), and references to other objects (D28).
     execute (asset-manager plan R5.4) and report those items from
     `collect_item_references`.
   - Rows (D12). The row is `item_reference_imgui`: a drop target
-    filtered by `reference_item_types`, a drag source, a picker over the
+    accepting an item whose type has a bit of `reference_item_types` (a
+    base-type bit such as `texture_reference` included; a drag payload is
+    named by the item's leaf class name) and that is shown in the UI, a
+    drag source for a shown value, a picker over the
     target scene's items of that mask - the content library items, and
     the scene's prims for a node-typed reference
     (`collect_reference_candidates`, a caller-owned scratch cleared after

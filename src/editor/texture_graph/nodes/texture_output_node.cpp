@@ -149,6 +149,8 @@ void Texture_output_node::register_texture()
         return;
     }
     texture->set_name(m_texture_name);
+    // The bake is internal to its Graph Texture, the one item of the graph the user sees and binds.
+    texture->disable_flag_bits(erhe::Item_flags::show_in_ui);
 
     const std::shared_ptr<Scene_root> scene_root = resolve_scene_root();
     if (!scene_root) {

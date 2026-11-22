@@ -289,6 +289,7 @@ void Texture_material_output_node::register_texture(Baked_texture& slot, const s
         return;
     }
     slot.target->set_name(name);
+    slot.target->disable_flag_bits(erhe::Item_flags::show_in_ui); // a bake is internal; the node binds it itself
     const std::shared_ptr<Content_library> library = get_content_library();
     if (!library) {
         return;
@@ -442,6 +443,7 @@ void Texture_material_output_node::render_orm(
     // Register the ORM texture.
     if (m_orm_target) {
         m_orm_target->set_name(m_base_name + " ORM");
+        m_orm_target->disable_flag_bits(erhe::Item_flags::show_in_ui); // a bake is internal; the node binds it itself
         const std::shared_ptr<Content_library> library = get_content_library();
         if (library) {
             if (m_orm_registered != m_orm_target) {

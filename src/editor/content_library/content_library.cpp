@@ -27,13 +27,15 @@ namespace editor {
 namespace {
 
 // The resource kinds the library indexes, in the order a scene creates their
-// scopes. Each row is one `erhe::Item_type` bit and the name of the `Scope`
-// the resources of that kind are gathered under.
+// scopes. Each row is one `erhe::Item_type` bit, the name of the `Scope`
+// the resources of that kind are gathered under, and the kind whose scope
+// holds that scope (0: the prim root).
 class Kind_row
 {
 public:
     uint64_t         type_bit;
     std::string_view scope_name;
+    uint64_t         parent_type_bit{0};
 };
 
 constexpr std::array<Kind_row, 11> c_kinds{
@@ -42,7 +44,7 @@ constexpr std::array<Kind_row, 11> c_kinds{
     Kind_row{erhe::Item_type::skin,                   "Skins"            },
     Kind_row{erhe::Item_type::material,               "Materials"        },
     Kind_row{erhe::Item_type::texture,                "Textures"         },
-    Kind_row{editor::Editor_item_types::graph_texture,          "Graph Textures"   },
+    Kind_row{editor::Editor_item_types::graph_texture,          "Graph Textures",   erhe::Item_type::texture},
     Kind_row{editor::Editor_item_types::graph_mesh,             "Graph Meshes"     },
     Kind_row{erhe::Item_type::physics_material,       "Physics Materials"},
     Kind_row{erhe::Item_type::collision_filter,       "Collision Filters"},
@@ -131,6 +133,25 @@ auto Content_library::get_kind_scope_name(const uint64_t kind_type_bit) -> std::
         }
     }
     return {};
+}
+
+auto Content_library::get_kind_parent_type_bit(const uint64_t kind_type_bit) -> uint64_t
+{
+    for (const Kind_row& row : c_kinds) {
+        if (row.type_bit == kind_type_bit) {
+            return row.parent_type_bit;
+        }
+    }
+    return 0;
+}
+
+auto Content_library::get_kind_scope_parent(const uint64_t kind_type_bit) -> std::shared_ptr<erhe::Hierarchy>
+{
+    const uint64_t parent_type_bit = get_kind_parent_type_bit(kind_type_bit);
+    if (parent_type_bit == 0) {
+        return get_prim_root();
+    }
+    return get_scope(parent_type_bit);
 }
 
 Content_library::Content_library()
@@ -257,10 +278,14 @@ void Content_library::set_owner(erhe::Item_host* const owner, const std::shared_
     const std::shared_ptr<erhe::Hierarchy> new_parent = get_prim_root();
     // A copy: moving a scope to the new root changes its item host, which
     // takes it out of m_scopes through unregister_prim and puts it back
-    // through register_prim.
+    // through register_prim. A scope inside its parent kind's scope moves with that scope.
     std::vector<std::shared_ptr<erhe::Scope>> scopes;
     scopes.reserve(m_scopes.size());
     for (const auto& [type_bit, scope] : m_scopes) {
+        const uint64_t parent_type_bit = get_kind_parent_type_bit(type_bit);
+        if ((parent_type_bit != 0) && find_scope(parent_type_bit)) {
+            continue;
+        }
         scopes.push_back(scope);
     }
     for (const std::shared_ptr<erhe::Scope>& scope : scopes) {
@@ -430,7 +455,7 @@ auto Content_library::get_scope(const uint64_t kind_type_bit) -> std::shared_ptr
         // Either freshly made, or made for an operation that has not executed
         // yet: a caller that places a resource straight into the tree needs
         // the scope in the tree.
-        scope->set_parent(get_prim_root());
+        scope->set_parent(get_kind_scope_parent(kind_type_bit));
     }
     return scope;
 }

@@ -86,7 +86,7 @@ public:
     void unregister_prim(const std::shared_ptr<erhe::Typed>& prim) override;
 
     // The resource kinds the index keeps, as `erhe::Item_type` bits. One kind
-    // is one `Scope` under the scene root.
+    // is one `Scope`, under the scene root or under its parent kind's scope.
     [[nodiscard]] static auto get_kind_type_bits() -> std::span<const uint64_t>;
     // The one kind bit of an item type mask, 0 when it names no kind.
     [[nodiscard]] static auto get_kind_type_bit_of_type(uint64_t item_type) -> uint64_t;
@@ -94,6 +94,10 @@ public:
     [[nodiscard]] static auto get_kind_type_bit(const erhe::Item_base& item) -> uint64_t;
     // The name of a kind's scope, empty for a type bit that names no kind.
     [[nodiscard]] static auto get_kind_scope_name(uint64_t kind_type_bit) -> std::string_view;
+    // The kind whose scope holds this kind's scope (Graph Textures sit in Textures); 0 for the scene root.
+    [[nodiscard]] static auto get_kind_parent_type_bit(uint64_t kind_type_bit) -> uint64_t;
+    // The prim a kind's scope is a child of: the parent kind's scope (see get_scope()), else the prim root.
+    [[nodiscard]] auto get_kind_scope_parent(uint64_t kind_type_bit) -> std::shared_ptr<erhe::Hierarchy>;
 
     // The owning scene's `Scene_root` is the `Item_host` of every resource
     // prim, and `prim_root` - the scene's root node - is the prim the kind

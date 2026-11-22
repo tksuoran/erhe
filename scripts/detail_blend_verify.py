@@ -9,7 +9,10 @@ flag every group runs:
                    create_material, read back through get_material_details and
                    get_item_properties, one undo entry per edit, the Properties
                    window's "Detail Blend" group, a scene save and load (a plain
-                   texture and a Graph Texture in the slot), read back again.
+                   texture and a Graph Texture in the slot), read back again; the
+                   Graph Texture under Textures/Graph Textures, its bake in no Scene
+                   Hierarchy row and no Height Texture picker entry, a pick and a drop
+                   of the Graph Texture on the row, the pick through save, close, load.
   --only-paint     channel painting (B7.1 - B7.3, B7.6): fill_vertex_channel per channel,
                    paint_vertex_channel strokes (mix, subtract, add) equal to a CPU model of
                    the channel brush within 1e-5 with the other channels bit-identical,
@@ -144,6 +147,67 @@ def check_slot(label, slot, texture_name=None, graph_texture_name=None, transfor
     check(f"{label}: the slot keeps its UV transform", not problems, "; ".join(problems))
 
 
+BAKE_NAME = "Height Bake"  # the output node's texture name: the Graph Texture's internal bake
+
+
+def imgui_items(e, **arguments):
+    arguments.setdefault("visible_only", False)
+    arguments.setdefault("limit", 3000)
+    return e.call("get_imgui_items", arguments).get("items", [])
+
+
+def window_with(e, label, prefix):
+    """The ImGui window, named with prefix, that submits an item with this label (None when none does)."""
+    for _ in range(60):
+        for item in imgui_items(e, label_contains=label):
+            if (item.get("label") == label) and str(item.get("window", "")).startswith(prefix):
+                return item["window"]
+        e.wait_frames(1)
+    return None
+
+
+def properties_window_of(e, scene, material):
+    """Opens the Properties window on a material, with its "Detail Blend" group open; its window name."""
+    e.call("open_properties_window", {"scene_name": scene, "material": material})
+    e.wait_frames(3)
+    for _ in range(4):
+        items = [i for i in imgui_items(e) if str(i.get("window", "")).startswith("Properties")]
+        # A row with a local value is labelled "* <label>".
+        picks = [i for i in items if i.get("label") in ("Height Texture.pick", "* Height Texture.pick")]
+        if picks:
+            e.call("imgui_scroll_to_item", {"window": picks[0]["window"], "id": picks[0]["id"]})
+            e.wait_frames(2)
+            return picks[0]["window"]
+        groups = [i["window"] for i in items if i.get("label") == "Detail Blend"]
+        if not groups:
+            e.wait_frames(1)
+            continue
+        e.call("imgui_scroll_to_item", {"window": groups[0], "label": "Detail Blend"})
+        e.wait_frames(2)
+        e.call("imgui_click", {"window": groups[0], "label": "Detail Blend"})
+        e.wait_frames(3)
+    return None
+
+
+def open_picker(e, window):
+    """Opens the Height Texture picker popup; its entries (label, id)."""
+    pick = [i for i in imgui_items(e, window=window) if i.get("label") in ("Height Texture.pick", "* Height Texture.pick")]
+    e.call("imgui_click", {"window": window, "id": pick[0]["id"]})
+    e.wait_frames(3)
+    return [(i.get("label"), i.get("id")) for i in imgui_items(e, visible_only=True) if str(i.get("window", "")).startswith("##Popup")]
+
+
+def open_tree_row(e, window, label):
+    """Opens a Scene Hierarchy row by a click on its arrow."""
+    rows = [i for i in imgui_items(e, window=window, label_contains=label) if i.get("label") == label]
+    if not rows or rows[0]["status"].get("opened"):
+        return
+    rect = e.call("get_imgui_item_rect", {"window": window, "label": label})
+    point = [rect["x"] + 8, rect["center_y"]]
+    e.call("mouse_drag", {"from": point, "to": point, "frames": 1})
+    e.wait_frames(3)
+
+
 def group_material(s: Session):
     print("\n== --only-material: values and the detail_blend slot ==")
     e = s.e
@@ -236,6 +300,62 @@ def group_material(s: Session):
     e.wait_idle()
     check_slot("4.4", s.details("Detail Graph")["texture_samplers"]["detail_blend"], graph_texture_name="Detail Height")
 
+
+    # 6. The Height Texture row in the Properties window: a Graph Texture is the item, its bake is internal
+    e.call("set_texture_graph_target", {"scene_name": s.scene, "graph_texture": "Detail Height"})
+    noise  = e.call("texture_graph_add_node", {"type": "perlin"})
+    output = e.call("texture_graph_add_node", {"type": "output"})
+    e.call("texture_graph_set_parameter", {"node_id": output["id"], "parameters": {"name": BAKE_NAME}})
+    e.call("texture_graph_connect", {"source_node_id": noise["id"], "sink_node_id": output["id"]})
+    e.wait_idle()
+    baked = False
+    for _ in range(120):
+        listed = e.call("get_graph_textures", {"scene_name": s.scene}).get("graph_textures", [])
+        baked = any((g.get("name") == "Detail Height") and g.get("has_output") for g in listed)
+        if baked:
+            break
+        e.wait_frames(1)
+    check("6.1 the Graph Texture bakes its output", baked)
+    nodes = e.call("get_scene_nodes", {"scene_name": s.scene}).get("nodes", [])
+    by_id = {n.get("id"): n for n in nodes}
+    graph_node = next((n for n in nodes if n.get("name") == "Detail Height"), {})
+    folder = by_id.get(graph_node.get("parent_id"), {})
+    check("6.2 the Graph Texture is listed under Textures/Graph Textures",
+          (folder.get("name") == "Graph Textures") and (by_id.get(folder.get("parent_id"), {}).get("name") == "Textures"),
+          f"{graph_node.get('parent')} < {folder.get('parent')}")
+    tree = window_with(e, "Textures", "Scene Hierarchy")
+    if tree is not None:
+        open_tree_row(e, tree, "Textures")
+        open_tree_row(e, tree, "Graph Textures")
+    rows = [i.get("label") for i in imgui_items(e, window=tree)] if tree is not None else []
+    check("6.3 the Scene Hierarchy lists the Graph Texture", "Detail Height" in rows, str(tree))
+    check("6.4 the Scene Hierarchy lists no bake", BAKE_NAME not in rows)
+    e.call("create_material", {"scene_name": s.scene, "name": "Detail UI", "detail_blend": True})
+    e.call("create_material", {"scene_name": s.scene, "name": "Detail Drop", "detail_blend": True})
+    e.wait_idle()
+    window = properties_window_of(e, s.scene, "Detail UI")
+    check("6.5 the Properties window shows the Height Texture row", window is not None)
+    if window is not None:
+        entries = open_picker(e, window)
+        labels = [label for label, _ in entries]
+        check("6.6 the Height Texture picker offers the Graph Texture", "Detail Height" in labels, str(labels))
+        check("6.7 the Height Texture picker offers no bake", BAKE_NAME not in labels, str(labels))
+        graph_entry = [item_id for label, item_id in entries if label == "Detail Height"]
+        if graph_entry:
+            e.call("imgui_click", {"id": graph_entry[0]})
+            e.wait_idle()
+        else:
+            e.call("key_press", {"key": "escape"})
+        check_slot("6.8 picked", s.details("Detail UI")["texture_samplers"]["detail_blend"], graph_texture_name="Detail Height", transform_kept=False)
+    window = properties_window_of(e, s.scene, "Detail Drop")
+    if (window is not None) and (tree is not None):
+        source = e.call("get_imgui_item_rect", {"window": tree, "label": "Detail Height"})
+        target = e.call("get_imgui_item_rect", {"window": window, "label": "Height Texture"})
+        e.call("mouse_drag", {"from": [source["center_x"], source["center_y"]], "to": [target["center_x"], target["center_y"]], "frames": 12})
+        e.wait_idle()
+    check_slot("6.9 dropped from the Scene Hierarchy", s.details("Detail Drop")["texture_samplers"]["detail_blend"],
+               graph_texture_name="Detail Height", transform_kept=False)
+
     # 5. Save and load: the box carries the plain-texture material, the graph material rides its binding
     assigned = e.call("assign_mesh_material", {"scene_name": s.scene, "mesh_name": "Detail Box", "material_name": "Detail Defaults"})
     e.wait_idle()
@@ -259,8 +379,22 @@ def group_material(s: Session):
     defaults_kept = s.details("Detail Defaults", loaded)
     check("5.9 the reload is the same values a second time", values_of(defaults_kept) == values_of(reloaded))
 
-    for scene in (loaded, s.scene):
-        e.close(scene)
+    e.close(loaded)
+
+    # 7. The Properties window's pick survives the editor's save, a close and a load of a new scene
+    ui_path = os.path.join(s.work_dir, "detail_ui.glb")
+    e.save(s.scene, ui_path)
+    e.close(s.scene)
+    reopened = e.load(ui_path)
+    check("7.1 the saved scene loads", reopened is not None, str(reopened))
+    check_slot("7.2 the reloaded picked slot", s.details("Detail UI", reopened)["texture_samplers"]["detail_blend"],
+               graph_texture_name="Detail Height", transform_kept=False)
+    window = properties_window_of(e, reopened, "Detail UI")
+    labels = [label for label, _ in open_picker(e, window)] if window is not None else []
+    e.call("key_press", {"key": "escape"})
+    check("7.3 after the load the picker offers the Graph Texture and no bake",
+          ("Detail Height" in labels) and (BAKE_NAME not in labels), str(labels))
+    e.close(reopened)
 
 
 # --- --only-paint ------------------------------------------------------------------------------

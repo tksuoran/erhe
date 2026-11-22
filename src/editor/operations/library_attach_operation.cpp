@@ -17,9 +17,46 @@
 #include <fmt/format.h>
 
 #include <limits>
+#include <vector>
 #include <mutex>
 
 namespace editor {
+
+namespace {
+
+// The steps that place a kind scope standing outside the tree: first the
+// scope of its parent kind when that one does not stand either, then this one.
+void append_kind_scope_placement(
+    Content_library&                          content_library,
+    const uint64_t                            kind_type_bit,
+    const std::shared_ptr<erhe::Scope>&       scope,
+    std::vector<std::shared_ptr<Operation>>&  out_operations
+)
+{
+    std::shared_ptr<erhe::Hierarchy> parent = content_library.get_prim_root();
+    const uint64_t parent_type_bit = Content_library::get_kind_parent_type_bit(kind_type_bit);
+    if (parent_type_bit != 0) {
+        const std::shared_ptr<erhe::Scope> existing_parent_scope = content_library.get_existing_scope(parent_type_bit);
+        const std::shared_ptr<erhe::Scope> parent_scope = existing_parent_scope
+            ? existing_parent_scope
+            : content_library.make_kind_scope(parent_type_bit);
+        ERHE_VERIFY(parent_scope);
+        if (!parent_scope->get_parent().lock()) {
+            append_kind_scope_placement(content_library, parent_type_bit, parent_scope, out_operations);
+        }
+        parent = parent_scope;
+    }
+    out_operations.push_back(
+        std::make_shared<Kind_scope_operation>(
+            Kind_scope_operation::Parameters{
+                .scope  = scope,
+                .parent = parent
+            }
+        )
+    );
+}
+
+} // anonymous namespace
 
 auto make_library_attach_operation(
     App_context&                                          context,
@@ -108,14 +145,7 @@ auto make_library_insert_operation(
     }
 
     Compound_operation::Parameters parameters{};
-    parameters.operations.push_back(
-        std::make_shared<Kind_scope_operation>(
-            Kind_scope_operation::Parameters{
-                .scope  = scope,
-                .parent = content_library->get_prim_root()
-            }
-        )
-    );
+    append_kind_scope_placement(*content_library, kind_type_bit, scope, parameters.operations);
     parameters.operations.push_back(insert);
     return std::make_shared<Compound_operation>(std::move(parameters));
 }
