@@ -1147,7 +1147,12 @@ void Hotbar::slot_button(const uint32_t id, Slot_entry& entry)
         // never shifts when an earlier slot is empty). Like the other branches this
         // must advance the layout with SameLine or the following slots wrap.
         const ImVec2 button_size{icon_size, icon_size};
+        ImGui::BeginDisabled();
         ImGui::Button("##empty", button_size);
+        ImGui::EndDisabled();
+        if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
+            ImGui::SetTooltip("Empty slot - assign a tool in the Inventory window");
+        }
         ImGui::SameLine();
     }
 

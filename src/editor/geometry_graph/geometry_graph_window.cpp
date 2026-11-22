@@ -364,15 +364,14 @@ auto Geometry_graph_window::connect(erhe::graph::Pin* source_pin, erhe::graph::P
                 *this, graph_mesh, source_pin, sink_pin, Geometry_graph_link_insert_remove_operation::Mode::insert
             )
         );
-        m_app_context.operation_stack->execute_now(std::make_shared<Compound_operation>(std::move(parameters)));
-        return true;
+        // Refused while a live edit is open (logged by the stack): not connected.
+        return m_app_context.operation_stack->execute_now(std::make_shared<Compound_operation>(std::move(parameters))) != Operation_outcome::refused;
     }
-    m_app_context.operation_stack->execute_now(
+    return m_app_context.operation_stack->execute_now(
         std::make_shared<Geometry_graph_link_insert_remove_operation>(
             *this, graph_mesh, source_pin, sink_pin, Geometry_graph_link_insert_remove_operation::Mode::insert
         )
-    );
-    return true;
+    ) != Operation_outcome::refused;
 }
 
 void Geometry_graph_window::disconnect(erhe::graph::Pin* source_pin, erhe::graph::Pin* sink_pin)
@@ -388,19 +387,25 @@ void Geometry_graph_window::disconnect(erhe::graph::Pin* source_pin, erhe::graph
     );
 }
 
-void Geometry_graph_window::set_node_parameters(const std::shared_ptr<Geometry_graph_node>& node, const nlohmann::json& parameters)
+auto Geometry_graph_window::set_node_parameters(const std::shared_ptr<Geometry_graph_node>& node, const nlohmann::json& parameters, std::string& out_refusal) -> Operation_outcome
 {
     if (!node) {
-        return;
+        out_refusal = "no node";
+        return Operation_outcome::refused;
     }
     std::string before_parameters = node->dump_parameters();
     node->read_parameters(parameters); // marks the node dirty
     std::string after_parameters = node->dump_parameters();
-    m_app_context.operation_stack->execute_now(
-        std::make_shared<Geometry_graph_parameter_operation>(
-            *this, node, std::move(before_parameters), std::move(after_parameters)
-        )
+    const std::shared_ptr<Operation> operation = std::make_shared<Geometry_graph_parameter_operation>(
+        *this, node, std::move(before_parameters), std::move(after_parameters)
     );
+    // The values are live already; a refused record (a live edit is open) applies the committed ones back (its undo).
+    const Operation_outcome outcome = m_app_context.operation_stack->execute_now(operation);
+    if (outcome == Operation_outcome::refused) {
+        operation->undo(m_app_context);
+        out_refusal = operation->get_error();
+    }
+    return outcome;
 }
 
 auto Geometry_graph_window::make_node(const std::string& type_name) -> std::shared_ptr<Geometry_graph_node>
@@ -429,11 +434,13 @@ auto Geometry_graph_window::add_node_of_type(const std::string& type_name, const
     if (!node) {
         return nullptr;
     }
-    m_app_context.operation_stack->execute_now(
+    if (m_app_context.operation_stack->execute_now(
         std::make_shared<Geometry_graph_node_insert_remove_operation>(
             *this, graph_mesh, node, Geometry_graph_node_insert_remove_operation::Mode::insert
         )
-    );
+    ) == Operation_outcome::refused) {
+        return nullptr; // a live edit is open (logged by the stack)
+    }
     set_node_position(*node.get(), (position != nullptr) ? *position : next_node_spawn_position());
     return node.get();
 }

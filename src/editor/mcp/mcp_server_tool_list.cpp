@@ -32,6 +32,8 @@
 #include <iterator>
 #include <mutex>
 #include <optional>
+#include "erhe_verify/verify.hpp"
+
 #include <span>
 #include <string>
 #include <string_view>
@@ -156,6 +158,18 @@ void Mcp_server::validate_tool_list_against_dispatch()
 {
     std::lock_guard<std::mutex> lock{m_tools_mutex};
     const std::span<const Tool_dispatch_entry> dispatch_table = get_dispatch_table();
+
+    // Every tool a live edit lets through is a dispatched tool, so the table cannot name a renamed or removed one.
+    for (const std::string_view name : get_live_edit_tools()) {
+        const bool dispatched = std::any_of(
+            dispatch_table.begin(), dispatch_table.end(),
+            [name](const Tool_dispatch_entry& entry) { return name == entry.name; }
+        );
+        if (!dispatched) {
+            log_mcp->error("MCP server: live edit tool '{}' is no dispatched tool", name);
+        }
+        ERHE_VERIFY(dispatched);
+    }
 
     for (const Tool_dispatch_entry& entry : dispatch_table) {
         const auto i = std::find_if(

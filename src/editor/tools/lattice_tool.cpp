@@ -325,14 +325,22 @@ void Lattice_tool::commit_point_edit()
         return;
     }
     const std::shared_ptr<Geometry_graph_node> node = std::dynamic_pointer_cast<Geometry_graph_node>(lattice->node_from_this());
-    m_context.operation_stack->execute_now(
+    // The offset is live already; a refused record (a live edit is open) puts the offset from before the drag back.
+    if (m_context.operation_stack->execute_now(
         std::make_shared<Geometry_graph_parameter_operation>(
             *m_context.geometry_graph_window,
             node,
             std::move(m_edit.before_parameters),
             std::move(after_parameters)
         )
-    );
+    ) == Operation_outcome::refused) {
+        restore_point_edit(*lattice);
+    }
+}
+
+void Lattice_tool::restore_point_edit(Lattice_node& lattice)
+{
+    lattice.set_control_point_offset(m_edit.point, m_edit.before_offset);
 }
 
 void Lattice_tool::cancel_point_edit()
@@ -343,7 +351,7 @@ void Lattice_tool::cancel_point_edit()
     m_edit.active = false;
     const std::shared_ptr<Lattice_node> lattice = m_edit.lattice.lock();
     if (lattice) {
-        lattice->set_control_point_offset(m_edit.point, m_edit.before_offset);
+        restore_point_edit(*lattice);
     }
 }
 

@@ -48,14 +48,16 @@ auto Geometry_graph_node::pin_key_color(const std::size_t key) const -> ImU32
 
 void Geometry_graph_node::commit_parameter_operation(App_context& app_context, std::string&& before_parameters, std::string&& after_parameters)
 {
-    app_context.operation_stack->execute_now(
-        std::make_shared<Geometry_graph_parameter_operation>(
-            *app_context.geometry_graph_window,
-            std::dynamic_pointer_cast<Geometry_graph_node>(node_from_this()),
-            std::move(before_parameters),
-            std::move(after_parameters)
-        )
+    const std::shared_ptr<Operation> operation = std::make_shared<Geometry_graph_parameter_operation>(
+        *app_context.geometry_graph_window,
+        std::dynamic_pointer_cast<Geometry_graph_node>(node_from_this()),
+        std::move(before_parameters),
+        std::move(after_parameters)
     );
+    // The values are live already; a refused record (a live edit is open) applies the committed ones back (its undo).
+    if (app_context.operation_stack->execute_now(operation) == Operation_outcome::refused) {
+        operation->undo(app_context);
+    }
 }
 
 void process_for_graph(erhe::geometry::Geometry& geometry)
@@ -249,11 +251,12 @@ void Geometry_graph_node::after_node_content(App_context& context)
         if (toggle_ghost) {
             new_ghost_id = is_ghost ? 0 : node_id;
         }
-        context.operation_stack->execute_now(
+        // Nothing is applied before the record: a refused one (a live edit is open; the stack logs it) changes no badge.
+        static_cast<void>(context.operation_stack->execute_now(
             std::make_shared<Geometry_graph_display_designation_operation>(
                 graph_mesh, get_name(), display_id, ghost_id, new_display_id, new_ghost_id
             )
-        );
+        ));
     }
 
     if ((context.editor_settings != nullptr) && context.editor_settings->graph_node_previews.enabled) {

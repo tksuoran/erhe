@@ -40,14 +40,16 @@ auto Texture_graph_node::pin_key_color(const std::size_t key) const -> ImU32
 
 void Texture_graph_node::commit_parameter_operation(App_context& app_context, std::string&& before_parameters, std::string&& after_parameters)
 {
-    app_context.operation_stack->execute_now(
-        std::make_shared<Texture_graph_parameter_operation>(
-            *app_context.texture_graph_window,
-            std::dynamic_pointer_cast<Texture_graph_node>(node_from_this()),
-            std::move(before_parameters),
-            std::move(after_parameters)
-        )
+    const std::shared_ptr<Operation> operation = std::make_shared<Texture_graph_parameter_operation>(
+        *app_context.texture_graph_window,
+        std::dynamic_pointer_cast<Texture_graph_node>(node_from_this()),
+        std::move(before_parameters),
+        std::move(after_parameters)
     );
+    // The values are live already; a refused record (a live edit is open) applies the committed ones back (its undo).
+    if (app_context.operation_stack->execute_now(operation) == Operation_outcome::refused) {
+        operation->undo(app_context);
+    }
 }
 
 void Texture_graph_node::after_node_content(App_context& app_context)

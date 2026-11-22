@@ -23,6 +23,9 @@ add_executable(${_target}
     # layout node values erhe::scene; the kit layout values and outlines
     # nlohmann_json; the piece record (the attachment) erhe::scene and nlohmann_json; the light frames glm and fmt; the snap to
     # surface search (surface_snap_search.hpp) is header-only; the surface attachment carry glm and erhe::math.
+    # The foliage index needs glm and erhe::verify.
+    # The foliage sampler needs glm (with the kit random stream and the scatter pick); the foliage palette nlohmann_json and fmt.
+    # The foliage system needs erhe::scene, erhe::utility, the piece record and the editor's log_scene (editor_log.cpp).
     ${CMAKE_CURRENT_SOURCE_DIR}/../kit_connection_flow.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../kit_connector.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../kit_layout.cpp
@@ -62,6 +65,11 @@ add_executable(${_target}
     ${CMAKE_CURRENT_SOURCE_DIR}/../level_region.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../level_repeat.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../floor_polygon.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../foliage_index.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../foliage_palette.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../foliage_sampler.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../foliage_system.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../editor_log.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../kit_standard_property.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../stairs_fit.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../stairs_mesh.cpp
@@ -103,6 +111,10 @@ add_executable(${_target}
     test_level_repeat.cpp
     test_stairs_fit.cpp
     test_floor_polygon.cpp
+    test_foliage_index.cpp
+    test_foliage_palette.cpp
+    test_foliage_sampler.cpp
+    test_foliage_system.cpp
     test_stairs_mesh.cpp
     test_surface_base_frame.cpp
     test_surface_drag_anchor.cpp
@@ -121,6 +133,7 @@ target_link_libraries(${_target}
         erhe::math
         erhe::profile
         erhe::scene
+        erhe::utility
         erhe::verify
         fmt::fmt
         glm::glm-header-only

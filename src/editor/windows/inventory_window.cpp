@@ -38,6 +38,7 @@
 
 #include <imgui/imgui.h>
 
+#include <algorithm>
 #include <cstdio>
 
 namespace editor {
@@ -82,6 +83,7 @@ Inventory_window::Inventory_window(
     , m_column_count     {config.column_count}
     , m_row_count        {config.row_count}
     , m_hotbar_slot_count{config.hotbar_slot_count}
+    , m_known_tools      {config.known_tools}
 {
     const int grid_count = m_column_count * m_row_count;
     m_grid_slots.resize(grid_count);
@@ -168,30 +170,41 @@ void Inventory_window::collect_tools()
     // in imgui(). apply_hotbar() below picks up any resolved hotbar slots.
     resolve_slot_references();
 
-    // If hotbar has no configured slots, populate with all tools (first-run default).
-    // An operation (command) slot counts as configured too, so a hotbar filled only
-    // with operations is not overwritten by the default tools on reload. A brush /
-    // material reference counts even while unresolved (non-empty key).
-    bool hotbar_empty = true;
-    for (const Slot_entry& entry : m_hotbar_slots) {
-        if (
-            (entry.tool != nullptr)              ||
-            !entry.brush.get_key().is_empty()    ||
-            !entry.material.get_key().is_empty() ||
-            (entry.command != nullptr)           ||
-            !entry.graph_node_type.empty()
-        ) {
-            hotbar_empty = false;
-            break;
-        }
+    // A toolbox tool the saved state does not know (a first run included)
+    // resets the hotbar to all tools.
+    if (has_new_tool()) {
+        reset_hotbar_to_tools();
+        touch_settings();
     }
-    if (hotbar_empty) {
-        for (int i = 0; i < m_hotbar_slot_count && i < static_cast<int>(m_all_tools.size()); ++i) {
-            m_hotbar_slots[i].tool = m_all_tools[i];
-        }
+    m_known_tools.clear();
+    for (const Tool* tool : m_all_tools) {
+        m_known_tools.emplace_back(tool->get_description());
     }
 
     apply_hotbar();
+}
+
+auto Inventory_window::has_new_tool() const -> bool
+{
+    for (const Tool* tool : m_all_tools) {
+        if (std::find(m_known_tools.begin(), m_known_tools.end(), tool->get_description()) == m_known_tools.end()) {
+            return true;
+        }
+    }
+    return false;
+}
+
+void Inventory_window::reset_hotbar_to_tools()
+{
+    m_hotbar_slot_count = std::max(m_hotbar_slot_count, static_cast<int>(m_all_tools.size()));
+    m_hotbar_slots.clear();
+    m_hotbar_slots.resize(m_hotbar_slot_count);
+    for (int i = 0; i < m_hotbar_slot_count; ++i) {
+        if (i < static_cast<int>(m_all_tools.size())) {
+            m_hotbar_slots[i].tool = m_all_tools[i];
+        }
+        set_slot_labels(m_hotbar_slots[i], true, i);
+    }
 }
 
 auto Inventory_window::resolve_slot_references() -> bool
@@ -596,10 +609,11 @@ auto Inventory_window::find_or_create_brush_with_material(
             // The fork joins the library as an undoable insert next to the
             // original, executed now so the slot can adopt it.
             std::shared_ptr<Brush> forked = original_brush->make_with_material(material);
-            m_context.operation_stack->execute_now(
+            const Operation_outcome outcome = m_context.operation_stack->execute_now(
                 make_resource_insert_operation(m_context, content_library, forked, original_brush->get_parent().lock())
             );
-            return forked;
+            // Refused (a live edit is open, logged by the stack): the slot keeps its brush.
+            return (outcome == Operation_outcome::refused) ? original_brush : forked;
         }
     }
 
@@ -704,6 +718,7 @@ void Inventory_window::write_config(Inventory_config& config) const
     config.column_count      = m_column_count;
     config.row_count         = m_row_count;
     config.hotbar_slot_count = m_hotbar_slot_count;
+    config.known_tools       = m_known_tools;
 
     // The Asset_reference keys persist whether or not they ever resolved
     // this session (their content library may not have loaded) - saving must

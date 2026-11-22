@@ -476,6 +476,18 @@ erhe_target_sources_grouped(
     level/kit_connection_flow.cpp
     level/kit_connection_flow.hpp
     level/floor_polygon.hpp
+    level/foliage_index.cpp
+    level/foliage_index.hpp
+    level/foliage_palette.cpp
+    level/foliage_palette.hpp
+    level/foliage_sampler.cpp
+    level/foliage_sampler.hpp
+    level/foliage_system.cpp
+    level/foliage_system.hpp
+    level/foliage_paint_tool.cpp
+    level/foliage_paint_tool.hpp
+    level/foliage_stroke.cpp
+    level/foliage_stroke.hpp
     level/stairs_mesh.cpp
     level/stairs_mesh.hpp
     level/surface_base_frame.cpp
@@ -582,6 +594,10 @@ erhe_target_sources_grouped(
     operations/node_transform_operation.hpp
     operations/operations_window.cpp
     operations/operations_window.hpp
+    operations/live_edit.cpp
+    operations/live_edit.hpp
+    operations/operation_group.cpp
+    operations/operation_group.hpp
     operations/operation_stack_selection.cpp
     operations/operation_stack_selection.hpp
     operations/operation_stack.cpp
@@ -1309,6 +1325,9 @@ set(_config_sources
     ${_config_out}/surface_snap_config.hpp
     ${_config_out}/surface_snap_config_serialization.hpp
     ${_config_out}/surface_snap_config.cpp
+    ${_config_out}/foliage_paint_config.hpp
+    ${_config_out}/foliage_paint_config_serialization.hpp
+    ${_config_out}/foliage_paint_config.cpp
     ${_config_out}/lod_config.hpp
     ${_config_out}/lod_config_serialization.hpp
     ${_config_out}/lod_config.cpp

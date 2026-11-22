@@ -447,7 +447,10 @@ auto Level_kits::detach_pieces(Scene_root& scene_root, const std::span<const std
     if (operations.empty()) {
         return result;
     }
-    m_context.operation_stack->execute_now(std::make_shared<Compound_operation>(Compound_operation::Parameters{.operations = std::move(operations)}));
+    result.error = execute_entry(std::make_shared<Compound_operation>(Compound_operation::Parameters{.operations = std::move(operations)}));
+    if (!result.error.empty()) {
+        return result;
+    }
     for (const std::shared_ptr<erhe::scene::Node>& node : nodes) {
         log_scene->info("Kit piece '{}' detached", node->get_name());
     }
@@ -485,8 +488,8 @@ auto Level_kits::remove_connection(Scene_root& scene_root, const std::shared_ptr
     if (!operation) {
         return result;
     }
-    m_context.operation_stack->execute_now(operation);
-    result.changed = true;
+    result.error = execute_entry(operation);
+    result.changed = result.error.empty();
     return result;
 }
 

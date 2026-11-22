@@ -228,6 +228,11 @@ an empty scene and checks over MCP:
   doc/editor/level_tools.md "Create menu"): the Level Kit window's Add Path
   Stairs and Make Layout On Curve, every layout kind and the shapes through
   Commands > Create and the Scene Hierarchy window's Create menu.
+- Foliage flag (FD2, doc/editor/level_tools.md "Surface placement"): a
+  hand-flagged piece is passed by snap to surface, the support report, the
+  height map, the Brush tool's placement and viewport Create; hover and
+  selection still hit it; Level Check leaves it out; the flag survives save
+  and load.
 
 Each group of checks (the catalog level, the walkable level, the Level Kit
 window's scene and the groups after them) closes the scenes it made and gives
@@ -251,7 +256,7 @@ Usage: python3 scripts/level_tools_verify.py [--editor <binary>] [--image <png p
        [--layout-image <png path>] [--group-image <png path>] [--path-image <png path>] [--only-walkable] [--only-transform] [--only-layouts]
        [--only-path-layouts] [--only-window-layout] [--only-replace] [--only-layout-selection] [--only-scatter] [--only-connectors] [--only-attachments] [--only-connector-types] [--only-polygon-floor] [--only-connection-records] [--only-property-flow] [--only-riders] [--only-surface-attachment] [--only-flow-preview] [--only-connector-snap]
        [--only-layout-indicators] [--only-region-handles] [--only-layout-handles] [--only-segment-handles] [--only-more-shapes] [--only-former-ids] [--only-layout-connectors] [--only-stairs-layout] [--only-stairs-drag-uploads]
-       [--only-piece-lights] [--piece-lights-shape <shape id>] [--only-wrap-with-path] [--only-create-menu]
+       [--only-piece-lights] [--piece-lights-shape <shape id>] [--only-wrap-with-path] [--only-create-menu] [--only-foliage-flag] [--only-foliage-index] [--only-foliage-paint] [--only-foliage-remove] [--only-foliage-tool]
        [--only-thumbnails] [--thumbnails-image <png path>] [--only-machine-kit]
 (default editor: build_ninja_linux_vulkan_headless/bin/editor when built, else build/Ninja_Vulkan_Debug/bin/editor)
 """
@@ -20195,6 +20200,2458 @@ def check_machine_kit(editor):
     editor.close(scene)
 
 
+FOLIAGE_NAME = "foliage block"
+
+
+def foliage_scene(editor):
+    """A ground slab (top at y 0) and a 2 m x 1 m x 2 m block on it, the block to be flagged foliage; returns (scene, pieces by name)."""
+    scene = create_scene(editor)
+    editor.call("set_active_scene", {"scene_name": scene})
+    placed = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [
+        {"shape": "basic.floor_slab", "position": [0.0, -0.2, 0.0], "name": "foliage ground", "parameters": {"width": 20.0, "depth": 20.0, "thickness": 0.2}},
+        {"shape": "basic.block", "position": [0.0, 0.0, 0.0], "name": FOLIAGE_NAME, "parameters": {"width": 2.0, "height": 1.0, "depth": 2.0}}]})["pieces"]
+    editor.wait_idle()
+    return scene, {p["name"]: p for p in placed}
+
+
+def set_foliage(editor, scene, node_id, enabled):
+    editor.call("set_item_flags", {"scene_name": scene, "ids": [node_id], "flags": ["foliage"], "enabled": enabled})
+    editor.wait_idle()
+
+
+def foliage_menu_entries(editor):
+    """The open viewport context menu's entries by label ('Cut "name"###Cut' reads Cut); empty when none is open."""
+    windows = {}
+    for item in editor.call("get_imgui_items", {"visible_only": True, "limit": 2000})["items"]:
+        label = item.get("label", "").split("###")[-1]
+        if label in ("Create", "Cut", "Copy", "Paste"):
+            windows.setdefault(item.get("window"), {})[label] = item
+    for window, entries in windows.items():
+        if ("Create" in entries) and str(window).startswith("##Popup"):
+            return entries
+    return {}
+
+
+def foliage_menu_create_xform(editor, scene, point):
+    """A right click at the window point, then Create > Xform; returns the new node's world position, or None. Undoes it."""
+    before = {n["id"] for n in editor.call("get_scene_nodes", {"scene_name": scene})["nodes"]}
+    editor.call("mouse_click", {"x": point[0], "y": point[1], "button": "right"})
+    entries = {}
+
+    def menu_shown():
+        entries.update(foliage_menu_entries(editor))
+        return bool(entries)
+    if not wait_until(editor, menu_shown):
+        return None
+    editor.call("imgui_click", {"id": entries["Create"]["id"]})
+    xform = []
+
+    def find_xform():
+        xform[:] = [i for i in editor.call("get_imgui_items", {"label_contains": "Xform", "visible_only": True})["items"]
+                    if i.get("display_label", i.get("label")) == "Xform"]
+        return bool(xform)
+    if not wait_until(editor, find_xform):
+        editor.call("key_press", {"key": "escape"})
+        wait_until(editor, lambda: not foliage_menu_entries(editor))
+        return None
+    editor.call("imgui_click", {"id": xform[0]["id"]})
+    wait_until(editor, lambda: not foliage_menu_entries(editor))
+    editor.wait_idle()
+    added = [n["id"] for n in editor.call("get_scene_nodes", {"scene_name": scene})["nodes"] if n["id"] not in before]
+    position = editor.call("get_node_details", {"scene_name": scene, "node_id": added[0]}).get("world_position") if len(added) == 1 else None
+    if added:
+        editor.call("undo")
+        editor.wait_idle()
+    return position
+
+
+def check_foliage_flag(editor, directory):
+    """FD2 (doc/editor/level_tools.md "Surface placement"): a mesh carrying the foliage flag is no surface for snap to surface,
+    the support report, the height map and viewport Create; hover and selection still hit it; Level Check leaves it out;
+    level_get_pieces reports the flag and it survives save and load."""
+    import curve_verify as cv  # noqa: E402 - frames the camera from the viewport's real size
+    scene, by_name = foliage_scene(editor)
+    foliage = by_name[FOLIAGE_NAME]
+    # A probe over the block, a block standing on its top and one sunk in it, standing on the ground.
+    probe, sitter, _ = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [
+        {"shape": "basic.block", "position": [-0.5, 3.0, 0.0], "name": "foliage probe", "parameters": {"width": 0.5, "height": 0.5, "depth": 0.5}},
+        {"shape": "basic.block", "position": [0.5, 1.0, 0.0], "name": "foliage sitter", "parameters": {"width": 0.5, "height": 0.5, "depth": 0.5}},
+        {"shape": "basic.block", "position": [0.75, 0.0, 0.75], "name": "foliage sunk", "parameters": {"width": 0.5, "height": 0.5, "depth": 0.5}}]})["pieces"]
+    editor.wait_idle()
+    aim = [0.0, 1.0, 0.0]  # the block's top center
+    viewport = cv.frame_camera(editor, scene, [0.0, 6.0, 6.0], aim, [[x, 1.0, z] for x in (-1.0, 1.0) for z in (-1.0, 1.0)])
+    eye = viewport["camera_world_from_camera"][12:15]
+    t = eye[1] / (eye[1] - aim[1])
+    behind = [eye[i] + t * (aim[i] - eye[i]) for i in range(3)]  # where the pointer ray through aim meets the ground
+    window_aim = window_point(viewport, aim)
+    select_button = binding_input(editor, "Selection.viewport_select", "mouse_button")
+
+    def measure():
+        snapped = editor.call("level_snap_to_surface", {"scene_name": scene, "node_ids": [probe["id"]], "query_only": True, "max_distance": 10.0})["nodes"][0]
+        support = editor.call("level_get_support_report", {"scene_name": scene, "node_ids": [sitter["id"], foliage["id"]]})["nodes"]
+        height = editor.call("level_get_height_map", {"scene_name": scene, "min": [-0.55, -1.0, 0.55], "max": [-0.45, 4.0, 0.65], "cell_size": 0.1})["heights"][0][0]
+        level = editor.call("level_check", {"scene_name": scene})
+        named = sorted({i for f in level.get("findings", []) for i in f.get("ids", [])})
+        piece = piece_by_id(editor, scene, foliage["id"])
+        pick = editor.call("pick_at", {"viewport": viewport["title"], "x": 0.5 * viewport["width"], "y": 0.5 * viewport["height"]})
+        hover(editor, viewport, aim)
+        x, y = window_aim
+        editor.call("mouse_click", {"x": x, "y": y, "button": select_button})
+        editor.wait_idle()
+        selected = [i["id"] for i in editor.call("get_selection")["items"]]
+        editor.call("select_items", {"scene_name": scene, "ids": []})
+        editor.wait_idle()
+        created = foliage_menu_create_xform(editor, scene, window_aim)
+        return {"snap y": snapped.get("position", [9, 9, 9])[1], "snap found": snapped.get("surface_found"),
+                "sitter supported": support[0]["supported"], "sitter distance": support[0]["distance"], "block supported": support[1]["supported"],
+                "height": height, "excluded": level["excluded_count"], "pieces": level["piece_count"], "named": named,
+                "foliage": piece.get("foliage"), "pick": (pick.get("nearest") or {}).get("node"), "selected": selected, "created": created}
+
+    plain = measure()
+    check("foliage flag setup: unflagged, the block is a surface: the probe snaps onto its top, the sitter rests on it, the height map "
+          "meets its top, Level Check tests it and names it (the sunk block's overlap), viewport Create lands on its top",
+          (plain["foliage"] is False) and close([plain["snap y"]], [1.0]) and plain["sitter supported"] and close([plain["height"] or 9.0], [1.0])
+          and (foliage["id"] in plain["named"]) and (plain["created"] is not None) and close(plain["created"], aim, 0.05), json.dumps(plain))
+    set_foliage(editor, scene, foliage["id"], True)
+    flagged = measure()
+    check("level_get_pieces reports foliage true for the hand-flagged block", flagged["foliage"] is True, json.dumps(flagged["foliage"]))
+    check("snap to surface passes a foliage mesh: the probe over the block snaps to the ground under it",
+          flagged["snap found"] and close([flagged["snap y"]], [0.0]), f"probe y {flagged['snap y']}")
+    check("the support report passes a foliage mesh: the block standing on its top is unsupported, 1 m over the ground; the foliage block "
+          "itself rests on the ground",
+          (not flagged["sitter supported"]) and close([flagged["sitter distance"] if flagged["sitter distance"] is not None else 9.0], [1.0])
+          and flagged["block supported"],
+          json.dumps({k: flagged[k] for k in ("sitter supported", "sitter distance", "block supported")}))
+    check("the height map passes a foliage mesh: the cell over the block reads the ground",
+          close([flagged["height"] if flagged["height"] is not None else 9.0], [0.0]), f"height {flagged['height']}")
+    check("Level Check leaves the foliage block out: excluded_count one more than unflagged, no finding names it",
+          (flagged["excluded"] == plain["excluded"] + 1) and (flagged["pieces"] == plain["pieces"]) and (foliage["id"] not in flagged["named"]),
+          json.dumps({k: (plain[k], flagged[k]) for k in ("excluded", "pieces", "named")}))
+    check("hover and selection still hit the foliage block: pick_at names it, a viewport click selects it",
+          (flagged["pick"] == FOLIAGE_NAME) and (flagged["selected"] == [foliage["id"]]) and (plain["pick"] == FOLIAGE_NAME),
+          json.dumps({k: (plain[k], flagged[k]) for k in ("pick", "selected")}))
+    check("viewport Create over the foliage block places the new node where the pointer ray meets the ground behind it",
+          (flagged["created"] is not None) and close(flagged["created"], behind, 0.05), f"created {flagged['created']}, expected about {fmt3(behind)}")
+    # The viewport context menu's Paste places at the same hit: the ground behind the foliage block.
+    editor.call("clipboard_copy_nodes", {"scene_name": scene, "node_ids": [sitter["id"]]})
+    before = {n["id"] for n in editor.call("get_scene_nodes", {"scene_name": scene})["nodes"]}
+    editor.call("mouse_click", {"x": window_aim[0], "y": window_aim[1], "button": "right"})
+    paste_entries = {}
+
+    def paste_menu_shown():
+        paste_entries.update(foliage_menu_entries(editor))
+        return "Paste" in paste_entries
+    pasted_position = None
+    if wait_until(editor, paste_menu_shown):
+        editor.call("imgui_click", {"id": paste_entries["Paste"]["id"]})
+        wait_until(editor, lambda: not foliage_menu_entries(editor))
+        editor.wait_idle()
+        added = [n["id"] for n in editor.call("get_scene_nodes", {"scene_name": scene})["nodes"] if n["id"] not in before]
+        if added:
+            pasted_position = editor.call("get_node_details", {"scene_name": scene, "node_id": added[0]}).get("world_position")
+            editor.call("undo")
+            editor.wait_idle()
+    else:
+        editor.call("key_press", {"key": "escape"})
+    check("viewport Paste over the foliage block places the pasted node on the ground behind it, not on the block's top",
+          (pasted_position is not None) and close([pasted_position[0], pasted_position[2]], [behind[0], behind[2]], 0.05) and (-0.05 <= pasted_position[1] < 0.5),
+          f"pasted at {pasted_position}, the ground behind at {fmt3(behind)}")
+
+    path = os.path.join(directory, "foliage_flag.gltf")
+    editor.save(scene, path)
+    editor.close(scene)
+    name = editor.load(path)
+    reloaded = {p["name"]: p for p in pieces(editor, name)}
+    probe_after = reloaded.get("foliage probe", {"id": -1})
+    snapped = editor.call("level_snap_to_surface", {"scene_name": name, "node_ids": [probe_after["id"]], "query_only": True, "max_distance": 10.0})["nodes"]
+    check("the foliage flag survives save and load: the reloaded block reports it and the probe still snaps to the ground",
+          (reloaded.get(FOLIAGE_NAME, {}).get("foliage") is True) and (reloaded.get("foliage ground", {}).get("foliage") is False)
+          and bool(snapped) and close([snapped[0].get("position", [9, 9, 9])[1]], [0.0]),
+          json.dumps({"foliage": reloaded.get(FOLIAGE_NAME, {}).get("foliage"), "snap": snapped}))
+    editor.close(name)
+
+
+def check_foliage_brush(editor, window_scene):
+    """FD2.4: the Brush tool's kit mode takes its point, normal and connector join target from the surface behind a hovered
+    foliage mesh (the pointer ray, not a search under the hover point), and the grid point grid-snapped behind it."""
+    import curve_verify as cv  # noqa: E402
+    editor.call("select_items", {"scene_name": window_scene, "ids": []})
+    scene, by_name = foliage_scene(editor)
+    foliage = by_name[FOLIAGE_NAME]
+    ground = by_name["foliage ground"]
+    wall = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [
+        {"shape": "architecture.wall", "position": [4.0, 0.0, 0.0], "name": "foliage wall"}]})["pieces"][0]
+    editor.wait_idle()
+    known = {p["id"] for p in by_name.values()} | {wall["id"]}
+    insert_button = binding_input(editor, "Brush_tool.insert", "mouse_button")
+    saved_distance = editor.call("get_surface_snap_settings", {}).get("connector_snap_distance", 0.0)
+
+    def frame(target):
+        return cv.frame_camera(editor, scene, [target[0], target[1] + 5.0, target[2] + 6.0], target,
+                               [[target[0] + x, target[1], target[2] + z] for x in (-1.0, 1.0) for z in (-1.0, 1.0)])
+
+    def behind_of(viewport, aim, ground_y=0.0):
+        """Where the pointer ray through aim meets the plane y = ground_y."""
+        eye = viewport["camera_world_from_camera"][12:15]
+        t = (eye[1] - ground_y) / (eye[1] - aim[1])
+        return [eye[i] + t * (aim[i] - eye[i]) for i in range(3)]
+
+    def preview_y(reply):
+        return (reply.get("position") or [9, 9, 9])[1]
+
+    def aim_with(viewport, aim, predicate):
+        # A step aside and back: the preview follows the pointer's hover change.
+        hover(editor, viewport, [aim[0] + 0.3, aim[1], aim[2] + 0.3])
+        hover(editor, viewport, aim)
+        return wait_preview(editor, lambda r: r.get("visible") and close(r.get("hover_position") or [9, 9, 9], aim, 0.05) and predicate(r))
+
+    def place(viewport, aim):
+        x, y = window_point(viewport, aim)
+        editor.call("mouse_click", {"x": x, "y": y, "button": insert_button})
+        editor.wait_idle()
+        added = new_pieces(editor, scene, known)
+        for piece in added:
+            known.add(piece["id"])
+        return added
+
+    aim = [0.0, 1.0, 0.0]  # the block's top center
+    viewport = frame(aim)
+    hover(editor, viewport, aim)
+    click(editor, "Block")
+    state = wait_preview(editor, lambda r: r.get("active") and (r.get("shape") == "basic.block"))
+    settings_ok = (set_checkbox(editor, "Snap To Module", True) and set_checkbox(editor, "Snap To Surface", True)
+                   and set_checkbox(editor, "Orient To Surface", False) and set_checkbox(editor, "Place As Layout", False))
+    check("foliage brush setup: the Block row enters kit mode, module and surface snap on, no orient", settings_ok and state.get("active"), json.dumps(state)[:300])
+
+    # The pointer ray meets the ground behind the block far from under the hover point: module snap tells them apart.
+    behind = behind_of(viewport, aim)
+    expected_xz = [round(behind[0]), round(behind[2])]
+    under_xz = [round(aim[0]), round(aim[2])]
+    plain = aim_with(viewport, aim, lambda r: close([preview_y(r)], [1.0]))
+    check("unflagged, the Brush tool's preview over the block rests on its top under the hover point", close([preview_y(plain)], [1.0])
+          and close([plain["position"][0], plain["position"][2]], under_xz, 1.0e-4), f"hover {plain.get('hover_position')}, preview {plain.get('position')}")
+    set_foliage(editor, scene, foliage["id"], True)
+    flagged = aim_with(viewport, aim, lambda r: close([preview_y(r)], [0.0]))
+    position = flagged.get("position") or [9, 9, 9]
+    check("over a foliage block the Brush tool's hover still reports the block's top while its preview rests on the ground where the "
+          "pointer ray meets it behind the block (module-rounded), not under the hover point",
+          close(flagged.get("hover_position") or [9, 9, 9], aim, 0.05) and flagged.get("surface_found") and close([position[1]], [0.0])
+          and close([position[0], position[2]], expected_xz, 1.0e-4) and (expected_xz != under_xz),
+          f"hover {flagged.get('hover_position')}, preview {position}, ray meets the ground at {fmt3(behind)}, under the hover {under_xz}")
+    added = place(viewport, aim)
+    check("a click places the block on the ground behind the foliage block, at the preview's pose",
+          (len(added) == 1) and close(added[0]["position"], position, 1.0e-4), f"added {[p['position'] for p in added]}")
+    editor.call("undo")
+    editor.wait_idle()
+    check("its undo removes the placed block", not [p for p in pieces(editor, scene) if p["id"] in {a["id"] for a in added}])
+
+    # The connector join: a hand-flagged wall (F1.2) is no join target.
+    reach = 0.5
+    editor.call("set_surface_snap_settings", {"connector_snap_distance": reach})
+    aabb = wall["world_aabb"]
+    end_x = aabb["max"][0]
+    end_aim = [end_x, 0.2, 0.0]  # on the end face, 0.2 m above its end connector
+    end_view = cv.frame_camera(editor, scene, [end_x + 4.0, 2.0, 4.0], [end_x, 0.5, 0.0],
+                               [[x, y, z] for x in (aabb["min"][0], end_x + 1.0) for y in (0.0, aabb["max"][1]) for z in (aabb["min"][2], aabb["max"][2])])
+    hover(editor, end_view, end_aim)
+    click(editor, "Wall")
+    wait_preview(editor, lambda r: r.get("active") and (r.get("shape") == "architecture.wall"))
+
+    def join_target(reply):
+        return (reply.get("connector_join") or {}).get("target_piece_id")
+    joined = aim_with(end_view, end_aim, lambda r: join_target(r) == wall["id"])
+    check("unflagged, hovering the wall's end face joins the new wall to its end connector", join_target(joined) == wall["id"],
+          json.dumps(joined.get("connector_join")))
+    set_foliage(editor, scene, wall["id"], True)
+    passed = aim_with(end_view, end_aim, lambda r: join_target(r) != wall["id"])
+    check("over a foliage wall the Brush tool joins nothing of it: the join target is the placement hit's mesh behind it",
+          passed.get("visible") and (join_target(passed) != wall["id"]) and not close(passed.get("position") or [9, 9, 9], joined.get("position") or [8, 8, 8], 1.0e-3),
+          f"join {passed.get('connector_join')}, preview {passed.get('position')} vs joined {joined.get('position')}")
+    editor.call("set_surface_snap_settings", {"connector_snap_distance": saved_distance})
+
+    # Through foliage onto the grid: the ground moved away, module snap off; the grid point is grid-snapped as on the grid itself.
+    viewport = frame(aim)
+    hover(editor, viewport, aim)
+    click(editor, "Block")
+    wait_preview(editor, lambda r: r.get("active") and (r.get("shape") == "basic.block"))
+    module_off = set_checkbox(editor, "Snap To Module", False)
+    # The Brush tool's Snap To Grid (Tool Properties) on; level_kit_window hides the window again.
+    editor.call("set_window_visibility", {"title": "Tool Properties", "visible": True})
+    editor.wait_idle()
+
+    def snap_to_grid_item():
+        found = [i for i in editor.call("get_imgui_items", {"window": "Tool Properties", "label_contains": "Snap To Grid", "limit": 50, "visible_only": False}).get("items", [])
+                 if i.get("display_label", i.get("label")) == "Snap To Grid"]
+        return found[0] if found else None
+
+    def snap_to_grid():
+        item = snap_to_grid_item()
+        return None if item is None else bool(item.get("status", {}).get("checked"))
+
+    def set_snap_to_grid(checked):
+        if (snap_to_grid() is not None) and (snap_to_grid() != checked):
+            editor.call("imgui_click", {"id": snap_to_grid_item()["id"]})
+            wait_until(editor, lambda: snap_to_grid() == checked)
+        return snap_to_grid() == checked
+    wait_until(editor, lambda: snap_to_grid() is not None)
+    saved_snap_to_grid = snap_to_grid()
+    grid_snap_on = set_snap_to_grid(True)
+    editor.call("set_node_transform", {"scene_name": scene, "node_id": ground["id"], "translation": [200.0, -0.2, 200.0]})
+    editor.wait_idle()
+    grid_aim = [0.37, 1.0, 0.23]
+    raw = behind_of(viewport, grid_aim)
+    through = aim_with(viewport, grid_aim, lambda r: close([preview_y(r)], [0.0]) and not r.get("surface_found"))
+    # The same pixel with the block moved away hovers the grid directly.
+    editor.call("set_node_transform", {"scene_name": scene, "node_id": foliage["id"], "translation": [-100.0, 0.0, -100.0]})
+    editor.wait_idle()
+    hover(editor, viewport, [grid_aim[0] + 0.3, 0.0, grid_aim[2] + 0.3])
+    x, y = window_point(viewport, grid_aim)
+    editor.call("mouse_wheel", {"x": x, "y": y, "dy": 0.0})
+    direct = wait_preview(editor, lambda r: r.get("visible") and close(r.get("hover_position") or [9, 9, 9], raw, 0.05))
+    through_xz = [(through.get("position") or [9, 9, 9])[i] for i in (0, 2)]
+    direct_xz = [(direct.get("position") or [8, 8, 8])[i] for i in (0, 2)]
+    check("through a foliage block onto the grid (no surface behind, module snap off) the preview takes the grid-snapped point, as "
+          "hovering the grid directly at the same pixel does, not the raw grid hit",
+          module_off and grid_snap_on and close(through.get("hover_position") or [9, 9, 9], grid_aim, 0.05) and close(direct.get("hover_position") or [9, 9, 9], raw, 0.05)
+          and close(through_xz, direct_xz, 1.0e-4) and not close(through_xz, [raw[0], raw[2]], 1.0e-3),
+          f"through {through.get('position')} (hover {through.get('hover_position')}), direct {direct.get('position')} "
+          f"(hover {direct.get('hover_position')}), raw grid hit {fmt3(raw)}")
+    if saved_snap_to_grid is not None:
+        set_snap_to_grid(saved_snap_to_grid)
+    set_checkbox(editor, "Snap To Module", True)
+
+    # F1.3, G8: an ordinary (non-kit) brush passes through foliage too: its preview and its insert take the face behind.
+    editor.call("set_node_transform", {"scene_name": scene, "node_id": ground["id"], "translation": [0.0, -0.2, 0.0]})
+    editor.call("set_node_transform", {"scene_name": scene, "node_id": foliage["id"], "translation": [0.0, 0.0, 0.0]})
+    editor.wait_idle()
+    brushes = editor.call("get_scene_brushes", {"scene_name": scene}).get("brushes", [])
+    check("non-kit brush setup: the scene's content library has a brush", bool(brushes), json.dumps(brushes)[:200])
+    if brushes:
+        editor.call("select_items", {"scene_name": scene, "ids": [brushes[0]["id"]]})
+        editor.wait_idle()
+        viewport = frame(aim)
+
+        def non_kit_preview():
+            hover(editor, viewport, [aim[0] + 0.3, aim[1], aim[2] + 0.3])
+            hover(editor, viewport, aim)
+            editor.wait_frames(3)
+            return preview(editor)
+
+        def place_non_kit():
+            before_ids = {n["id"] for n in editor.call("get_scene_nodes", {"scene_name": scene})["nodes"]}
+            x, y = window_point(viewport, aim)
+            editor.call("mouse_click", {"x": x, "y": y, "button": insert_button})
+            editor.wait_idle()
+            added = [n for n in editor.call("get_scene_nodes", {"scene_name": scene})["nodes"] if n["id"] not in before_ids]
+            positions = [editor.call("get_node_details", {"scene_name": scene, "node_id": n["id"]}).get("world_position") for n in added]
+            if added:
+                editor.call("undo")
+                editor.wait_idle()
+            return positions
+
+        set_foliage(editor, scene, foliage["id"], False)
+        on_block = non_kit_preview()
+        on_block_placed = place_non_kit()
+        set_foliage(editor, scene, foliage["id"], True)
+        through = non_kit_preview()
+        through_placed = place_non_kit()
+        p_block, p_through = on_block.get("preview_position") or [9, 9, 9], through.get("preview_position") or [8, 8, 8]
+        check("unflagged, a non-kit brush over the block previews and places on its top",
+              (not on_block.get("active")) and bool(on_block_placed) and close(on_block_placed[0] or [7, 7, 7], p_block, 1.0e-3)
+              and (p_block[1] >= 1.0 - 1.0e-3),
+              f"preview {p_block}, placed {on_block_placed}")
+        check("over the foliage-flagged block a non-kit brush previews and places on the ground behind it (the hovered face's frame "
+              "taken from the surface hit behind), not on the block's top",
+              bool(through_placed) and close(through_placed[0] or [7, 7, 7], p_through, 1.0e-3) and (p_through[1] < p_block[1] - 0.5),
+              f"preview {p_through} vs on the block {p_block}, placed {through_placed}")
+    editor.close(scene)
+
+
+def foliage_compare(editor, scene, parents=None, center=None, radius=None, plain=()):
+    """level_get_foliage (first: it brings the transforms up to date) against the script's own search over level_get_pieces
+    and, for the flagged meshes that are no kit piece (the node ids of plain), get_node_details; returns (reply, problems)."""
+    args = {"scene_name": scene}
+    if center is not None:
+        args.update({"center": center, "radius": radius})
+    reply = editor.call("level_get_foliage", args)
+    flagged = [p for p in pieces(editor, scene) if p.get("foliage")]
+    for node_id in plain:
+        details = editor.call("get_node_details", {"scene_name": scene, "node_id": node_id})
+        flagged.append({"id": node_id, "name": details.get("name"), "position": details.get("world_position"), "foliage_radius": 0.0, "shape": ""})
+    expected = {p["id"]: p for p in flagged
+                if (center is None) or (sum((p["position"][i] - center[i]) ** 2 for i in range(3)) <= radius * radius)}
+    got = {item["id"]: item for item in reply.get("items", [])}
+    problems = []
+    if set(got) != set(expected):
+        problems.append(f"ids {sorted(got)} vs search {sorted(expected)}")
+    for node_id in sorted(set(got) & set(expected)):
+        item, piece = got[node_id], expected[node_id]
+        if not close(item["position"], piece["position"], 1.0e-4):
+            problems.append(f"{piece['name']}: position {fmt3(item['position'])} vs {fmt3(piece['position'])}")
+        if item["radius"] != piece.get("foliage_radius"):
+            problems.append(f"{piece['name']}: radius {item['radius']} vs {piece.get('foliage_radius')}")
+        if item["shape"] != piece["shape"]:
+            problems.append(f"{piece['name']}: shape {item['shape']} vs {piece['shape']}")
+        if (parents is not None) and (item["parent"] != parents.get(node_id)):
+            problems.append(f"{piece['name']}: parent {item['parent']} vs {parents.get(node_id)}")
+    if reply.get("count") != len(got):
+        problems.append(f"count {reply.get('count')} vs {len(got)} items")
+    max_radius = max([p.get("foliage_radius", 0.0) for p in flagged], default=0.0)
+    if not close([reply.get("max_radius", -1.0)], [max_radius], 1.0e-6):
+        problems.append(f"max_radius {reply.get('max_radius')} vs {max_radius}")
+    if center is None:
+        if reply.get("density") is not None:
+            problems.append(f"density {reply.get('density')} without a sphere")
+    elif radius > 0.0:
+        density = len(expected) / (math.pi * radius * radius)
+        if (reply.get("density") is None) or not close([reply["density"]], [density], 1.0e-5):
+            problems.append(f"density {reply.get('density')} vs {density}")
+    return reply, problems
+
+
+def check_foliage_index(editor, directory):
+    """FD5 (doc/editor/level_tools.md "Foliage paint"): level_get_foliage against the script's own search over level_get_pieces
+    after placing, flagging and unflagging, radius edits, moving an item and its parent, delete, undo, redo, save and load."""
+    scene, by_name = foliage_scene(editor)
+    placed = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [
+        {"shape": "nature.bush",       "position": [-4.0, 0.0, 3.0], "name": "index bush a"},
+        {"shape": "nature.bush",       "position": [4.0, 0.0, 3.0], "name": "index bush b"},
+        {"shape": "nature.grass_tuft", "position": [0.0, 0.0, 6.0], "name": "index grass"},
+        {"shape": "basic.block",       "position": [6.0, 0.0, -5.0], "name": "index carrier", "parameters": {"width": 1.0, "height": 0.5, "depth": 1.0}}]})["pieces"]
+    editor.wait_idle()
+    ids = {p["name"]: p["id"] for p in placed}
+    a, b, grass, carrier = ids["index bush a"], ids["index bush b"], ids["index grass"], ids["index carrier"]
+    block = by_name[FOLIAGE_NAME]["id"]
+    parents = {}
+
+    def compare(label, count, **query):
+        reply, problems = foliage_compare(editor, scene, parents, **query)
+        if reply.get("count") != count:
+            problems.append(f"count {reply.get('count')}, expected {count}")
+        check(f"level_get_foliage {label} matches the search over level_get_pieces", not problems, "; ".join(problems))
+        return reply
+
+    def radii(reply):
+        return {i["id"]: i["radius"] for i in reply.get("items", [])}
+
+    def set_radius(node_id, value):
+        editor.call("set_item_property", {"scene_name": scene, "item_id": node_id, "property": "Kit_piece.foliage_radius", "value": value})
+        editor.wait_idle()
+
+    def step(tool, arguments=None):
+        editor.call(tool, arguments if arguments is not None else {})
+        editor.wait_idle()
+
+    compare("after placing (nothing flagged)", 0)
+    for node_id in (a, b, grass, block):
+        set_foliage(editor, scene, node_id, True)
+    reply = compare("after flagging two bushes, the grass and the block", 4)
+    check("a piece flagged by hand has radius 0 until it is given one", all(r == 0.0 for r in radii(reply).values()), json.dumps(radii(reply)))
+
+    depth = undo_depth(editor)
+    set_radius(a, 0.6)
+    set_radius(b, 1.5)
+    set_radius(grass, 0.15)
+    reply = compare("after radius edits", 4)
+    check("the radius edits are three undo entries and max_radius is the largest", (undo_depth(editor) == depth + 3) and (reply.get("max_radius") == 1.5),
+          f"undo depth {undo_depth(editor)} vs {depth} + 3, max_radius {reply.get('max_radius')}")
+    step("undo")
+    reply = compare("after the undo of a radius edit", 4)
+    check("the undo gives the grass radius 0 back", radii(reply).get(grass) == 0.0, json.dumps(radii(reply)))
+    step("redo")
+    compare("after its redo", 4)
+    refusal = call_error(editor, "set_item_property", {"scene_name": scene, "item_id": a, "property": "Kit_piece.foliage_radius", "value": 250.0})
+    editor.wait_idle()
+    reply = compare("after a radius out of range", 4)
+    check("a radius outside 0 - 100 m is refused by the property's validation, naming it: bush a keeps 0.6",
+          (refusal is not None) and ("validation" in refusal) and close([radii(reply).get(a, 9.0)], [0.6], 1.0e-6),
+          f"{json.dumps(radii(reply))}; {(refusal or 'accepted')[:200]}")
+
+    set_foliage(editor, scene, b, False)
+    reply = compare("after unflagging bush b", 3)
+    check("unflagging the largest leaves max_radius at the next largest", close([reply.get("max_radius", 9.0)], [0.6], 1.0e-6), f"max_radius {reply.get('max_radius')}")
+    set_foliage(editor, scene, b, True)
+    compare("after flagging bush b again", 4)
+
+    step("set_node_transform", {"scene_name": scene, "node_id": a, "translation": [-7.0, 0.5, 1.0]})
+    compare("after moving bush a", 4)
+    step("reparent_item", {"scene_name": scene, "item_id": grass, "parent_id": carrier})
+    parents[grass] = carrier
+    compare("after parenting the grass to the carrier", 4)
+    before = {i["id"]: i["position"] for i in editor.call("level_get_foliage", {"scene_name": scene})["items"]}
+    step("set_node_transform", {"scene_name": scene, "node_id": carrier, "translation": [10.0, 2.0, -9.0]})
+    reply = compare("after moving the grass's parent", 4)
+    after = {i["id"]: i["position"] for i in reply.get("items", [])}
+    check("the parent's move moved the grass in the index and nothing else",
+          (grass in after) and (not close(after[grass], before[grass], 1.0e-3)) and all(close(after.get(i, [9, 9, 9]), before[i], 1.0e-6) for i in (a, b, block)),
+          json.dumps({"before": before, "after": after}))
+
+    reply = compare("in a 1 m sphere around bush a", 1, center=after.get(a, [9.0, 9.0, 9.0]), radius=1.0)
+    check("the sphere around bush a holds bush a alone", [i["id"] for i in reply.get("items", [])] == [a], json.dumps(reply.get("items")))
+    compare("in a 30 m sphere around the origin", 4, center=[0.0, 0.0, 0.0], radius=30.0)
+    compare("in a sphere far away", 0, center=[500.0, 0.0, 500.0], radius=5.0)
+
+    step("delete_nodes", {"scene_name": scene, "ids": [b]})
+    compare("after deleting bush b", 3)
+    step("delete_nodes", {"scene_name": scene, "ids": [carrier]})
+    parents.pop(grass)
+    compare("after deleting the grass's parent (the grass goes with it)", 2)
+    step("undo")
+    parents[grass] = carrier
+    compare("after the undo of the parent's delete", 3)
+    step("undo")
+    compare("after the undo of bush b's delete", 4)
+    step("redo")
+    compare("after its redo", 3)
+    step("undo")
+    compare("after the redo's undo", 4)
+
+    # F2.3: a mesh that is no kit piece, flagged by hand, is in the index with radius 0 and no shape.
+    step("create_shape", {"scene_name": scene, "shape": "box", "name": "index plain mesh", "position": [-2.0, 0.5, -6.0], "motion_mode": "none"})
+    plain = [n["id"] for n in editor.call("get_scene_nodes", {"scene_name": scene})["nodes"] if n.get("name") == "index plain mesh"]
+    check("create_shape makes one plain mesh node", len(plain) == 1, json.dumps(plain))
+    plain_before, problems = foliage_compare(editor, scene, parents, plain=())
+    check("the plain mesh is not in the index before it is flagged", (not problems) and (plain_before.get("count") == 4), "; ".join(problems))
+    set_foliage(editor, scene, plain[0], True)
+    saved, problems = foliage_compare(editor, scene, parents, plain=plain)
+    plain_item = {i["id"]: i for i in saved.get("items", [])}.get(plain[0], {})
+    check("a hand-flagged mesh that is no kit piece is in the index with radius 0 and an empty shape, at its world position",
+          (not problems) and (saved.get("count") == 5) and (plain_item.get("radius") == 0.0) and (plain_item.get("shape") == ""),
+          "; ".join(problems) + " " + json.dumps(plain_item))
+
+    path = os.path.join(directory, "foliage_index.gltf")
+    editor.save(scene, path)
+    editor.close(scene)
+    name = editor.load(path)
+    reloaded_plain = [n["id"] for n in editor.call("get_scene_nodes", {"scene_name": name})["nodes"] if n.get("name") == "index plain mesh"]
+    reloaded, problems = foliage_compare(editor, name, plain=reloaded_plain)
+    by_item_name = {i["name"]: i for i in reloaded.get("items", [])}
+    problems += [f"{n}: {by_item_name.get(n)} vs {i}" for n, i in {i["name"]: i for i in saved.get("items", [])}.items()
+                 if (n not in by_item_name) or (by_item_name[n]["radius"] != i["radius"]) or not close(by_item_name[n]["position"], i["position"], 1.0e-4)]
+    check("after save and load the index holds the five items with their positions and radii, and matches the search",
+          (reloaded.get("count") == 5) and not problems, "; ".join(problems))
+
+    # F1.2, F2.4: the Foliage Radius row is listed on any foliage-flagged mesh, a plain one too, and its radius counts in spacing.
+    plain_id = reloaded_plain[0] if reloaded_plain else None
+
+    def radius_listed(node_id):
+        reply = editor.call("get_item_properties", {"item_id": node_id})
+        return any(p.get("name") == "Kit_piece.foliage_radius" for p in reply.get("properties", []))
+    listed_flagged = (plain_id is not None) and radius_listed(plain_id)
+    if plain_id is not None:
+        set_foliage(editor, name, plain_id, False)
+    listed_unflagged = (plain_id is not None) and radius_listed(plain_id)
+    if plain_id is not None:
+        set_foliage(editor, name, plain_id, True)
+    check("the Foliage Radius row (Kit_piece.foliage_radius) is listed on the hand-flagged plain mesh, and not once it is unflagged",
+          listed_flagged and not listed_unflagged and radius_listed(plain_id), f"flagged {listed_flagged}, unflagged {listed_unflagged}")
+    # The check above reports a missing plain mesh; the stroke over it needs the mesh.
+    if plain_id is not None:
+        plain_radius = 2.0
+        editor.call("set_item_property", {"scene_name": name, "item_id": plain_id, "property": "Kit_piece.foliage_radius", "value": plain_radius})
+        editor.wait_idle()
+        plain_position = editor.call("get_node_details", {"scene_name": name, "node_id": plain_id})["world_position"]
+        bush_a = by_item_name.get("index bush a", {}).get("position", [-7.0, 0.5, 1.0])
+        # A stroke after the load over the plain mesh and over bush a: the reloaded items and the plain mesh's radius count.
+        painted = editor.call("level_foliage_paint", {"scene_name": name, "palette": [{"shape": "nature.grass_tuft"}], "radius": 2.5, "density": 3.0, "seed": 4,
+                                                      "stamps": [{"center": [plain_position[0], 0.0, plain_position[2]], "normal": [0.0, 1.0, 0.0]},
+                                                                 {"center": [bush_a[0], 0.0, bush_a[2]], "normal": [0.0, 1.0, 0.0]}]})
+        editor.wait_idle()
+        reference = foliage_reference(editor, name)
+        reference[plain_id] = {"id": plain_id, "position": plain_position, "radius": plain_radius, "parent": None}
+        problems = foliage_index_problems(editor, name, reference) + foliage_spacing_problems(list(reference.values()))
+        near_plain = [i["id"] for i in painted["items"] if math.dist(i["position"], plain_position) < plain_radius]
+        check("after the load a new stroke over the plain mesh (radius 2 m) and the reloaded bush a holds the spacing over every pair, "
+              "the plain mesh's radius counted; the index equals the reference",
+              (painted["placed"] > 0) and not near_plain and not problems, f"placed {painted['placed']}, within 2 m of the plain mesh {near_plain}; " + "; ".join(problems[:5]))
+    editor.close(name)
+
+
+def quat_rotate(q, v):
+    """The vector v turned by the unit quaternion q = [x, y, z, w]."""
+    x, y, z, w = q
+    tx, ty, tz = 2.0 * (y * v[2] - z * v[1]), 2.0 * (z * v[0] - x * v[2]), 2.0 * (x * v[1] - y * v[0])
+    return [v[0] + w * tx + (y * tz - z * ty), v[1] + w * ty + (z * tx - x * tz), v[2] + w * tz + (x * ty - y * tx)]
+
+
+def foliage_spacing_problems(items):
+    """F6.1 over every pair: |p - q| >= max(r_p, r_q), compared on squared distances with a 1e-4 m allowance."""
+    problems = []
+    for i in range(len(items)):
+        for j in range(i + 1, len(items)):
+            a, b = items[i], items[j]
+            reach = max(a["radius"], b["radius"]) - 1.0e-4
+            if sum((a["position"][k] - b["position"][k]) ** 2 for k in range(3)) < reach * reach:
+                problems.append(f"{a['id']} and {b['id']} {math.dist(a['position'], b['position']):.4f} m apart, reach {reach:.4f}")
+    return problems
+
+
+def same_rotation(a, b, tolerance=1.0e-4):
+    """Whether two unit quaternions turn alike (q and -q are one rotation)."""
+    return close(a, b, tolerance) or close(a, [-x for x in b], tolerance)
+
+
+def foliage_reference(editor, scene):
+    """The scene's foliage items read from level_get_pieces and get_scene_nodes (not from the foliage index): by id, the
+    world position and rotation, the radius, the parent node id (None at the root), the surface record state, the shape and
+    the slot materials."""
+    nodes = {n["id"]: n for n in editor.call("get_scene_nodes", {"scene_name": scene})["nodes"]}
+    root_ids = {n["parent_id"] for n in nodes.values() if n.get("parent") == "root"}
+    reference = {}
+    for p in pieces(editor, scene):
+        if not p.get("foliage"):
+            continue
+        parent = nodes.get(p["id"], {}).get("parent_id")
+        record = p.get("surface_attachment")
+        reference[p["id"]] = {
+            "id": p["id"], "position": p["position"], "rotation_xyzw": p["rotation_xyzw"], "radius": p["foliage_radius"],
+            "parent": None if (parent in root_ids) else parent, "state": record["state"] if record else None,
+            "shape": p["shape"], "materials": p["materials"], "mesh_key": p.get("mesh_key")
+        }
+    return reference
+
+
+def foliage_index_problems(editor, scene, reference):
+    """level_get_foliage's item set, positions, radii and parents against the reference."""
+    reply = editor.call("level_get_foliage", {"scene_name": scene})
+    got = {i["id"]: i for i in reply["items"]}
+    problems = []
+    if set(got) != set(reference):
+        problems.append(f"level_get_foliage ids differ from level_get_pieces: {sorted(set(got) ^ set(reference))[:8]}")
+    for node_id in set(got) & set(reference):
+        item, ref = got[node_id], reference[node_id]
+        if (not close(item["position"], ref["position"], 1.0e-4)) or (item["radius"] != ref["radius"]) or (item["parent"] != ref["parent"]):
+            problems.append(f"{node_id}: index {fmt3(item['position'])} r {item['radius']} parent {item['parent']} vs "
+                            f"{fmt3(ref['position'])} r {ref['radius']} parent {ref['parent']}")
+    return problems
+
+
+def check_foliage_paint(editor, directory):
+    """FD6, FD9 (doc/editor/level_tools.md "Foliage paint"): level_foliage_paint on a floor, a slope, a wall, a turned and a
+    non-uniformly scaled support and a plain mesh, checked against the script's own reading of the surfaces and of
+    level_get_pieces / get_scene_nodes (positions, parents, records, the spacing rule over all pairs); the index against
+    that reading; weights, variants, palette materials, the carry, undo, redo, cancel, batches and save and load."""
+    scene = create_scene(editor)
+    editor.call("set_active_scene", {"scene_name": scene})
+    slope_degrees = 30.0
+    half = math.radians(slope_degrees) / 2.0
+    turn_half = math.radians(40.0) / 2.0
+    turn = [0.0, math.sin(turn_half), 0.0, math.cos(turn_half)]
+    placed = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [
+        {"shape": "basic.floor_slab", "position": [0.0, -0.2, 0.0], "name": "paint floor", "parameters": {"width": 60.0, "depth": 60.0, "thickness": 0.2}},
+        {"shape": "basic.floor_slab", "position": [50.0, 0.0, 0.0], "name": "paint slope", "parameters": {"width": 10.0, "depth": 10.0, "thickness": 0.2},
+         "rotation_xyzw": [0.0, 0.0, math.sin(half), math.cos(half)]},
+        {"shape": "basic.block", "position": [-40.0, 0.0, 0.0], "name": "paint wall", "parameters": {"width": 0.5, "height": 6.0, "depth": 10.0}},
+        {"shape": "basic.floor_slab", "position": [0.0, 0.0, -50.0], "name": "paint turned", "parameters": {"width": 8.0, "depth": 8.0, "thickness": 0.2},
+         "rotation_xyzw": turn},
+        {"shape": "basic.floor_slab", "position": [30.0, 0.0, -50.0], "name": "paint scaled", "parameters": {"width": 4.0, "depth": 8.0, "thickness": 0.2}}]})["pieces"]
+    editor.wait_idle()
+    ids = {p["name"]: p["id"] for p in placed}
+    floor, slope, wall, turned, scaled = (ids[n] for n in ("paint floor", "paint slope", "paint wall", "paint turned", "paint scaled"))
+    # Non-uniform scale: the 4 m x 8 m slab becomes 8 m x 4 m, its top at y 0.2 * 0.5 = 0.1.
+    editor.call("set_node_transform", {"scene_name": scene, "node_id": scaled, "scale": [2.0, 0.5, 0.5]})
+    editor.wait_idle()
+    editor.call("create_shape", {"scene_name": scene, "shape": "box", "name": "paint plain box", "size": [4.0, 1.0, 4.0], "position": [0.0, 0.5, 40.0], "motion_mode": "none"})
+    editor.wait_idle()
+    plain = [n["id"] for n in editor.call("get_scene_nodes", {"scene_name": scene})["nodes"] if n.get("name") == "paint plain box"]
+    check("create_shape makes the plain support box", len(plain) == 1, json.dumps(plain))
+    plain = plain[0] if plain else None
+
+    slope_normal = quat_rotate([0.0, 0.0, math.sin(half), math.cos(half)], [0.0, 1.0, 0.0])
+    slope_top = [50.0 + 0.2 * slope_normal[0], 0.2 * slope_normal[1], 0.0]  # the slab's origin is at its base center
+    slope_along = [slope_normal[1], -slope_normal[0], 0.0]
+    wall_x = -40.0 + 0.25
+    grass = {"shape": "nature.grass_tuft"}
+
+    def paint(stamps, palette, radius=2.0, density=2.0, seed=1, align=False):
+        reply = editor.call("level_foliage_paint", {"scene_name": scene, "stamps": [{"center": c, "normal": n} for c, n in stamps],
+                                                    "palette": palette, "radius": radius, "density": density, "seed": seed, "align_to_surface": align})
+        editor.wait_idle()
+        return reply
+
+    def reference():
+        return foliage_reference(editor, scene)
+
+    def stroke_check(label, reply, center, radius, plane_point, plane_normal, parent, up, state):
+        ref = reference()
+        problems = []
+        for item in reply["items"]:
+            r = ref.get(item["id"])
+            if r is None:
+                problems.append(f"{item['id']} is no foliage piece")
+                continue
+            p = r["position"]
+            if math.dist(p, center) > radius + 1.0e-4:
+                problems.append(f"{item['id']} at {fmt3(p)} is {math.dist(p, center):.4f} m from the center")
+            height = sum((p[k] - plane_point[k]) * plane_normal[k] for k in range(3))
+            if abs(height) > 1.0e-3:
+                problems.append(f"{item['id']} at {fmt3(p)} is {height:.5f} m off the surface")
+            if r["parent"] != parent:
+                problems.append(f"{item['id']} parent {r['parent']}, expected {parent}")
+            item_up = quat_rotate(r["rotation_xyzw"], [0.0, 1.0, 0.0])
+            if not close(item_up, up, 1.0e-3):
+                problems.append(f"{item['id']} up {fmt3(item_up)}, expected {fmt3(up)}")
+            if not (close(item["position"], p, 1.0e-4) and same_rotation(item["rotation_xyzw"], r["rotation_xyzw"])):
+                problems.append(f"{item['id']} reply pose {fmt3(item['position'])} {item['rotation_xyzw']} vs level_get_pieces {fmt3(p)} {r['rotation_xyzw']}")
+            if r["state"] != state:
+                problems.append(f"{item['id']} record {r['state']}, expected {state}")
+        spacing = foliage_spacing_problems(list(ref.values()))
+        index = foliage_index_problems(editor, scene, ref)
+        check(f"{label}: {reply['placed']} items on the surface, inside the brush, under the hit mesh, the expected up axis, "
+              f"record {state}; the spacing holds over every pair of the scene's foliage pieces and the index matches them",
+              (reply["placed"] > 0) and (reply["placed"] == len(reply["items"])) and not problems and not spacing and not index,
+              "; ".join(problems[:5] + spacing[:5] + index[:5]))
+
+    # Floor, slope, wall, a turned and a scaled support, a plain mesh (FD9.4, F5.5, F7.1, F7.4).
+    depth = undo_depth(editor)
+    floor_center = [-10.0, 0.0, -10.0]
+    first = paint([(floor_center, [0.0, 1.0, 0.0])], [grass])
+    stroke_check("a floor stroke", first, floor_center, 2.0, [0.0, 0.0, 0.0], [0.0, 1.0, 0.0], floor, [0.0, 1.0, 0.0], "active")
+    check("the floor stroke is one undo entry and reports it recorded", first["recorded"] and (undo_depth(editor) == depth + 1),
+          f"recorded {first['recorded']}, undo depth {undo_depth(editor)} vs {depth} + 1")
+    first_ref = reference()
+    check("every painted item carries the foliage flag and the entry's radius (the grass tuft's 0.15 m)",
+          all((i["id"] in first_ref) and close([first_ref[i["id"]]["radius"]], [0.15], 1.0e-6) for i in first["items"]), "")
+    for align, up in ((False, [0.0, 1.0, 0.0]), (True, slope_normal)):
+        center = [slope_top[k] + (2.5 if align else -2.5) * slope_along[k] for k in range(3)]
+        reply = paint([(center, slope_normal)], [grass], radius=1.5, align=align)
+        stroke_check(f"a slope stroke with Align To Surface {'on' if align else 'off'}", reply, center, 1.5, slope_top, slope_normal, slope, up, "active")
+    for align, up, z in ((False, [0.0, 1.0, 0.0], -2.5), (True, [1.0, 0.0, 0.0], 2.5)):
+        center = [wall_x, 3.0, z]
+        reply = paint([(center, [1.0, 0.0, 0.0])], [grass], radius=1.5, align=align)
+        stroke_check(f"a wall stroke with Align To Surface {'on' if align else 'off'}", reply, center, 1.5, [wall_x, 0.0, 0.0], [1.0, 0.0, 0.0], wall, up, "active")
+    turned_top = [0.0, 0.2, -50.0]
+    reply = paint([(turned_top, [0.0, 1.0, 0.0])], [grass], radius=2.0)
+    stroke_check("a stroke on a slab turned 40 degrees about y", reply, turned_top, 2.0, turned_top, [0.0, 1.0, 0.0], turned, [0.0, 1.0, 0.0], "active")
+    scaled_top = [30.0, 0.1, -50.0]
+    reply = paint([(scaled_top, [0.0, 1.0, 0.0])], [grass], radius=1.5)
+    stroke_check("a stroke on a slab scaled (2, 0.5, 0.5)", reply, scaled_top, 1.5, scaled_top, [0.0, 1.0, 0.0], scaled, [0.0, 1.0, 0.0], "active")
+    if plain is not None:
+        center = [0.0, 1.0, 40.0]
+        reply = paint([(center, [0.0, 1.0, 0.0])], [grass], radius=1.5)
+        stroke_check("a stroke on a mesh that is no kit piece (a plain child, no record)", reply, center, 1.5, center, [0.0, 1.0, 0.0], plain, [0.0, 1.0, 0.0], None)
+
+    # A second stroke over the first adds more and holds the rule; saturation (F5.4, F6.3).
+    count = len(reference())
+    second = paint([(floor_center, [0.0, 1.0, 0.0])], [grass], seed=2)
+    ref = reference()
+    # Earlier foliage is passed through: every new item stands on the floor's top under the floor, none on a grass tuft.
+    off_support = [f"{i['id']} at {fmt3(ref[i['id']]['position'])} parent {ref[i['id']]['parent']}" for i in second["items"]
+                   if (i["id"] in ref) and ((ref[i["id"]]["parent"] != floor) or (abs(ref[i["id"]]["position"][1]) > 1.0e-3))]
+    check("a second stroke over the first adds items on the floor itself (parent the floor, on its top, none on earlier foliage) "
+          "and holds the spacing over every pair",
+          (second["placed"] > 0) and (len(ref) == count + second["placed"]) and not off_support and not foliage_spacing_problems(list(ref.values())),
+          f"placed {second['placed']}, count {len(ref)} vs {count} + {second['placed']}; " + "; ".join(off_support[:5]))
+    saturation_center, saturation_radius, r = [-20.0, 0.0, 20.0], 0.6, 0.15
+    history = []
+    for seed in range(1, 31):
+        reply = paint([(saturation_center, [0.0, 1.0, 0.0])] * 4, [grass], radius=saturation_radius, density=100.0, seed=seed)
+        history.append(reply["placed"])
+        if reply["placed"] == 0:
+            break
+    inside = sum(1 for i in reference().values() if math.dist(i["position"], saturation_center) <= saturation_radius + r)
+    bound = ((saturation_radius + r / 2.0) / (r / 2.0)) ** 2
+    check("repeated strokes over one spot saturate: a stroke there places nothing, and the count stays under the disc packing bound",
+          (history[-1] == 0) and (len(history) > 1) and (inside <= bound), f"placed per stroke {history}, {inside} items near the spot, bound {bound:.1f}")
+
+    # Weights 1, 3 and 0 at one radius, over ground of its own (F3.1, FD8.4).
+    weights = [{"shape": "nature.grass_tuft", "weight": 1, "radius": 0.1}, {"shape": "nature.succulent", "weight": 3, "radius": 0.1},
+               {"shape": "nature.leaf_plant", "weight": 0, "radius": 0.1}]
+    centers = [[x, 0.0, z] for x in (10.0, 18.0) for z in (10.0, 18.0)]
+    reply = paint([(c, [0.0, 1.0, 0.0]) for c in centers], weights, radius=5.0, density=1.0, seed=7)
+    ref = reference()
+    shapes = [ref[i["id"]]["shape"] for i in reply["items"] if i["id"] in ref]
+    share = shapes.count("nature.succulent") / max(len(shapes), 1)
+    check("weights 1 : 3 : 0 give about a quarter grass and three quarters succulents (share within 0.1 of 0.75) and no leaf plant",
+          (len(shapes) >= 100) and (len(shapes) == len(reply["items"])) and (abs(share - 0.75) <= 0.1) and ("nature.leaf_plant" not in shapes) and
+          (shapes.count("nature.grass_tuft") + shapes.count("nature.succulent") == len(shapes)),
+          f"{len(shapes)} items: {shapes.count('nature.grass_tuft')} grass, {shapes.count('nature.succulent')} succulents, "
+          f"{shapes.count('nature.leaf_plant')} leaf plants, share {share:.3f}")
+    # The save and load below reads a scene of a few hundred items: one mesh per item is slow to open in a Debug build.
+    editor.call("delete_nodes", {"scene_name": scene, "ids": [i["id"] for i in reply["items"]]})
+    editor.wait_idle()
+
+    # Variants bound the meshes (FD7.2); a palette material the scene lacks is inserted with the stroke and leaves with its undo.
+    material = "Kit Autumn Foliage"
+    bush_slots = [slot["slot"] for slot in next(shape for shape in editor.call("level_get_kits", {"scene_name": scene})["shapes"]
+                                                 if shape["id"] == "nature.bush")["material_slots"]]
+    bush_materials = [material if (slot == "foliage") else "" for slot in bush_slots]
+
+    def scene_materials():
+        return {m["name"] for m in editor.call("get_scene_materials", {"scene_name": scene})["materials"]}
+
+    check(f"the scene has no material '{material}' before the bush stroke", material not in scene_materials(), "")
+    depth = undo_depth(editor)
+    reply = paint([([-15.0, 0.0, 0.0], [0.0, 1.0, 0.0]), ([-12.0, 0.0, 0.0], [0.0, 1.0, 0.0])],
+                  [{"shape": "nature.bush", "variants": 3, "radius": 0.3, "seed": 5, "materials": bush_materials}], radius=3.0, density=1.0, seed=3)
+    ref = reference()
+    bushes = [ref[i["id"]] for i in reply["items"] if i["id"] in ref]
+    keys = {b["mesh_key"] for b in bushes}
+    check("bushes of 3 variants: 2 or 3 distinct meshes among many items", (len(bushes) >= 10) and (2 <= len(keys) <= 3),
+          f"{len(bushes)} items, {len(keys)} mesh keys")
+    check(f"the bushes take the slot default bark and the palette's '{material}' foliage, inserted into the scene in the stroke's one entry",
+          bushes and all(b["materials"] == {"bark": "Kit Bark", "foliage": material} for b in bushes) and (material in scene_materials()) and
+          (undo_depth(editor) == depth + 1), json.dumps(bushes[0]["materials"] if bushes else None))
+    editor.call("undo")
+    editor.wait_idle()
+    check("the undo of the bush stroke removes the bushes and the material it inserted",
+          (material not in scene_materials()) and not ({b["id"] for b in bushes} & set(reference())), "")
+    editor.call("redo")
+    editor.wait_idle()
+    check("its redo gives the bushes and the material back", (material in scene_materials()) and ({b["id"] for b in bushes} <= set(reference())), "")
+
+    # Records on a kit support; the support moved and its parameter changed (F7.3, F7.4, G5).
+    ref = reference()
+    floor_items = [i for i in ref.values() if i["parent"] == floor]
+    check("the items painted on the floor hold active surface records", floor_items and all(i["state"] == "active" for i in floor_items), f"{len(floor_items)} items")
+    slope_before = {i["id"]: i for i in ref.values() if i["parent"] == slope}
+    editor.call("set_node_transform", {"scene_name": scene, "node_id": slope, "translation": [50.0, 2.0, 0.0]})
+    editor.wait_idle()
+    ref = reference()
+    slope_after = {i["id"]: i for i in ref.values() if i["parent"] == slope}
+    check("moving the slope moves its items 2 m up with it",
+          slope_before and (set(slope_before) == set(slope_after)) and
+          all(close(slope_after[i]["position"], [slope_before[i]["position"][0], slope_before[i]["position"][1] + 2.0, slope_before[i]["position"][2]], 1.0e-3)
+              for i in slope_before), "")
+    # A parameter change of the support carries each item to its place on the new shape: the aligned ones too (C).
+    editor.call("level_set_piece_parameters", {"scene_name": scene, "node_id": slope, "parameters": {"width": 14.0}})
+    editor.wait_idle()
+    ref = reference()
+    slope_origin = [50.0, 2.0, 0.0]
+    moved = []
+    for node_id in slope_before:
+        after = ref.get(node_id)
+        along_before = sum((slope_after[node_id]["position"][k] - slope_origin[k]) * slope_along[k] for k in range(3))
+        expected = [slope_after[node_id]["position"][k] + along_before * (14.0 / 10.0 - 1.0) * slope_along[k] for k in range(3)]
+        if (after is None) or (after["state"] != "active") or not close(after["position"], expected, 1.0e-3) or \
+                not same_rotation(after["rotation_xyzw"], slope_after[node_id]["rotation_xyzw"]):
+            moved.append(f"{node_id} {fmt3(after['position']) if after else None} {after['state'] if after else None} vs {fmt3(expected)}")
+    check("widening the slope from 10 m to 14 m carries its upright and aligned items proportionally along it, on its surface, "
+          "turned as before and active (1 mm)", slope_before and not moved, "; ".join(moved[:5]))
+    editor.call("level_set_piece_parameters", {"scene_name": scene, "node_id": floor, "parameters": {"thickness": 0.6}})
+    editor.wait_idle()
+    top = 0.4  # the base stays at -0.2
+    ref = reference()
+    off = [f"{i} y {ref[i]['position'][1]:.4f} {ref[i]['state']}" if i in ref else f"{i} gone" for i in (f["id"] for f in floor_items)
+           if (i not in ref) or (abs(ref[i]["position"][1] - top) > 1.0e-3) or (ref[i]["state"] != "active")]
+    check("thickening the floor carries its items onto its new top (y 0.4), still attached", not off, "; ".join(off[:5]))
+
+    # Undo and redo of a stroke; an empty stroke and a cancelled one record nothing and keep the redo history (FD9.2, FD9.3).
+    count, depth = len(reference()), undo_depth(editor)
+    reply = paint([([-10.0, 0.0, 10.0], [0.0, 1.0, 0.0])], [grass], seed=11)
+    painted = {i["id"]: reference().get(i["id"], {}).get("position") for i in reply["items"]}
+    check("a stroke adds one undo entry", (reply["placed"] > 0) and (undo_depth(editor) == depth + 1) and (len(reference()) == count + reply["placed"]),
+          f"placed {reply['placed']}, undo depth {undo_depth(editor)} vs {depth} + 1")
+    editor.call("undo")
+    editor.wait_idle()
+    index_after_undo = foliage_index_problems(editor, scene, reference())
+    check("its undo removes the stroke's items alone, and the index follows", (len(reference()) == count) and not (set(painted) & set(reference()))
+          and not index_after_undo, f"count {len(reference())} vs {count}; " + "; ".join(index_after_undo[:4]))
+
+    def redo_count():
+        return len(editor.call("get_undo_redo_stack").get("redo", []))
+
+    redo = redo_count()
+    empty = paint([([0.0, -50.0, 0.0], [0.0, 1.0, 0.0])], [grass], seed=12)
+    check("a stroke over nothing places nothing, records no entry and keeps the redo history",
+          (empty["placed"] == 0) and (not empty["recorded"]) and (undo_depth(editor) == depth) and (redo_count() == redo) and (redo >= 1),
+          f"placed {empty['placed']}, undo depth {undo_depth(editor)} vs {depth}, redo {redo}")
+    cancelled_stamps = [{"center": [-10.0, 0.0, 10.0], "normal": [0.0, 1.0, 0.0]}, {"center": [-10.0, 0.0, 10.0], "normal": [0.0, 0.0, 0.0]}]
+    refusal = call_error(editor, "level_foliage_paint", {"scene_name": scene, "palette": [grass], "radius": 2.0, "density": 2.0, "seed": 13,
+                                                         "stamps": cancelled_stamps})
+    editor.wait_idle()
+    check("a stroke whose second stamp has a zero normal is refused and cancelled: the first stamp's items are gone, no entry, the redo history kept",
+          (refusal is not None) and ("normal" in refusal) and ("cancelled" in refusal) and (len(reference()) == count) and
+          (undo_depth(editor) == depth) and (redo_count() == redo) and not foliage_index_problems(editor, scene, reference()),
+          f"{(refusal or '')[:160]}; count {len(reference())} vs {count}, undo depth {undo_depth(editor)} vs {depth}")
+    editor.call("redo")
+    editor.wait_idle()
+    ref = reference()
+    check("the redo gives the stroke's items back where they were, and the index follows",
+          (set(painted) <= set(ref)) and all(close(ref[i]["position"], painted[i], 1.0e-5) for i in painted) and not foliage_index_problems(editor, scene, ref),
+          f"{len(set(painted) & set(ref))} of {len(painted)}")
+
+    # Inside a batch the stroke is a member of the batch's one entry; a cancelled stroke leaves the batch's other operations.
+    def batch(calls):
+        try:
+            result = editor.call("batch", {"calls": calls})
+        except RuntimeError as error:  # a batch with a failed call is an error reply; its other calls stay applied
+            result = {"error": str(error)}
+        editor.wait_idle()
+        return result
+
+    def batch_block(name, z):
+        return {"tool": "level_place_pieces", "arguments": {"scene_name": scene, "pieces": [
+            {"shape": "basic.block", "position": [20.0, 0.0, z], "name": name, "parameters": {"width": 1.0, "height": 0.5, "depth": 1.0}}]}}
+
+    def block_ids(name):
+        return [p["id"] for p in pieces(editor, scene) if p["name"] == name]
+
+    count, depth = len(reference()), undo_depth(editor)
+    batch([batch_block("batch block", -20.0),
+           {"tool": "level_foliage_paint", "arguments": {"scene_name": scene, "palette": [grass], "radius": 2.0, "density": 2.0, "seed": 21,
+                                                         "stamps": [{"center": [-20.0, 0.0, -20.0], "normal": [0.0, 1.0, 0.0]}]}}])
+    added = len(reference()) - count
+    check("a batch of a placement and a stroke records one undo entry holding both",
+          (added > 0) and (undo_depth(editor) == depth + 1) and (len(block_ids("batch block")) == 1), f"{added} items, undo depth {undo_depth(editor)} vs {depth} + 1")
+    editor.call("undo")
+    editor.wait_idle()
+    check("the batch's undo removes the placement and the stroke's items together",
+          (len(reference()) == count) and not block_ids("batch block") and (undo_depth(editor) == depth), f"count {len(reference())} vs {count}")
+    batch([batch_block("batch keeper", -24.0),
+           {"tool": "level_foliage_paint", "arguments": {"scene_name": scene, "palette": [grass], "radius": 2.0, "density": 2.0, "seed": 22,
+                                                         "stamps": cancelled_stamps}}])
+    check("a batch whose stroke is cancelled keeps the batch's placement as its one entry and paints nothing",
+          (len(reference()) == count) and (len(block_ids("batch keeper")) == 1) and (undo_depth(editor) == depth + 1),
+          f"count {len(reference())} vs {count}, keeper {block_ids('batch keeper')}, undo depth {undo_depth(editor)} vs {depth} + 1")
+
+    for label, arguments, expected in (
+        ("a brush radius of 0", {"radius": 0.0}, "radius"),
+        ("a density below 0", {"density": -1.0}, "density"),
+        ("a palette of weight 0 alone", {"palette": [{"shape": "nature.grass_tuft", "weight": 0}]}, "weight above 0"),
+        ("an unknown shape", {"palette": [{"shape": "nature.no_such_shape"}]}, "no_such_shape"),
+        ("a stamp with an unknown key", {"stamps": [{"center": [-10.0, 0.0, 10.0], "normal": [0.0, 1.0, 0.0], "spin": 1.0}]}, "spin"),
+        ("a scene_name that is no string", {"scene_name": 7}, "scene_name"),
+    ):
+        arguments = {"scene_name": scene, "palette": [grass], "stamps": [{"center": [-10.0, 0.0, 10.0], "normal": [0.0, 1.0, 0.0]}], **arguments}
+        before = (len(reference()), undo_depth(editor))
+        error = call_error(editor, "level_foliage_paint", arguments)
+        check(f"level_foliage_paint refuses {label}, naming it, and paints nothing",
+              (error is not None) and (expected in error) and ((len(reference()), undo_depth(editor)) == before), (error or "accepted")[:200])
+
+    # Copies (F10.3): a duplicate and a pasted copy of a foliage item and of a support carrying foliage keep the flag and the
+    # radius, the index holds them, a copied support's items are attached to the copy; Replace of the support carries them.
+    support = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [
+        {"shape": "basic.floor_slab", "position": [22.0, top, 22.0], "name": "paint copy support", "parameters": {"width": 2.0, "depth": 2.0, "thickness": 0.2}}]})["pieces"][0]["id"]
+    editor.wait_idle()
+    on_support = paint([([22.0, top + 0.2, 22.0], [0.0, 1.0, 0.0])], [grass], radius=0.8, density=6.0, seed=31)
+    support_items = sorted(i["id"] for i in on_support["items"])
+    ref = reference()
+    check("copy setup: a stroke on the small support places grass under it, attached",
+          support_items and all((ref.get(i, {}).get("parent") == support) and (ref.get(i, {}).get("state") == "active") for i in support_items),
+          f"{len(support_items)} items")
+
+    def copy_problems(label, before_ref, expected_new, copied_support=None):
+        """The foliage pieces new since before_ref: their count, radius 0.15, and (with copied_support) parent and record."""
+        now = reference()
+        new = {i: x for i, x in now.items() if i not in before_ref}
+        problems = foliage_index_problems(editor, scene, now)
+        if len(new) != expected_new:
+            problems.append(f"{len(new)} new foliage pieces, expected {expected_new}")
+        for node_id, x in new.items():
+            if not close([x["radius"]], [0.15], 1.0e-6):
+                problems.append(f"{node_id} radius {x['radius']}")
+            if (copied_support is not None) and ((x["parent"] != copied_support) or (x["state"] != "active")):
+                problems.append(f"{node_id} parent {x['parent']} record {x['state']}, expected attached to {copied_support}")
+        check(label, not problems, "; ".join(problems[:5]))
+
+    def copied_roots(before_nodes):
+        """The new nodes since before_nodes whose parent is no new node: the root of each copied subtree."""
+        new = [n for n in editor.call("get_scene_nodes", {"scene_name": scene})["nodes"] if n["id"] not in before_nodes]
+        new_ids = {n["id"] for n in new}
+        return [n["id"] for n in new if n.get("parent_id") not in new_ids]
+
+    item_name = next((p["name"] for p in pieces(editor, scene) if p["id"] == support_items[0]), "") if support_items else ""
+    for how in ("duplicate", "copy and paste"):
+        for what, node_id, count in (("a foliage item", support_items[0] if support_items else None, 1), ("the support with its foliage", support, len(support_items))):
+            before_ref = reference()
+            before_nodes = {n["id"] for n in editor.call("get_scene_nodes", {"scene_name": scene})["nodes"]}
+            before_depth = undo_depth(editor)
+            if how == "duplicate":
+                editor.call("select_items", {"scene_name": scene, "ids": [node_id]})
+                editor.wait_idle()
+                editor.call("Selection.duplicate")
+            else:
+                editor.call("clipboard_copy_nodes", {"scene_name": scene, "node_ids": [node_id]})
+                editor.call("clipboard_paste", {"scene_name": scene})
+            editor.wait_idle()
+            if node_id == support:
+                copied = copied_roots(before_nodes)
+                check(f"a {how} of the support with its foliage makes one new subtree root, the copied support",
+                      len(copied) == 1, json.dumps(copied))
+                copy_problems(f"a {how} of {what} keeps the foliage flag and the radius on every copied foliage piece and the index holds them, "
+                              "attached to the copied support", before_ref, count, copied[0] if (len(copied) == 1) else -1)
+            else:
+                copy_problems(f"a {how} of {what} keeps the foliage flag and the radius on every copied foliage piece and the index holds them",
+                              before_ref, count)
+            recorded = undo_depth(editor) > before_depth
+            check(f"a {how} of {what} records one undo entry", recorded, f"undo depth {before_depth} -> {undo_depth(editor)}")
+            if recorded:
+                editor.call("undo")
+                editor.wait_idle()
+            editor.call("select_items", {"scene_name": scene, "ids": []})
+            editor.wait_idle()
+    check("the undo of each copy leaves the scene's foliage as before the copies", not foliage_index_problems(editor, scene, reference())
+          and (set(support_items) <= set(reference())), item_name)
+    before_ref = reference()
+    editor.call("level_replace_pieces", {"scene_name": scene, "node_ids": [support], "shape": "basic.block", "parameters": {"width": 2.0, "height": 1.0, "depth": 2.0}})
+    editor.wait_idle()
+    ref = reference()
+    off = [f"{i} y {ref[i]['position'][1]:.4f} parent {ref[i]['parent']} {ref[i]['state']}" if i in ref else f"{i} gone" for i in support_items
+           if (i not in ref) or (abs(ref[i]["position"][1] - (top + 1.0)) > 1.0e-3) or (ref[i]["parent"] != support) or (ref[i]["state"] != "active")]
+    check("Replace of the support by a 1 m block carries its foliage onto the block's top (1 m above its base), still children with active records, "
+          "and the index follows", support_items and not off and not foliage_index_problems(editor, scene, ref), "; ".join(off[:5]))
+    editor.call("undo")
+    editor.wait_idle()
+    ref = reference()
+    check("the undo of the Replace gives the foliage its poses on the slab back and the index follows",
+          all(close(ref.get(i, {}).get("position", [9, 9, 9]), before_ref[i]["position"], 1.0e-4) for i in support_items)
+          and not foliage_index_problems(editor, scene, ref), "")
+
+    # B1 (F1.4): a mesh inside a reference instance takes no foliage; the stroke paints the ground beside it.
+    before_nodes = {n["id"] for n in editor.call("get_scene_nodes", {"scene_name": scene})["nodes"]}
+    before_instance_depth = undo_depth(editor)
+    instantiated = editor.call("instantiate_prefab", {"scene_name": scene, "path": "res/editor/assets/SM_Deccer_Cubes_Textured.glb", "position": [-22.0, 0.0, 22.0]})
+    instance_nodes = []
+
+    def instance_landed():
+        instance_nodes[:] = [n for n in editor.call("get_scene_nodes", {"scene_name": scene})["nodes"] if n["id"] not in before_nodes]
+        return bool(instance_nodes)
+    landed = wait_until(editor, instance_landed, frames=600)
+    editor.wait_idle()
+    instance_ids = {n["id"] for n in instance_nodes}
+    if landed:
+        instance_nodes[:] = [n for n in editor.call("get_scene_nodes", {"scene_name": scene})["nodes"] if n["id"] not in before_nodes]
+        instance_ids = {n["id"] for n in instance_nodes}
+    boxes = [(editor.call("get_node_details", {"scene_name": scene, "node_id": n["id"]}).get("mesh") or {}).get("world_aabb") for n in instance_nodes]
+    boxes = [b for b in boxes if b]
+    top = max([b["max"][1] for b in boxes], default=0.0)
+    check("instance setup: instantiate_prefab puts the Deccer cubes instance into the scene, standing on the floor",
+          bool(instantiated) and landed and boxes and (top > 0.1), json.dumps({"reply": instantiated, "nodes": len(instance_nodes), "top": top})[:300])
+    reply = paint([([-22.0, 0.0, 22.0], [0.0, 1.0, 0.0])], [grass], radius=6.0, density=1.0, seed=33)
+    ref = reference()
+    inside = [i["id"] for i in reply["items"] if (ref.get(i["id"], {}).get("parent") in instance_ids)]
+    on_floor = [i["id"] for i in reply["items"] if ref.get(i["id"], {}).get("parent") == floor]
+    check("a stroke over the reference instance puts nothing inside it (candidates on its meshes are spent and counted as "
+          "on_sealed_support) and paints the floor beside it",
+          (reply.get("on_sealed_support", 0) > 0) and not inside and on_floor and (len(on_floor) == reply["placed"]) and reply.get("recorded"),
+          f"on_sealed_support {reply.get('on_sealed_support')}, inside {inside[:5]}, on the floor {len(on_floor)} of {reply['placed']}, recorded {reply.get('recorded')}")
+    if reply.get("recorded"):
+        editor.call("undo")
+        editor.wait_idle()
+    if undo_depth(editor) > before_instance_depth:
+        editor.call("undo")  # the instance
+        editor.wait_idle()
+
+    # Save and load (F10.3).
+    saved = reference()
+    path = os.path.join(directory, "foliage_paint.gltf")
+    editor.save(scene, path)
+    editor.close(scene)
+    name = editor.load(path)
+    reloaded = foliage_reference(editor, name)
+
+    def summary(items):
+        return sorted((i["shape"], round(i["radius"], 6), i["state"] or "", *[round(x, 4) for x in i["position"]]) for i in items.values())
+
+    problems = foliage_index_problems(editor, name, reloaded)
+    check("after save and load the scene holds the same foliage pieces (shapes, radii, records, positions) and the index matches them",
+          (summary(reloaded) == summary(saved)) and not problems and not foliage_spacing_problems(list(reloaded.values())),
+          f"{len(reloaded)} vs {len(saved)} items; " + "; ".join(problems[:5]))
+    editor.close(name)
+
+
+FOLIAGE_REMOVE_STREAM = "foliage remove"
+
+
+def foliage_remove_threshold(density):
+    """get_remove_threshold(): the count of 24-bit draws below density * 2^24 (the product with a power of two is exact)."""
+    d = f32(density)
+    if not (d > 0.0):
+        return 0
+    if d >= 1.0:
+        return 1 << 24
+    return int(math.ceil(d * float(1 << 24)))
+
+
+def foliage_remove_model(items, parents, stamps, radius, density, seed, only_shapes, kept=()):
+    """FD10 replayed from the documented rule: per stamp the items whose point lies in the sphere (only only_shapes' kit pieces
+    when given), in the order x, y, z, id, each one 24-bit draw of Kit_random(seed, "foliage remove"); a draw below the
+    threshold removes the item with its subtree, unless it is in kept (an edit lock or a locked kit layout protects it: it
+    took its draw and stays). Returns (removed ids in order, ids left, ids too close to a sphere's border to decide)."""
+    state = kit_random_state(seed, FOLIAGE_REMOVE_STREAM)
+    threshold = foliage_remove_threshold(density)
+    present = set(items)
+    removed, ambiguous = [], []
+
+    def under(node_id, ancestors):
+        parent = parents.get(node_id)
+        while parent is not None:
+            if parent in ancestors:
+                return True
+            parent = parents.get(parent)
+        return False
+
+    for center in stamps:
+        candidates = []
+        for node_id in present:
+            distance = math.dist(items[node_id]["position"], center)
+            if abs(distance - radius) < 1.0e-3:
+                ambiguous.append(node_id)
+            if (distance <= radius) and ((not only_shapes) or (items[node_id]["shape"] in only_shapes)):
+                candidates.append(node_id)
+        candidates.sort(key=lambda i: (*items[i]["position"], i))
+        drawn = []
+        for node_id in candidates:
+            value, state = kit_random_next_u32(state)
+            if ((value >> 8) < threshold) and (node_id not in kept):
+                drawn.append(node_id)
+        removed += drawn
+        drawn_set = set(drawn)
+        present = {i for i in present if (i not in drawn_set) and not under(i, drawn_set)}
+    return removed, present, ambiguous
+
+
+def check_foliage_remove(editor, directory):
+    """FD10 (doc/editor/level_tools.md "Foliage paint"): level_foliage_remove checked against the script's own reading of
+    level_get_pieces / get_scene_nodes / get_node_details and an exact replay of the remove stream: density 1 empties the
+    brush and only the brush, 0 removes nothing, 0.25 over repeated stamps, only_shapes, items that are no foliage, a
+    hand-flagged plain mesh, an item with children, undo, redo, the redo history, a batch, the refusals and save and load."""
+    scene = create_scene(editor)
+    editor.call("set_active_scene", {"scene_name": scene})
+    placed = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [
+        {"shape": "basic.floor_slab", "position": [0.0, -0.2, 0.0], "name": "remove floor", "parameters": {"width": 40.0, "depth": 40.0, "thickness": 0.2}}]})["pieces"]
+    editor.wait_idle()
+    floor = placed[0]["id"]
+    grass = {"shape": "nature.grass_tuft"}
+    plain_ids = []
+
+    def paint(center, palette, radius, density, seed):
+        reply = editor.call("level_foliage_paint", {"scene_name": scene, "stamps": [{"center": center, "normal": [0.0, 1.0, 0.0]}],
+                                                    "palette": palette, "radius": radius, "density": density, "seed": seed})
+        editor.wait_idle()
+        return reply
+
+    def remove(stamps, radius=2.0, density=1.0, seed=1, only_shapes=None):
+        arguments = {"scene_name": scene, "stamps": [{"center": c} for c in stamps], "radius": radius, "density": density, "seed": seed}
+        if only_shapes is not None:
+            arguments["only_shapes"] = only_shapes
+        reply = editor.call("level_foliage_remove", arguments)
+        editor.wait_idle()
+        return reply
+
+    def nodes():
+        return {n["id"]: n for n in editor.call("get_scene_nodes", {"scene_name": scene})["nodes"]}
+
+    def parents_of(all_nodes):
+        root_ids = {n["parent_id"] for n in all_nodes.values() if n.get("parent") == "root"}
+        return {i: (None if (n.get("parent_id") in root_ids) else n.get("parent_id")) for i, n in all_nodes.items()}
+
+    def state():
+        """The foliage items (kit pieces from level_get_pieces, the hand-flagged plain meshes from get_node_details), the
+        parent of every node and the ids of every node."""
+        all_nodes = nodes()
+        parents = parents_of(all_nodes)
+        items = foliage_reference(editor, scene)
+        for node_id in plain_ids:
+            if node_id not in all_nodes:
+                continue
+            details = editor.call("get_node_details", {"scene_name": scene, "node_id": node_id})
+            items[node_id] = {"id": node_id, "position": details.get("world_position"), "radius": 0.0, "parent": parents.get(node_id),
+                              "state": None, "shape": ""}
+        return items, parents, set(all_nodes)
+
+    def same_items(a, b):
+        problems = []
+        if set(a) != set(b):
+            problems.append(f"ids differ: {sorted(set(a) ^ set(b))[:8]}")
+        for node_id in set(a) & set(b):
+            x, y = a[node_id], b[node_id]
+            if not close(x["position"], y["position"], 1.0e-5) or (x["radius"] != y["radius"]) or (x["parent"] != y["parent"]) or \
+                    (x["state"] != y["state"]) or (x["shape"] != y["shape"]) or \
+                    (("rotation_xyzw" in x) and not same_rotation(x["rotation_xyzw"], y["rotation_xyzw"], 1.0e-5)):
+                problems.append(f"{node_id}: {json.dumps(x)} vs {json.dumps(y)}")
+        return problems
+
+    def index_problems(items):
+        problems = []
+        reply = editor.call("level_get_foliage", {"scene_name": scene})
+        got = {i["id"]: i for i in reply["items"]}
+        if set(got) != set(items):
+            problems.append(f"level_get_foliage ids differ from the reference: {sorted(set(got) ^ set(items))[:8]}")
+        for node_id in set(got) & set(items):
+            if (not close(got[node_id]["position"], items[node_id]["position"], 1.0e-4)) or (got[node_id]["radius"] != items[node_id]["radius"]):
+                problems.append(f"{node_id}: index {fmt3(got[node_id]['position'])} r {got[node_id]['radius']} vs "
+                                f"{fmt3(items[node_id]['position'])} r {items[node_id]['radius']}")
+        return problems
+
+    def redo_count():
+        return len(editor.call("get_undo_redo_stack").get("redo", []))
+
+    def model_check(label, before, parents, stamps, radius, density, seed, only_shapes, reply, after, kept=()):
+        expected, left, ambiguous = foliage_remove_model(before, parents, stamps, radius, density, seed, only_shapes or [], set(kept))
+        problems = []
+        if ambiguous:
+            problems.append(f"items within 1 mm of a sphere's border make the model undecidable: {sorted(set(ambiguous))[:8]}")
+        if reply["removed_ids"] != expected:
+            problems.append(f"removed_ids {reply['removed_ids'][:12]} vs the model {expected[:12]}")
+        if reply["removed"] != len(expected):
+            problems.append(f"removed {reply['removed']} vs the model {len(expected)}")
+        if set(after) != left:
+            problems.append(f"foliage left differs from the model: {sorted(set(after) ^ left)[:8]}")
+        problems += index_problems(after)
+        check(f"{label}: the removed items and the items left equal the replay of the remove stream ({len(expected)} removed)",
+              not problems, "; ".join(problems[:6]))
+        return expected
+
+    # The setup: grass painted in three areas of a kit floor (items with surface records), then things that are no foliage.
+    for center, seed in (([-10.0, 0.0, -10.0], 1), ([10.0, 0.0, -10.0], 2)):
+        paint(center, [grass], 2.5, 3.0, seed)
+    paint([10.0, 0.0, 10.0], [{"shape": "nature.grass_tuft", "weight": 1}, {"shape": "nature.bush", "weight": 1, "radius": 0.4}], 2.5, 3.0, 3)
+    others = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [
+        {"shape": "basic.block", "position": [-10.3, 0.0, -10.2], "name": "remove kit block", "parameters": {"width": 0.3, "height": 0.3, "depth": 0.3}},
+        {"shape": "nature.bush", "position": [-10.0, 0.0, 10.0], "name": "remove parent bush"},
+        {"shape": "nature.grass_tuft", "position": [-9.5, 0.0, 10.6], "name": "remove child grass"},
+        {"shape": "basic.block", "position": [-10.6, 0.0, 9.4], "name": "remove child block", "parameters": {"width": 0.2, "height": 0.2, "depth": 0.2}}]})["pieces"]
+    editor.wait_idle()
+    other = {p["name"]: p["id"] for p in others}
+    kit_block, parent_bush, child_grass, child_block = (other[n] for n in ("remove kit block", "remove parent bush", "remove child grass", "remove child block"))
+    # Foliage over and under the first stamp's sphere, a horizontal distance of 0.1 m from its center: a removal by
+    # horizontal distance would take them.
+    stacked = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [
+        {"shape": "nature.grass_tuft", "position": [-10.1, 2.2, -10.0], "name": "remove grass above"},
+        {"shape": "nature.grass_tuft", "position": [-9.9, -1.8, -10.0], "name": "remove grass below"}]})["pieces"]
+    editor.wait_idle()
+    grass_above, grass_below = stacked[0]["id"], stacked[1]["id"]
+    for node_id in (grass_above, grass_below):
+        set_foliage(editor, scene, node_id, True)
+    for node_id in (parent_bush, child_grass):
+        set_foliage(editor, scene, node_id, True)
+    for child in (child_grass, child_block):
+        editor.call("reparent_item", {"scene_name": scene, "item_id": child, "parent_id": parent_bush})
+        editor.wait_idle()
+    # An edit-locked bush with an unlocked foliage child; an unlocked bush whose edit-locked child block holds a foliage grass.
+    locks = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [
+        {"shape": "nature.bush", "position": [-11.0, 0.0, 10.8], "name": "remove locked bush"},
+        {"shape": "nature.grass_tuft", "position": [-11.3, 0.0, 11.2], "name": "remove locked bush grass"},
+        {"shape": "nature.bush", "position": [-8.8, 0.0, 9.2], "name": "remove holder bush"},
+        {"shape": "basic.block", "position": [-8.6, 0.0, 9.6], "name": "remove locked block", "parameters": {"width": 0.2, "height": 0.2, "depth": 0.2}},
+        {"shape": "nature.grass_tuft", "position": [-8.4, 0.0, 9.0], "name": "remove held grass"}]})["pieces"]
+    editor.wait_idle()
+    lock = {p["name"]: p["id"] for p in locks}
+    locked_bush, locked_bush_grass, holder_bush, locked_block, held_grass = (lock[n] for n in (
+        "remove locked bush", "remove locked bush grass", "remove holder bush", "remove locked block", "remove held grass"))
+    for node_id in (locked_bush, locked_bush_grass, holder_bush, held_grass):
+        set_foliage(editor, scene, node_id, True)
+    for child, parent in ((locked_bush_grass, locked_bush), (locked_block, holder_bush), (held_grass, locked_block)):
+        editor.call("reparent_item", {"scene_name": scene, "item_id": child, "parent_id": parent})
+        editor.wait_idle()
+    editor.call("lock_items", {"scene_name": scene, "ids": [locked_bush, locked_block]})
+    editor.wait_idle()
+    # An unlocked line layout of two blocks: block 0 flagged foliage, grass painted on block 1 (surface records); locked in the file below.
+    layout = editor.call("level_create_layout", {"scene_name": scene, "name": "remove layout", "position": [0.0, 0.0, -15.0], "locked": False,
+                                                 "items": [{"shape": "basic.block", "parameters": {"width": 1.0, "height": 0.5, "depth": 1.0}}],
+                                                 "pattern": {"kind": "line", "count": 2, "step": 3.0}})
+    editor.wait_idle()
+    layout_id = layout["id"]
+    layout_children = sorted(layout["children"], key=lambda c: c["position"][0])
+    layout_flagged, layout_support = layout_children[0]["id"], layout_children[1]["id"]
+    set_foliage(editor, scene, layout_flagged, True)
+    layout_top = [layout_children[1]["position"][0], 0.5, -15.0]
+    on_layout = paint(layout_top, [{"shape": "nature.grass_tuft", "radius": 0.15}], 0.45, 6.0, 8)
+    on_layout_ids = [i["id"] for i in on_layout["items"] if i["parent"] == layout_support]
+    for name, position in (("remove plain box", [-9.6, 0.2, -9.7]), ("remove flagged box", [-10.4, 0.2, -9.4]), ("remove flagged box c", [9.0, 0.2, 10.8])):
+        editor.call("create_shape", {"scene_name": scene, "shape": "box", "name": name, "size": [0.3, 0.3, 0.3], "position": position, "motion_mode": "none"})
+        editor.wait_idle()
+    by_name = {n["name"]: i for i, n in nodes().items()}
+    plain_box, flagged_box, flagged_box_c = by_name["remove plain box"], by_name["remove flagged box"], by_name["remove flagged box c"]
+    for node_id in (flagged_box, flagged_box_c):
+        set_foliage(editor, scene, node_id, True)
+        plain_ids.append(node_id)
+    items, parents, ids = state()
+    area_a = [i for i in items.values() if math.dist(i["position"], [-10.0, 0.0, -10.0]) <= 1.5]
+    check("remove setup: grass painted with surface records, a hand-flagged plain box and no foliage among the kit block and the plain box",
+          (len(area_a) >= 10) and any(i["state"] == "active" for i in area_a) and (flagged_box in items) and
+          (kit_block not in items) and (plain_box not in items) and (parents.get(child_grass) == parent_bush) and (parents.get(child_block) == parent_bush) and
+          (parents.get(held_grass) == locked_block) and (parents.get(locked_block) == holder_bush) and (layout_flagged in items) and
+          on_layout_ids and all(i in items for i in on_layout_ids) and all(items[i]["state"] == "active" for i in on_layout_ids),
+          f"{len(area_a)} items in area a, {len(items)} foliage items, {len(on_layout_ids)} on the layout's block")
+
+    # Density 1 empties the brush and only the brush; undo restores the items with their records and parents; redo again (FD10.2).
+    before, parents, ids_before = items, parents, ids
+    depth, redo = undo_depth(editor), redo_count()
+    stamp = [-10.0, 0.0, -10.0]
+    inside = {i for i, item in before.items() if math.dist(item["position"], stamp) <= 1.5}
+    selected_outside = min(i for i, item in before.items() if 2.0 < math.dist(item["position"], stamp) <= 2.5)
+    selected_inside = min(inside)
+    editor.call("select_items", {"scene_name": scene, "ids": [selected_outside, selected_inside]})
+    editor.wait_idle()
+    reply = remove([stamp], radius=1.5, density=1.0, seed=4)
+    after, _, ids_after = state()
+    check("a remove stroke drops the removed selected item from the selection and keeps the selected item outside the brush",
+          selected_ids(editor) == [selected_outside], json.dumps(selected_ids(editor)))
+    outside_problems = same_items({i: x for i, x in before.items() if i not in inside}, after)
+    check("density 1 removes every foliage item in the brush sphere (the hand-flagged plain box too) and leaves every item outside it as it was",
+          (set(after) == set(before) - inside) and (flagged_box in inside) and not outside_problems and (reply["removed"] == len(inside)) and
+          (set(reply["removed_ids"]) == inside), f"removed {reply['removed']} vs {len(inside)} inside; " + "; ".join(outside_problems[:4]))
+    model_check("the density 1 stroke", before, parents, [stamp], 1.5, 1.0, 4, None, reply, after)
+    check("the foliage 2.2 m above and 1.8 m below the stamp's center, 0.1 m from it across, stays (the brush is a sphere)",
+          (grass_above in before) and (grass_below in before) and (grass_above in after) and (grass_below in after), "")
+    check("the kit block and the plain box in the brush are untouched (no foliage)",
+          (kit_block in ids_after) and (plain_box in ids_after) and
+          close(editor.call("get_node_details", {"scene_name": scene, "node_id": plain_box})["world_position"], [-9.6, 0.2, -9.7], 1.0e-5), "")
+    check("the stroke is one undo entry and reports it recorded", reply["recorded"] and (undo_depth(editor) == depth + 1),
+          f"recorded {reply['recorded']}, undo depth {undo_depth(editor)} vs {depth} + 1")
+    editor.call("undo")
+    editor.wait_idle()
+    undone, undone_parents, undone_ids = state()
+    problems = same_items(before, undone)
+    check("its undo restores every removed item with its pose, radius, parent and surface record, and the index holds them",
+          not problems and (undone_ids == ids_before) and not index_problems(undone), "; ".join(problems[:4]))
+    check("its undo selects the removed item again beside the one outside", selected_ids(editor) == sorted([selected_outside, selected_inside]),
+          json.dumps(selected_ids(editor)))
+    refusal = call_error(editor, "level_foliage_remove", {"scene_name": scene, "radius": 1.5, "density": 1.0, "seed": 4,
+                                                          "stamps": [{"center": stamp}, {"center": [1.0e39, 0.0, 0.0]}]})
+    editor.wait_idle()
+    check("a stroke whose second stamp's center is not finite (beyond the float range) is cancelled: the first stamp's removals are "
+          "undone, the selection is as before, no entry, the redo history kept",
+          (refusal is not None) and ("not finite" in refusal) and ("cancelled" in refusal) and not same_items(before, state()[0]) and
+          (selected_ids(editor) == sorted([selected_outside, selected_inside])) and (undo_depth(editor) == depth) and (redo_count() >= 1),
+          (refusal or "accepted")[:160] + json.dumps({"items": same_items(before, state()[0])[:3], "selected": selected_ids(editor),
+                                                       "undo": [undo_depth(editor), depth], "redo": redo_count()}))
+    editor.call("select_items", {"scene_name": scene, "ids": []})
+    editor.wait_idle()
+    redo = redo_count()
+    nothing = remove([stamp], radius=1.5, density=0.0, seed=4)
+    check("density 0 removes nothing, records no entry and keeps the redo history",
+          (nothing["removed"] == 0) and (nothing["removed_ids"] == []) and (not nothing["recorded"]) and (undo_depth(editor) == depth) and
+          (redo_count() == redo) and (redo >= 1) and not same_items(before, state()[0]),
+          f"removed {nothing['removed']}, undo depth {undo_depth(editor)} vs {depth}, redo {redo_count()} vs {redo}")
+    editor.call("redo")
+    editor.wait_idle()
+    redone = state()[0]
+    check("the redo removes the same items again", set(redone) == set(after) and not same_items(after, redone), "")
+
+    # 0.2 over repeated stamps thins the area: the exact replay of the stream (FD10.1, FD10.2); the threshold of 0.2, whose
+    # ceiling differs from its floor and rounding, is pinned by the Foliage_sampler unit tests.
+    items, parents, _ = state()
+    stamps = [[10.0, 0.0, -10.0], [10.5, 0.0, -10.0], [10.0, 0.0, -10.0], [9.6, 0.0, -9.6], [10.0, 0.0, -10.0]]
+    candidates = {i for i, item in items.items() if any(math.dist(item["position"], s) <= 1.5 for s in stamps)}
+    depth = undo_depth(editor)
+    reply = remove(stamps, radius=1.5, density=0.2, seed=9)
+    after = state()[0]
+    expected = model_check("a density 0.2 stroke of five stamps, three of them at one center", items, parents, stamps, 1.5, 0.2, 9, None, reply, after)
+    check("the density 0.2 stroke thins the area: some items removed, some kept, as one undo entry",
+          (0 < len(expected) < len(candidates)) and (undo_depth(editor) == depth + 1), f"{len(expected)} of {len(candidates)} removed")
+
+    # only_shapes: only kit pieces of the given shapes; a hand-flagged plain mesh has no shape and stays (F9.3).
+    items, parents, _ = state()
+    center_c = [10.0, 0.0, 10.0]
+    inside_c = {i: x for i, x in items.items() if math.dist(x["position"], center_c) <= 2.5}
+    inner_c = {i for i, x in inside_c.items() if (x["shape"] == "nature.bush") and (math.dist(x["position"], center_c) <= 1.2)}
+    reply = remove([center_c], radius=1.2, density=1.0, seed=5, only_shapes=["nature.bush.v2"])
+    after = state()[0]
+    check("only_shapes with the former id nature.bush.v2 removes the bushes (its shape) within 1.2 m and nothing else",
+          inner_c and (set(reply["removed_ids"]) == inner_c) and (set(after) == set(items) - inner_c), f"{len(inner_c)} bushes, removed {reply['removed']}")
+    model_check("the former id stroke", items, parents, [center_c], 1.2, 1.0, 5, ["nature.bush"], reply, after)
+    items, parents, _ = state()
+    inside_c = {i: x for i, x in items.items() if math.dist(x["position"], center_c) <= 2.5}
+    bushes = {i for i, x in inside_c.items() if x["shape"] == "nature.bush"}
+    reply = remove([center_c], radius=2.5, density=1.0, seed=5, only_shapes=["nature.bush"])
+    after = state()[0]
+    check("only_shapes [nature.bush] removes the bushes in the brush alone: its grass and the hand-flagged plain box stay",
+          bushes and (set(reply["removed_ids"]) == bushes) and (set(after) == set(items) - bushes) and (flagged_box_c in after) and
+          any(x["shape"] == "nature.grass_tuft" for x in inside_c.values()), f"{len(bushes)} bushes, removed {reply['removed']}")
+    model_check("the only_shapes stroke", items, parents, [center_c], 2.5, 1.0, 5, ["nature.bush"], reply, after)
+    reply = remove([center_c], radius=2.5, density=1.0, seed=5, only_shapes=[])
+    after = state()[0]
+    check("an empty only_shapes removes every foliage item, the hand-flagged plain box with them",
+          (flagged_box_c not in after) and not any(math.dist(x["position"], center_c) <= 2.5 for x in after.values()), f"removed {reply['removed']}")
+
+    # An item with children: the drawn child grass and the bush's other child go with the bush; undo gives all back (FD10.3).
+    items, parents, ids = state()
+    center_d = [-10.0, 0.0, 10.0]
+    depth = undo_depth(editor)
+    reply = remove([center_d], radius=2.0, density=1.0, seed=6)
+    after, _, ids_after = state()
+    check("removing a bush with children removes its subtree: the child grass (foliage) and the child block (no foliage) leave with it",
+          (parent_bush in reply["removed_ids"]) and (child_grass in reply["removed_ids"]) and (child_block not in ids_after) and
+          (parent_bush not in ids_after) and (child_grass not in ids_after), json.dumps(reply["removed_ids"]))
+    after_nodes = nodes()
+    after_parents = parents_of(after_nodes)
+    check("an edit-locked bush in the brush is kept and not counted; its unlocked foliage child is removed",
+          (locked_bush in ids_after) and (locked_bush not in reply["removed_ids"]) and (locked_bush_grass in reply["removed_ids"]) and
+          (locked_bush_grass not in ids_after), json.dumps(reply["removed_ids"]))
+    check("a drawn grass below an edit-locked block below a drawn bush is removed; the locked block stays, moved to the bush's parent",
+          (holder_bush in reply["removed_ids"]) and (held_grass in reply["removed_ids"]) and (held_grass not in ids_after) and
+          (locked_block in ids_after) and (after_parents.get(locked_block) == parents.get(holder_bush)),
+          json.dumps({"removed": reply["removed_ids"], "block parent": after_parents.get(locked_block)}))
+    model_check("the subtree stroke", items, parents, [center_d], 2.0, 1.0, 6, None, reply, after, kept=[locked_bush])
+    editor.call("undo")
+    editor.wait_idle()
+    undone, undone_parents, undone_ids = state()
+    check("its undo gives the bushes, their children and their parents back, the locked block under its bush again",
+          (undone_ids == ids) and (undone_parents.get(child_grass) == parent_bush) and (undone_parents.get(child_block) == parent_bush) and
+          (undone_parents.get(locked_block) == holder_bush) and (undone_parents.get(held_grass) == locked_block) and
+          not same_items(items, undone), "")
+    redo = redo_count()
+    empty = remove([[0.0, -30.0, 0.0]], radius=2.0, density=1.0, seed=6)
+    check("a stroke over no foliage removes nothing, records no entry and keeps the redo history",
+          (empty["removed"] == 0) and (not empty["recorded"]) and (undo_depth(editor) == depth) and (redo_count() == redo) and (redo >= 1),
+          f"removed {empty['removed']}, undo depth {undo_depth(editor)} vs {depth}, redo {redo_count()} vs {redo}")
+
+    # Inside a batch the stroke joins the batch's one entry.
+    items, _, _ = state()
+    depth = undo_depth(editor)
+    try:
+        editor.call("batch", {"calls": [
+            {"tool": "level_place_pieces", "arguments": {"scene_name": scene, "pieces": [
+                {"shape": "basic.block", "position": [0.0, 0.0, 15.0], "name": "remove batch block", "parameters": {"width": 1.0, "height": 0.5, "depth": 1.0}}]}},
+            {"tool": "level_foliage_remove", "arguments": {"scene_name": scene, "stamps": [{"center": center_d}], "radius": 2.0, "density": 1.0, "seed": 7}}]})
+    except RuntimeError as error:
+        check("the batch of a placement and a remove stroke succeeds", False, str(error)[:200])
+    editor.wait_idle()
+    after = state()[0]
+    block = [p["id"] for p in pieces(editor, scene) if p["name"] == "remove batch block"]
+    check("a batch of a placement and a remove stroke records one undo entry holding both",
+          (len(block) == 1) and (parent_bush not in after) and (undo_depth(editor) == depth + 1), f"undo depth {undo_depth(editor)} vs {depth} + 1")
+    editor.call("undo")
+    editor.wait_idle()
+    check("the batch's undo gives the removed items back and removes the placement",
+          not same_items(items, state()[0]) and not [p for p in pieces(editor, scene) if p["name"] == "remove batch block"], "")
+
+    # Refusals (FD12): nothing is removed and nothing recorded.
+    for label, arguments, expected_text in (
+        ("a brush radius of 0", {"radius": 0.0}, "radius"),
+        ("a negative brush radius", {"radius": -1.0}, "radius"),
+        ("a density above 1", {"density": 1.5}, "density"),
+        ("a density below 0", {"density": -0.1}, "density"),
+        ("an unknown shape in only_shapes", {"only_shapes": ["nature.no_such_shape"]}, "no_such_shape"),
+        ("a center that is not three numbers", {"stamps": [{"center": center_d}, {"center": [1.0, 2.0]}]}, "center"),
+        ("a stamp with an unknown key", {"stamps": [{"center": center_d, "spin": 1.0}]}, "spin"),
+        ("an unknown argument", {"palette": []}, "palette"),
+    ):
+        arguments = {"scene_name": scene, "stamps": [{"center": center_d}], "radius": 2.0, "density": 1.0, **arguments}
+        before = (len(state()[0]), undo_depth(editor))
+        error = call_error(editor, "level_foliage_remove", arguments)
+        editor.wait_idle()
+        check(f"level_foliage_remove refuses {label}, naming it, and removes nothing",
+              (error is not None) and (expected_text in error) and ((len(state()[0]), undo_depth(editor)) == before), (error or "accepted")[:200])
+    with_normal = editor.call("level_foliage_remove", {"scene_name": scene, "stamps": [{"center": [0.0, -30.0, 0.0], "normal": [0.0, 0.0, 0.0]}]})
+    editor.wait_idle()
+    check("a zero normal in a remove stamp is not refused (the normal is not read)", with_normal["removed"] == 0, json.dumps(with_normal))
+
+    # The Delete command's operation (delete_nodes calls Selection::delete_items) on a parent and its child given together,
+    # in both orders: each node is collected once, one undo entry, undo puts the child back under the parent.
+    for order in ("child first", "parent first"):
+        pair = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [
+            {"shape": "basic.block", "position": [15.0, 0.0, 15.0], "name": "delete pair parent", "parameters": {"width": 1.0, "height": 0.5, "depth": 1.0}},
+            {"shape": "basic.block", "position": [15.0, 0.5, 15.0], "name": "delete pair child", "parameters": {"width": 0.5, "height": 0.5, "depth": 0.5}}]})["pieces"]
+        editor.wait_idle()
+        pair_parent, pair_child = pair[0]["id"], pair[1]["id"]
+        editor.call("reparent_item", {"scene_name": scene, "item_id": pair_child, "parent_id": pair_parent})
+        editor.wait_idle()
+        depth = undo_depth(editor)
+        editor.call("delete_nodes", {"scene_name": scene, "ids": [pair_child, pair_parent] if order == "child first" else [pair_parent, pair_child]})
+        editor.wait_idle()
+        gone = not ({pair_parent, pair_child} & set(nodes()))
+        deleted_depth = undo_depth(editor)
+        editor.call("undo")
+        editor.wait_idle()
+        back = parents_of(nodes())
+        check(f"the Delete command on a parent and its child ({order}) removes both as one undo entry; undo gives both back, the child under the parent",
+              gone and (deleted_depth == depth + 1) and (pair_parent in back) and (back.get(pair_child) == pair_parent),
+              json.dumps({"gone": gone, "undo depth": [deleted_depth, depth], "child parent": back.get(pair_child)}))
+        editor.call("delete_nodes", {"scene_name": scene, "ids": [pair_parent]})
+        editor.wait_idle()
+
+    # Save and load after the removals (F10.3).
+    saved = foliage_reference(editor, scene)
+    path = os.path.join(directory, "foliage_remove.gltf")
+    editor.save(scene, path)
+    editor.close(scene)
+    # The flag cannot be set on a locked layout's child, and locking replaces the children: the file locks the layout.
+    with open(path, "r", encoding="utf-8") as f:
+        text = f.read()
+    unlocked_count = text.count('"Kit_layout.locked":"false"')
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(text.replace('"Kit_layout.locked":"false"', '"Kit_layout.locked":"true"'))
+    name = editor.load(path)
+    reloaded = foliage_reference(editor, name)
+
+    def summary(items):
+        return sorted((i["shape"], round(i["radius"], 6), i["state"] or "", *[round(x, 4) for x in i["position"]]) for i in items.values())
+
+    problems = foliage_index_problems(editor, name, reloaded)
+    check("after save and load the scene holds the foliage the removals left (shapes, radii, records, positions) and the index matches them",
+          (summary(reloaded) == summary(saved)) and not problems, f"{len(reloaded)} vs {len(saved)} items; " + "; ".join(problems[:5]))
+
+    # The lock of a kit layout node (R5.12.3) keeps its flagged child; it ends at a surface attached piece (S5.1).
+    loaded_layouts = [l for l in editor.call("level_get_layouts", {"scene_name": name})["layouts"] if l.get("name") == "remove layout"]
+    loaded_children = sorted(loaded_layouts[0]["children"], key=lambda c: c["position"][0]) if loaded_layouts else []
+    flagged_now = loaded_children[0]["id"] if loaded_children else None
+    attached_now = [i for i, x in reloaded.items() if (x["parent"] == (loaded_children[1]["id"] if len(loaded_children) > 1 else None))]
+    check("the loaded layout is locked and keeps its flagged child and the grass attached to its other block",
+          (unlocked_count == 1) and loaded_layouts and loaded_layouts[0].get("locked") is True and (flagged_now in reloaded) and attached_now and
+          all(reloaded[i]["state"] == "active" for i in attached_now),
+          json.dumps({"files unlocked layouts": unlocked_count, "locked": loaded_layouts[0].get("locked") if loaded_layouts else None, "attached": len(attached_now)}))
+    all_loaded = {n["id"]: n for n in editor.call("get_scene_nodes", {"scene_name": name})["nodes"]}
+    loaded_parents = parents_of(all_loaded)
+    layout_center = [(loaded_children[0]["position"][0] + loaded_children[1]["position"][0]) / 2.0, 0.5, -15.0] if len(loaded_children) > 1 else [0.0, 0.5, -15.0]
+    depth = undo_depth(editor)
+    reply = editor.call("level_foliage_remove", {"scene_name": name, "stamps": [{"center": layout_center}], "radius": 2.6, "density": 1.0, "seed": 3})
+    editor.wait_idle()
+    left = foliage_reference(editor, name)
+    expected, model_left, ambiguous = foliage_remove_model(reloaded, loaded_parents, [layout_center], 2.6, 1.0, 3, [], {flagged_now})
+    check("over a locked layout a remove stroke keeps the layout's flagged child (its draw taken, not counted) and removes the grass "
+          "attached to the other child, as the replay says",
+          (flagged_now in left) and (flagged_now not in reply["removed_ids"]) and attached_now and all(i in reply["removed_ids"] for i in attached_now) and
+          (reply["removed_ids"] == expected) and (set(left) == model_left) and not ambiguous and (undo_depth(editor) == depth + 1),
+          json.dumps({"removed": len(reply["removed_ids"]), "model": len(expected), "ambiguous": len(ambiguous)}))
+    editor.close(name)
+
+
+FOLIAGE_STROKE_REASON = "a foliage stroke is in progress"
+FOLIAGE_TOOL_PALETTE = [{"shape": "nature.grass_tuft", "weight": 1}]
+# One attempt per stamp at every brush radius the tool group uses (FD8.1: round(density * pi * r^2), at least 1).
+FOLIAGE_TOOL_DENSITY = 0.3
+
+
+def foliage_brush(editor):
+    return editor.call("level_get_foliage_brush")
+
+
+def foliage_count(editor, scene):
+    return editor.call("level_get_foliage", {"scene_name": scene})["count"]
+
+
+def redo_depth(editor):
+    return len(editor.call("get_undo_redo_stack").get("redo", []))
+
+
+def plane_point_of_pixel(viewport, pixel, plane_y):
+    """Where the pointer ray through a window pixel meets the plane y = plane_y (window_point() inverted)."""
+    m = viewport["camera_world_from_camera"]
+    right, up, back, origin = m[0:3], m[4:7], m[8:11], m[12:15]
+    tan_y = math.tan(0.5 * viewport["camera_fov_y"])
+    tan_x = tan_y * viewport["width"] / viewport["height"]
+    ndc_x = 2.0 * (pixel[0] - viewport["x"]) / viewport["width"] - 1.0
+    ndc_y = 1.0 - 2.0 * (pixel[1] - viewport["y"]) / viewport["height"]
+    direction = [-back[i] + ndc_x * tan_x * right[i] + ndc_y * tan_y * up[i] for i in range(3)]
+    t = (plane_y - origin[1]) / direction[1]
+    return [origin[i] + t * direction[i] for i in range(3)]
+
+
+def viewport_of_scene(editor, scene):
+    return next(v for v in editor.call("get_viewports")["viewports"] if v.get("scene") == scene)
+
+
+def wait_foliage_brush(editor, predicate, frames=240):
+    """The brush reply once predicate holds, read again after each editor frame."""
+    reply = foliage_brush(editor)
+    for _ in range(frames):
+        if predicate(reply):
+            return reply
+        editor.wait_frames()
+        reply = foliage_brush(editor)
+    return reply
+
+
+def wait_log(editor, text, start=0, frames=240):
+    """True once the editor log holds the text past the offset, read again after each editor frame."""
+    for _ in range(frames):
+        if text in pav.read_log()[start:]:
+            return True
+        editor.wait_frames()
+    return text in pav.read_log()[start:]
+
+
+def scene_row(editor, scene):
+    """The scene's own row in a Scene Hierarchy window, shown through the Window menu when no hierarchy shows it."""
+    def find():
+        found = [i for i in editor.call("get_imgui_items", {"limit": 400, "visible_only": True, "label_contains": scene}).get("items", [])
+                 if (i.get("label") == scene) and i.get("window", "").startswith("Scene Hierarchy")]
+        return found[0] if found else None
+    row = find()
+    hierarchies = [w["display_name"] for w in editor.call("get_imgui_windows").get("windows", []) if w.get("display_name", "").startswith("Scene Hierarchy")]
+    for name in hierarchies:
+        if row is not None:
+            break
+        open_window(editor, name)
+        wait_until(editor, lambda: find() is not None, frames=10)
+        row = find()
+    return row
+
+
+def popup_entry(editor, label):
+    found = [i for i in editor.call("get_imgui_items", {"limit": 400, "visible_only": True, "label_contains": label}).get("items", [])
+             if (i.get("label") == label) and i.get("window", "").startswith("##Popup")]
+    return found[0] if found else None
+
+
+@gives_back_tool_settings
+def check_foliage_tool(editor, directory):
+    """FD11 (doc/editor/level_tools.md "Foliage paint"): the Foliage Paint tool through the input drivers - the drags,
+    the wheel, Escape and the context menu - and, with a stroke held open, the live edit rules no MCP stroke reaches.
+    Everything the group changes is given back in one finally: the settings, the bindings, the tool, the windows."""
+    saved_settings = editor.call("level_get_foliage_paint_settings")
+    windows = shown_windows(editor, editor.scene_names())
+    made = {"scenes": []}
+    try:
+        foliage_tool_checks(editor, directory, made)
+    except Exception as error:  # noqa: BLE001 - reported, then raised to the run's check
+        print(f"foliage tool checks stopped: {type(error).__name__}: {error}", flush=True)
+        raise
+    finally:
+        for button in editor.call("get_input_state").get("buttons", []):
+            editor.call("mouse_release", {"button": button})
+        if foliage_brush(editor)["stroke_open"]:
+            editor.call("key_press", {"key": "escape"})
+            wait_foliage_brush(editor, lambda r: not r["stroke_open"])
+        for command in ("Foliage_paint.paint", "Foliage_paint.remove"):
+            editor.call("reset_command_bindings", {"command": command})
+        editor.wait_frames(2)
+        editor.call("set_active_tool", {"tool": None})
+        hide_windows_shown_since(editor, windows)
+        for name in sorted(windows - shown_windows(editor, editor.scene_names())):
+            editor.call("set_window_visibility", {"title": name, "visible": True})
+        editor.wait_idle()
+        palette = saved_settings.pop("palette")
+        for key in ("palette_text", "paint_refusal"):
+            saved_settings.pop(key, None)
+        editor.call("level_set_foliage_paint_settings", dict(saved_settings, palette=palette))
+        for scene in made["scenes"]:
+            if scene in editor.scene_names():
+                editor.close(scene)
+
+
+def foliage_tool_checks(editor, directory, made):
+    import curve_verify as cv  # noqa: E402
+    scene = create_scene(editor)
+    made["scenes"].append(scene)
+    editor.call("set_active_scene", {"scene_name": scene})
+    placed = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [
+        {"shape": "basic.floor_slab", "position": [0.0, -0.2, 0.0], "name": "tool floor", "parameters": {"width": 40.0, "depth": 40.0, "thickness": 0.2}},
+        {"shape": "basic.floor_slab", "position": [6.0, 0.0, 4.0], "name": "tool support", "parameters": {"width": 3.0, "depth": 3.0, "thickness": 0.2}},
+        {"shape": "basic.block", "position": [-6.0, 0.0, 4.0], "name": "tool block", "parameters": {"width": 1.0, "height": 1.0, "depth": 1.0}}]})["pieces"]
+    editor.wait_idle()
+    ids = {p["name"]: p["id"] for p in placed}
+    editor.call("create_shape", {"scene_name": scene, "shape": "box", "name": "tool box", "size": [1.0, 1.0, 1.0], "position": [-6.0, 0.5, -4.0], "motion_mode": "none"})
+    editor.wait_idle()
+    box = [n["id"] for n in editor.call("get_scene_nodes", {"scene_name": scene})["nodes"] if n.get("name") == "tool box"]
+    box = box[0] if box else None
+
+    # The settings tools: explicit arguments, every one checked before anything changes.
+    radius = 1.0
+    reply = editor.call("level_set_foliage_paint_settings", {"brush_radius": radius, "paint_density": FOLIAGE_TOOL_DENSITY, "remove_density": 1.0, "align_to_surface": False,
+                                                             "remove_only_palette_shapes": False, "seed": 7, "palette": FOLIAGE_TOOL_PALETTE})
+    entry = (reply.get("palette") or [{}])[0]
+    check("level_set_foliage_paint_settings writes the values and the palette; the entry takes the shape's foliage radius and 8 variants",
+          (reply["brush_radius"] == radius) and (reply["seed"] == 7) and (entry.get("shape") == "nature.grass_tuft") and close([entry.get("radius", 0.0)], [0.15])
+          and (entry.get("variants") == 8) and (reply.get("paint_refusal") is None) and reply.get("palette_text", "").startswith("[{"), json.dumps(reply)[:400])
+    refusals = {
+        "unknown argument": call_error(editor, "level_set_foliage_paint_settings", {"radius": 3.0}),
+        "radius out of range": call_error(editor, "level_set_foliage_paint_settings", {"brush_radius": 60.0, "seed": 9}),
+        "unknown shape": call_error(editor, "level_set_foliage_paint_settings", {"palette": [{"shape": "nature.nope"}], "seed": 9}),
+        "yaw order": call_error(editor, "level_set_foliage_paint_settings", {"palette": [{"shape": "nature.bush", "yaw_min": 90.0, "yaw_max": 10.0}]}),
+    }
+    after = editor.call("level_get_foliage_paint_settings")
+    check("level_set_foliage_paint_settings refuses an unknown argument, a radius out of range, an unknown shape and yaw limits out of order, "
+          "and nothing changes", all(refusals.values()) and (after == reply), json.dumps({k: (v or "")[:120] for k, v in refusals.items()}))
+    zero = editor.call("level_set_foliage_paint_settings", {"palette": [{"shape": "nature.grass_tuft", "weight": 0}]})
+    check("a palette without an entry of weight above 0 is kept and reported as the reason painting is disabled (F3.3)",
+          "nothing to paint" in (zero.get("paint_refusal") or ""), json.dumps(zero.get("paint_refusal")))
+    editor.call("level_set_foliage_paint_settings", {"palette": FOLIAGE_TOOL_PALETTE})
+
+    editor.call("set_active_tool", {"tool": "foliage_paint"})
+    viewport = cv.frame_camera(editor, scene, [0.0, 12.0, 12.0], [0.0, 0.0, 0.0], [[x, 0.0, z] for x in (-7.0, 7.0) for z in (-5.0, 5.0)])
+
+    def at(point):
+        return list(window_point(viewport, point))
+
+    def aim(point):
+        hover(editor, viewport, [point[0] + 0.3, point[1], point[2] + 0.3])
+        hover(editor, viewport, point)
+        return wait_foliage_brush(editor, lambda r: r["has_brush"] and close(r["center"], point, 0.05))
+
+    def last_stroke_after(seed):
+        return wait_foliage_brush(editor, lambda r: (not r["stroke_open"]) and ((r.get("last_stroke") or {}).get("seed") == seed) and (r["seed"] != seed))
+
+    state = aim([0.0, 0.0, 0.0])
+    check("with the tool active the brush is the surface point under the pointer, with the floor's normal",
+          state["tool_active"] and state["has_brush"] and (state["scene_name"] == scene) and close(state["normal"], [0.0, 1.0, 0.0], 1.0e-3), json.dumps(state))
+
+    # F4.1: a water piece (pass_through, no foliage) is no brush surface: the brush is on the floor under it and a stroke paints the floor.
+    water = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [
+        {"shape": "nature.water", "position": [3.0, 0.3, 0.0], "name": "tool water", "parameters": {"width": 2.0, "depth": 2.0}}]})["pieces"][0]["id"]
+    editor.wait_idle()
+    water_aim = [3.0, 0.3, 0.0]
+    hover(editor, viewport, [water_aim[0] + 0.3, water_aim[1], water_aim[2] + 0.3])
+    hover(editor, viewport, water_aim)
+    under_water = wait_foliage_brush(editor, lambda r: r["has_brush"] and (abs(r["center"][1]) < 1.0e-3))
+    seed = foliage_brush(editor)["seed"]
+    before_ids = {p["id"] for p in pieces(editor, scene)}
+    x, y = at(water_aim)
+    editor.call("mouse_drag", {"from": [x, y], "to": [x + 2.0, y], "frames": 3})
+    water_stroke = (last_stroke_after(seed).get("last_stroke") or {})
+    floor_id = ids["tool floor"]
+    painted_under = [p for p in pieces(editor, scene) if p["id"] not in before_ids]
+    nodes_now = {n["id"]: n for n in editor.call("get_scene_nodes", {"scene_name": scene})["nodes"]}
+    check("over a water piece the brush is on the floor under it (y 0, not the water's 0.3) and a stroke there paints the floor",
+          under_water["has_brush"] and (abs(under_water["center"][1]) < 1.0e-3) and (water_stroke.get("placed", 0) > 0) and water_stroke.get("recorded") and painted_under
+          and all((nodes_now.get(p["id"], {}).get("parent_id") == floor_id) and (abs(p["position"][1]) < 1.0e-3) for p in painted_under),
+          f"brush {under_water.get('center')}, stroke {json.dumps(water_stroke)}, parents {[nodes_now.get(p['id'], {}).get('parent_id') for p in painted_under][:5]}")
+    if water_stroke.get("recorded"):
+        editor.call("undo")
+        editor.wait_idle()
+    editor.call("delete_nodes", {"scene_name": scene, "ids": [water]})
+    editor.wait_idle()
+
+    # A left drag paints one undo entry; the seed advances.
+    depth = undo_depth(editor)
+    count = foliage_count(editor, scene)
+    seed = foliage_brush(editor)["seed"]
+    editor.call("mouse_drag", {"from": at([-2.0, 0.0, 0.0]), "to": at([-1.8, 0.0, 0.0]), "frames": 4})
+    state = last_stroke_after(seed)
+    last = state.get("last_stroke") or {}
+    check("a short left drag (under half the radius) paints one stamp as one undo entry, and the seed advances (FD8.3)",
+          (last.get("kind") == "paint") and (last.get("outcome") == "ended") and (last.get("stamps") == 1) and (last.get("placed", 0) > 0)
+          and last.get("recorded") and (undo_depth(editor) == depth + 1) and (foliage_count(editor, scene) == count + last.get("placed", -1))
+          and (state["seed"] == kit_next_seed(seed)), json.dumps(last))
+
+    # F3.1, F3.2: an entry's parameter typed into its Tool Properties row reaches the painted items; Reset gives the defaults.
+    tool_window = "Tool Properties"
+    tool_window_shown = tool_window in shown_windows(editor, editor.scene_names())
+    editor.call("level_set_foliage_paint_settings", {"palette": FOLIAGE_TOOL_PALETTE})
+    open_window(editor, tool_window)
+
+    def spread_rows():
+        return [i for i in editor.call("get_imgui_items", {"window": tool_window, "limit": 400, "visible_only": False, "label_contains": "spread"}).get("items", [])
+                if i.get("label") == "spread"]
+
+    def paint_at(point):
+        if not tool_window_shown:
+            editor.call("set_window_visibility", {"title": tool_window, "visible": False})
+            editor.wait_idle()
+        before_ids = {p["id"] for p in pieces(editor, scene)}
+        stroke_seed = foliage_brush(editor)["seed"]
+        aim(point)
+        editor.call("mouse_drag", {"from": at(point), "to": at([point[0] + 0.2, point[1], point[2]]), "frames": 4})
+        stroke = (last_stroke_after(stroke_seed).get("last_stroke") or {})
+        if not tool_window_shown:
+            open_window(editor, tool_window)
+        return stroke, [p for p in pieces(editor, scene) if (p["id"] not in before_ids) and (p.get("shape") == "nature.grass_tuft")]
+
+    rows_shown = wait_until(editor, lambda: bool(spread_rows()), frames=30)
+    editor.call("imgui_scroll_to_item", {"window": tool_window, "label": "spread"})
+    editor.call("imgui_click", {"window": tool_window, "label": "spread", "modifiers": IMGUI_CTRL})
+    editor.call("key_press", {"key": "a", "modifiers": IMGUI_CTRL})
+    editor.call("type_text", {"text": "0.3"})
+    editor.call("key_press", {"key": "enter"})
+    editor.wait_idle()
+    edited_entry = (editor.call("level_get_foliage_paint_settings").get("palette") or [{}])[0]
+    edited_parameters = json.loads(edited_entry.get("parameters") or "{}")
+    check("typing 0.3 into the grass tuft entry's spread row in Tool Properties writes the entry's parameters (level_get_foliage_paint_settings)",
+          rows_shown and isinstance(edited_parameters.get("spread"), str) and (abs(float.fromhex(edited_parameters["spread"]) - 0.3) < 1.0e-4),
+          f"rows shown {rows_shown}, parameters {edited_entry.get('parameters')!r}")
+    edited_stroke, edited_items = paint_at([5.5, 0.0, 0.25])
+    editor.call("imgui_scroll_to_item", {"window": tool_window, "label": "Reset"})
+    editor.call("imgui_click", {"window": tool_window, "label": "Reset"})
+    editor.wait_idle()
+    reset_entry = (editor.call("level_get_foliage_paint_settings").get("palette") or [{}])[0]
+    default_stroke, default_items = paint_at([-5.5, 0.0, 0.25])
+    edited_keys = {p.get("mesh_key") for p in edited_items}
+    default_keys = {p.get("mesh_key") for p in default_items}
+    check("a stroke after the edit paints grass tufts that carry the typed spread 0.3",
+          (edited_stroke.get("placed", 0) > 0) and (len(edited_items) == edited_stroke.get("placed", -1))
+          and all(abs(p.get("parameters", {}).get("spread", 0.0) - 0.3) < 1.0e-4 for p in edited_items),
+          f"placed {edited_stroke.get('placed')}, spreads {[p.get('parameters', {}).get('spread') for p in edited_items][:6]}")
+    check("Reset returns the entry to the shape's defaults (empty parameters) and the next stroke paints the default spread 0.5, "
+          "with mesh keys none of the edited items have",
+          (reset_entry.get("parameters") == "") and (default_stroke.get("placed", 0) > 0) and (len(default_items) == default_stroke.get("placed", -1))
+          and all(abs(p.get("parameters", {}).get("spread", 0.0) - 0.5) < 1.0e-4 for p in default_items)
+          and bool(edited_keys) and bool(default_keys) and edited_keys.isdisjoint(default_keys),
+          f"parameters {reset_entry.get('parameters')!r}, placed {default_stroke.get('placed')}, "
+          f"spreads {[p.get('parameters', {}).get('spread') for p in default_items][:6]}, shared keys {len(edited_keys & default_keys)}")
+    if not tool_window_shown:
+        editor.call("set_window_visibility", {"title": tool_window, "visible": False})
+        editor.wait_idle()
+
+    # A longer drag stamps by travel (F5.1, G4): the press and one stamp per half radius walked along the path, the
+    # remainder carried, whatever steps the drag arrives in.
+    frames = 40
+    for z, steps in ((-2.0, frames), (-3.0, 1)):
+        seed = foliage_brush(editor)["seed"]
+        start, end = at([-3.85, 0.0, z]), at([3.85, 0.0, z])
+        travel = math.dist(plane_point_of_pixel(viewport, start, 0.0), plane_point_of_pixel(viewport, end, 0.0))
+        expected = 1 + math.floor(travel / (0.5 * radius))
+        depth_before = undo_depth(editor)
+        # Held, so the release follows the brush's last hover change (the hover of a motion is read a frame later).
+        editor.call("mouse_drag", {"from": start, "to": end, "frames": steps, "hold": True})
+        wait_foliage_brush(editor, lambda r: r["stroke_open"] and close(r["center"], plane_point_of_pixel(viewport, end, 0.0), 0.02))
+        editor.call("mouse_release", {})
+        state = last_stroke_after(seed)
+        last = state.get("last_stroke") or {}
+        check(f"a {travel:.2f} m left drag over flat ground injected in {steps} step(s) stamps exactly {expected} times: at the press and at "
+              f"each half radius of travel", (last.get("stamps") == expected) and (last.get("placed", 0) > 0) and (undo_depth(editor) == depth_before + 1),
+              json.dumps(last))
+    # A one-step jump of 38 half-radius steps: the walk stamps at most 16 per frame and continues on the next frames.
+    editor.call("level_set_foliage_paint_settings", {"brush_radius": 0.4})
+    seed = foliage_brush(editor)["seed"]
+    start, end = at([-3.85, 0.0, -5.0]), at([3.85, 0.0, -5.0])
+    travel = math.dist(plane_point_of_pixel(viewport, start, 0.0), plane_point_of_pixel(viewport, end, 0.0))
+    expected = 1 + math.floor(travel / 0.2)
+    aim([-3.85, 0.0, -5.0])
+    editor.call("mouse_drag", {"from": start, "to": end, "frames": 1, "hold": True})
+    pending = wait_foliage_brush(editor, lambda r: (r.get("stroke") or {}).get("stamps", 0) >= expected)
+    editor.call("mouse_release", {})
+    state = last_stroke_after(seed)
+    editor.call("level_set_foliage_paint_settings", {"brush_radius": radius})
+    last = state.get("last_stroke") or {}
+    check(f"a one-step {travel:.2f} m jump with a 0.4 m brush walks {expected} stamps over several frames (16 per frame), the count the path gives",
+          ((pending.get("stroke") or {}).get("stamps") == expected) and (last.get("stamps") == expected), json.dumps(last))
+    # Released in the same frame as its only motion: the release walks the travel to the pointer at the release.
+    seed = foliage_brush(editor)["seed"]
+    start, end = at([-3.85, 0.0, -4.0]), at([3.85, 0.0, -4.0])
+    travel = math.dist(plane_point_of_pixel(viewport, start, 0.0), plane_point_of_pixel(viewport, end, 0.0))
+    expected = 1 + math.floor(travel / (0.5 * radius))
+    aim([-3.85, 0.0, -4.0])
+    editor.call("inject_input_events", {"events": [
+        {"type": "mouse_button", "button": "left", "pressed": True, "frame": 0},
+        {"type": "mouse_move", "x": end[0], "y": end[1], "frame": 2},
+        {"type": "mouse_button", "button": "left", "pressed": False, "frame": 2}]})
+    state = last_stroke_after(seed)
+    last = state.get("last_stroke") or {}
+    check(f"a {travel:.2f} m drag whose release comes in the frame of its only motion stamps exactly {expected} times",
+          last.get("stamps") == expected, json.dumps(last))
+
+    def exact_pixels(x0, x1, z, step):
+        """Pixels of a drag along z whose length over the floor is not within 2 % of a step of a whole step count."""
+        for nudge in (0.0, 0.013, 0.027, 0.041):
+            a, b = at([x0, 0.0, z]), at([x1 + nudge, 0.0, z])
+            length = math.dist(plane_point_of_pixel(viewport, a, 0.0), plane_point_of_pixel(viewport, b, 0.0))
+            fraction = (length / step) - math.floor(length / step)
+            if 0.02 < fraction < 0.98:
+                return a, b, length
+        return a, b, length
+
+    # A fast long drag with a small brush: three jumps of about 90 stamps each, released in the frame of the last
+    # motion. The backlog passes 256 stamps, the frame walks the excess, the release completes it; no travel is dropped.
+    editor.call("level_set_foliage_paint_settings", {"brush_radius": 0.1})
+    seed = foliage_brush(editor)["seed"]
+    start, end, travel = exact_pixels(-6.6, 6.6, -1.0, 0.05)
+    expected = 1 + math.floor(travel / 0.05)
+    aim(plane_point_of_pixel(viewport, start, 0.0))
+    moves = [[start[0] + (end[0] - start[0]) * k / 3.0, start[1] + (end[1] - start[1]) * k / 3.0] for k in (1, 2, 3)]
+    editor.call("inject_input_events", {"events": [
+        {"type": "mouse_button", "button": "left", "pressed": True, "frame": 0},
+        *[{"type": "mouse_move", "x": m[0], "y": m[1], "frame": i + 1} for i, m in enumerate(moves)],
+        {"type": "mouse_button", "button": "left", "pressed": False, "frame": 3}]})
+    state = last_stroke_after(seed)
+    last = state.get("last_stroke") or {}
+    check(f"a fast {travel:.2f} m drag of three jumps with a 0.1 m brush, released in the frame of its last motion, stamps exactly {expected} times "
+          "(the backlog above 256 stamps is walked in its frame, the release completes the rest)", last.get("stamps") == expected, json.dumps(last))
+
+    # Shift + wheel during a backlog: the stamps after the change continue one new step after the last stamp.
+    seed = foliage_brush(editor)["seed"]
+    start, end, travel = exact_pixels(-3.85, 3.85, 1.5, 0.05)
+    aim(plane_point_of_pixel(viewport, start, 0.0))
+    editor.call("mouse_drag", {"from": start, "to": end, "frames": 1, "hold": True})
+    before_wheel = wait_foliage_brush(editor, lambda r: r["stroke_open"] and ((r.get("stroke") or {}).get("stamps", 0) > 1))
+    editor.call("mouse_wheel", {"x": end[0], "y": end[1], "dy": 1.0, "modifiers": ["shift"]})
+    after_wheel = foliage_brush(editor)
+    wait_foliage_brush(editor, lambda r: r["stroke_open"] and close(r["center"], plane_point_of_pixel(viewport, end, 0.0), 0.02))
+    editor.call("mouse_release", {})
+    state = last_stroke_after(seed)
+    last = state.get("last_stroke") or {}
+    step0, step1 = 0.05, 0.5 * after_wheel["radius"]
+    low = (before_wheel.get("stroke") or {}).get("stamps", 0) - 1
+    high = (after_wheel.get("stroke") or {}).get("stamps", 0) - 1
+    totals = {k: 1 + k + math.floor(((travel - (k * step0)) / step1) + 1.0e-4) for k in range(max(0, low), high + 1)}
+    check(f"Shift + wheel with travel pending: the walk continues one new step ({step1:.3f} m) after the last stamp of the old step "
+          f"({step0:.3f} m), the count 1 + k + floor((L - k * {step0}) / {step1}) for the k stamps walked before the change",
+          (step1 > step0) and (last.get("stamps") in totals.values()), f"stamps {last.get('stamps')}, possible {totals}")
+    editor.call("level_set_foliage_paint_settings", {"brush_radius": radius})
+
+    # Shift + wheel shrinking the step below the distance carried from the last stamp: the next stamp is at the walk's
+    # current point, never on the backward extension of the next chord; every stamp lies on the travelled path.
+    def segment_distance(p, a, b):
+        ab = [b[i] - a[i] for i in range(3)]
+        length2 = sum(x * x for x in ab)
+        t = 0.0 if length2 == 0.0 else max(0.0, min(1.0, sum((p[i] - a[i]) * ab[i] for i in range(3)) / length2))
+        return math.dist(p, [a[i] + t * ab[i] for i in range(3)])
+    seed = foliage_brush(editor)["seed"]
+    corner_a, corner_p, corner_q = [-3.0, 0.0, 2.5], [-1.7, 0.0, 2.5], [-1.7, 0.0, 3.5]
+    brush_a = aim(corner_a)["center"]
+    pixel_p, pixel_q = at(corner_p), at(corner_q)
+    editor.call("inject_input_events", {"events": [
+        {"type": "mouse_button", "button": "left", "pressed": True, "frame": 0},
+        {"type": "mouse_move", "x": pixel_p[0], "y": pixel_p[1], "frame": 1}]})
+    at_p = wait_foliage_brush(editor, lambda r: r["stroke_open"] and close(r["center"], corner_p, 0.05))
+    editor.call("mouse_wheel", {"x": pixel_p[0], "y": pixel_p[1], "dy": -10.0, "modifiers": ["shift"]})
+    shrunk = wait_foliage_brush(editor, lambda r: r["radius"] < 0.5 * radius)
+    editor.call("inject_input_events", {"events": [{"type": "mouse_move", "x": pixel_q[0], "y": pixel_q[1], "frame": 0}]})
+    at_q = wait_foliage_brush(editor, lambda r: r["stroke_open"] and close(r["center"], corner_q, 0.05))
+    editor.call("inject_input_events", {"events": [{"type": "mouse_button", "button": "left", "pressed": False, "frame": 0}]})
+    state = last_stroke_after(seed)
+    with_centers = editor.call("level_get_foliage_brush", {"include_stamp_centers": True})
+    centers = with_centers.get("stamp_centers") or []
+    polyline = [brush_a, at_p["center"], at_q["center"]]
+    off_path = [fmt3(c) for c in centers if min(segment_distance(c, polyline[k], polyline[k + 1]) for k in range(2)) > 1.0e-3]
+    carried = 1.3 - (2 * 0.5 * radius)
+    check(f"after Shift + wheel shrinks the step to {0.5 * shrunk['radius']:.3f} m below the {carried:.2f} m carried at a corner, every one of "
+          f"the stroke's stamps lies on the travelled path (none on the backward extension of the second chord)",
+          (len(centers) >= 5) and (0.5 * shrunk["radius"] < carried) and not off_path and ((state.get("last_stroke") or {}).get("stamps") == len(centers))
+          and (with_centers.get("stamp_centers_truncated") is False) and ("stamp_centers" not in state),
+          f"{len(centers)} stamps, truncated {with_centers.get('stamp_centers_truncated')}, off the path {off_path[:5]}, "
+          f"listed without the argument {'stamp_centers' in state}")
+    editor.call("level_set_foliage_paint_settings", {"brush_radius": radius})
+
+    # A drag that leaves the viewport over a side edge and comes back lower on the same edge: no stamps along the chord
+    # across the outside, one at the re-entry, then one per half radius of the short travel after it.
+    seed = foliage_brush(editor)["seed"]
+    # The left edge when the editor window has room beside it, else the right edge.
+    side = 1.0 if viewport["x"] >= 50.0 else -1.0
+    edge = viewport["x"] if side > 0.0 else viewport["x"] + viewport["width"]
+    inside, outside = edge + side * 30.0, edge - side * 40.0
+    row_exit, row_entry = viewport["y"] + 0.4 * viewport["height"], viewport["y"] + 0.7 * viewport["height"]
+    exit_point = plane_point_of_pixel(viewport, [inside, row_exit], 0.0)
+    entry_point = plane_point_of_pixel(viewport, [inside, row_entry], 0.0)
+    for nudge in (0.0, 3.0, 7.0, 11.0):
+        end_pixel = [inside + side * (80.0 + nudge), row_entry]
+        travel = math.dist(entry_point, plane_point_of_pixel(viewport, end_pixel, 0.0))
+        if 0.02 < ((travel / (0.5 * radius)) % 1.0) < 0.98:
+            break
+    end_point = plane_point_of_pixel(viewport, end_pixel, 0.0)
+    obstacles = {"tool block": [-6.0, 0.0, 4.0], "tool box": [-6.0, 0.0, -4.0], "tool support": [6.0, 0.0, 4.0]}
+    clearance = min(math.dist([p[0], p[2]], [o[0], o[2]]) for p in (exit_point, entry_point, end_point) for o in obstacles.values())
+    on_floor = all((abs(p[0]) < 19.0) and (abs(p[2]) < 19.0) for p in (exit_point, entry_point, end_point))
+    check("the side-edge drag's exit, re-entry and end points are on the floor, clear of the block, the box and the support",
+          on_floor and (clearance > radius + 2.5), f"exit {fmt3(exit_point)}, entry {fmt3(entry_point)}, end {fmt3(end_point)}, clearance {clearance:.2f} m")
+    expected = 2 + math.floor(travel / (0.5 * radius))
+    middle = [0.5 * (exit_point[i] + entry_point[i]) for i in range(3)]
+    middle_radius = min(1.5, 0.5 * math.dist(exit_point, entry_point) - 1.2 * radius)
+    near_before = editor.call("level_get_foliage", {"scene_name": scene, "center": middle, "radius": middle_radius})["count"]
+    # Hovered by pixel: the edge column is outside window_point()'s margin.
+    for pixel in ([inside + side * 6.0, row_exit + 6.0], [inside, row_exit]):
+        editor.call("mouse_wheel", {"x": pixel[0], "y": pixel[1], "dy": 0.0})
+    at_exit = wait_foliage_brush(editor, lambda r: r["has_brush"] and close(r["center"], exit_point, 0.05))
+    editor.call("inject_input_events", {"events": [
+        {"type": "mouse_button", "button": "left", "pressed": True, "frame": 0},
+        {"type": "mouse_move", "x": outside, "y": row_exit, "frame": 1}]})
+    left = wait_foliage_brush(editor, lambda r: r["stroke_open"] and not r["has_brush"])
+    path = [[outside, 0.5 * (row_exit + row_entry)], [outside, row_entry], [inside, row_entry], end_pixel]
+    editor.call("inject_input_events", {"events": [{"type": "mouse_move", "x": m[0], "y": m[1], "frame": i} for i, m in enumerate(path)]})
+    at_end = wait_foliage_brush(editor, lambda r: r["has_brush"] and close(r["center"], end_point, 0.05))
+    editor.call("inject_input_events", {"events": [{"type": "mouse_button", "button": "left", "pressed": False, "frame": 0}]})
+    state = last_stroke_after(seed)
+    last = state.get("last_stroke") or {}
+    check("the side-edge drag's brush is at its exit point before the press, gone once the pointer is outside and at its end point after the re-entry",
+          at_exit["has_brush"] and close(at_exit["center"], exit_point, 0.05) and left["stroke_open"] and (not left["has_brush"])
+          and at_end["has_brush"] and close(at_end["center"], end_point, 0.05),
+          f"exit brush {at_exit.get('center')}, outside brush {left['has_brush']}, end brush {at_end.get('center')}")
+    near_after = editor.call("level_get_foliage", {"scene_name": scene, "center": middle, "radius": middle_radius})["count"]
+    at_entry = editor.call("level_get_foliage", {"scene_name": scene, "center": entry_point, "radius": radius})["count"]
+    check(f"a drag out of the viewport's side edge and back {math.dist(exit_point, entry_point):.2f} m away stamps exactly {expected} times "
+          f"(the press, the re-entry, {expected - 2} along the {travel:.2f} m after it) and paints no ground along the chord across the outside",
+          (last.get("stamps") == expected) and (last.get("outcome") == "ended") and (near_after == near_before) and (at_entry > 0) and (middle_radius > 0.5),
+          f"stamps {last.get('stamps')}, items near the chord's middle {near_before} -> {near_after} (radius {middle_radius:.2f}), at the re-entry {at_entry}")
+
+    # Shift + wheel sets the radius; the plain wheel zooms.
+    camera_before = viewport_of_scene(editor, scene)["camera_world_from_camera"]
+    x, y = at([0.0, 0.0, 0.0])
+    editor.call("mouse_wheel", {"x": x, "y": y, "dy": 1.0, "modifiers": ["shift"]})
+    up = wait_foliage_brush(editor, lambda r: not close([r["radius"]], [radius], 1.0e-5))
+    editor.call("mouse_wheel", {"x": x, "y": y, "dy": -1.0, "modifiers": ["shift"]})
+    down = wait_foliage_brush(editor, lambda r: close([r["radius"]], [radius], 1.0e-5))
+    camera_shift = viewport_of_scene(editor, scene)["camera_world_from_camera"]
+    check("Shift + wheel multiplies the brush radius by 1.1 per step up and divides it per step down; the camera stays",
+          close([up["radius"]], [radius * 1.1], 1.0e-5) and close([down["radius"]], [radius], 1.0e-5) and close(camera_shift, camera_before, 1.0e-6)
+          and close([editor.call("level_get_foliage_paint_settings")["brush_radius"]], [radius], 1.0e-5), f"radius {up['radius']} -> {down['radius']}")
+    editor.call("mouse_wheel", {"x": x, "y": y, "dy": 1.0})
+    editor.wait_idle()
+    camera_plain = viewport_of_scene(editor, scene)["camera_world_from_camera"]
+    check("the plain wheel zooms the camera and leaves the brush radius", (not close(camera_plain, camera_before, 1.0e-4)) and close([foliage_brush(editor)["radius"]], [radius], 1.0e-5),
+          f"camera moved {not close(camera_plain, camera_before, 1.0e-4)}, radius {foliage_brush(editor)['radius']}")
+    viewport = cv.frame_camera(editor, scene, [0.0, 12.0, 12.0], [0.0, 0.0, 0.0], [[x2, 0.0, z2] for x2 in (-7.0, 7.0) for z2 in (-5.0, 5.0)])
+
+    # A right drag removes and opens no context menu; a plain right click with another tool opens it.
+    seed = foliage_brush(editor)["seed"]
+    count = foliage_count(editor, scene)
+    aim([-4.0, 0.0, -2.0])
+    editor.call("mouse_drag", {"from": at([-4.0, 0.0, -2.0]), "to": at([4.0, 0.0, -2.0]), "button": "right", "frames": frames})
+    state = last_stroke_after(seed)
+    last = state.get("last_stroke") or {}
+    editor.wait_frames(2)
+    check("a right drag removes the foliage under its stamps as one undo entry and opens no context menu",
+          (last.get("kind") == "remove") and (last.get("removed", 0) > 0) and (foliage_count(editor, scene) == count - last.get("removed", -1))
+          and last.get("recorded") and not popup_open(editor), json.dumps(last))
+    seed = state["seed"]
+    x, y = at([3.0, 0.0, 3.0])
+    editor.call("mouse_click", {"x": x, "y": y, "button": "right"})
+    state = last_stroke_after(seed)
+    editor.wait_frames(2)
+    check("a plain right click with the tool active is a remove stroke of one stamp and opens no context menu",
+          ((state.get("last_stroke") or {}).get("kind") == "remove") and ((state.get("last_stroke") or {}).get("stamps") == 1) and not popup_open(editor),
+          json.dumps(state.get("last_stroke")))
+    # F9.1: with the tool active the plain right press is the tool's with no brush too (the pointer over the sky).
+    sky = [viewport["x"] + 0.5 * viewport["width"], viewport["y"] + 4.0]
+    editor.call("mouse_wheel", {"x": sky[0], "y": sky[1], "dy": 0.0})
+    no_brush = wait_foliage_brush(editor, lambda r: not r["has_brush"], frames=30)
+    last_before = no_brush.get("last_stroke")
+    editor.call("mouse_click", {"x": sky[0], "y": sky[1], "button": "right"})
+    editor.wait_frames(3)
+    check("11. a plain right click with the tool active and no brush (the sky) opens no context menu and begins no stroke",
+          (not no_brush["has_brush"]) and (not popup_open(editor)) and (foliage_brush(editor).get("last_stroke") == last_before),
+          f"brush {no_brush['has_brush']}, menu {popup_open(editor)}")
+    # F4.2: Shift + wheel over the viewport changes the radius with no brush too (the pointer over the sky).
+    editor.call("mouse_wheel", {"x": sky[0], "y": sky[1], "dy": 1.0, "modifiers": ["shift"]})
+    sky_up = wait_foliage_brush(editor, lambda r: not close([r["radius"]], [radius], 1.0e-5), frames=30)
+    editor.call("mouse_wheel", {"x": sky[0], "y": sky[1], "dy": -1.0, "modifiers": ["shift"]})
+    sky_down = wait_foliage_brush(editor, lambda r: close([r["radius"]], [radius], 1.0e-5), frames=30)
+    check("Shift + wheel over the viewport with no brush (the sky) changes the brush radius as over the ground",
+          (not sky_up["has_brush"]) and close([sky_up["radius"]], [radius * 1.1], 1.0e-5) and close([sky_down["radius"]], [radius], 1.0e-5),
+          f"brush {sky_up['has_brush']}, radius {sky_up['radius']} -> {sky_down['radius']}")
+    if popup_open(editor):
+        editor.call("key_press", {"key": "escape"})
+    # 12. A left press held without motion holds the mouse: a right click then opens no menu and begins no stroke.
+    x, y = at([2.0, 0.0, 6.0])
+    aim([2.0, 0.0, 6.0])
+    editor.call("inject_input_events", {"events": [{"type": "mouse_button", "button": "left", "pressed": True, "frame": 0}]})
+    held_press = wait_foliage_brush(editor, lambda r: r["stroke_open"])
+    editor.call("mouse_click", {"x": x, "y": y, "button": "right"})
+    editor.wait_frames(3)
+    during = foliage_brush(editor)
+    menu_during = popup_open(editor)
+    editor.call("inject_input_events", {"events": [{"type": "mouse_button", "button": "left", "pressed": False, "frame": 0}]})
+    ended_press = wait_foliage_brush(editor, lambda r: not r["stroke_open"])
+    check("12. a left press held without motion (the command Ready, not yet Active) holds the mouse: a right click opens no menu "
+          "and begins no second stroke; the release ends the paint stroke",
+          held_press["stroke_open"] and during["stroke_open"] and ((during.get("stroke") or {}).get("kind") == "paint") and (not menu_during)
+          and ((ended_press.get("last_stroke") or {}).get("kind") == "paint") and ((ended_press.get("last_stroke") or {}).get("outcome") == "ended"),
+          f"menu {menu_during}, stroke {json.dumps(during.get('stroke'))}, last {json.dumps(ended_press.get('last_stroke'))}")
+    aim([2.0, 0.0, 6.0])
+    editor.call("inject_input_events", {"events": [{"type": "mouse_button", "button": "right", "pressed": True, "frame": 0}]})
+    held_press = wait_foliage_brush(editor, lambda r: r["stroke_open"])
+    selection_before = editor.call("get_selection").get("items", [])
+    editor.call("mouse_click", {"x": x, "y": y})
+    editor.wait_frames(3)
+    during = foliage_brush(editor)
+    selection_during = editor.call("get_selection").get("items", [])
+    editor.call("inject_input_events", {"events": [{"type": "mouse_button", "button": "right", "pressed": False, "frame": 0}]})
+    ended_press = wait_foliage_brush(editor, lambda r: not r["stroke_open"])
+    editor.wait_frames(2)
+    check("12. the mirror: a right press held without motion, then a left click: no paint stroke begins, the selection stays, no menu; "
+          "the release ends the remove stroke",
+          held_press["stroke_open"] and ((during.get("stroke") or {}).get("kind") == "remove") and (selection_during == selection_before)
+          and (not popup_open(editor)) and ((ended_press.get("last_stroke") or {}).get("kind") == "remove"),
+          f"stroke {json.dumps(during.get('stroke'))}, last {json.dumps(ended_press.get('last_stroke'))}")
+    x, y = at([3.0, 0.0, 3.0])
+    editor.call("set_active_tool", {"tool": "move"})
+    editor.call("mouse_click", {"x": x, "y": y, "button": "right"})
+    opened = wait_until(editor, lambda: popup_open(editor), frames=30)
+    editor.call("key_press", {"key": "escape"})
+    closed = wait_until(editor, lambda: not popup_open(editor), frames=30)
+    check("a plain right click with another tool active still opens the viewport context menu", opened and closed, f"opened {opened}, closed {closed}")
+    editor.call("set_active_tool", {"tool": "foliage_paint"})
+    # A right drag with a modifier stays the camera's: Alt + right drag tumbles, no stroke begins.
+    aim([0.0, 0.0, 0.0])
+    seed = foliage_brush(editor)["seed"]
+    last_before = foliage_brush(editor).get("last_stroke")
+    camera_before = viewport_of_scene(editor, scene)["camera_world_from_camera"]
+    editor.call("mouse_drag", {"from": at([0.0, 0.0, 0.0]), "to": at([1.0, 0.0, 0.0]), "button": "right", "modifiers": ["menu"], "frames": 6})
+    editor.wait_idle()
+    check("Alt + right drag with the tool active turns the camera and begins no stroke",
+          (foliage_brush(editor).get("last_stroke") == last_before) and (foliage_brush(editor)["seed"] == seed)
+          and not close(viewport_of_scene(editor, scene)["camera_world_from_camera"], camera_before, 1.0e-4), "")
+    viewport = cv.frame_camera(editor, scene, [0.0, 12.0, 12.0], [0.0, 0.0, 0.0], [[x2, 0.0, z2] for x2 in (-7.0, 7.0) for z2 in (-5.0, 5.0)])
+
+    # FD11.1: the bindings are editable; a paint drag rebound to Ctrl + left paints with Ctrl and not without.
+    editor.call("set_command_bindings", {"command": "Foliage_paint.paint", "bindings": ["mouse_drag:ctrl+left"]})
+    editor.wait_frames(2)
+    aim([-2.0, 0.0, 7.0])
+    seed = foliage_brush(editor)["seed"]
+    last_before = foliage_brush(editor).get("last_stroke")
+    editor.call("mouse_drag", {"from": at([-2.0, 0.0, 7.0]), "to": at([-1.8, 0.0, 7.0]), "frames": 3})
+    editor.wait_idle()
+    plain = foliage_brush(editor)
+    editor.call("mouse_drag", {"from": at([-2.0, 0.0, 7.0]), "to": at([-1.8, 0.0, 7.0]), "frames": 3, "modifiers": ["ctrl"]})
+    with_ctrl = last_stroke_after(seed)
+    editor.call("reset_command_bindings", {"command": "Foliage_paint.paint"})
+    editor.wait_frames(2)
+    check("a paint drag rebound to Ctrl + left drag begins no stroke without Ctrl and paints with it (the press's modifiers exactly)",
+          (plain.get("last_stroke") == last_before) and (plain["seed"] == seed) and ((with_ctrl.get("last_stroke") or {}).get("kind") == "paint")
+          and ((with_ctrl.get("last_stroke") or {}).get("placed", 0) > 0), f"plain {json.dumps(plain.get('last_stroke'))}, ctrl {json.dumps(with_ctrl.get('last_stroke'))}")
+
+    def hold_stroke(button="left", point=(0.0, 0.0, 3.0)):
+        """A left (or other button's) drag held open mid-stroke; returns the brush reply with the stroke open."""
+        p = list(point)
+        aim(p)
+        editor.call("mouse_drag", {"from": at(p), "to": at([p[0] + 1.0, p[1], p[2]]), "button": button, "frames": 5, "hold": True})
+        return wait_foliage_brush(editor, lambda r: r["stroke_open"])
+
+    def release(button="left"):
+        seed_now = foliage_brush(editor)["seed"]
+        editor.call("mouse_release", {"button": button})
+        return wait_foliage_brush(editor, lambda r: (not r["stroke_open"]) and (r["seed"] != seed_now))
+
+    # 10. Escape cancels: the scene is as before the press, no entry, the redo history kept.
+    editor.call("level_place_pieces", {"scene_name": scene, "pieces": [{"shape": "basic.block", "position": [10.0, 0.0, -8.0], "name": "tool redo"}]})
+    editor.wait_idle()
+    editor.call("undo")
+    editor.wait_idle()
+    depth, redo, count = undo_depth(editor), redo_depth(editor), foliage_count(editor, scene)
+    held = hold_stroke()
+    painted_mid = foliage_count(editor, scene)
+    editor.call("key_press", {"key": "escape"})
+    cancelled = wait_foliage_brush(editor, lambda r: not r["stroke_open"])
+    after_escape = (foliage_count(editor, scene), undo_depth(editor), redo_depth(editor))
+    editor.call("mouse_release", {})
+    editor.wait_idle()
+    check("10. Escape mid-stroke cancels it: the painted items go, no undo entry, the redo history kept, the seed advances",
+          (redo >= 1) and held["stroke_open"] and (painted_mid > count) and ((cancelled.get("last_stroke") or {}).get("outcome") == "cancelled")
+          and (after_escape == (count, depth, redo)) and (foliage_count(editor, scene) == count) and (undo_depth(editor) == depth)
+          and (cancelled["seed"] == kit_next_seed(held["seed"])),
+          f"mid {painted_mid} from {count}, after escape {after_escape} vs {(count, depth, redo)}, last {json.dumps(cancelled.get('last_stroke'))}")
+
+    # Escape cancels with any modifiers: Shift still held from the wheel.
+    count = foliage_count(editor, scene)
+    held = hold_stroke(point=(-1.0, 0.0, -6.0))
+    editor.call("key_press", {"key": "escape", "modifiers": ["shift"]})
+    shifted = wait_foliage_brush(editor, lambda r: not r["stroke_open"])
+    editor.call("mouse_release", {})
+    editor.wait_idle()
+    check("Shift + Escape mid-stroke cancels it as Escape does", held["stroke_open"] and ((shifted.get("last_stroke") or {}).get("outcome") == "cancelled")
+          and (foliage_count(editor, scene) == count), json.dumps(shifted.get("last_stroke")))
+
+    # A tool switch through the input path mid-stroke ends the stroke as a release does: one entry, no open stroke.
+    depth = undo_depth(editor)
+    count = foliage_count(editor, scene)
+    slot_key = binding_input(editor, "Hotbar.activate_slot_1", "key")
+    held = hold_stroke(point=(-4.0, 0.0, 6.0))
+    editor.call("key_press", {"key": slot_key})
+    switched = wait_foliage_brush(editor, lambda r: not r["stroke_open"])
+    editor.call("mouse_release", {})
+    editor.wait_idle()
+    last = switched.get("last_stroke") or {}
+    check("a hotbar key mid-stroke makes another tool active and ends the stroke as a release: what it painted stays, one undo entry",
+          held["stroke_open"] and (not switched["tool_active"]) and (last.get("outcome") == "ended") and last.get("recorded")
+          and (foliage_count(editor, scene) == count + last.get("placed", -1)) and (last.get("placed", 0) > 0) and (undo_depth(editor) == depth + 1),
+          f"tool active {switched['tool_active']}, last {json.dumps(last)}")
+    editor.call("set_active_tool", {"tool": "foliage_paint"})
+
+    # 1, 2, 12 with a left drag held open.
+    depth = undo_depth(editor)
+    held = hold_stroke()
+    mid_count = foliage_count(editor, scene)
+    errors = {tool: call_error(editor, tool, {}) for tool in ("undo", "redo")}
+    stack_mid = editor.call("get_undo_redo_stack")
+    # Ctrl+Z reaches the undo command, which declines without a log line (Operation_stack::can_undo() reads the
+    # stroke's block reason); the unchanged stack is the check.
+    editor.call("key_press", {"key": "z", "modifiers": IMGUI_CTRL})
+    editor.wait_frames(3)
+    stack_after_key = editor.call("get_undo_redo_stack")
+    check("1. mid-stroke undo and redo (MCP) are refused with the stroke's reason, and Ctrl+Z through key_press undoes nothing",
+          held["stroke_open"] and all(FOLIAGE_STROKE_REASON in (e or "") for e in errors.values()) and (stack_after_key == stack_mid)
+          and (foliage_count(editor, scene) == mid_count) and (len(stack_mid.get("undo", [])) == depth),
+          json.dumps({k: (v or "")[:120] for k, v in errors.items()}) + f", stack unchanged by Ctrl+Z {stack_after_key == stack_mid}")
+    mutating = {
+        "level_place_pieces": {"scene_name": scene, "pieces": [{"shape": "basic.block", "position": [10.0, 0.0, 8.0]}]},
+        "delete_nodes": {"scene_name": scene, "node_ids": [ids["tool block"]]},
+        "batch": {"calls": [{"tool": "list_scenes", "arguments": {}}]},
+        "close_scene": {"scene_name": scene},
+        "reset_editor_state": {},
+        "save_scene": {"scene_name": scene, "path": os.path.join(directory, "foliage_tool_mid.glb")},
+    }
+    refused = {tool: call_error(editor, tool, arguments) for tool, arguments in mutating.items()}
+    read = editor.call("level_get_foliage", {"scene_name": scene})
+    check("2. mid-stroke a mutating MCP tool (level_place_pieces, delete_nodes, batch, close_scene, reset_editor_state, save_scene) is refused "
+          "with the reason, while level_get_foliage runs",
+          all(FOLIAGE_STROKE_REASON in (e or "") for e in refused.values()) and (read["count"] == mid_count) and (scene in editor.scene_names()),
+          json.dumps({k: (v or "None")[:100] for k, v in refused.items()}))
+    editor.call("inject_input_events", {"events": [{"type": "mouse_button", "button": "right", "pressed": True, "frame": 0}]})
+    editor.wait_frames(2)
+    second = foliage_brush(editor)
+    paint_error = call_error(editor, "level_foliage_paint", {"scene_name": scene, "stamps": [{"center": [5.0, 0.0, 5.0], "normal": [0.0, 1.0, 0.0]}], "palette": FOLIAGE_TOOL_PALETTE})
+    editor.call("inject_input_events", {"events": [{"type": "mouse_button", "button": "right", "pressed": False, "frame": 0}]})
+    editor.wait_frames(2)
+    check("12. a second begin is refused: a right press mid-stroke begins no remove stroke, level_foliage_paint is refused with the reason",
+          second["stroke_open"] and ((second.get("stroke") or {}).get("kind") == "paint") and (FOLIAGE_STROKE_REASON in (paint_error or "")),
+          f"stroke {json.dumps(second.get('stroke'))}, level_foliage_paint {(paint_error or 'None')[:120]}")
+    ended = release()
+    check("the release ends the held stroke as one undo entry", ((ended.get("last_stroke") or {}).get("recorded") is True) and (undo_depth(editor) == depth + 1),
+          json.dumps(ended.get("last_stroke")))
+
+    # 3. Delete through key_press mid-stroke runs after the release as a later entry.
+    editor.call("select_items", {"scene_name": scene, "ids": [ids["tool block"]]})
+    editor.wait_idle()
+    depth = undo_depth(editor)
+    hold_stroke()
+    editor.call("key_press", {"key": "delete"})
+    editor.wait_frames(3)
+    mid_ids = {p["id"] for p in pieces(editor, scene)}
+    release()
+    editor.wait_idle()
+    stack = editor.call("get_undo_redo_stack").get("undo", [])
+    check("3. Delete through key_press mid-stroke waits: the block stays until the release, then goes as a later undo entry after the stroke's",
+          (ids["tool block"] in mid_ids) and (ids["tool block"] not in {p["id"] for p in pieces(editor, scene)}) and (len(stack) == depth + 2),
+          f"block mid {ids['tool block'] in mid_ids}, undo entries {len(stack) - depth}: {json.dumps(stack[-2:])[:300]}")
+
+    # 4. Delete of a painted-on support mid-drag runs after the stroke; two undos restore the scene exactly.
+    def scene_snapshot():
+        nodes = editor.call("get_scene_nodes", {"scene_name": scene})["nodes"]
+        return sorted((n["id"], n.get("name"), n.get("parent_id")) for n in nodes)
+    before_nodes = scene_snapshot()
+    before_foliage = foliage_count(editor, scene)
+    editor.call("select_items", {"scene_name": scene, "ids": [ids["tool support"]]})
+    editor.wait_idle()
+    depth = undo_depth(editor)
+    hold_stroke(point=(5.5, 0.2, 4.0))
+    on_support = [i for i in editor.call("level_get_foliage", {"scene_name": scene})["items"] if i.get("parent") == ids["tool support"]]
+    editor.call("key_press", {"key": "delete"})
+    editor.wait_frames(3)
+    release()
+    editor.wait_idle()
+    gone = (ids["tool support"] not in {n["id"] for n in editor.call("get_scene_nodes", {"scene_name": scene})["nodes"]})
+    entries = undo_depth(editor) - depth
+    editor.call("undo")
+    editor.wait_idle()
+    editor.call("undo")
+    editor.wait_idle()
+    check("4. Delete of the support painted on mid-drag runs after the stroke (two entries); two undos give the scene back exactly",
+          bool(on_support) and gone and (entries == 2) and (scene_snapshot() == before_nodes) and (foliage_count(editor, scene) == before_foliage),
+          f"{len(on_support)} items on the support, gone {gone}, entries {entries}, nodes equal {scene_snapshot() == before_nodes}")
+    editor.call("select_items", {"scene_name": scene, "ids": []})
+    editor.wait_idle()
+
+    # The checks that click the UI mid-stroke hold the stroke with the middle button (paint rebound, as the Input Bindings
+    # window does), so the left and right buttons are free for the clicks.
+    editor.call("set_command_bindings", {"command": "Foliage_paint.paint", "bindings": ["mouse_drag:middle"]})
+    editor.wait_frames(2)
+    # The windows a check clicks open mid-stroke through the Window menu and hide again after the release, so they
+    # cover no viewport point of the held drags.
+    def hide(name):
+        editor.call("set_window_visibility", {"title": name, "visible": False})
+        editor.wait_idle()
+
+    # A press without motion, then the viewport window hidden: the stroke ends with its press stamp as one entry.
+    full_title = viewport_of_scene(editor, scene)["title"]
+    depth = undo_depth(editor)
+    aim([3.0, 0.0, -6.0])
+    editor.call("inject_input_events", {"events": [{"type": "mouse_button", "button": "middle", "pressed": True, "frame": 0}]})
+    pressed = wait_foliage_brush(editor, lambda r: r["stroke_open"])
+    editor.call("imgui_click", {"label": "Window"})
+    editor.call("imgui_click", {"window": "Window###Menu_00", "label": full_title.split("###")[0]})
+    gone = wait_foliage_brush(editor, lambda r: not r["stroke_open"], frames=60)
+    mouse_command = editor.call("get_input_state").get("active_mouse_command")
+    editor.call("inject_input_events", {"events": [{"type": "mouse_button", "button": "middle", "pressed": False, "frame": 0}]})
+    editor.wait_frames(2)
+    editor.call("set_window_visibility", {"title": full_title, "visible": True})
+    editor.wait_idle()
+    last = gone.get("last_stroke") or {}
+    check("a press without motion, then the viewport window hidden: no open stroke, the press stamp kept as one entry, no active mouse command",
+          pressed["stroke_open"] and (not gone["stroke_open"]) and (last.get("outcome") == "ended") and last.get("recorded") and (last.get("stamps") == 1)
+          and (mouse_command is None) and (undo_depth(editor) == depth + 1), f"last {json.dumps(last)}, mouse command {mouse_command}")
+    viewport = cv.frame_camera(editor, scene, [0.0, 12.0, 12.0], [0.0, 0.0, 0.0], [[x2, 0.0, z2] for x2 in (-7.0, 7.0) for z2 in (-5.0, 5.0)])
+
+    # 5. A Level Kit window button mid-stroke is refused with the reason and leaves nothing behind.
+    editor.call("select_items", {"scene_name": scene, "ids": [ids["tool support"]]})
+    editor.wait_idle()
+    hide(WINDOW)
+    nodes_before = scene_snapshot()
+    depth = undo_depth(editor)
+    held = hold_stroke(button="middle")
+    log_start = len(pav.read_log())
+    open_window(editor, WINDOW)
+    editor.call("imgui_scroll_to_item", {"window": WINDOW, "label": "Group Selected"})
+    editor.call("imgui_click", {"window": WINDOW, "label": "Group Selected"})
+    refused_log = wait_log(editor, "refused: " + FOLIAGE_STROKE_REASON, log_start)
+    release("middle")
+    editor.wait_idle()
+    hide(WINDOW)
+    after_nodes = [n for n in scene_snapshot() if n not in nodes_before]
+    check("5. Group Selected in the Level Kit window mid-stroke is refused with the stroke's reason and leaves no group node behind",
+          held["stroke_open"] and refused_log and all(not (n[1] or "").startswith("Group") for n in after_nodes) and (undo_depth(editor) == depth + 1),
+          f"refused in log {refused_log}, new nodes {after_nodes[:6]}, undo entries {undo_depth(editor) - depth}")
+
+    # 6. A kit parameter preview committed mid-stroke is refused and its value restored.
+    def thickness_rows():
+        return [i for i in editor.call("get_imgui_items", {"window": "Properties", "limit": 400, "visible_only": False, "label_contains": "thickness"}).get("items", [])
+                if i.get("label") == "thickness"]
+
+    def support_height():
+        return size_of(next(p for p in pieces(editor, scene) if p["id"] == ids["tool support"])["world_aabb"])[1]
+    open_window(editor, "Properties")
+    kit_group_opened = False
+    if not wait_until(editor, lambda: bool(thickness_rows()), frames=10):
+        editor.call("imgui_scroll_to_item", {"window": "Properties", "label": "Kit Piece"})
+        editor.call("imgui_click", {"window": "Properties", "label": "Kit Piece"})
+        kit_group_opened = wait_until(editor, lambda: bool(thickness_rows()), frames=30)
+    hide("Properties")
+    height_before = support_height()
+    held = hold_stroke(button="middle", point=(0.0, 0.0, -4.0))
+    open_window(editor, "Properties")
+    wait_until(editor, lambda: bool(thickness_rows()), frames=30)
+    drag_row(editor, "Properties", "thickness", 60.0)
+    editor.wait_frames(3)
+    height_mid = support_height()
+    editor.call("mouse_release", {"button": "left"})
+    editor.wait_frames(3)
+    height_refused = support_height()
+    release("middle")
+    editor.wait_idle()
+    height_after = support_height()
+    check("6. a kit parameter drag applied live mid-stroke (a floor's thickness): its commit is refused and the value goes back",
+          held["stroke_open"] and (height_mid > height_before + 0.05) and close([height_refused, height_after], [height_before, height_before], 1.0e-4),
+          f"height {height_before:.3f} -> mid {height_mid:.3f} -> refused {height_refused:.3f} -> after {height_after:.3f}")
+    if kit_group_opened:
+        editor.call("imgui_scroll_to_item", {"window": "Properties", "label": "Kit Piece"})
+        editor.call("imgui_click", {"window": "Properties", "label": "Kit Piece"})
+        wait_until(editor, lambda: not thickness_rows(), frames=30)
+    hide("Properties")
+    editor.call("select_items", {"scene_name": scene, "ids": []})
+    editor.wait_idle()
+
+    # 7. A worker completion (queue_from_thread) is held until the stroke's end.
+    if box is not None:
+        hide("Operations")
+        editor.call("select_items", {"scene_name": scene, "ids": [box]})
+        editor.wait_idle()
+        depth = undo_depth(editor)
+        held = hold_stroke(button="middle", point=(2.0, 0.0, -4.0))
+        open_window(editor, "Operations")
+        editor.call("imgui_scroll_to_item", {"window": "Operations", "label": "Catmull-Clark"})
+        editor.call("imgui_click", {"window": "Operations", "label": "Catmull-Clark"})
+        queued = wait_until(editor, lambda: editor.call("get_async_status").get("queued_operations", 0) > 0, frames=600)
+        mid_depth = undo_depth(editor)
+        released = release("middle")
+        editor.wait_idle()
+        hide("Operations")
+        stack = editor.call("get_undo_redo_stack").get("undo", [])
+        check("7. a worker's completion (Catmull-Clark of a selected box) waits in the queue while the stroke is open and records after the stroke's entry",
+              held["stroke_open"] and queued and (mid_depth == depth) and (len(stack) == depth + 2) and ((released.get("last_stroke") or {}).get("recorded") is True),
+              f"queued {queued}, undo entries mid {mid_depth - depth}, after {len(stack) - depth}: {json.dumps(stack[-2:])[:300]}")
+        editor.call("select_items", {"scene_name": scene, "ids": []})
+        editor.wait_idle()
+    else:
+        check("7. the plain box for the worker completion check was made", False, "create_shape made no box")
+
+    # 8. A save requested from the File menu mid-stroke starts only after the release.
+    path = os.path.join(directory, "foliage_tool_save.glb")
+    job = editor.client.save("save_scene", {"scene_name": scene, "path": path, "set_as_source": True})
+    size_before = os.path.getsize(path) if os.path.isfile(path) else -1
+    held = hold_stroke(button="middle", point=(-2.0, 0.0, -4.0))
+    log_start = len(pav.read_log())
+    editor.call("imgui_click", {"window": "##MainMenuBar", "label": "Commands"})
+    editor.call("imgui_click", {"window": "Commands###Menu_00", "label": "File"})
+    editor.call("imgui_click", {"label": "Save glTF (erhe)"})
+    queued_log = wait_log(editor, "Scene save queued", log_start)
+    editor.wait_frames(10)
+    started_mid = "Scene save started" in pav.read_log()[log_start:]
+    editor.call("mouse_release", {"button": "middle"})
+    # While the save runs the MCP server answers the save tools and wait_frames alone: frames pace the wait, at most 1200.
+    saved_log = False
+    for _ in range(300):
+        saved_log = f"Scene '{scene}' saved to" in pav.read_log()[log_start:]
+        if saved_log:
+            break
+        editor.call("get_save_status")
+        editor.wait_frames(4)
+    editor.wait_idle()
+    ended = foliage_brush(editor)
+    check("8. Commands > File > Save glTF (erhe) mid-stroke is queued and starts only after the release, then saves the scene",
+          (job.get("state") == "done") and held["stroke_open"] and queued_log and (not started_mid) and saved_log and (os.path.getsize(path) != size_before)
+          and (not ended["stroke_open"]) and ((ended.get("last_stroke") or {}).get("outcome") == "ended"),
+          f"first save {job.get('state')}, queued {queued_log}, started mid-stroke {started_mid}, saved {saved_log}")
+
+    # The stroke's viewport window hidden through the Window menu mid-stroke: the hide ends the gesture the viewport
+    # started (its release cannot arrive), so the stroke ends with its entry and no mouse command stays active.
+    full_title = viewport_of_scene(editor, scene)["title"]
+    title = full_title.split("###")[0]
+    depth = undo_depth(editor)
+    count = foliage_count(editor, scene)
+    held = hold_stroke(button="middle", point=(4.0, 0.0, -6.0))
+    editor.call("imgui_click", {"label": "Window"})
+    editor.call("imgui_click", {"window": "Window###Menu_00", "label": title})
+    after_hide = wait_foliage_brush(editor, lambda r: not r["stroke_open"], frames=60)
+    mouse_command = editor.call("get_input_state").get("active_mouse_command")
+    editor.call("mouse_release", {"button": "middle"})
+    editor.wait_frames(2)
+    editor.call("set_window_visibility", {"title": full_title, "visible": True})
+    editor.wait_idle()
+    last = after_hide.get("last_stroke") or {}
+    check("hiding the stroke's viewport window mid-stroke ends the stroke before any release: no active mouse command is left, what it "
+          "painted stays as one entry",
+          held["stroke_open"] and (not after_hide["stroke_open"]) and (mouse_command is None) and (last.get("outcome") == "ended") and last.get("recorded")
+          and (foliage_count(editor, scene) == count + last.get("placed", -1)) and (undo_depth(editor) == depth + 1),
+          f"stroke open after the hide {after_hide['stroke_open']}, active mouse command {mouse_command}, last {json.dumps(last)}")
+    viewport = cv.frame_camera(editor, scene, [0.0, 12.0, 12.0], [0.0, 0.0, 0.0], [[x2, 0.0, z2] for x2 in (-7.0, 7.0) for z2 in (-5.0, 5.0)])
+
+    # 9. Closing the stroke's scene, and closing another scene, mid-stroke: the stroke is abandoned.
+    def close_through_hierarchy(target):
+        row = scene_row(editor, target)
+        if row is None:
+            return False
+        editor.call("mouse_click", {"x": row["x"] + 10.0, "y": row["center_y"], "button": "right"})
+        wait_until(editor, lambda: popup_entry(editor, "Close") is not None, frames=30)
+        entry = popup_entry(editor, "Close")
+        if entry is None:
+            editor.call("key_press", {"key": "escape"})
+            return False
+        editor.call("imgui_click", {"id": entry["id"]})
+        return wait_until(editor, lambda: target not in editor.scene_names(), frames=240)
+
+    other = create_scene(editor)
+    made["scenes"].append(other)
+    editor.call("set_active_scene", {"scene_name": scene})
+    viewport = cv.frame_camera(editor, scene, [0.0, 12.0, 12.0], [0.0, 0.0, 0.0], [[x2, 0.0, z2] for x2 in (-7.0, 7.0) for z2 in (-5.0, 5.0)])
+    count = foliage_count(editor, scene)
+    held = hold_stroke(button="middle", point=(-3.0, 0.0, 6.0))
+    mid = foliage_count(editor, scene)
+    closed_other = close_through_hierarchy(other)
+    state = wait_foliage_brush(editor, lambda r: not r["stroke_open"])
+    editor.call("mouse_release", {"button": "middle"})
+    editor.wait_idle()
+    last = state.get("last_stroke") or {}
+    check("9. closing another scene mid-stroke abandons the stroke: its items go, no entry, the tool reports no open stroke",
+          held["stroke_open"] and (mid > count) and closed_other and (last.get("outcome") == "abandoned") and (not last.get("recorded"))
+          and (foliage_count(editor, scene) == count) and not foliage_brush(editor)["stroke_open"],
+          f"closed {closed_other}, items {count} -> {mid} -> {foliage_count(editor, scene)}, last {json.dumps(last)}")
+    held = hold_stroke(button="middle", point=(-3.0, 0.0, 6.0))
+    closed_own = close_through_hierarchy(scene)
+    state = wait_foliage_brush(editor, lambda r: not r["stroke_open"])
+    editor.call("mouse_release", {"button": "middle"})
+    editor.wait_idle()
+    last = state.get("last_stroke") or {}
+    check("9. closing the stroke's own scene mid-stroke abandons the stroke: no entry, the tool reports no open stroke and no brush in it",
+          held["stroke_open"] and closed_own and (last.get("outcome") == "abandoned") and (not last.get("recorded"))
+          and not state["stroke_open"] and (state.get("scene_name") != scene),
+          f"closed {closed_own}, last {json.dumps(last)}, brush scene {state.get('scene_name')}")
+
+
+def check_foliage_tool_exit(editor):
+    """Plan check 11: request_exit with a stroke held open ends the editor cleanly - the shutdown abandons the stroke.
+    The run's last act on its own editor, after the end-of-run state check."""
+    import curve_verify as cv  # noqa: E402
+    scene = create_scene(editor)
+    editor.call("set_active_scene", {"scene_name": scene})
+    editor.call("level_place_pieces", {"scene_name": scene, "pieces": [
+        {"shape": "basic.floor_slab", "position": [0.0, -0.2, 0.0], "name": "exit floor", "parameters": {"width": 20.0, "depth": 20.0, "thickness": 0.2}}]})
+    editor.wait_idle()
+    editor.call("level_set_foliage_paint_settings", {"brush_radius": 1.0, "palette": FOLIAGE_TOOL_PALETTE})
+    editor.call("set_active_tool", {"tool": "foliage_paint"})
+    viewport = cv.frame_camera(editor, scene, [0.0, 10.0, 10.0], [0.0, 0.0, 0.0], [[x, 0.0, z] for x in (-4.0, 4.0) for z in (-4.0, 4.0)])
+    hover(editor, viewport, [0.0, 0.0, 0.0])
+    wait_foliage_brush(editor, lambda r: r["has_brush"])
+    editor.call("mouse_drag", {"from": list(window_point(viewport, [0.0, 0.0, 0.0])), "to": list(window_point(viewport, [1.0, 0.0, 0.0])),
+                               "frames": 5, "hold": True})
+    held = wait_foliage_brush(editor, lambda r: r["stroke_open"])
+    editor.call("request_exit")
+    try:
+        code = editor.process.wait(timeout=300)
+    except Exception:  # noqa: BLE001 - subprocess.TimeoutExpired: no exit
+        code = None
+    log = pav.read_log()
+    check("11. request_exit with a stroke held open exits the editor cleanly: exit code 0, the shutdown abandons the stroke, no stroke is "
+          "destroyed open, no crash trace",
+          held["stroke_open"] and (code == 0) and (f"Live edit abandoned: {FOLIAGE_STROKE_REASON}" in log) and ("Foliage Paint: paint stroke abandoned" in log)
+          and ("destroyed open" not in log) and ("Callstack" not in log) and ("VERIFY" not in log),
+          f"exit code {code}, abandoned {FOLIAGE_STROKE_REASON in log}, destroyed open {'destroyed open' in log}, callstack {'Callstack' in log}")
+    if code is None:
+        editor.process.kill()
+        editor.process.wait()
+
+
 def run_group(editor, name, function, *arguments):
     """Runs one group of checks and checks that it closed what it created and restored what it changed."""
     before = editor_state(editor)
@@ -20268,6 +22725,11 @@ def main():
     parser.add_argument("--only-more-shapes", action="store_true", help="run the checks of the more shapes alone (doc/plans/level_kit_more_shapes.md build order 1 - 12)")
     parser.add_argument("--only-piece-lights", action="store_true", help="run the checks of light nodes on pieces alone (D3.15; needs a library shape with light frames)")
     parser.add_argument("--piece-lights-shape", default=PIECE_LIGHTS_SHAPE, help="the lit shape the piece light checks place")
+    parser.add_argument("--only-foliage-flag", action="store_true", help="run the foliage flag checks alone: placement rays pass a foliage mesh, hover and selection hit it (FD2)")
+    parser.add_argument("--only-foliage-index", action="store_true", help="run the foliage index checks alone: level_get_foliage against a search over level_get_pieces (FD5)")
+    parser.add_argument("--only-foliage-paint", action="store_true", help="run the foliage paint stroke checks alone: level_foliage_paint (FD6, FD9)")
+    parser.add_argument("--only-foliage-remove", action="store_true", help="run the foliage remove stroke checks alone: level_foliage_remove (FD10)")
+    parser.add_argument("--only-foliage-tool", action="store_true", help="run the Foliage Paint tool checks alone: the drags, the wheel, Escape, the context menu and the live edit rules of a held stroke (FD11, FD13.2)")
     parser.add_argument("--only-create-menu", action="store_true", help="run the checks of path stairs from the UI and the Create menu's Level Kit submenu alone (U46, U47)")
     parser.add_argument("--only-wrap-with-path", action="store_true", help="run the Wrap with Path checks alone (MCP and the Scene Hierarchy context menu, U45)")
     parser.add_argument("--only-former-ids", action="store_true", help="run the checks of the former shape ids alone (U55)")
@@ -20474,6 +22936,16 @@ def main():
             groups = [("machine kit", check_machine_kit)]
         elif args.only_wrap_with_path:
             groups = [("wrap with path", check_wrap_with_path, work)]
+        elif args.only_foliage_flag:
+            groups = [("foliage flag", check_foliage_flag, work), ("Level Kit window foliage brush", level_kit_window(lambda e, s, _: check_foliage_brush(e, s)))]
+        elif args.only_foliage_index:
+            groups = [("foliage index", check_foliage_index, work)]
+        elif args.only_foliage_paint:
+            groups = [("foliage paint", check_foliage_paint, work)]
+        elif args.only_foliage_remove:
+            groups = [("foliage remove", check_foliage_remove, work)]
+        elif args.only_foliage_tool:
+            groups = [("foliage tool", check_foliage_tool, work)]
         elif args.only_create_menu:
             groups = [("create menu", check_create_menu)]
         elif args.only_piece_lights:
@@ -20549,6 +23021,12 @@ def main():
                 ("piece lights", check_piece_lights, work, args.piece_lights_shape),
                 ("wrap with path", check_wrap_with_path, work),
                 ("create menu", check_create_menu),
+                ("foliage flag", check_foliage_flag, work),
+                ("Level Kit window foliage brush", level_kit_window(lambda e, s, _: check_foliage_brush(e, s))),
+                ("foliage index", check_foliage_index, work),
+                ("foliage paint", check_foliage_paint, work),
+                ("foliage remove", check_foliage_remove, work),
+                ("foliage tool", check_foliage_tool, work),
             ]
         for name, function, *arguments in groups:
             run_group(editor, name, function, *arguments)
@@ -20557,6 +23035,9 @@ def main():
               (end_state["scenes"] == start_state["scenes"]) and (end_state["active tool"] == start_state["active tool"]) and
               (end_state["Brush tool active"] == start_state["Brush tool active"]) and (end_state["kit mode"] == start_state["kit mode"]),
               state_differences(start_state, end_state))
+        # Last: it ends the editor (plan check 11 of doc/plans/foliage_paint_tool_implementation.md step 7).
+        if args.only_foliage_tool or (not any(getattr(args, name) for name in vars(args) if name.startswith("only_"))):
+            check_foliage_tool_exit(editor)
     except Exception as error:  # noqa: BLE001 - a failed step is a failed check
         check("run completed without an error", False, f"{type(error).__name__}: {error}")
     finally:

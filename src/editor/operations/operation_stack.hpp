@@ -1,15 +1,20 @@
 #pragma once
 
+#include "operations/live_edit.hpp"
+#include "operations/operation.hpp"
+#include "operations/operation_group.hpp"
 #include "operations/operation_stack_selection.hpp"
 
 #include "erhe_commands/command.hpp"
 #include "erhe_imgui/imgui_window.hpp"
 #include "erhe_profile/profile.hpp"
 
+#include <functional>
 #include <memory>
 #include <mutex>
 #include <unordered_set>
 #include <optional>
+#include <string>
 #include <vector>
 
 namespace erhe            { class Item_base; }
@@ -103,8 +108,10 @@ public:
     // thread) and records it for undo. Used where the caller needs the
     // operation's effects to be observable right away, e.g. the MCP
     // server responding to a tool call, or geometry graph edits whose
-    // evaluation runs in the same frame.
-    void execute_now(const std::shared_ptr<Operation>& operation);
+    // evaluation runs in the same frame. While a save holds the stack the
+    // operation waits in the queue (deferred); while a live edit is open it
+    // is refused with the live edit's reason (is_refused() reads true).
+    auto execute_now(const std::shared_ptr<Operation>& operation) -> Operation_outcome;
 
     // True during the first execute of a new entry (not undo, redo or an operation a tool runs outside the stack).
     [[nodiscard]] auto is_recording() const -> bool;
@@ -130,6 +137,21 @@ public:
     void begin_group();
     // Returns the number of operations that were grouped.
     auto end_group() -> std::size_t;
+
+    // Live edits (doc/editor/operations.md "Live edits"): opens one unless a block reason is reported (out_refusal);
+    // the calls below refuse (false) a token whose edit ended.
+    [[nodiscard]] auto begin_live_edit(std::string reason, std::function<void()> on_abandoned, std::string& out_refusal) -> Live_edit_token;
+    [[nodiscard]] auto is_live_edit_open   () const -> bool;
+    [[nodiscard]] auto get_live_edit_reason() const -> const char*; // null when none is open
+    // The owner's operation: its first execute now, with the recording state of execute_now(); held in the edit unless refused.
+    [[nodiscard]] auto execute_in_live_edit(const Live_edit_token& token, const std::shared_ptr<Operation>& operation) -> bool;
+    // Records the edit's operations as one entry (inside an open batch group, as its member), none when it holds none.
+    // Ends the edit.
+    [[nodiscard]] auto end_live_edit(Live_edit_token& token) -> Live_edit_end;
+    // Undoes the edit's operations in reverse order; nothing is recorded. Ends the edit.
+    [[nodiscard]] auto cancel_live_edit(Live_edit_token& token) -> bool;
+    // Cancels an open edit on the stack's own account (a scene close, the shutdown), then calls the owner's on_abandoned.
+    void abandon_live_edit();
 
     // Not-yet-executed operations: the main-thread queue plus the cross-
     // thread inbox. Stale-data guards use this alongside the async-op
@@ -194,6 +216,9 @@ private:
     void imgui(const char* stack_label, const std::vector<std::shared_ptr<Operation>>& operations);
 
     void verify_main_thread() const;
+    [[nodiscard]] auto get_admission(Operation_request request) const -> Operation_admission;
+    [[nodiscard]] auto is_live_edit_owner(const Live_edit_token& token, const char* call) const -> bool;
+    void end_live_previews();
     void begin_recording();
     void end_recording();
 
@@ -211,9 +236,8 @@ private:
     bool                                    m_undo_requested{false};
     bool                                    m_redo_requested{false};
 
-    // Undo-group scope state (begin_group / end_group).
-    bool                                    m_grouping{false};
-    std::vector<std::shared_ptr<Operation>> m_group_collected;
+    Operation_group                         m_group;
+    Live_edit                               m_live_edit;
 
     // Cross-thread inbox for queue_from_thread(); drained by update().
     ERHE_PROFILE_MUTEX(std::mutex,          m_thread_queue_mutex);

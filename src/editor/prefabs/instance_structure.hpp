@@ -46,6 +46,9 @@ namespace editor {
 // instance carrier, or is itself inside an instance.
 [[nodiscard]] auto instance_child_refusal(const erhe::Hierarchy& parent) -> std::optional<std::string>;
 
+// True when `hierarchy` is an instance carrier or inside an instance (the arc rule alone, not the kit layout lock).
+[[nodiscard]] auto is_instance_content(const erhe::Hierarchy& hierarchy) -> bool;
+
 // The same two questions, answered without formatting a message.
 [[nodiscard]] auto is_instance_structure_protected(const erhe::Item_base& item) -> bool;
 [[nodiscard]] auto refuses_instance_child(const erhe::Hierarchy& parent) -> bool;

@@ -39,7 +39,8 @@ constexpr erhe::Item_flag_info c_editor_item_flags[] = {
     { Editor_item_flags::navigation_seed,                "Navigation Seed",                "navigation_seed"           },
     { Editor_item_flags::navigation_mesh,                "Navigation Mesh",                nullptr                     },
     { Editor_item_flags::navigation_reachable,           "Navigation Reachable",           nullptr                     },
-    { Editor_item_flags::pass_through,                   "Pass Through",                   "pass_through"              }
+    { Editor_item_flags::pass_through,                   "Pass Through",                   "pass_through"              },
+    { Editor_item_flags::foliage,                        "Foliage",                        "foliage"                   }
 };
 
 // The C++ class names (the item trees name their drag and drop payloads by them).

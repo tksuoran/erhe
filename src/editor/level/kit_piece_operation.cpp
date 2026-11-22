@@ -213,14 +213,14 @@ auto Kit_attachment_follow_operation::record(App_context& context, Scene_root& s
     Level_kits& level_kits = *context.level_kits;
     // Runs the operations from begin; at a refusal everything this operation ran is undone, in reverse.
     const auto run = [this, &context](const std::size_t begin) -> std::string {
-        const Operation* const refused = execute_unless_refused(context, std::span<const std::shared_ptr<Operation>>{m_operations}.subspan(begin));
-        if (refused == nullptr) {
+        std::optional<std::string> refusal = execute_unless_refused(context, std::span<const std::shared_ptr<Operation>>{m_operations}.subspan(begin));
+        if (!refusal.has_value()) {
             return {};
         }
         for (std::size_t i = begin; i > 0; --i) {
             m_operations[i - 1]->undo(context);
         }
-        return refused->get_error();
+        return std::move(refusal.value());
     };
     // C3.13: the entry's report (an empty one says a flow ran and changed nothing).
     if (level_kits.get_flow_report() != nullptr) {

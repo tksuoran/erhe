@@ -67,6 +67,44 @@ TEST(Kit_shape_library, library_has_the_starter_set_and_the_more_shapes)
     EXPECT_EQ(library.find("basic.nothing"), nullptr);
 }
 
+// The foliage shapes and their default radii (doc/editor/level_tools.md "Foliage paint"), in library order.
+TEST(Kit_shape_library, foliage_shapes_are_the_vegetation_shapes)
+{
+    const std::map<std::string, float> expected{
+        {"nature.grass_tuft",   0.15f},
+        {"nature.succulent",    0.4f },
+        {"nature.leaf_plant",   0.6f },
+        {"nature.palm_shrub",   0.6f },
+        {"nature.bush",         0.6f },
+        {"nature.bamboo",       0.5f },
+        {"nature.palm_clump",   1.0f },
+        {"nature.tree",         1.5f },
+        {"nature.blocky_tree",  1.5f },
+        {"nature.palm",         2.0f }
+    };
+    const Kit_shape_library& library = get_library();
+    std::vector<const Kit_shape_definition*> in_library_order;
+    for (const Kit_shape_definition& shape : library.get_shapes()) {
+        SCOPED_TRACE(shape.id);
+        const std::map<std::string, float>::const_iterator i = expected.find(shape.id);
+        if (i == expected.end()) {
+            EXPECT_FALSE(shape.foliage_radius.has_value());
+            continue;
+        }
+        ASSERT_TRUE(shape.foliage_radius.has_value());
+        EXPECT_EQ(shape.foliage_radius.value(), i->second);
+        in_library_order.push_back(&shape);
+    }
+    EXPECT_EQ(in_library_order.size(), expected.size());
+    EXPECT_EQ(library.get_foliage_shapes(), in_library_order);
+    // A former id (a recreated shape's) resolves to the shape, so it takes the shape's radius.
+    for (const char* const former_id : {"nature.tree.v2", "nature.bush.v2", "nature.leaf_plant.v2", "nature.palm_shrub.v2"}) {
+        const Kit_shape_definition* const shape = library.find(former_id);
+        ASSERT_NE(shape, nullptr) << former_id;
+        EXPECT_TRUE(shape->foliage_radius.has_value()) << former_id;
+    }
+}
+
 // R2.9: every slot name has a default and alternatives in the palette.
 TEST(Kit_shape_library, every_material_slot_has_a_palette_material)
 {

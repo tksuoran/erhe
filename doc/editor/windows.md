@@ -68,8 +68,9 @@ there (`Viewport_context_menu`, `windows/viewport_context_menu.*`).
   binding on the right button's release. The press readies it and pointer
   motion before the release drops it, so a right drag stays with the drags
   bound to the button (the camera turn, the physics drag). A command that
-  consumes the right press comes first: the Brush tool's insert and the
-  material paint tool's pick while their tool is active, a modal mesh
+  consumes the right press comes first: the Brush tool's insert, the
+  material paint tool's pick and the Foliage Paint tool's remove stroke
+  while their tool is active, a modal mesh
   component gesture's cancel. A tool handle or a rendertarget's own UI under
   the pointer takes the click too. The binding is editable in the Input
   Bindings window like any other.
@@ -91,8 +92,11 @@ there (`Viewport_context_menu`, `windows/viewport_context_menu.*`).
   is created as from a row: its head is where its parent puts it.
 - **Placement.** Create and Paste put the item at the hovered point: the
   nearest hit of scene content or the grid under the pointer, with the
-  surface normal there turned to the side the pointer ray came from
-  (`Hover_placement`, `scene/hover_placement.*`;
+  surface normal there turned to the side the pointer ray came from; over a
+  mesh carrying the foliage flag, the surface behind it along the pointer
+  ray, or the grid when the grid is nearer (`Level_kits::get_placement_hover()`,
+  `doc/editor/level_tools.md` "Surface placement"); the target rule above
+  still sees the foliage item (`Hover_placement`, `scene/hover_placement.*`;
   `Item_tree::get_context_menu_placement()` hands it to the Create
   callback, `Clipboard::try_paste()` takes it). A click that hovers nothing
   creates and pastes as from a row. `place_nodes_at()` sets the world

@@ -6,6 +6,7 @@
 #include <fmt/format.h>
 
 #include <algorithm>
+#include <cmath>
 #include <string_view>
 #include <utility>
 #include <vector>
@@ -172,6 +173,12 @@ Kit_shape_library::Kit_shape_library()
     }
     std::sort(names.begin(), names.end());
     ERHE_VERIFY(std::adjacent_find(names.begin(), names.end()) == names.end());
+    for (const Kit_shape_definition& shape : m_shapes) {
+        if (shape.foliage_radius.has_value()) {
+            ERHE_VERIFY(std::isfinite(shape.foliage_radius.value()) && (shape.foliage_radius.value() > 0.0f));
+            m_foliage_shapes.push_back(&shape);
+        }
+    }
     // Base colors are linear.
     m_palette = {
         Kit_palette_material{.name = "Kit Stone",          .base_color = glm::vec3{0.50f, 0.50f, 0.47f}, .roughness = 0.85f},
@@ -247,6 +254,11 @@ auto Kit_shape_library::get_kits() const -> const std::vector<Kit_definition>&
 auto Kit_shape_library::get_shapes() const -> const std::vector<Kit_shape_definition>&
 {
     return m_shapes;
+}
+
+auto Kit_shape_library::get_foliage_shapes() const -> const std::vector<const Kit_shape_definition*>&
+{
+    return m_foliage_shapes;
 }
 
 auto Kit_shape_library::find(const std::string_view id) const -> const Kit_shape_definition*

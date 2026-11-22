@@ -38,7 +38,7 @@ Defines the Tool abstraction and the Tools container, plus several concrete tool
 
 - **`Hover_tool`** -- Background tool that tracks what the pointer hovers over and displays information. Subscribes to hover messages.
 
-- **`Hotbar`** -- VR/desktop toolbar showing tool icons for quick switching.
+- **`Hotbar`** -- VR/desktop toolbar showing tool icons for quick switching. Its slots are the Inventory window's hotbar row, saved in the settings with the names of the toolbox tools known at that save (`Inventory_config::known_tools`). A toolbox tool missing from that list at startup (a tool new to the build, a first run) resets the row: every slot is cleared, the slot count grows to the tool count when it is smaller, and the tools fill the slots in registration order. An empty slot draws as a disabled box.
 
 - **`Hud`** -- Head-up display for VR mode (rendertarget-based ImGui host).
 
@@ -47,6 +47,8 @@ Defines the Tool abstraction and the Tools container, plus several concrete tool
 - **`Paint_tool`** -- Vertex color painting.
 
 - **`Material_paint_tool`** -- Assigns materials to faces.
+
+- **`Foliage_paint_tool`** (`level/foliage_paint_tool.hpp`) -- Paints foliage kit pieces onto the surfaces under a spherical brush with a left drag and removes them with a right drag, one undo entry per stroke; Shift + wheel sets the brush radius and Escape cancels a stroke (`doc/editor/level_tools.md` "Foliage paint").
 
 - **`Clipboard`** -- Cut/copy/paste for scene items.
 
@@ -89,6 +91,11 @@ its materials) are content of that scene, and the headset renders it.
   `close_scene`) detaches them and homes them in the most recently opened
   remaining scene. Closing the last scene leaves them sceneless; the next
   created or loaded scene homes them.
+- Every way of opening a scene homes sceneless tools: a created scene, a
+  loaded erhe scene or USD file, and a foreign glTF opened as a scene
+  (`Scene_open_operation`, each execute). Undo of such an open takes the
+  scene out of the list without a close; a `Release_tools_message` then
+  moves tools homed in it to the most recently opened remaining scene.
 - A `Home_tools_message` (MCP `set_headset_scene`, the headset window's
   scene combo) moves them into a named open scene. It is queue-only: the
   move destroys and creates the tools' rendertarget ImGui hosts.

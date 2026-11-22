@@ -59,7 +59,7 @@ namespace mcp_server_detail {
 
 // The toolbox tools by their stable names in get_input_state (active_tool), set_active_tool and set_tool_asset.
 enum class Mcp_tool : unsigned int {
-    brush = 0, move, rotate, scale, selection, paint, material_paint, weight_paint, physics, travel, count
+    brush = 0, move, rotate, scale, selection, paint, material_paint, weight_paint, physics, travel, foliage_paint, count
 };
 
 [[nodiscard]] auto c_str        (Mcp_tool tool) -> const char*;

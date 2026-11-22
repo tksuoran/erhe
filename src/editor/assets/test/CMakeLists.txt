@@ -13,12 +13,17 @@ add_executable(${_target}
     ${CMAKE_CURRENT_SOURCE_DIR}/../prepared_status.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../../editor_log.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../pending_item_removals.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../operations/compound_operation.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../operations/operation.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../operations/live_edit.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../operations/operation_group.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../../operations/operation_stack_selection.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../../scene/world_space_validity.cpp
     test_editor_asset.cpp
     test_editor_asset_load.cpp
     test_pending_item_removals.cpp
     test_free_undone_loads.cpp
+    test_operation_group.cpp
     test_item_keys.cpp
     test_prepared_asset.cpp
     test_prepared_status.cpp

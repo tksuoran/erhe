@@ -34,6 +34,13 @@ enum class Input_kind : unsigned int
     axis     = 5  // controller_axis
 };
 
+// How a mouse drag binding's modifier mask matches a press (doc/erhe/commands.md "Binding model").
+enum class Drag_modifier_match : unsigned int
+{
+    subset = 0,
+    exact  = 1
+};
+
 [[nodiscard]] auto c_str         (Binding_kind kind) -> const char*;
 [[nodiscard]] auto c_str         (Input_kind kind) -> const char*;
 [[nodiscard]] auto get_input_kind(Binding_kind kind) -> Input_kind;
@@ -50,9 +57,9 @@ enum class Input_kind : unsigned int
 // trigger: key, mouse_button and controller_button only. mouse_button does
 // not support Button_trigger::Any.
 //
-// drag_call_on_button_down_without_motion belongs to the command, not to the
-// user's choice of input: it is not part of the text form, and a user binding
-// takes it from the command's default binding.
+// drag_call_on_button_down_without_motion and drag_modifier_match belong to
+// the command, not to the user's choice of input: they are not part of the
+// text form, and a user binding takes them from the command's default binding.
 class Binding_desc
 {
 public:
@@ -61,6 +68,7 @@ public:
     std::optional<uint32_t> modifier_mask{};
     Button_trigger          trigger      {Button_trigger::Button_pressed};
     bool                    drag_call_on_button_down_without_motion{false};
+    Drag_modifier_match     drag_modifier_match{Drag_modifier_match::subset};
 
     [[nodiscard]] auto operator==(const Binding_desc& other) const -> bool;
 

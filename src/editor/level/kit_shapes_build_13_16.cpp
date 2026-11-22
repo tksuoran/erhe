@@ -1674,6 +1674,7 @@ void add_build_13_16_shapes(std::vector<Kit_shape_definition>& shapes)
     {
         Kit_shape_definition shape;
         shape.id              = "nature.succulent";
+        shape.foliage_radius  = 0.4f;
         shape.kit             = "nature";
         shape.display_name    = "Succulent";
         shape.description     =
@@ -1700,6 +1701,7 @@ void add_build_13_16_shapes(std::vector<Kit_shape_definition>& shapes)
     {
         Kit_shape_definition shape;
         shape.id              = "nature.grass_tuft";
+        shape.foliage_radius  = 0.15f;
         shape.kit             = "nature";
         shape.display_name    = "Grass tuft";
         shape.description     =

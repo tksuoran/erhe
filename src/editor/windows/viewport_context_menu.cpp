@@ -3,6 +3,7 @@
 #include "app_context.hpp"
 #include "app_scenes.hpp"
 #include "editor_log.hpp"
+#include "level/level_kits.hpp"
 #include "scene/scene_root.hpp"
 #include "scene/scene_view.hpp"
 #include "scene/viewport_scene_view.hpp"
@@ -127,17 +128,11 @@ auto Viewport_context_menu::open() -> bool
         target = hovered_item;
     }
 
+    // FD2.4: the surface point, foliage passed through; its normal faces the side the pointer ray came from.
     m_placement.reset();
-    const Hover_entry* const nearest = viewport_scene_view->get_nearest_hover(Hover_entry::content_bit | Hover_entry::grid_bit);
-    if ((nearest != nullptr) && nearest->valid && nearest->position.has_value()) {
-        m_placement = Hover_placement{.position = nearest->position.value(), .normal = nearest->normal};
-        // The side of the surface the pointer ray came from is the side an item is placed on.
-        const std::optional<glm::vec3> ray_origin = viewport_scene_view->get_control_ray_origin_in_world();
-        if (m_placement->normal.has_value() && ray_origin.has_value()) {
-            if (glm::dot(m_placement->normal.value(), ray_origin.value() - m_placement->position) < 0.0f) {
-                m_placement->normal = -m_placement->normal.value();
-            }
-        }
+    const std::optional<Hover_placement_hit> placement = m_context.level_kits->get_placement_hover(*viewport_scene_view);
+    if (placement.has_value()) {
+        m_placement = Hover_placement{.position = placement.value().position, .normal = placement.value().normal};
     }
 
     m_viewport_scene_view = viewport_scene_view;

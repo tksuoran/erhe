@@ -9,6 +9,7 @@
 #include "parsers/usd.hpp"
 #include "brushes/brush.hpp"
 #include "brushes/brush_tool.hpp"
+#include "level/foliage_paint_tool.hpp"
 #include "content_library/content_library.hpp"
 #include "editor_log.hpp"
 #include "prefabs/prefab_library.hpp"
@@ -29,6 +30,8 @@
 #include "windows/active_scene_highlight.hpp"
 #include "windows/viewport_context_menu.hpp"
 
+#include "erhe_commands/command.hpp"
+#include "erhe_commands/commands.hpp"
 #include "erhe_defer/defer.hpp"
 #include "erhe_imgui/imgui_helpers.hpp"
 #include "erhe_imgui/imgui_host.hpp"
@@ -244,12 +247,30 @@ void Viewport_window::hidden()
     m_viewport_input_requested      = false;
     m_viewport_child_window_hovered = false;
     m_viewport_child_window_focused = false;
+    // hidden() runs every frame a window is not drawn and no hide notification is reachable: act on the edge.
+    const bool just_hidden = m_drawn_last_frame;
+    m_drawn_last_frame = false;
     std::shared_ptr<Viewport_scene_view> viewport_scene_view = m_viewport_scene_view.lock();
     if (!viewport_scene_view) {
         return;
     }
     viewport_scene_view->set_is_scene_view_hovered(false);
     viewport_scene_view->set_enabled(false);
+    if (!just_hidden) {
+        return;
+    }
+    // A stroke made in this view ends with it, Active drag or not.
+    if (m_app_context.foliage_paint_tool != nullptr) {
+        m_app_context.foliage_paint_tool->on_stroke_view_gone(viewport_scene_view.get());
+    }
+    // A hidden viewport passes on no more input: the mouse gesture it started (its release cannot arrive) ends here.
+    erhe::commands::Commands* const commands = m_app_context.commands;
+    if ((commands != nullptr) && (m_app_context.scene_views != nullptr) && m_app_context.scene_views->owns_pointer_capture(viewport_scene_view.get())) {
+        erhe::commands::Command* const active = commands->get_active_mouse_command();
+        if (active != nullptr) {
+            active->set_inactive();
+        }
+    }
 }
 
 auto Viewport_window::flags() -> ImGuiWindowFlags
@@ -489,6 +510,7 @@ void Viewport_window::drag_and_drop_target(float min_x, float min_y, float max_x
 
 void Viewport_window::imgui()
 {
+    m_drawn_last_frame = true;
     // Giving this viewport focus makes its scene the active scene
     // (edge-triggered: selection changes elsewhere may activate another
     // scene while this window stays focused, and must not be fought).

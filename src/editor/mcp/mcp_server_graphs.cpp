@@ -410,10 +410,15 @@ auto Mcp_server::action_geometry_graph_set_parameter(const json& args) -> std::s
     if (!args.contains("parameters") || !args["parameters"].is_object()) {
         return make_error_content("Missing 'parameters' object");
     }
-    window->set_node_parameters(
+    std::string refusal;
+    const Operation_outcome outcome = window->set_node_parameters(
         std::dynamic_pointer_cast<Geometry_graph_node>(node->node_from_this()),
-        args["parameters"]
+        args["parameters"],
+        refusal
     );
+    if (outcome == Operation_outcome::refused) {
+        return make_error_content("geometry_graph_set_parameter: refused: " + refusal + "; nothing was changed");
+    }
     return make_json_content(geometry_graph_node_json(*node)).dump();
 }
 
@@ -1573,10 +1578,15 @@ auto Mcp_server::action_texture_graph_set_parameter(const json& args) -> std::st
     if (!args.contains("parameters") || !args["parameters"].is_object()) {
         return make_error_content("Missing 'parameters' object");
     }
-    window->set_node_parameters(
+    std::string refusal;
+    const Operation_outcome outcome = window->set_node_parameters(
         std::dynamic_pointer_cast<Texture_graph_node>(node->node_from_this()),
-        args["parameters"]
+        args["parameters"],
+        refusal
     );
+    if (outcome == Operation_outcome::refused) {
+        return make_error_content("texture_graph_set_parameter: refused: " + refusal + "; nothing was changed");
+    }
     return make_json_content(texture_graph_node_json(*window, *node)).dump();
 }
 

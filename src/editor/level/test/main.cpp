@@ -1,3 +1,5 @@
+#include "editor_log.hpp"
+
 #include "erhe_geometry/geometry_log.hpp"
 #include "erhe_item/item_log.hpp"
 #include "erhe_property/property_log.hpp"
@@ -8,7 +10,7 @@
 #include <spdlog/spdlog.h>
 
 // As src/erhe/geometry/test/main.cpp and src/erhe/scene/test/main.cpp: geogram, then the loggers the kit generators and the
-// kit layout node tests reach.
+// kit layout node tests reach, and the editor's scene logger the foliage system reaches.
 void initialize_test_logging()
 {
     GEO::initialize(GEO::GEOGRAM_INSTALL_NONE);
@@ -20,6 +22,7 @@ void initialize_test_logging()
     erhe::scene::log               = spdlog::default_logger();
     erhe::scene::log_frame         = spdlog::default_logger();
     erhe::scene::log_mesh_raytrace = spdlog::default_logger();
+    editor::log_scene              = spdlog::default_logger(); // Foliage_system
 }
 
 int main(int argc, char** argv)

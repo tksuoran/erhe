@@ -2047,6 +2047,7 @@ auto Mcp_server::action_drag_selection(const json& args) -> std::string
     Selection_drag_steps& steps = m_selection_drag_steps.value();
     ++steps.frame;
     apply_step(steps, static_cast<float>(steps.frame) / static_cast<float>(steps.frame_count));
+    mark_current_request_progress();
 
     if (steps.frame < steps.frame_count) {
         m_defer_current_request = true;
@@ -2244,6 +2245,7 @@ auto Mcp_server::action_physics_drag(const json& args) -> std::string
     ++steps.frame;
     const float fraction = static_cast<float>(steps.frame) / static_cast<float>(steps.frame_count);
     physics_tool->step_scripted_drag(glm::mix(steps.start_goal, steps.end_goal, fraction));
+    mark_current_request_progress();
 
     if ((steps.frame < steps.frame_count) && physics_tool->is_scripted_drag_active()) {
         m_defer_current_request = true;

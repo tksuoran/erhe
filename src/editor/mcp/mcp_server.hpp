@@ -12,6 +12,7 @@
 #include <mutex>
 #include <set>
 #include <span>
+#include <string_view>
 #include <string>
 #include <thread>
 #include <vector>
@@ -187,6 +188,9 @@ private:
         auto (Mcp_server::*handler)(const nlohmann::json&) -> std::string;
     };
     [[nodiscard]] static auto get_dispatch_table() -> std::span<const Tool_dispatch_entry>;
+    // The tools that run while a live edit is open; every name is a dispatched tool.
+    [[nodiscard]] static auto get_live_edit_tools() -> std::span<const std::string_view>;
+    [[nodiscard]] static auto is_allowed_during_live_edit(const std::string& tool_name) -> bool;
 
     // Logs any disagreement between the advertised static tool list and the
     // dispatch table. Advertising a tool with no handler is not fatal (the
@@ -301,6 +305,12 @@ private:
     auto action_level_refresh_layout          (const nlohmann::json& args) -> std::string;
     auto action_level_wrap_with_path          (const nlohmann::json& args) -> std::string;
     auto query_level_pieces                   (const nlohmann::json& args) -> std::string;
+    auto query_level_foliage                  (const nlohmann::json& args) -> std::string;
+    auto action_level_foliage_paint           (const nlohmann::json& args) -> std::string;
+    auto action_level_foliage_remove          (const nlohmann::json& args) -> std::string;
+    auto query_level_foliage_paint_settings   (const nlohmann::json& args) -> std::string;
+    auto action_level_set_foliage_paint_settings(const nlohmann::json& args) -> std::string;
+    auto query_level_foliage_brush            (const nlohmann::json& args) -> std::string;
     auto action_level_set_piece_parameters    (const nlohmann::json& args) -> std::string;
     auto action_level_set_piece_material      (const nlohmann::json& args) -> std::string;
     auto action_level_replace_pieces          (const nlohmann::json& args) -> std::string;

@@ -33,6 +33,7 @@ class App_context;
 class App_message_bus;
 class App_scenes;
 class Icon_set;
+class Operation;
 class Scene_root;
 class Selection;
 class Tools;
@@ -319,6 +320,8 @@ public:
     // instance: the instance is always deleted as a whole (its interior is
     // sealed with lock_edit to be non-editable, not to outlive the instance).
     auto delete_items       (const std::vector<std::shared_ptr<erhe::Item_base>>& items) -> bool;
+    // The operation delete_items() queues, not executed; null when nothing would be deleted.
+    [[nodiscard]] auto make_delete_operation(const std::vector<std::shared_ptr<erhe::Item_base>>& items) -> std::shared_ptr<Operation>;
     auto cut_selection      () -> bool;
     auto copy_selection     () -> bool;
     auto duplicate_selection() -> bool;

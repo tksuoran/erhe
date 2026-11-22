@@ -162,6 +162,8 @@ public:
     void on_connector_snap_suspend_key_edge();
     [[nodiscard]] auto get_hover_world_position() const -> std::optional<glm::vec3>;
     [[nodiscard]] auto get_hover_world_normal  () const -> std::optional<glm::vec3>;
+    // The world origin of the shown preview mesh's node; none without a preview.
+    [[nodiscard]] auto get_preview_world_position() const -> std::optional<glm::vec3>;
 
 private:
     void on_hover_scene_view               (Hover_scene_view_message& message);
@@ -183,8 +185,8 @@ private:
     void on_selection(const Selection_message& message);
     [[nodiscard]] auto try_insert_kit_piece() -> bool;
     void take_next_kit_seed(const Scene_root& scene_root);
-    void update_kit_preview_transform(Brush& brush);
-    void update_kit_join(Scene_root& scene_root);
+    void update_kit_preview_transform(Brush& brush, const std::optional<Hover_placement_hit>* motion_placement);
+    void update_kit_join(Scene_root& scene_root, const Hover_placement_hit& placement);
     [[nodiscard]] auto apply_kit_join(
         Scene_root&                               scene_root,
         const std::shared_ptr<erhe::scene::Node>& piece,
@@ -205,15 +207,19 @@ private:
     [[nodiscard]] auto is_kit_connector_joined(const Scene_root& scene_root, const erhe::scene::Node& piece, const Kit_connector& connector) -> bool;
     // The join's target or a node above it moved, or a piece's connector switches changed: the preview joins again.
     void on_kit_join_target_changed(const erhe::scene::Node* node);
-    void update_preview_mesh               ();
+    // motion_placement: the view's placement hit on_motion() computed this motion; null when the caller has none.
+    void update_preview_mesh               (const std::optional<Hover_placement_hit>* motion_placement = nullptr);
     void do_insert_operation               (Brush& brush);
-    void add_preview_mesh                  (Brush& brush);
+    void add_preview_mesh                  (Brush& brush, const std::optional<Hover_placement_hit>* motion_placement = nullptr);
     void remove_preview_mesh               ();
-    void update_preview_mesh_node_transform();
+    void update_preview_mesh_node_transform(const std::optional<Hover_placement_hit>* motion_placement = nullptr);
 
-    [[nodiscard]] auto get_world_from_grid_hover_point() const -> glm::mat4;
+    // The grid hit's point, grid-snapped when Snap To Grid is on.
+    [[nodiscard]] auto get_grid_point(const Hover_placement_hit& placement) const -> glm::vec3;
 
     [[nodiscard]] auto update_hover_frame_from_mesh() -> bool;
+    // The placement hit of the view (Level_kits::get_placement_hover()) as a hover entry; empty when there is none.
+    [[nodiscard]] auto make_placement_hover_entry(const Scene_view& scene_view, const std::optional<Hover_placement_hit>& placement) const -> Hover_entry;
     [[nodiscard]] auto update_hover_frame_from_grid() -> bool;
     [[nodiscard]] auto update_brush_frame          (Brush& brush) -> bool;
     [[nodiscard]] auto get_placement_facet  () const -> GEO::index_t;
@@ -260,7 +266,7 @@ private:
     bool                               m_parent_to_scene_root    {true};
     bool                               m_parent_to_hovered       {false};
 
-    Hover_entry                        m_hover;
+    Hover_entry                        m_hover; // the placement hover: foliage passed through
     std::shared_ptr<erhe::scene::Mesh> m_preview_mesh;
     std::shared_ptr<erhe::scene::Node> m_preview_node;
     bool                               m_with_physics   {true};

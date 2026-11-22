@@ -58,6 +58,8 @@ public:
 
 private:
     auto resolve_tool(const std::string& tool_name) const -> Tool*;
+    [[nodiscard]] auto has_new_tool() const -> bool;
+    void reset_hotbar_to_tools();
     auto render_slot(int id, Slot_entry& slot, bool is_source, bool is_target, int section, int slot_index) -> bool;
     auto find_or_create_brush_with_material(
         const std::shared_ptr<Brush>&                      original_brush,
@@ -89,6 +91,7 @@ private:
     };
     std::vector<Saved_slot_name> m_saved_grid_names;
     std::vector<Saved_slot_name> m_saved_hotbar_names;
+    std::vector<std::string>     m_known_tools; // toolbox tool descriptions at the last save
 
     // Per-frame resolve of slot references still carrying an unresolved key
     // (their content library was not loaded yet - scenes load

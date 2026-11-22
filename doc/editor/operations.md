@@ -8,7 +8,7 @@ Implements the undo/redo operation system and all concrete editor operations.
 
 ## Key Types
 
-- **`Operation`** -- Abstract base class with `execute(App_context&)` and `undo(App_context&)`. Has a unique serial ID, a description string, and an error state (`set_error`/`get_error`/`has_error`). Operations that fail set the error instead of asserting. An operation whose first execute is refused (`set_refused()`, `is_refused()`; the reason is its error) leaves the state as it found it, and the entry it ends is not recorded: the level kit flow refuses a change whose floor fit would make an invalid outline (`doc/editor/level_tools.md` "Property flow"). `execute_unless_refused()` runs a list of operations and, at a refused one, undoes the ones before it in reverse; every host that runs sub-operations or follow-ups on its first execute goes through it and is refused with the child, after taking back its own write: `Compound_operation`, `Property_set_operation` (the value goes back), `Property_set_apply_operation` (the targets' values go back), `Curve_set_operation` (the path goes back) and `Kit_attachment_follow_operation`.
+- **`Operation`** -- Abstract base class with `execute(App_context&)` and `undo(App_context&)`. Has a unique serial ID, a description string, and an error state (`set_error`/`get_error`/`has_error`). Operations that fail set the error instead of asserting. An operation whose first execute is refused (`set_refused()`, `is_refused()`; the reason is its error) leaves the state as it found it, and the entry it ends is not recorded: the level kit flow refuses a change whose floor fit would make an invalid outline (`doc/editor/level_tools.md` "Property flow"). `execute_unless_refused()` runs a list of operations and, at a refused one, undoes the ones before it in reverse and returns a copy of its reason (no pointer to the child, so a host may drop its children before it reads the reason); every host that runs sub-operations or follow-ups on its first execute goes through it and is refused with the child, after taking back its own write: `Compound_operation`, `Property_set_operation` (the value goes back), `Property_set_apply_operation` (the targets' values go back), `Curve_set_operation` (the path goes back) and `Kit_attachment_follow_operation`.
 
 - **`Operation_stack`** -- Manages three vectors: `m_queued`, `m_executed`, `m_undone`. Operations are queued via `queue()`, then executed during `update()` (called once per frame). Undo moves from `m_executed` to `m_undone`; redo moves back. Also an `Imgui_window` that displays the operation history. Binds Ctrl+Z/Ctrl+Y for undo/redo. A refused operation (`execute_now()`, `update()`, a group's `queue()`) is logged as a warning naming it and is not recorded, and it leaves the redo history as it was. A caller of `execute_now()` reads `is_refused()` afterwards: the level kit entry points return the refusal as their error (`Level_kits::execute_entry()`), and the MCP tools that record at once reply an error naming it. `is_recording()` is true during the first execute of a new entry (not during undo, redo or an operation a tool runs outside the stack for a preview), and `get_recording_serial()` counts those first executes: the level kit flow report keys on them (`doc/editor/level_tools.md` "Flow report").
 
@@ -253,6 +253,88 @@ compound, and `Scene_open_operation::execute()` runs that compound inline as
 part of its own execution, so opening a glTF scene is one Ctrl+Z. Its
 `undo()` only unregisters the scene - the imported content stays alive in
 the kept `Scene_root`, so redo re-registers it without re-importing.
+
+## Live edits
+
+A live edit spans frames and records one entry at its end; the foliage
+stroke (`Foliage_stroke`, `doc/editor/level_tools.md` "Foliage paint") is
+one. The stack holds it (`Live_edit`, `operations/live_edit.hpp`), with
+the operations it has executed, so they are in the stack's reach as soon as
+they run: `collect_item_references()` reports what they retain, and nothing
+outside the stack records or undoes them.
+
+- `begin_live_edit(reason, on_abandoned, out_refusal)` opens one and returns
+  its token (`Live_edit_token`, move-only), unless `get_undo_block_reason()`
+  names a reason (a scene save, another live edit), which it writes to
+  `out_refusal`, returning an empty token. One is open at a time.
+- The owner's calls take the token, and the stack refuses one (logged,
+  returning false or `Live_edit_end::refused`) whose token names no open
+  edit: an ended or abandoned edit's token is dead.
+  - `execute_in_live_edit(token, operation)`: the first execute of an
+    operation, with the recording state of `execute_now()`
+    (`is_recording()`, the recording serial, the flow summary reset); the
+    edit holds it unless it is refused.
+  - `end_live_edit(token)` records the held operations as one entry and
+    clears the redo history, as every recording path does (inside an open
+    batch group the entry joins the group): `Live_edit_end::recorded`. With
+    no operation it records nothing and the redo history stays:
+    `Live_edit_end::unchanged`.
+  - `cancel_live_edit(token)` undoes the held operations in reverse order
+    and records nothing, ending a live kit parameter or layout preview first
+    as `undo()` does.
+- `abandon_live_edit()` cancels an open edit on the stack's own account and
+  then calls the owner's `on_abandoned`, with no operation executing, so the
+  callback may call the stack as any main-thread code does; it clears the
+  owner's state. The close of any scene abandons an open live edit, the
+  stroke's own scene or another one, because the close clears the whole
+  history (`Editor::on_close_scene()`, before `clear_history()`, which
+  verifies that none is open); so does the editor's shutdown (`~Editor()`,
+  before the save service and the parts go), as the Transform tool and the
+  kit previews end their gestures at a close.
+- `Foliage_stroke`'s destructor cancels a stroke left open, with a warning,
+  so no early return or exception of an owner leaves a live edit or its
+  callback behind.
+
+While a live edit is open only its owner changes the scene through the
+stack, so the history's order is the order of execution. `execute_now()`
+of another party is refused with the live edit's reason: it returns
+`Operation_outcome::refused`, the operation reads `is_refused()` with that
+reason and the stack logs one warning naming it, so a caller that reads the
+result reports it (`Level_kits::execute_entry()` returns it as the entry's
+error). `queue()` from the main thread waits in the queue and runs after the
+live edit's entry, and so do the worker completions of
+`queue_from_thread()`. While a scene save holds the stack, `execute_now()`
+defers instead (`Operation_outcome::deferred`) and the queue waits too
+(`get_operation_admission()`).
+
+`Operation_outcome::refused` means the stack did not change the scene
+through this operation, whether the stack refused it or its execute refused
+itself. A caller that applied its change live before it records it (the
+Curve tool's and the Lattice tool's point edits, a graph node's parameter
+widgets, a kit piece's parameter preview) puts the state from before the
+edit back when its record is refused, with the restore its own cancel uses
+(the parameter widgets: the operation's undo), so a refused commit leaves
+the scene as before the edit. The live edits that record through `queue()`
+(the Transform tool's releases, the Properties rows' edit sessions, the
+paint tools, the Animation window) wait and record after the live edit's
+entry.
+
+- `get_undo_block_reason()` names the live edit: `undo()`, `redo()` and the
+  Operations window's requests decline with it, and a scene save does not
+  start (`Scene_save_service::is_scene_quiescent()`; every path that makes
+  the service active, the automatic status job among them, starts from
+  `update_requests()` after that test).
+- The MCP dispatcher runs only the tools of `Mcp_server::get_live_edit_tools()`
+  while a live edit is open: reads that change no scene, undo or asset
+  state (the user interface reads `get_imgui_windows`, `get_imgui_items`
+  and `get_imgui_item_rect` among them), the input drivers
+  (`inject_input_events`, `mouse_*`, `key_press`, `imgui_*`), whose
+  commands' operations then wait or are
+  refused at the stack, and `request_exit`, whose shutdown abandons the
+  live edit as closing the window does. Every other tool is refused with the live edit's
+  reason, `batch` too even when it holds only reads, and the scene save
+  tools with it. `validate_tool_list_against_dispatch()` verifies at
+  startup that every name of the table is a dispatched tool.
 
 ## Public API / Integration Points
 

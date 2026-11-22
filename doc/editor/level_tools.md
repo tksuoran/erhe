@@ -311,6 +311,26 @@ All material inserts and node inserts of the call form one
 entry, which removes every piece of the call and the palette materials it
 added.
 
+Foliage items ("Foliage paint") are made by
+`Level_kits::make_foliage_operation(scene_root, placements, result)`. Each
+placement names `Kit_placement::foliage_radius` (meters, 0 - 100) and,
+through `Kit_placement::foliage_support`, the mesh node it goes under (none:
+the scene root). Its parent is its support: a foliage placement with
+`parent` or `parent_index` is refused. The call checks the placements as
+`place()` does, and also refuses a foliage placement with a connector join,
+with a support of another scene, or with a support and a `surface.direction`
+that is not a unit vector. A foliage placement takes its
+position and rotation as given: no module snap, no surface search, no
+connector join and no attachment follow operation. The node gets
+`Editor_item_flags::foliage` and its `Kit_piece.foliage_radius` before the
+insert. Under a support `find_surface_support()` accepts it also gets the
+surface attachment record `make_surface_record()` makes from its world
+pose, `surface.direction`, `surface.orient` and `surface.rest`, whatever
+`surface.attach` says; under any other mesh it is a plain child. Its body
+and `pass_through` follow the shape as for every piece. The call returns
+its material and node inserts as one `Compound_operation`, not executed (null
+with the refusal in `result.error`); the stroke runs it.
+
 ## Pattern expansion
 
 The arrangement of a kit layout node ("Kit layout nodes", R5.4, D3.7) is a
@@ -2829,6 +2849,420 @@ changes, A is carried to the same place on the new shape. The code is in
   `level_snap_to_surface` each node's `support` (the mesh it rests on) and
   `attached_to` (its support after the call).
 
+## Foliage paint
+
+Foliage is the kit pieces and other meshes that carry the foliage flag
+("Surface placement"), painted and kept apart by their radii (GitHub issue
+302). A foliage item carries a radius of its own and has a place in its
+scene's foliage index; a foliage shape gives its items their default radius.
+
+- Foliage shapes: a shape that states `Kit_shape_definition::foliage_radius`
+  (meters) is a foliage shape, the value the default radius of its items.
+  `Kit_shape_library::get_foliage_shapes()` gives them in library order.
+  They are the vegetation shapes of the nature kit: `nature.grass_tuft`
+  0.15 m, `nature.succulent` 0.4 m, `nature.leaf_plant` 0.6 m,
+  `nature.palm_shrub` 0.6 m, `nature.bush` 0.6 m, `nature.bamboo` 0.5 m,
+  `nature.palm_clump` 1.0 m, `nature.tree` 1.5 m, `nature.blocky_tree`
+  1.5 m and `nature.palm` 2.0 m. A former id ("Former shape ids") names the
+  same shape, so a recreated form has its radius.
+- `Kit_piece.foliage_radius` (`Kit_piece::foliage_radius_property`): the
+  radius of one foliage item in meters, a float attached to the mesh node,
+  default 0, saved with the node and outside the mesh key, so pieces of one
+  shape and values share one brush whatever their radii. A write outside
+  0 - 100 m is refused (the property's validation). The Properties window
+  shows the row "Foliage Radius" in the Foliage group of every mesh that
+  carries the foliage flag, a kit piece or a mesh flagged by hand; the row
+  and `set_item_property` write it through `Property_set_operation` (one
+  undo entry). A mesh made foliage by hand has radius 0 until it is given
+  one, and its radius then counts in the spacing rule as a piece's does.
+- The foliage index (`Foliage_index`, `level/foliage_index.hpp`): the points
+  and radii of the scene's foliage items in a uniform grid of 4 m cells; a
+  query visits the cells of its box or scans the entries, whichever is
+  fewer, and costs the items near it.
+- The foliage system (`Foliage_system`, `level/foliage_system.hpp`): the
+  node system (`doc/erhe/scene.md` "Node systems") each `Scene_root` owns
+  beside its other node systems (`Scene_root::get_foliage_system()`). It
+  owns the scene's index and one record per registered mesh carrying the
+  foliage flag, keyed by the node's address: the node held weakly, its id,
+  a generation, its state in the index, the index handle, the node's
+  transform observer, the captured world translation (scene root space)
+  and `Kit_piece.foliage_radius`, and a queued mark. Its index holds those
+  records at their captured values; a record whose position or radius the
+  index cannot take (a translation that is not finite - an infinite
+  translation, a degenerate ancestor matrix - or, as a guard, a radius
+  that is not a finite number >= 0) stays out of it and enters again at its
+  next valid values.
+  - The hooks capture values: each reads what it needs on the thread that
+    made the change, before it takes the system's mutex, and only then
+    stores it in the record. Registration and the foliage flag set
+    (`Scene_root::on_mesh_flags_changed()` forwards a change of the bit to
+    `Foliage_system::on_flags_changed()`; every flag writer reaches it
+    through the mesh's `handle_flag_bits_update()`) read the world
+    translation and the radius and make the record and its transform
+    observer; unregistration (of any node) and the flag cleared erase the
+    record and release its observer, so an unregistered node has no record. The radius hook (`on_values_changed()`; the
+    property's change callback is `erhe::scene::node_system_property_changed`,
+    so every writer - the Properties row, `set_item_property`, undo, a
+    load, a raw `set_value()`, an expression - reaches it) reads the value;
+    a read that evaluates an expression may call the hook again inside it,
+    which completes first. The transform observer reads the translation it
+    is called with, for the node's own moves and, in
+    `Scene::update_node_transforms()`, for every move of an ancestor. A
+    record found at the node's address that belongs to another (dead) node
+    is replaced by a new record with a new generation.
+  - The observer is added and released in the hooks. One writer changes a
+    node at a time - the main thread, or a worker holding the scene's
+    `item_host_mutex` - as `Node_physics_system` relies on too.
+  - The queue holds at most one entry per record (its key and generation)
+    plus one removal of an index entry per record erased since the last
+    query; an entry of an erased record is inert (its generation is gone).
+    `Foliage_system::get_index()`, `find_nodes_within()` and
+    `get_nodes()` run on the main thread and
+    apply the queue in order under the system's mutex alone: plain values
+    go into the index, and no node, property, scene or other mutex is
+    touched, so a caller may hold any lock. Records that leave the index
+    for invalid values give one warning per query (the count and the first
+    node's id). Nothing runs per frame: a frame without a query or a change
+    touches neither the queue nor the index, and both queue lists keep
+    their capacity. A captured translation is current once
+    `Scene::update_node_transforms()` has run for moved ancestors, so a
+    reader calls it before a query, as `level_get_foliage` does.
+  - `Foliage_system::find_nodes_within(center, distance, out_nodes)`
+    gives the nodes of the entries within a distance, `get_nodes()` every
+    indexed node (resolved on the main thread from the weak references
+    the index handles keep), `find_handle()` a node's entry; `get_index()`
+    returns the index read-only.
+- `level_get_foliage` ("MCP") reads the index; `level_get_pieces` reports
+  each piece's `foliage_radius`.
+- Palette (`Foliage_palette_entry`, `level/foliage_palette.hpp`): an entry
+  holds `shape` (an id), `parameters` (the canonical text of
+  `Kit_parameter_values`, empty for the shape's defaults), `materials` (a
+  name per slot, empty for the slot default), `weight` (0 - 1000),
+  `radius` (meters), `yaw_min` and `yaw_max` (degrees), `variants`
+  (1 - 64) and `seed` (the entry's base seed). Its text
+  (`make_foliage_palette_text()`, `parse_foliage_palette_text()`) is a
+  JSON list of objects with sorted keys and hexadecimal floats, so equal
+  palettes give equal text. `check_foliage_palette()` names the first
+  entry that cannot be painted: an unknown shape, parameters that do not
+  read or are out of range, a weight above 1000, a radius that is not a
+  finite length >= 0, yaw limits that are not finite or out of order,
+  variants outside 1 - 64, more materials than slots, a variant whose
+  values `validate()` or the shape's combination check refuses. One
+  function derives an entry's variants for given level lengths and reports
+  their first problem (`derive_foliage_variants()`); the check runs it at
+  the default level lengths (`Kit_lengths{}`: 1 m module, 3 m wall),
+  `Foliage_stroke::begin()` at the painted scene's lengths, so a stroke
+  refuses what those lengths make refused. Variant `v` of an entry has the seed `get_foliage_variant_seed(seed, v)`
+  (`derive_layout_element_seed()`, the function of a layout's Per Piece
+  Seed), which goes through the shape's derive-from-seed; an entry whose
+  values derive nothing from the seed and whose shape is not seeded has
+  one variant (`get_foliage_variant_count()`), so an entry needs at most
+  `variants` kit brushes.
+- Sampling (`level/foliage_sampler.hpp`, scene-free): a paint stamp makes
+  `get_attempt_count(density, radius)` = round(density * pi * radius^2)
+  attempts, clamped to 1 - 1024, about the brush frame
+  (`make_brush_frame()`: the normal and two unit tangents, the first the
+  cross product of the normal and the world axis it is least along). The
+  draws come from `Kit_random(seed, "foliage paint")` in a fixed order:
+  per attempt one 32-bit draw picks the entry by weight
+  (`pick_scatter_item()`); then up to 8 candidates, each two 24-bit draws
+  giving a point of the square -1 - 1, spent outside the unit circle, else
+  a ray from `center + radius * (x * t0 + y * t1) + h * normal` (h =
+  radius * sqrt(1 - x^2 - y^2)) against the normal for 2 h, so its hit is
+  inside the brush sphere. A candidate without a hit or one the spacing
+  rule refuses is spent, and so is one whose hit mesh is inside a
+  reference instance (`is_instance_content()`: nothing is added to an
+  instance's content, which its referenced file holds). The rule
+  (`is_spacing_free()`): a point p of radius r is free when every indexed
+  item q is at least max(r, r_q) away, read with one index query about p
+  whose range is that bound for the largest radius the index holds,
+  widened by 1/65536 of itself (`c_foliage_spacing_query_margin`) so the
+  query can only over-include; and every point accepted earlier in the
+  same stamp is that far too. The
+  accepted point takes one 24-bit draw for the yaw within the entry's
+  range and one 32-bit draw for the variant. `run_foliage_paint_stamp()`
+  fills caller-owned buffers with the placements and counts the attempts,
+  the candidates the spacing refused, those without a surface and those on
+  a mesh inside a reference instance (`on_sealed_support`); a palette whose
+  weights sum to 0 makes no attempt.
+- Strokes (`Foliage_stroke`, `level/foliage_stroke.hpp`): one
+  implementation for the foliage paint tool and the MCP tools.
+  `begin(scene_root, kind, settings, palette, seed)` takes the brush
+  radius, the paint density and the up axis (world up, or the surface
+  normal with Align To Surface) as they are at the press. It refuses,
+  with the reason, a brush radius that is not a finite length above 0, a
+  density that is not finite or is below 0, a palette
+  `check_foliage_palette()` refuses, a palette without an entry of weight
+  above 0, and a material name neither in the scene nor in the kit
+  palette. It resolves each entry once - its values (the shape's defaults
+  at the scene's level lengths, or its text), each variant's values with
+  its seed applied and checked, the material of each slot - and the
+  stream of the seed. `stamp(center, normal)` refuses a center that is
+  not finite and a normal that is not a direction; else it commits the
+  raytrace scene, runs `Scene::update_node_transforms()`, takes the
+  foliage index (so the items of the earlier stamps count), runs the
+  sampler with `find_ray_surface()` as its ray (foliage is passed
+  through) and places the accepted points with the one operation
+  `Level_kits::make_foliage_operation()` makes ("Placing"), run through
+  `Operation_stack::execute_in_live_edit()`. Each item stands at its
+  point with its origin (a kit shape's base) there, upright along world
+  +Y or turned onto the hit normal, turned by its yaw about that up axis,
+  as a child of the hit mesh's node; on a mesh `find_surface_support()`
+  accepts (a kit piece, a kit layout's generated mesh) it also gets its
+  surface attachment record ("Surface attachments": direction against the
+  hit normal, `orient` off and rest `anchor`, with Align To Surface too),
+  whatever Attach To Surface says, so it rides its support and is carried
+  on the support's shape changes. The record rests the origin, where the
+  stroke put it, with the item's own rotation: a carry at unchanged bounds
+  gives the stroke's pose back. With `orient` on the rest would be the
+  base center of the bounds, which lies off the origin of every foliage
+  shape, and the first carry would move the item. The sampler's buffers belong to the stroke and
+  keep their capacity, so a stamp's sampling allocates nothing once they
+  are big enough. A stroke's queries of the foliage system run at its
+  stamps on the main thread, never inside an operation.
+- Undo: a stroke is a live edit of the stack (`doc/editor/operations.md`
+  "Live edits"). `begin()` refuses while the stack reports a block reason
+  (a scene save, another live edit) and then opens its own
+  (`Operation_stack::begin_live_edit()`), so undo, redo, scene saves and
+  other parties' operations wait for the stroke. Each stamp that places
+  something executes one `Compound_operation`, which the live edit holds.
+  `end()` records the stroke's operations as one entry
+  (`Operation_stack::end_live_edit()`; inside an MCP batch the entry joins
+  the batch's), or none when no stamp placed anything, and the redo history
+  then stays. `cancel()` undoes the stroke's operations in reverse order
+  (`Operation_stack::cancel_live_edit()`) and records nothing. A scene
+  close and the editor's shutdown cancel an open stroke through the stack
+  (`abandon_live_edit()`), which then clears the stroke's state. The owner
+  ends every stroke it begins with `end()` or `cancel()`, or leaves it to
+  that abandon; the destructor cancels a stroke left open, with a warning.
+- Remove strokes (`Foliage_stroke_kind::remove`): `begin()` takes the
+  brush radius, the Remove Density (`remove_density`, 0 - 1) and the filter
+  (`Foliage_remove_filter`: every foliage item, or Remove Only Palette
+  Shapes, the kit pieces of the palette entries' shapes); it refuses a
+  brush radius that is not a finite length above 0 and a density that is
+  not finite or lies outside 0 - 1. With Remove Only Palette Shapes it reads
+  the entries' shapes alone and refuses an unknown one; removing every item
+  it reads no palette. It opens its live edit as a paint stroke does. The draws come from `Kit_random(seed, "foliage remove")`, and the
+  threshold `get_remove_threshold(density)` (the count of 24-bit draws
+  below density * 2^24; `is_remove_draw()` compares one draw with it) is
+  computed once per stroke, so 1 removes every item
+  and 0 none. `stamp(center, normal)` refuses a center that is not finite and
+  does not read the normal. A remove stamp runs
+  `Scene::update_node_transforms()`, takes the foliage index (the removals
+  of the earlier stamps are applied) and visits the items whose indexed
+  point lies in the brush sphere (distance at most the radius), keeping
+  with Remove Only Palette Shapes those whose `Kit_piece.shape` names one
+  of the entries' shapes (a former id names its shape; a mesh that is no
+  kit piece has no shape and is kept), in the order of
+  `is_before_in_remove_order()`: x, then y, then z, then the node id. Each
+  visited item takes one 24-bit draw, removed or not, so the result follows
+  from the seed and the item set; a draw below the threshold removes the
+  item with its subtree. An item the lock of a kit layout node protects
+  (`locked_layout_refusal()`; the lock ends at a surface attached piece, so
+  foliage painted on a locked layout's child is not protected) takes its
+  draw and is kept. The removals of a stamp are the Delete command applied
+  to exactly the drawn items: one operation of
+  `Selection::make_delete_operation()`, the `Compound_operation` the Delete
+  command queues, run through `execute_in_live_edit()`. It removes each item
+  and every node below it from its parent, deepest first, collecting an
+  item given beside its ancestor once; an edit-locked item (`lock_edit`) and
+  its subtree are kept and move to the removed parent's parent, while a
+  drawn item below an edit-locked one is removed on its own. A kept item is
+  not counted. The selection loses the removed items; undo and a cancelled
+  stroke give them back. Undo puts every node back under its parent
+  with its transform and values: the surface attachment record, the
+  foliage radius and the flag travel with the node. Only items carrying the
+  foliage flag are in the index, so nothing else is removed, though the
+  subtree of a removed item goes whatever its flags. The stroke counts
+  `removed` and keeps the removed foliage nodes in removal order
+  (`get_removed_nodes()`) while it is open; `end()`, `cancel()` and an
+  abandon release them and the placed nodes, so a finished stroke holds no
+  node. A stroke that removes nothing records no entry.
+- `level_foliage_paint` ("MCP") runs one paint stroke from its arguments,
+  `level_foliage_remove` one remove stroke.
+- The Foliage Paint tool (`Foliage_paint_tool`, `level/foliage_paint_tool.hpp`;
+  `App_context::foliage_paint_tool`): a toolbox tool of the hotbar (base
+  priority 4, as the Brush tool's), the one owner of strokes besides the
+  MCP tools. Its commands, each hosted by the tool and editable in the
+  Input Bindings window:
+  - `Foliage_paint.paint`, a left drag called at the press: the press
+    begins a paint stroke and stamps at the brush, and the release ends it.
+    It is ready only with a brush, no stroke open, no block reason of the
+    stack (`get_undo_block_reason()`) and a palette that can paint. Its drag
+    binding matches the press's modifiers exactly
+    (`erhe::commands::Drag_modifier_match::exact`, all four modifier bits),
+    so a press with other modifiers goes on to the camera's drags and a user
+    binding with a modifier (Ctrl + left drag) paints with that modifier
+    alone.
+  - `Foliage_paint.remove`, a right drag called at the press, the same with a
+    remove stroke. While the tool is active it takes every plain right
+    press, with a brush or not (without one the press does nothing), so the
+    viewport context menu's release click does not follow it (a plain right
+    click is a remove stroke of one stamp); Alt + right drag stays the
+    camera's tumble.
+  - `Foliage_paint.radius`, the wheel with Shift (an exact mask): one step
+    multiplies the brush radius by 1.1, a step down divides it, clamped to
+    0.1 - 50 m, and writes the setting, whenever the pointer is inside a
+    viewport's rectangle, with a brush or not (over the sky too); the plain
+    wheel stays the camera's zoom. An open stroke follows the radius
+    (`Foliage_stroke::set_brush_radius()`): its next stamp and its travel
+    step take it, and the circle shows it.
+  - `Foliage_paint.cancel`, Escape with any modifiers: cancels the open
+    stroke; it declines when none is open.
+  While a stroke is open both drag commands are ready for their button's
+  plain press and consume it without starting anything, so a press of the
+  other button between the stroke's press and its first motion reaches no
+  lower command (the context menu, a camera drag) and begins no second
+  stroke.
+- The brush (`Foliage_brush`: the scene, the center, the unit normal and the
+  pointer ray that found them): read at the hover changes - the
+  `hover_scene_view` and `hover_mesh` messages the Brush tool subscribes
+  to - from `Level_kits::get_placement_hover()` of the hovered scene view,
+  so a foliage item under the pointer is passed through. A drag keeps its
+  viewport hovered while the pointer is over another window; the brush is
+  only where the pointer is inside the viewport's rectangle. The brush
+  center is the nearest hit of the pointer ray on a surface mesh
+  (`is_placement_surface()`: neither pass_through nor foliage): a grid or
+  analytic hover (the grid in a floor's top plane can win the tie by
+  rounding) and a hover on a pass_through mesh (water) give way to
+  `Level_kits::find_placement_surface()`, the ray form of the same rule,
+  along the same pointer ray; with no surface hit there is no brush.
+  While a stroke is open the tool ignores the hover of other scenes: a
+  stroke belongs to the scene of its press. Nothing is read per frame.
+- Stamps (F5.1, G4): one at the press; then each hover change queues the
+  travel from the last brush to the new one, and the walk stamps every half
+  brush radius of it, the remainder carried, so the stamp count is a
+  function of the path: on flat ground a drag of length L stamps
+  1 + floor(L / (r / 2)) times, whatever steps the pointer moves in. A
+  step's center is the surface hit (`find_placement_surface()`) of the ray
+  from the pointer ray origin interpolated between the two brushes toward
+  the point at the same fraction of the chord between their centers, so the
+  stamps are equally spaced along the chord on flat ground; a ray without a
+  surface hit stamps nothing there and the walk goes on. The walk carries
+  the distance since the last stamp, so after a Shift + wheel the next stamp
+  is one new step after the last one; when the new step is shorter than the
+  distance already carried (Shift + wheel down), the next stamp is at the
+  walk's current point, never behind it. One budget per frame covers the hover
+  change and the tool's update command (`Foliage_paint.walk`, which walks
+  only while travel is pending): 16 stamps while at most 256 stamps are
+  pending, and beyond that everything above 256, so the backlog never
+  exceeds 256 stamps plus one hover change's travel. The pending hover
+  changes are a ring of 32; a full ring walks its head segment to the end
+  before the next one is queued, so no travel is dropped and nothing is
+  allocated. Leaving the viewport breaks the travel: the re-entry brush
+  starts a new segment, with one stamp there when it is at least half a
+  radius from the last stamp, and no stamps along the chord across the
+  outside. The release (its button no longer down; not a deactivation, a
+  hidden view, a binding rebuild or an abandon) first takes the pointer ray
+  at the release event (the hover of a motion is read a frame later: the
+  tool sets the view's pointer from `Commands::last_mouse_position()` and
+  refreshes its ray), when that pointer is over the stroke's viewport, and
+  walks everything pending before the stroke ends. The stroke takes the tool's values at the press (densities, Align To
+  Surface, Remove Only Palette Shapes, the palette and the seed) and the
+  current radius at each stamp; nothing `Foliage_stroke::begin()` builds
+  depends on the radius.
+- The seed: the stroke draws from the Seed setting, and when a stroke that
+  began ends - released, cancelled or abandoned - the setting takes
+  `kit_next_seed()` of the seed it drew from. A refused begin changes
+  nothing.
+- Lifetime: a stroke ends as a release does when the tool loses priority
+  (a hotbar key, a tool switch; its two drag commands are made inactive, so
+  no active mouse command is left behind), and when the scene view of its
+  press is destroyed or hidden, whether or not the drag has moved: on the
+  drawn-to-hidden edge `Viewport_window::hidden()` calls
+  `Foliage_paint_tool::on_stroke_view_gone()` directly, and the destroyed
+  view's hover message does the same. On that edge a viewport window whose
+  scene view holds the pointer capture (`Scene_views::owns_pointer_capture()`)
+  also makes the active mouse command inactive, since its release cannot
+  arrive (for every tool's drag); Escape cancels the stroke; the
+  stack's abandon (a scene close, the shutdown) reaches the tool through
+  `Foliage_stroke::set_abandon_callback()`, which records the outcome and
+  advances the seed only. The shutdown abandons before the parts go, so
+  the tool's destructor verifies that no stroke is open. While a stroke is
+  open the stack refuses other changes, and the tool's own widgets write
+  settings only.
+- Drawing (`tool_render()`, x-ray lines of 2 pixels): a 64-segment circle of
+  the brush radius about the center in the plane across the normal and the
+  normal as a line of a quarter radius, in the scene of the brush. The
+  circle's points are a member array, computed when the brush or the
+  radius changes. The colors are `Debug_visualizations_style::foliage_paint_color`
+  (idle and painting) and `foliage_remove_color` (a remove stroke), edited
+  in the Debug Visualizations window's style rows ("Foliage Brush").
+- The tool's window (Tool Properties): Brush Radius, Paint Density (0.01 -
+  100), Remove Density (0 - 1), Align To Surface, Remove Only Palette
+  Shapes and Seed; the palette, one row group per entry - the shape's
+  thumbnail from the Level Kit window's shape thumbnails (`Kit_thumbnails`),
+  its name, Remove, Move Up, Move Down (the entry order is the weighted
+  pick's order and the saved order), Reset (enabled when the entry has
+  parameters), Weight, Radius, Yaw (a range), Variants, the shape's
+  parameter rows (`kit_parameter_row()`, "Parameter rows") and a material
+  combo per slot (the slot's default first, then its alternatives) - and
+  Add Entry, which lists the foliage shapes: a new entry takes the shape's
+  foliage radius, weight 1, yaw 0 - 360, the shape's defaults (empty
+  parameters) and 8 variants for a shape whose defaults derive values from
+  a seed or that draws from it, 1 otherwise. The parameter rows show the
+  entry's values at the default level lengths (1 m module, 3 m wall), as
+  `level_set_foliage_paint_settings` reads a `parameters` object; a change
+  that `validate()` accepts writes the values' canonical text into the
+  entry, a refused typed value shows the message and the entry's values
+  again, and Reset empties the parameters (the shape's defaults at the
+  painted scene's lengths). The from-seed toggles choose which values each
+  painted variant derives from its seed and which it keeps as shown; the
+  entry's Variants decides how many seeded forms are painted. Each variant
+  takes the seed `get_foliage_variant_seed()` gives, so for an entry that
+  derives values the Seed row is shown disabled. The thumbnails keep the
+  lengths of the first scene the thumbnails followed (the Level Kit window's, or the last
+  hovered scene's when no window followed one). Below the entries the
+  reason painting is disabled, and the last stroke: its kind, outcome
+  (ended, cancelled, abandoned or did not begin, with the refusal) and
+  counts. Each widget writes the setting at its edit.
+- Settings (`Foliage_paint_config`, the `foliage_paint` section of
+  `editor_settings.json`, editor settings version 22): `brush_radius` 2,
+  `paint_density` 0.5, `remove_density` 1, `align_to_surface` false,
+  `remove_only_palette_shapes` false, `seed` 1 and `palette`, the
+  palette's canonical text (empty for none). The tool parses and checks the
+  text against the kit shape library at construction (it takes
+  `Level_kits` as a constructor argument) and at its own writes of the
+  palette; a text that does not read leaves the palette empty with the
+  reason shown. The painting refusal (F3.3) is computed then: an empty
+  palette, an entry `check_foliage_palette()` refuses, or no entry of
+  weight above 0.
+- `level_get_foliage_paint_settings`, `level_set_foliage_paint_settings` and
+  `level_get_foliage_brush` ("MCP") read and write the settings and read
+  the brush and the stroke; `set_active_tool` names the tool
+  `foliage_paint`.
+- Scale (F12), measured in the headless Vulkan editor on Windows, Release
+  and Debug builds. An inserted item costs the same whatever the number of
+  its siblings (the child name index, `doc/erhe/item.md` "Sibling-unique
+  names"): one `level_foliage_paint` stroke of 2,390 grass tufts under one
+  floor takes 0.53 s in Release (0.22 ms per item) and 48 s in Debug, where
+  the sibling-unique name pass is 13 us of an item's insert. A stamp of 64
+  attempts spends 0.075 ms (median; worst 0.11 ms) in the index queries and
+  the spacing tests over 10,000 entries in Release and 1.6 ms in Debug (the
+  `Foliage_sampler` timed case). On a scene of 1,202 items, 1,000 of them on
+  one floor slab: one more stamp of 64 attempts 7 - 18 ms (Release) and
+  75 ms (Debug); a set_node_transform move of an unrelated kit piece 7 ms
+  (67 ms) and of the carrying slab 24 ms (102 ms); a width change of the
+  slab, which carries its 1,000 items with one surface search each, 0.25 s
+  (17.6 s); the frame with nothing changing 3.9 ms (3.8 ms), as before the
+  painting (3.6 ms); the saved scene 36.6 MB, about 26 KB per item, since
+  each item's mesh is written into the file; its open 2.4 s (74 s) until
+  idle, its slowest frame 0.5 s (5.2 s). At 5,002 items (Release) the move
+  of an unrelated piece takes 17 ms, the carry of 1,000 items 0.29 s, the
+  save 109 MB and the open 13.5 s, with a frame of 4.9 s. One
+  `level_foliage_remove` stroke of one stamp at density 1 over 1,058 grass
+  tufts on one floor slab takes 0.047 s in Release (0.045 ms per item) and
+  2.2 s in Debug (2.1 ms per item); the selection update each removal runs
+  is about 1 % of that (the stroke without it: 2.19 s in Debug).
+- The kit's surface ray visits each raytrace instance that changed in the
+  last 30 commits of the scene, outside the scene BVH; the hover ray of an
+  interactive session commits once a frame, so the items of a stroke reach
+  the scene BVH half a second after they are painted. A headless MCP run
+  has no hover and commits once per stamp: an item stays outside the BVH
+  for the next 30 stamps, and every candidate ray of a stamp visits each
+  such item (Debug, a stamp of 302 attempts: 0.9 s over 300 such items, 9 s
+  over 1,200).
+
 ## Parameter rows
 
 `kit_parameter_rows.hpp` draws a piece's parameters for both windows that edit
@@ -2957,7 +3391,8 @@ attachments", which also attach what they snap) - search their one max distance 
 (`make_surface_options()`); a Transform tool drag snaps its anchor, one point,
 along its own direction ("Transform tool"); `make_placement_pose()` searches against the
 normal of the surface under the pointer (U51). The excluded meshes - the ones being moved - are not there, and
-neither is a mesh carrying `Editor_item_flags::pass_through` (a water piece):
+neither is a mesh carrying `Editor_item_flags::pass_through` (a water piece)
+or `Editor_item_flags::foliage`:
 the snap, the orient, the support report and the height map pass through it
 to what lies below (`is_surface_mesh()`, the one test every surface ray and
 search of `level_queries.cpp` asks).
@@ -3161,6 +3596,50 @@ found along (`Kit_placement_pose::surface_direction`).
 A caller placing several meshes commits the raytrace scene once and passes it to
 the `find_surface_placement()` overload that takes a committed
 `erhe::raytrace::IScene`.
+
+The foliage flag (label "Foliage", saved by name as `foliage`) is an authored
+flag on a mesh node, independent of `pass_through`, editable in the
+Properties window like every authored flag. A foliage mesh is no surface for
+placement rays, and every other ray sees it: viewport hover and selection,
+the Transform tool and material paint hit it (`raytrace_node_mask()` keeps
+it in the content slot). The flag changes no physics body. The scene's
+foliage index holds every mesh carrying it ("Foliage paint").
+
+- `find_ray_surface()` (`level_queries.hpp`) is the pointer ray of
+  placement: the nearest front face of a surface mesh along a unit
+  direction within a distance, as a `Surface_ray_hit` (position, unit normal
+  toward the ray's origin, mesh, and the hit primitive and triangle a caller
+  resolves to a facet); it allocates nothing. `is_placement_surface()`
+  answers whether a mesh is such a surface (neither pass_through nor
+  foliage).
+- `Level_kits::get_placement_hover()` gives a placing tool its surface
+  point as a `Hover_placement_hit` (`scene/hover_placement.hpp`): its
+  source (`surface`, `grid` or `analytic`), the point, the normal turned
+  toward the pointer ray's origin, the surface's mesh with the hit mesh
+  primitive and facet, or the grid and the plane it was hit in. It is the scene view's nearest content or grid
+  hover; when that is a foliage mesh, it casts `find_ray_surface()` along
+  the scene view's pointer ray and takes the surface behind the foliage, or
+  the grid when the grid is strictly nearer (the rule of
+  `Scene_view::get_nearest_hover()`); it casts that ray only then.
+- The Brush tool's kit mode (`update_kit_preview_transform()`, run at hover
+  changes; over foliage it reads the hit `on_motion()` computed for the
+  pass-through, so the ray is cast once per motion) takes everything about a placement from that one hit: the point
+  (grid-snapped on the grid), the normal and the connector join target (the
+  hit's mesh, the distance measured from the hit's point), so a piece
+  placed over a foliage wall joins nothing of it. The Brush tool's ordinary
+  (non-kit) brush placement passes foliage too (G8): over a foliage mesh its
+  hover entry is that hit (`Brush_tool::make_placement_hover_entry()`), so
+  the preview, its face frame (the hit's mesh primitive and facet), the
+  insert, the pick of the brush a hovered mesh was placed from
+  (`try_pick()`, through `get_hover_brush()`) and the wheel rotate of a
+  hovered placed mesh (`try_rotate()`) act on the surface behind, the
+  support and not the foliage item; the hover position it reports stays
+  the pointer's. The viewport context
+  menu's Create / Paste placement (`doc/editor/windows.md` "Viewport
+  context menu") takes its point and normal from it. A crate placed over
+  painted grass lands on the ground.
+- Level Check (`run_level_check()`) leaves foliage meshes out of its
+  support and overlap parts and counts them in `excluded_count`.
 
 ## Surface settings
 
@@ -4387,7 +4866,8 @@ surface placement.
 - `level_check {scene_name, support_tolerance, overlap_tolerance,
   min_island_area, exclude_tags}` (read-only): `run_level_check()`; the
   tolerances positive, `min_island_area` 0 or more. The reply: the effective
-  arguments, `piece_count`, `excluded_count`, `agent`,
+  arguments, `piece_count`, `excluded_count` (the pieces left out by
+  `exclude_tags` or the foliage flag), `agent`,
   `navigation_available`, `navigation_stale`, `island_count`,
   `finding_count`, `counts` per kind and `findings`, each with `kind`,
   `position`, `ids`, `names` and `detail`, and `distance` (unsupported, null
@@ -4396,7 +4876,8 @@ surface placement.
 - `level_get_placement_preview {}` (read-only): `active` (kit mode),
   `tool_active` (the Brush tool is the priority tool), `rotation_step_degrees`,
   `yaw_steps`, `hover_position`, `hover_normal` (the normal the preview
-  searches against) and `visible`; in kit mode also `shape`,
+  searches against), `preview_position` (the world origin of the shown
+  preview, kit mode or not) and `visible`; in kit mode also `shape`,
   `parameters`, `mesh_key`, `brush_id`, the brush's own `bounds` and
   `materials` (slot name to the palette material of the next piece); with a
   visible preview also its `position`, `rotation_xyzw`, `surface_found` and
@@ -4427,7 +4908,89 @@ surface placement.
   values, "Lights on pieces"); `uid`, `attachments` (one status per
   connection the piece records, "Connections"), `attachment` (the first
   of them, null for none) and `surface_attachment` ("Surface attachments",
-  null for none).
+  null for none); `pass_through` and `foliage` (the authored flags,
+  "Surface placement"); `foliage_radius` (`Kit_piece.foliage_radius`,
+  "Foliage paint").
+- `level_get_foliage {scene_name, center?, radius?}`: the scene's foliage
+  items from its foliage index ("Foliage paint"), after
+  `Scene::update_node_transforms()`: without a sphere every item, with
+  `center` and `radius` (given together) the items within it. `count`,
+  `items` in id order (`id`, `name`, `shape` - the `Kit_piece.shape`,
+  empty for a mesh that is no kit piece -, `position` the indexed world
+  translation, `radius`, `parent` the parent node's id or null at the
+  root), `max_radius` (the largest radius the index holds) and `density`
+  (the count within the sphere over the area of its great circle, items
+  per square meter; null without a sphere and for a sphere of radius 0).
+  An unknown argument fails the
+  call.
+- `level_foliage_paint {scene_name, stamps, palette, radius?, density?,
+  seed?, align_to_surface?}`: one paint stroke ("Foliage paint"): `stamps`
+  a list of `center` and `normal` (world space, the normal not zero),
+  `radius` the brush radius (default 2 m), `density` the Paint Density
+  (default 0.5 items per square meter), `seed` (default 1),
+  `align_to_surface` (default false) and `palette` the entries as objects
+  (`shape`; `parameters` an object as `level_place_pieces` takes it or the
+  canonical text; `materials` a material name per slot, empty for the
+  slot default; `weight` default 1; `radius` default the shape's foliage
+  radius, required for a shape without one; `yaw_min`, `yaw_max` default
+  0 - 360; `variants` default 8; `seed` default 0). No tool setting is
+  read or written. A refusal of the stroke's begin fails the call and
+  names its reason; a refused stamp cancels the stroke, so nothing is
+  painted and nothing recorded. The reply holds `stamps`, `attempts`,
+  `placed`, `refused_by_spacing`, `without_surface` and `on_sealed_support`
+  (candidates),
+  `recorded` (the stroke changed the scene and is in the undo history, as
+  its own entry or, inside a batch, as a part of the batch's entry) and `items` in placement
+  order (`id`, `name`, `shape`, world `position` and `rotation_xyzw`,
+  `radius`, `parent` the parent node's id or null at the root, `attached`
+  whether it holds a surface attachment record, `mesh_key`). An unknown
+  argument fails the call.
+- `level_foliage_remove {scene_name, stamps, radius?, density?, seed?,
+  only_shapes?}`: one remove stroke ("Foliage paint"): `stamps` a list of
+  `center` (world space) and an optional `normal`, accepted in the form of
+  a paint stamp and not read; `radius` the brush radius (default 2 m),
+  `density` the Remove Density (default 1), `seed` (default 1) and
+  `only_shapes` shape ids for Remove Only Palette Shapes (empty or absent:
+  every foliage item). No tool setting is read or written. A brush radius
+  that is not a finite number above 0, a density outside 0 - 1, an unknown
+  shape id and a center that is not three numbers fail the call, naming the
+  reason. A center beyond the float range is not finite: the stroke refuses
+  that stamp and is cancelled, so nothing is removed, nothing recorded and
+  the selection is as before. The reply holds `stamps`, `removed` (the
+  foliage items removed, each with its subtree), `recorded` (as
+  `level_foliage_paint` reports it) and `removed_ids`, the removed items'
+  node ids in removal order. An unknown argument fails the call.
+- `level_get_foliage_paint_settings {}`: the Foliage Paint tool's settings
+  ("Foliage paint"): `brush_radius`, `paint_density`, `remove_density`,
+  `align_to_surface`, `remove_only_palette_shapes`, `seed` (the next
+  stroke's), `palette` (the entries as `level_foliage_paint` takes them,
+  `parameters` as the canonical text), `palette_text` (the saved text) and
+  `paint_refusal` (why a paint stroke cannot begin, null when one can).
+  Runs while a stroke is open.
+- `level_set_foliage_paint_settings {brush_radius?, paint_density?,
+  remove_density?, align_to_surface?, remove_only_palette_shapes?, seed?,
+  palette?}`: writes the given settings as the tool's widgets do and
+  replies as the read. Every argument is checked before anything changes:
+  an unknown argument, `brush_radius` outside 0.1 - 50, `paint_density`
+  outside 0.01 - 100, `remove_density` outside 0 - 1, a `seed` that is no
+  integer 0 - 1000000 and a palette entry that does not read or check fail
+  the call. A `palette` replaces the whole palette (an empty list clears
+  it); an entry's `parameters` object reads at the default level lengths
+  (module 1 m, wall height 3 m), the canonical text gives exact values.
+- `level_get_foliage_brush {include_stamp_centers?}`: `tool_active`, `has_brush`, `scene_name`,
+  `center` and `normal` (null without a brush), `radius` (the setting),
+  `seed`, `stroke_open`, `stroke` (the open stroke: `kind`, `scene_name` and
+  its counts so far - `stamps`, `attempts`, `placed`, `removed`,
+  `refused_by_spacing`, `without_surface`, `on_sealed_support`, `recorded`;
+  null when none is open), `last_stroke` (the last stroke the tool began or
+  tried: `kind`, `outcome` ended | cancelled | abandoned | refused,
+  `scene_name`, `seed`, `refusal` and its counts; null before the first).
+  With `include_stamp_centers: true` (default false) it also returns
+  `stamp_centers` (the first 1024 stamp centers of the open stroke, else of
+  the last one that began, in stamp order; the tool records them into a
+  fixed array and stops recording when it is full) and
+  `stamp_centers_truncated` (the stroke stamped more than 1024). Runs while
+  a stroke is open; the checks that drive the mouse wait on it.
 
 ## Walkable area reads
 
@@ -4515,9 +5078,10 @@ Kit window and the MCP tools both call; their scene-free parts are in
   shape's `check_walkability` over the piece's parameter values for the agent
   of the scene's navigation build settings) and `unreadable_piece` (a record
   naming no known shape or parameters that do not parse; the piece's origin).
-  Pieces carrying a tag of `exclude_tags` take no part in the support and
-  overlap parts, so ground pieces, which rest on nothing, and a rock sunk into
-  the ground on purpose can be left out. Without a navigation mesh no island
+  Pieces carrying a tag of `exclude_tags` or the foliage flag ("Surface
+  placement") take no part in the support and overlap parts, so ground
+  pieces, which rest on nothing, and a rock sunk into the ground on purpose
+  can be left out. Without a navigation mesh no island
   is checked and `navigation_available` is false; a stale mesh is checked as it
   stands with `navigation_stale` true.
 
@@ -5869,6 +6433,211 @@ Kit window and the MCP tools both call; their scene-free parts are in
   unselected clicked row alone and a selected row's whole selection; save,
   close and load keeping the wrapped layout's kind, values, curve and
   children.
+  `--only-foliage-flag` runs the foliage flag checks ("Surface placement"),
+  which the full run ends with: a ground slab and a block on it, the block
+  unflagged and then flagged by hand with `set_item_flags`; flagged, a probe
+  over it snaps to the ground (`level_snap_to_surface`), a block standing on
+  it is unsupported 1 m over the ground (`level_get_support_report`), the
+  height map over it reads the ground, Level Check counts it in
+  `excluded_count` and no finding names it, `pick_at` and a viewport click
+  still hit and select it, viewport Create > Xform lands where the pointer
+  ray meets the ground behind it, and so does viewport Paste of a copied
+  block, and the Brush tool's kit mode, its hover
+  still on the block's top, previews and places a block on the ground at
+  the x and z where the pointer ray meets it behind the block
+  (module-rounded), not under the hover point; unflagged, each of these
+  meets the block; a hand-flagged wall is no connector join target (its
+  end connector joins unflagged); through the foliage block onto the grid
+  (no surface behind, Snap To Module off, Snap To Grid on) the preview takes
+  the grid-snapped point that hovering the grid directly gives; a non-kit
+  brush (the scene's first content library brush, selected) previewing
+  (`preview_position`) and placing on the block's top unflagged and on the
+  ground behind it flagged; save, close and load keeping the flag.
+  `--only-foliage-index` runs the foliage index checks ("Foliage paint"),
+  which the full run ends with: two bushes, a grass tuft and a block
+  flagged by hand on a ground slab; after every step `level_get_foliage` is
+  compared with the script's own search over `level_get_pieces` (the
+  flagged pieces, their world positions and `foliage_radius`, the parent
+  the script made, the count, `max_radius`, and in a sphere the density):
+  placing, flagging, radius edits through `set_item_property` (three undo
+  entries, the undo and redo of one), a radius of 250 m refused, unflagging
+  the largest and flagging it again, `set_node_transform` of a bush, the
+  grass reparented to a block and the block moved (the grass alone moves in
+  the index), spheres of 1 m, 30 m and far away, deleting a bush and the
+  grass's parent with its child, two undos, a redo, a plain mesh (no kit
+  piece, `create_shape`) flagged by hand in the index with radius 0 and an
+  empty shape (compared with `get_node_details`), and a save, close and
+  load keeping the five items with their positions and radii; after the
+  load, `get_item_properties` listing `Kit_piece.foliage_radius` on the
+  flagged plain mesh and not once it is unflagged, the plain mesh given
+  radius 2 m, and a stroke over it and over a reloaded bush keeping every
+  pair apart (the plain mesh's radius counted, nothing within 2 m of it),
+  the index equal to the reference. The 250 m radius write is refused by
+  the property's validation, the call failing with that reason.
+  `--only-foliage-paint` runs the foliage paint stroke checks ("Foliage
+  paint"), which the full run ends with. Its reference is the scene's
+  foliage pieces as `level_get_pieces` and `get_scene_nodes` give them
+  (world pose, radius, parent, record), and after every stroke
+  `level_get_foliage` must hold the same items. On a 60 m floor slab, a slab
+  tilted 30 degrees, a wall block, a slab turned 40 degrees about y, a slab
+  scaled (2, 0.5, 0.5) and a plain box (`create_shape`), `level_foliage_paint`
+  strokes whose items lie on the surface (within 1 mm of the plane the script
+  computes), inside the brush sphere, under the hit mesh, upright or along
+  the surface normal with `align_to_surface`, at the pose the reply names,
+  with active records on the kit pieces and none on the box; the spacing
+  over every pair after each stroke; a second stroke over the first adding
+  items, each under the floor on its top and none on earlier foliage;
+  strokes of one spot until one places nothing, under the disc
+  packing bound; weights 1, 3 and 0 at one radius (the share of the weight 3
+  entry within 0.1 of 0.75, none of the weight 0 entry); bushes of 3
+  variants giving 2 or 3 mesh keys, with a palette material the scene lacks
+  inserted in the stroke's entry, gone with its undo and back with its redo;
+  the slope moved (its items move with it) and widened from 10 m to 14 m
+  (upright and aligned items carried proportionally along it, turned as
+  before and active, within 1 mm); the floor thickened (its items carried
+  onto the new top); one undo entry per stroke, its undo and redo, the index
+  equal to the reference after each; a stroke
+  over nothing and a stroke cancelled by a zero normal in its second stamp
+  recording nothing and keeping the redo history; a `batch` of a placement
+  and a stroke as one entry, undone together, and a `batch` whose stroke is
+  cancelled keeping its placement; the refusals of a radius of 0, a negative
+  density, a palette of weight 0, an unknown shape, a stamp with an unknown
+  key and a `scene_name` that is no string; on a 2 m slab with painted
+  grass, `Selection.duplicate` and `clipboard_copy_nodes` /
+  `clipboard_paste` of one grass and of the slab, each copied foliage piece
+  keeping the flag and the 0.15 m radius, the index holding it, the copied
+  slab's grass attached to the copied slab, each undone; `level_replace_pieces`
+  of the slab by a 1 m block carrying its grass onto the block's top,
+  attached, and its undo; a stroke over a Deccer cubes instance
+  (`instantiate_prefab`) placing nothing inside it, its candidates there
+  counted in `on_sealed_support`, and painting the floor beside it; and,
+  the weight check's items deleted to keep the scene small, a save, close
+  and load keeping the foliage. A mirrored support is not painted: mirroring a registered mesh at
+  run time is fatal (`doc/plans/open_items.md` "Editor defects found in passing").
+  `--only-foliage-remove` runs the foliage remove stroke checks ("Foliage
+  paint"). Its reference is the foliage as
+  `level_get_pieces`, `get_scene_nodes` and `get_node_details` give it, and
+  every stroke's removed ids and the items left must equal the script's
+  replay of the remove stream (`foliage_remove_model()`: the splitmix64 of
+  `Kit_random` over the documented order and threshold; an item within
+  1 mm of a brush border fails the check as undecidable; the replay takes
+  the items a lock keeps as drawn and kept). On a 40 m kit floor with grass
+  and bushes painted in three areas, a kit block and a plain box (no
+  foliage) and two hand-flagged plain boxes: density 1 removing every item
+  in the brush, the hand-flagged box too, and leaving every item outside
+  it, the kit block and the plain box as they were, grass 2.2 m above and
+  1.8 m below the stamp's center, 0.1 m from it across, among them; a selected item outside
+  the brush staying selected and a selected removed item leaving the
+  selection and coming back with the undo; its one undo entry, the undo
+  restoring the items with their poses, radii, parents and surface
+  records, and the redo; a stroke whose second stamp's center is 1e39
+  cancelled with the items and the selection as before; density 0 removing
+  nothing, recording nothing and keeping the redo history; density 0.2
+  (whose threshold, the ceiling of 0.2 * 2^24 = 3355443.25 in float, the
+  `Foliage_sampler.remove_threshold` test pins with draws at the threshold
+  and one below) over five stamps, three at one center, thinning the area; `only_shapes` with
+  the former id `nature.bush.v2` and with `nature.bush` removing the bushes
+  alone (grass and the hand-flagged box stay) and an empty `only_shapes`
+  removing all; a bush with a foliage child and a plain child leaving with
+  its subtree; an edit-locked bush kept with its unlocked foliage child
+  removed; a drawn grass below an edit-locked block below a drawn bush
+  removed, the block kept at the bush's parent; their undo; a stroke over
+  no foliage recording nothing; a `batch` of a placement and a remove
+  stroke as one entry; the refusals of a radius of 0 and -1, a density of
+  1.5 and -0.1, an unknown shape, a center of two numbers, a stamp with an
+  unknown key and an unknown argument; a zero normal accepted; a save,
+  close and load keeping the foliage left; the Delete command's operation
+  (`delete_nodes`) on a parent and its child given together, in both
+  orders, as one undo entry whose undo puts the child back under the
+  parent; and a stroke over a locked line
+  layout keeping its flagged child and removing the grass painted on its
+  other block. Its index comparison holds the positions and radii, not
+  only the ids. A flagged child of a locked layout is a state only a file
+  produces (the flag is refused on a locked layout's child, and locking
+  replaces the children), so the group makes it by editing the saved
+  scene's text, `"Kit_layout.locked":"false"` to `"true"`, before the
+  load.
+  `--only-foliage-tool` runs the Foliage Paint tool checks ("Foliage
+  paint"), which the full run ends with, through the input drivers
+  (`mouse_drag` with `hold` and `mouse_release`, `mouse_click`,
+  `mouse_wheel` with Shift, `key_press`, `inject_input_events`,
+  `imgui_click`) on a 40 m floor slab with a 3 m slab, a kit block and a
+  plain box; its waits read `level_get_foliage_brush`, and one finally
+  gives back the settings, the bindings, the tool, the windows and the
+  scenes. Its Paint Density 0.3 gives one attempt per stamp at every
+  radius it uses, and every drag stays on the framed part of the floor, so
+  a check paints at most one item per stamp. The settings tools: the
+  values and a grass palette written and read back, the entry taking the shape's radius and 8 variants; an
+  unknown argument, a radius of 60, an unknown shape and yaw limits out of
+  order refused with nothing changed; a weight-0 palette kept with
+  "nothing to paint" as the refusal. The brush on the floor with its
+  normal; over a 2 m water piece 0.3 m above the floor the brush on the
+  floor under it and a short stroke there painting the floor; a short left drag one stamp and one undo entry, the seed then
+  `kit_next_seed()` of it; the entry's spread typed as 0.3 into its
+  Tool Properties row (Ctrl + click, `type_text`, Enter) written into the
+  entry's parameters (`level_get_foliage_paint_settings`), a stroke then
+  painting grass tufts of spread 0.3, Reset emptying the parameters and the
+  next stroke painting the default spread 0.5 with mesh keys none of the
+  edited items have; a 7.7 m drag over the floor, injected in 40
+  steps and in one, held until the brush reaches its end, stamping exactly
+  1 + floor(L / (r / 2)) times; a one-step jump with a 0.4 m brush walked
+  over several frames to the same exact count; a drag released in the
+  frame of its only motion (`inject_input_events`) giving the exact count;
+  a fast 13 m drag of three jumps with a 0.1 m brush, released in the frame
+  of its last motion, giving the exact count through a backlog above 256
+  stamps; a Shift + wheel during a backlog continuing one new step after
+  the last stamp; a held drag of 1.3 m with a 1 m brush, Shift + wheel ten
+  steps down (the new 0.19 m step below the 0.3 m carried), then a turn of
+  90 degrees: every stamp center (`stamp_centers`, read with
+  `include_stamp_centers`; not truncated, not listed without it) within 1 mm of the
+  travelled polyline; a drag out of the viewport over a side edge (the
+  left one when the window has room beside it) and back in lower on the
+  same edge, its points on the floor clear of the obstacles, stamping exactly the press, the re-entry and one
+  per half radius of the short travel after it, and painting nothing along
+  the chord across the outside; a middle press without motion
+  followed by the viewport window's hide ending the stroke with its press
+  stamp as one entry; Shift + wheel 1.1 times the radius and back
+  with the camera still, the plain wheel zooming with the radius kept; a
+  right drag removing the painted items as one entry with no context menu,
+  a plain right click a one-stamp remove stroke with no menu, a plain right
+  click over the sky (no brush) opening no menu and beginning no stroke,
+  Shift + wheel there changing the radius, a
+  left press held without motion taking a right click with no menu and no
+  second stroke, and the mirror (a right press held, a left click: no paint
+  stroke, the selection kept), the same right click with the Move tool
+  active opening the menu; Alt + right drag turning the camera with no stroke; the paint
+  drag rebound to Ctrl + left drag (`set_command_bindings`, reset after)
+  painting with Ctrl and not without. With a stroke held open: Escape and
+  Shift + Escape removing its items with no entry, the redo history kept
+  and the seed advanced; a hotbar key making another tool active and
+  ending the stroke as a release, its items kept as one entry; MCP `undo`
+  and `redo` refused with the stroke's reason and Ctrl+Z undoing nothing
+  (the undo command declines without a log line while `can_undo()` reads
+  the block reason, so the unchanged stack is the check);
+  `level_place_pieces`, `delete_nodes`, `batch`, `close_scene`,
+  `reset_editor_state` and `save_scene` refused with the reason while
+  `level_get_foliage` runs; a right press beginning no second stroke and
+  `level_foliage_paint` refused; Delete through `key_press` running after
+  the release as a later entry; Delete of the support painted on running
+  after the stroke, two undos giving the scene's nodes and foliage back.
+  With the paint command rebound to the middle drag, so the left and right
+  buttons are free: the Level Kit window's Group Selected refused with the
+  reason and no group left; a Properties thickness drag of the slab
+  applied live, its commit refused and the value restored; Catmull-Clark of
+  the box from the Operations window, its worker's completion held in the
+  queue until the release and recorded after the stroke's entry; Commands >
+  File > Save glTF (erhe) queued and started only after the release; the
+  viewport window hidden through the Window menu ending the stroke with
+  its entry before any release, with no active mouse command left; closing another scene, then the stroke's own, through the
+  Scene Hierarchy row menu abandoning the stroke with no entry. The windows
+  a check clicks open mid-stroke through the Window menu and hide after
+  the release. The run's last act, after its end-of-run state check (in
+  the full run and with `--only-foliage-tool`), is `request_exit` with a
+  stroke held open on the run's own editor: exit code 0, the log's "Live
+  edit abandoned" and "paint stroke abandoned" lines, no stroke destroyed
+  open and no crash trace. The viewport scene view's destruction is not
+  reached mid-stroke: only the undo of a scene builder's viewport
+  operation destroys one, and undo is refused while a stroke is open.
 - `Mcp_test.document_edits_record_one_undo_entry_each` places three pieces as
   one undo entry, changes a piece's parameters and snaps a raised piece onto
   the one below it, groups it, mirrors the group, duplicates it and ungroups
@@ -5886,3 +6655,6 @@ Kit window and the MCP tools both call; their scene-free parts are in
 - [Level kit connections: implementation steps](../plans/level_kit_connections_implementation.md)
 - [Kit layout composition: plan](../plans/kit_layout_composition.md)
 - [Level kit surface attachments: plan](../plans/level_kit_surface_attachment.md)
+- [Foliage paint tool: requirements](../plans/foliage_paint_tool.md)
+- [Foliage paint tool: design](../plans/foliage_paint_tool_design.md)
+- [Foliage paint tool: implementation steps](../plans/foliage_paint_tool_implementation.md)

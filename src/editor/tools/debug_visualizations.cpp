@@ -2996,6 +2996,16 @@ void Debug_visualizations::style_imgui(Property_editor& p, App_context& context,
     p.add_entry(Property_row_id::debug_kit_layout_tick_size, "Tick Size", [&style](){ ImGui::SetNextItemWidth(80.0f); ImGui::DragFloat("##", &style.kit_layout_tick_size, 0.001f, 0.0f, 0.5f, "%.3f"); });
     p.pop_group();
 
+    // The Foliage Paint tool's brush (doc/editor/level_tools.md "Foliage paint").
+    p.add_entry(Property_row_id::debug_foliage_brush_colors, "Foliage Brush", [&style]() {
+        ImGui::ColorEdit4("##paint",  &style.foliage_paint_color.x,  ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_Float);
+        ImGui::SameLine();
+        ImGui::ColorEdit4("##remove", &style.foliage_remove_color.x, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_Float);
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("The foliage brush circle and normal: idle and painting, removing");
+        }
+    });
+
     p.add_entry(Property_row_id::debug_primitive_boxes, "Primitive Boxes",   [style_row, &style](){ style_row(&style.mesh_primitive_box_color, &style.mesh_primitive_box_width); });
     p.add_entry(Property_row_id::debug_bone_boxes, "Bone Boxes",        [style_row, &style](){ style_row(&style.bone_box_color,           &style.bone_box_width); });
     // Skin bone visualization: colors alternate by joint hierarchy depth (A = even, B = odd) + line width.

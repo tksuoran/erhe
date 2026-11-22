@@ -284,6 +284,7 @@ public:
     Kit_seam_sides_function    get_seam_sides;         // optional: sides that fill their bounds rectangle
     std::vector<Kit_property_mapping> property_mappings; // C2.2: the standard properties the shape takes, onto parameters or slots
     Kit_supply_function        get_supply;             // optional (C3.3): the values a piece supplies over one of its connectors
+    std::optional<float>       foliage_radius;         // meters; set: a foliage shape, the default radius of its items (doc/editor/level_tools.md "Foliage paint")
 
     [[nodiscard]] auto find_parameter(std::string_view name) const -> std::optional<std::size_t>;
     [[nodiscard]] auto has_tag       (std::string_view tag) const -> bool;

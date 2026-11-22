@@ -263,6 +263,7 @@ enum class Property_row_id : uint32_t
     debug_kit_layouts_style,
     debug_kit_layout_colors,
     debug_kit_layout_tick_size,
+    debug_foliage_brush_colors,
     debug_primitive_boxes,
     debug_bone_boxes,
     debug_skin_bones,

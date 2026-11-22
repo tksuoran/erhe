@@ -69,8 +69,14 @@ bindings, and a per-command override replaces them.
 - `set_binding_override(command, bindings)` replaces all editable bindings of the command; an
   empty list unbinds it. Every binding must match the command's input kind, and a mouse button
   click cannot trigger on `Any`; otherwise nothing changes and the error names the reason. A user
-  drag binding takes `drag_call_on_button_down_without_motion` from the command's default drag
-  binding, since that is the command's behavior rather than the user's choice of input.
+  drag binding takes `drag_call_on_button_down_without_motion` and `drag_modifier_match` from the
+  command's default drag binding, since they are the command's behavior rather than the user's
+  choice of input.
+- A drag binding's modifier mask matches a press by `Drag_modifier_match` (the last argument of
+  `bind_command_to_mouse_drag()`): `subset` (the default) when the press holds at least the mask's
+  modifiers, a motion with others ending the drag; `exact` when the press holds exactly them, all
+  four modifier bits compared, with motion and release not filtered, so a modifier pressed during
+  the drag does not end it.
 - The dispatch tables (`get_key_bindings()`, `get_mouse_bindings()`, ...) are derived state,
   rebuilt from "override if present, else defaults" at the start of the next `tick()` or by
   `sort_bindings()` after any declaration or edit, never in the steady state. Declaration order is
@@ -102,4 +108,5 @@ The editor's Input Bindings window, the `input_bindings.json` file and the MCP b
 - Tests: `erhe_commands_tests` (`src/erhe/commands/test/`): `Binding_desc` text form round trips,
   overrides, input kind enforcement, conflicts, rebind during a drag, `sort_bindings()` from a
   command dispatched by `tick()`, masked key bindings dispatching before mask-less ones, the
-  active gesture's host taking its keys first, a command refusing a binding.
+  active gesture's host taking its keys first, a command refusing a binding, an exact drag modifier
+  match.

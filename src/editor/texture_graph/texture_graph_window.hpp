@@ -3,6 +3,7 @@
 #include "texture_graph/texture_graph.hpp"
 #include "texture_graph/texture_renderer.hpp"
 #include "graph_editor/graph_editor_window_base.hpp"
+#include "operations/operation.hpp"
 
 #include "erhe_imgui/imgui_window.hpp"
 
@@ -95,7 +96,8 @@ public:
     // Undoable parameter change: applies the (possibly partial) parameter
     // object through read_parameters() and records before / after state in a
     // Texture_graph_parameter_operation.
-    void set_node_parameters(const std::shared_ptr<Texture_graph_node>& node, const nlohmann::json& parameters);
+    // A refused change (a live edit is open) is applied back; out_refusal names the reason.
+    [[nodiscard]] auto set_node_parameters(const std::shared_ptr<Texture_graph_node>& node, const nlohmann::json& parameters, std::string& out_refusal) -> Operation_outcome;
 
     // Sets / clears the explicit target Graph_texture this window edits
     // (issue #252). Stored as a weak_ptr so a deleted asset clears the

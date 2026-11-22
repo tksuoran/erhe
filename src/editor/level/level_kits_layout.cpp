@@ -892,7 +892,10 @@ auto Level_kits::create_layout_after(
     for (std::shared_ptr<Operation>& operation : generation) {
         parameters.operations.push_back(std::move(operation));
     }
-    m_context.operation_stack->execute_now(std::make_shared<Compound_operation>(std::move(parameters)));
+    result.error = execute_entry(std::make_shared<Compound_operation>(std::move(parameters)));
+    if (!result.error.empty()) {
+        return result;
+    }
     result.node    = node;
     result.changed = true;
     return result;
@@ -1411,12 +1414,12 @@ auto Level_kits::set_layout_lock(Scene_root& scene_root, const std::shared_ptr<e
             operations.push_back(std::move(operation));
         }
     }
-    m_context.operation_stack->execute_now(
+    result.error = execute_entry(
         (operations.size() == 1)
             ? operations.front()
             : std::make_shared<Compound_operation>(Compound_operation::Parameters{.operations = std::move(operations)})
     );
-    result.changed = true;
+    result.changed = result.error.empty();
     return result;
 }
 

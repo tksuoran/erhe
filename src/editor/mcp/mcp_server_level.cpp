@@ -10,6 +10,11 @@
 #include "brushes/brush_placement.hpp"
 #include "brushes/brush_tool.hpp"
 #include "content_library/content_library.hpp"
+#include "config/generated/foliage_paint_config.hpp"
+#include "level/foliage_paint_tool.hpp"
+#include "level/foliage_palette.hpp"
+#include "level/foliage_stroke.hpp"
+#include "level/foliage_system.hpp"
 #include "level/kit_connector_indicators.hpp"
 #include "level/kit_connector_snap.hpp"
 #include "level/kit_layout.hpp"
@@ -54,6 +59,7 @@
 #include "erhe_scene/xform.hpp"
 
 #include <geogram/mesh/mesh.h>
+#include <glm/gtc/constants.hpp>
 #include <nlohmann/json.hpp>
 
 #include <algorithm>
@@ -61,6 +67,7 @@
 #include <cmath>
 #include <limits>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -219,6 +226,16 @@ namespace {
         }
     }
     return unrecognized;
+}
+
+// A JSON number as a float without an out-of-range conversion: beyond the float range it is an infinity of its sign.
+[[nodiscard]] auto to_float_or_infinity(const json& value) -> float
+{
+    const double number = value.get<double>();
+    if (!std::isfinite(number) || (std::abs(number) > static_cast<double>(std::numeric_limits<float>::max()))) {
+        return std::signbit(number) ? -std::numeric_limits<float>::infinity() : std::numeric_limits<float>::infinity();
+    }
+    return static_cast<float>(number);
 }
 
 [[nodiscard]] auto read_finite_numbers(const json& value, const std::size_t count, float* out) -> bool
@@ -2066,6 +2083,8 @@ auto Mcp_server::query_level_pieces(const json& args) -> std::string
             {"has_body",        get_node_rigid_body(*node) != nullptr}
         };
         piece["pass_through"] = (node->get_flag_bits() & Editor_item_flags::pass_through) != 0;
+        piece["foliage"]      = (node->get_flag_bits() & Editor_item_flags::foliage) != 0;
+        piece["foliage_radius"] = node->get_value(Kit_piece::foliage_radius_property);
         pieces.push_back(std::move(piece));
     }
     return make_json_content({
@@ -2516,6 +2535,8 @@ auto Mcp_server::query_level_placement_preview(const json& args) -> std::string
     result["hover_position"] = hover.has_value() ? vec3_json(hover.value()) : json(nullptr);
     const std::optional<glm::vec3> hover_normal = brush_tool->get_hover_world_normal();
     result["hover_normal"]   = hover_normal.has_value() ? vec3_json(hover_normal.value()) : json(nullptr);
+    const std::optional<glm::vec3> preview_position = brush_tool->get_preview_world_position();
+    result["preview_position"] = preview_position.has_value() ? vec3_json(preview_position.value()) : json(nullptr);
     // Step 40: the connector join the preview shows and a click places (Kit_placement::connect).
     result["connector_snap_distance"]  = m_context.level_kits->get_connector_snap_distance();
     result["connector_join_suspended"] = brush_tool->is_kit_join_suspended();
@@ -2682,6 +2703,666 @@ namespace {
 }
 
 } // anonymous namespace
+
+auto Mcp_server::query_level_foliage(const json& args) -> std::string
+{
+    const std::string unrecognized = unrecognized_keys(args, {"scene_name", "center", "radius"});
+    if (!unrecognized.empty()) {
+        return make_error_content("level_get_foliage: unrecognized argument(s): " + unrecognized + " (accepted: scene_name, center, radius)");
+    }
+    const std::string scene_name = args.value("scene_name", "");
+    Scene_root* const scene_root = find_scene(scene_name);
+    if (scene_root == nullptr) {
+        return make_error_content("Scene not found: " + scene_name);
+    }
+    if (args.contains("center") != args.contains("radius")) {
+        return make_error_content("level_get_foliage: give center and radius together, or neither");
+    }
+    const bool sphere = args.contains("center");
+    glm::vec3  center{0.0f};
+    float      radius{0.0f};
+    if (sphere) {
+        std::string error;
+        if (!read_vec3(args, "center", center, error)) {
+            return make_error_content("level_get_foliage: " + error);
+        }
+        const json& radius_value = args.at("radius");
+        if (!radius_value.is_number() || !std::isfinite(to_float_or_infinity(radius_value)) || (to_float_or_infinity(radius_value) < 0.0f)) {
+            return make_error_content("level_get_foliage: radius must be a finite number >= 0, not " + radius_value.dump());
+        }
+        radius = to_float_or_infinity(radius_value);
+    }
+
+    // The index reads world positions: ancestors' moves are applied first.
+    scene_root->get_scene().update_node_transforms();
+    Foliage_system& foliage_system = scene_root->get_foliage_system();
+    std::vector<std::shared_ptr<erhe::scene::Node>> nodes;
+    if (sphere) {
+        foliage_system.find_nodes_within(center, radius, nodes);
+    } else {
+        foliage_system.get_nodes(nodes);
+    }
+    std::sort(
+        nodes.begin(), nodes.end(),
+        [](const std::shared_ptr<erhe::scene::Node>& lhs, const std::shared_ptr<erhe::scene::Node>& rhs) -> bool {
+            return lhs->get_id() < rhs->get_id();
+        }
+    );
+    const Foliage_index& index = foliage_system.get_index();
+    const std::shared_ptr<erhe::scene::Node> root = scene_root->get_scene().get_root_node();
+    json items = json::array();
+    for (const std::shared_ptr<erhe::scene::Node>& node : nodes) {
+        const std::optional<Foliage_index::Handle> handle = foliage_system.find_handle(*node);
+        if (!handle.has_value()) {
+            continue;
+        }
+        const Foliage_index_entry&               entry  = index.get_entry(handle.value());
+        const std::shared_ptr<erhe::scene::Node> parent = node->get_parent_node();
+        items.push_back(
+            json{
+                {"id",       node->get_id()},
+                {"name",     node->get_name()},
+                {"shape",    carries_kit_piece(*node) ? node->get_value(Kit_piece::shape_property) : std::string{}},
+                {"position", vec3_json(entry.position)},
+                {"radius",   entry.radius},
+                {"parent",   (parent && (parent != root)) ? json(parent->get_id()) : json(nullptr)}
+            }
+        );
+    }
+    json result{
+        {"scene_name", scene_root->get_name()},
+        {"count",      items.size()},
+        {"items",      items},
+        {"max_radius", index.get_max_radius()}
+    };
+    if (sphere) {
+        const float area = glm::pi<float>() * radius * radius;
+        result["density"] = (area > 0.0f) ? json(static_cast<float>(index.count_within(center, radius)) / area) : json(nullptr);
+    } else {
+        result["density"] = nullptr;
+    }
+    return make_json_content(result).dump();
+}
+
+namespace {
+
+// One palette entry of level_foliage_paint (FD7.1): parameters as level_place_pieces takes them (or the canonical text),
+// materials a name per slot (empty: the slot default), radius the shape's foliage radius when not given.
+[[nodiscard]] auto read_foliage_palette_entry(
+    const Level_kits&      level_kits,
+    const Kit_lengths&     lengths,
+    const json&            object,
+    Foliage_palette_entry& out_entry
+) -> std::string
+{
+    if (!object.is_object()) {
+        return "an entry must be an object {shape, parameters, materials, weight, radius, yaw_min, yaw_max, variants, seed}";
+    }
+    const std::string unrecognized = unrecognized_keys(object, {"shape", "parameters", "materials", "weight", "radius", "yaw_min", "yaw_max", "variants", "seed"});
+    if (!unrecognized.empty()) {
+        return "unrecognized key(s): " + unrecognized + " (accepted: shape, parameters, materials, weight, radius, yaw_min, yaw_max, variants, seed)";
+    }
+    if (!object.contains("shape") || !object.at("shape").is_string()) {
+        return "shape must be a shape id";
+    }
+    const std::string shape_id = object.at("shape").get<std::string>();
+    const Kit_shape_definition* const shape = level_kits.get_library().find(shape_id);
+    if (shape == nullptr) {
+        return "unknown shape '" + shape_id + "' (level_get_kits lists the shapes)";
+    }
+    Foliage_palette_entry entry{};
+    entry.shape = shape_id;
+    if (object.contains("parameters")) {
+        const json& parameters = object.at("parameters");
+        if (parameters.is_string()) {
+            entry.parameters = parameters.get<std::string>();
+        } else {
+            Kit_parameter_values values = editor::make_default_values(*shape, lengths.module, lengths.wall_height);
+            const std::string error = apply_parameters_json(parameters, values);
+            if (!error.empty()) {
+                return error;
+            }
+            values.resolve_derived(lengths.module, lengths.wall_height);
+            entry.parameters = values.to_canonical_text();
+        }
+    }
+    if (object.contains("materials")) {
+        const json& materials = object.at("materials");
+        if (!materials.is_array()) {
+            return "materials must be an array of material names, one per slot (an empty name for the slot default)";
+        }
+        for (const json& name : materials) {
+            if (!name.is_string()) {
+                return "materials holds " + name.dump() + ", not a material name";
+            }
+            entry.materials.push_back(name.get<std::string>());
+        }
+    }
+    if (object.contains("weight")) {
+        const json& weight = object.at("weight");
+        if (!weight.is_number_unsigned() || (weight.get<std::uint64_t>() > std::numeric_limits<std::uint32_t>::max())) {
+            return "weight must be an integer 0 - 1000, not " + weight.dump();
+        }
+        entry.weight = weight.get<std::uint32_t>();
+    }
+    if (object.contains("radius")) {
+        const json& radius = object.at("radius");
+        if (!radius.is_number() || !std::isfinite(to_float_or_infinity(radius))) {
+            return "radius must be a finite number, not " + radius.dump();
+        }
+        entry.radius = to_float_or_infinity(radius);
+    } else if (shape->foliage_radius.has_value()) {
+        entry.radius = shape->foliage_radius.value();
+    } else {
+        return shape_id + " is no foliage shape: give the entry a radius";
+    }
+    if (object.contains("yaw_min") || object.contains("yaw_max")) {
+        const json yaw_min = object.value("yaw_min", json(entry.yaw_min_degrees));
+        const json yaw_max = object.value("yaw_max", json(entry.yaw_max_degrees));
+        if (!yaw_min.is_number() || !yaw_max.is_number() || !std::isfinite(yaw_min.get<float>()) || !std::isfinite(yaw_max.get<float>())) {
+            return "yaw_min and yaw_max must be finite numbers of degrees";
+        }
+        entry.yaw_min_degrees = yaw_min.get<float>();
+        entry.yaw_max_degrees = yaw_max.get<float>();
+    }
+    // F3.1: 8 variants by default; a shape without derived values has one whatever the count.
+    entry.variants = 8;
+    for (const char* key : {"variants", "seed"}) {
+        if (!object.contains(key)) {
+            continue;
+        }
+        const json& value = object.at(key);
+        if (!value.is_number_integer() ||
+            (value.get<std::int64_t>() < std::numeric_limits<int>::min()) || (value.get<std::int64_t>() > std::numeric_limits<int>::max())) {
+            return std::string{key} + " must be an integer, not " + value.dump();
+        }
+        if (std::string_view{key} == "variants") {
+            entry.variants = value.get<int>();
+        } else {
+            entry.seed = value.get<int>();
+        }
+    }
+    out_entry = std::move(entry);
+    return {};
+}
+
+} // anonymous namespace
+
+auto Mcp_server::action_level_foliage_paint(const json& args) -> std::string
+{
+    const std::string tool = "level_foliage_paint";
+    const std::string unrecognized = unrecognized_keys(args, {"scene_name", "stamps", "radius", "density", "seed", "align_to_surface", "palette"});
+    if (!unrecognized.empty()) {
+        return make_error_content(tool + ": unrecognized argument(s): " + unrecognized + " (accepted: scene_name, stamps, radius, density, seed, align_to_surface, palette)");
+    }
+    if (!args.contains("scene_name") || !args.at("scene_name").is_string()) {
+        return make_error_content(tool + ": scene_name must be the name of a scene (a string)");
+    }
+    const std::string scene_name = args.at("scene_name").get<std::string>();
+    Scene_root* const scene_root = find_scene(scene_name);
+    if (scene_root == nullptr) {
+        return make_error_content("Scene not found: " + scene_name);
+    }
+    Level_kits& level_kits = *m_context.level_kits;
+    Foliage_stroke_settings settings{};
+    if (args.contains("radius")) {
+        if (!args.at("radius").is_number()) {
+            return make_error_content(tool + ": radius must be a number of meters, not " + args.at("radius").dump());
+        }
+        settings.brush_radius = to_float_or_infinity(args.at("radius"));
+    }
+    if (args.contains("density")) {
+        if (!args.at("density").is_number()) {
+            return make_error_content(tool + ": density must be a number of items per square meter, not " + args.at("density").dump());
+        }
+        settings.paint_density = to_float_or_infinity(args.at("density"));
+    }
+    int seed = 1;
+    if (args.contains("seed")) {
+        const json& value = args.at("seed");
+        if (!value.is_number_integer() || (value.get<std::int64_t>() < std::numeric_limits<int>::min()) || (value.get<std::int64_t>() > std::numeric_limits<int>::max())) {
+            return make_error_content(tool + ": seed must be an integer, not " + value.dump());
+        }
+        seed = value.get<int>();
+    }
+    if (args.contains("align_to_surface")) {
+        if (!args.at("align_to_surface").is_boolean()) {
+            return make_error_content(tool + ": align_to_surface must be true or false");
+        }
+        settings.up = args.at("align_to_surface").get<bool>() ? Foliage_up::surface_normal : Foliage_up::world;
+    }
+    const json palette_json = args.value("palette", json());
+    if (!palette_json.is_array()) {
+        return make_error_content(tool + ": palette must be an array of entries");
+    }
+    std::vector<Foliage_palette_entry> palette;
+    for (std::size_t i = 0, end = palette_json.size(); i < end; ++i) {
+        Foliage_palette_entry entry;
+        const std::string error = read_foliage_palette_entry(level_kits, level_kits.get_lengths(*scene_root), palette_json[i], entry);
+        if (!error.empty()) {
+            return make_error_content(tool + " palette[" + std::to_string(i) + "]: " + error + "; nothing was painted");
+        }
+        palette.push_back(std::move(entry));
+    }
+    const json stamps_json = args.value("stamps", json());
+    if (!stamps_json.is_array() || stamps_json.empty()) {
+        return make_error_content(tool + ": stamps must be a non-empty array of {center, normal}");
+    }
+    std::vector<std::pair<glm::vec3, glm::vec3>> stamps;
+    for (std::size_t i = 0, end = stamps_json.size(); i < end; ++i) {
+        const json& stamp = stamps_json[i];
+        std::string error;
+        glm::vec3   center{0.0f};
+        glm::vec3   normal{0.0f};
+        if (!stamp.is_object()) {
+            error = "a stamp must be an object {center, normal}";
+        } else if (const std::string unknown = unrecognized_keys(stamp, {"center", "normal"}); !unknown.empty()) {
+            error = "unrecognized key(s): " + unknown + " (accepted: center, normal)";
+        } else if (read_vec3(stamp, "center", center, error)) {
+            static_cast<void>(read_vec3(stamp, "normal", normal, error));
+        }
+        if (!error.empty()) {
+            return make_error_content(tool + " stamps[" + std::to_string(i) + "]: " + error + "; nothing was painted");
+        }
+        stamps.emplace_back(center, normal);
+    }
+
+    // One stroke of the stamps (FD9): a refused stamp cancels the stroke, so nothing is painted.
+    Foliage_stroke stroke{m_context};
+    const std::string refusal = stroke.begin(*scene_root, Foliage_stroke_kind::paint, settings, palette, seed);
+    if (!refusal.empty()) {
+        return make_error_content(tool + ": " + refusal + "; nothing was painted");
+    }
+    for (std::size_t i = 0, end = stamps.size(); i < end; ++i) {
+        const std::string error = stroke.stamp(stamps[i].first, stamps[i].second);
+        if (!error.empty()) {
+            stroke.cancel();
+            return make_error_content(tool + " stamps[" + std::to_string(i) + "]: " + error + "; the stroke was cancelled, nothing was painted");
+        }
+    }
+    const std::vector<std::shared_ptr<erhe::scene::Node>> placed{stroke.get_placed_nodes().begin(), stroke.get_placed_nodes().end()};
+    const Foliage_stroke_result result = stroke.end();
+
+    scene_root->get_scene().update_node_transforms();
+    const std::shared_ptr<erhe::scene::Node> root = scene_root->get_scene().get_root_node();
+    json items = json::array();
+    for (const std::shared_ptr<erhe::scene::Node>& node : placed) {
+        const std::shared_ptr<erhe::scene::Node> parent = node->get_parent_node();
+        const std::optional<Kit_piece_data>      record = read_kit_piece(*node);
+        Kit_parameter_values                     values;
+        const bool reads = record.has_value() && read_kit_piece_record(level_kits.get_library(), record->shape, record->parameters, values).empty();
+        const erhe::scene::Trs_transform world = node->world_from_node_transform();
+        items.push_back(
+            json{
+                {"id",            node->get_id()},
+                {"name",          node->get_name()},
+                {"shape",         record.has_value() ? record->shape : std::string{}},
+                {"position",      vec3_json(world.get_translation())},
+                {"rotation_xyzw", quat_json(world.get_rotation())},
+                {"radius",        node->get_value(Kit_piece::foliage_radius_property)},
+                {"parent",        (parent && (parent != root)) ? json(parent->get_id()) : json(nullptr)},
+                {"attached",      node->has_local_value(Kit_piece::surface_attachment_property.get())},
+                {"mesh_key",      reads ? Level_kits::get_mesh_key(values) : std::string{}}
+            }
+        );
+    }
+    log_mcp->info("{}: {} stamp(s), {} attempt(s), {} placed in scene '{}'", tool, result.stamps, result.attempts, result.placed, scene_root->get_name());
+    return make_json_content(json{
+        {"scene_name",         scene_root->get_name()},
+        {"stamps",             result.stamps},
+        {"attempts",           result.attempts},
+        {"placed",             result.placed},
+        {"refused_by_spacing", result.refused_by_spacing},
+        {"without_surface",    result.without_surface},
+        {"on_sealed_support",  result.on_sealed_support},
+        {"recorded",           result.recorded},
+        {"items",              items}
+    }).dump();
+}
+
+auto Mcp_server::action_level_foliage_remove(const json& args) -> std::string
+{
+    const std::string tool = "level_foliage_remove";
+    const std::string unrecognized = unrecognized_keys(args, {"scene_name", "stamps", "radius", "density", "seed", "only_shapes"});
+    if (!unrecognized.empty()) {
+        return make_error_content(tool + ": unrecognized argument(s): " + unrecognized + " (accepted: scene_name, stamps, radius, density, seed, only_shapes)");
+    }
+    if (!args.contains("scene_name") || !args.at("scene_name").is_string()) {
+        return make_error_content(tool + ": scene_name must be the name of a scene (a string)");
+    }
+    const std::string scene_name = args.at("scene_name").get<std::string>();
+    Scene_root* const scene_root = find_scene(scene_name);
+    if (scene_root == nullptr) {
+        return make_error_content("Scene not found: " + scene_name);
+    }
+    Foliage_stroke_settings settings{};
+    if (args.contains("radius")) {
+        if (!args.at("radius").is_number()) {
+            return make_error_content(tool + ": radius must be a number of meters, not " + args.at("radius").dump());
+        }
+        settings.brush_radius = to_float_or_infinity(args.at("radius"));
+    }
+    if (args.contains("density")) {
+        if (!args.at("density").is_number()) {
+            return make_error_content(tool + ": density must be a number 0 - 1, not " + args.at("density").dump());
+        }
+        settings.remove_density = to_float_or_infinity(args.at("density"));
+    }
+    int seed = 1;
+    if (args.contains("seed")) {
+        const json& value = args.at("seed");
+        if (!value.is_number_integer() || (value.get<std::int64_t>() < std::numeric_limits<int>::min()) || (value.get<std::int64_t>() > std::numeric_limits<int>::max())) {
+            return make_error_content(tool + ": seed must be an integer, not " + value.dump());
+        }
+        seed = value.get<int>();
+    }
+    // F9.3: only_shapes is the palette of Remove Only Palette Shapes; empty or absent removes every foliage item.
+    std::vector<Foliage_palette_entry> palette;
+    if (args.contains("only_shapes")) {
+        const json& only_shapes = args.at("only_shapes");
+        if (!only_shapes.is_array()) {
+            return make_error_content(tool + ": only_shapes must be an array of shape ids");
+        }
+        for (const json& shape : only_shapes) {
+            if (!shape.is_string()) {
+                return make_error_content(tool + ": only_shapes holds " + shape.dump() + ", not a shape id");
+            }
+            if (m_context.level_kits->get_library().find(shape.get<std::string>()) == nullptr) {
+                return make_error_content(tool + ": only_shapes: unknown shape '" + shape.get<std::string>() + "' (level_get_kits lists the shapes); nothing was removed");
+            }
+            Foliage_palette_entry entry{};
+            entry.shape = shape.get<std::string>();
+            palette.push_back(std::move(entry));
+        }
+    }
+    settings.remove_filter = palette.empty() ? Foliage_remove_filter::all_shapes : Foliage_remove_filter::palette_shapes;
+    const json stamps_json = args.value("stamps", json());
+    if (!stamps_json.is_array() || stamps_json.empty()) {
+        return make_error_content(tool + ": stamps must be a non-empty array of {center, normal?}");
+    }
+    std::vector<glm::vec3> centers;
+    for (std::size_t i = 0, end = stamps_json.size(); i < end; ++i) {
+        const json& stamp = stamps_json[i];
+        std::string error;
+        glm::vec3   center{0.0f};
+        if (!stamp.is_object()) {
+            error = "a stamp must be an object {center, normal?}";
+        } else if (const std::string unknown = unrecognized_keys(stamp, {"center", "normal"}); !unknown.empty()) {
+            error = "unrecognized key(s): " + unknown + " (accepted: center, normal)";
+        } else if (!stamp.contains("center") || !stamp.at("center").is_array() || (stamp.at("center").size() != 3) ||
+                   !stamp.at("center")[0].is_number() || !stamp.at("center")[1].is_number() || !stamp.at("center")[2].is_number()) {
+            error = "center must be an array of 3 numbers";
+        } else {
+            // A center beyond the float range is not finite: the stroke refuses that stamp and is cancelled.
+            // A normal key is accepted in the form of a paint stamp and not read.
+            const json& value = stamp.at("center");
+            center = glm::vec3{to_float_or_infinity(value[0]), to_float_or_infinity(value[1]), to_float_or_infinity(value[2])};
+        }
+        if (!error.empty()) {
+            return make_error_content(tool + " stamps[" + std::to_string(i) + "]: " + error + "; nothing was removed");
+        }
+        centers.push_back(center);
+    }
+
+    // One stroke of the stamps (FD10): a refused stamp cancels the stroke, so nothing is removed.
+    Foliage_stroke stroke{m_context};
+    const std::string refusal = stroke.begin(*scene_root, Foliage_stroke_kind::remove, settings, palette, seed);
+    if (!refusal.empty()) {
+        return make_error_content(tool + ": " + refusal + "; nothing was removed");
+    }
+    for (std::size_t i = 0, end = centers.size(); i < end; ++i) {
+        const std::string error = stroke.stamp(centers[i], glm::vec3{0.0f, 1.0f, 0.0f});
+        if (!error.empty()) {
+            stroke.cancel();
+            return make_error_content(tool + " stamps[" + std::to_string(i) + "]: " + error + "; the stroke was cancelled, nothing was removed");
+        }
+    }
+    json removed_ids = json::array();
+    for (const std::shared_ptr<erhe::scene::Node>& node : stroke.get_removed_nodes()) {
+        removed_ids.push_back(node->get_id());
+    }
+    const Foliage_stroke_result result = stroke.end();
+    log_mcp->info("{}: {} stamp(s), {} removed in scene '{}'", tool, result.stamps, result.removed, scene_root->get_name());
+    return make_json_content(json{
+        {"scene_name",  scene_root->get_name()},
+        {"stamps",      result.stamps},
+        {"removed",     result.removed},
+        {"recorded",    result.recorded},
+        {"removed_ids", removed_ids}
+    }).dump();
+}
+
+namespace {
+
+[[nodiscard]] auto foliage_palette_entry_json(const Foliage_palette_entry& entry) -> json
+{
+    return json{
+        {"shape",      entry.shape},
+        {"parameters", entry.parameters},
+        {"materials",  entry.materials},
+        {"weight",     entry.weight},
+        {"radius",     entry.radius},
+        {"yaw_min",    entry.yaw_min_degrees},
+        {"yaw_max",    entry.yaw_max_degrees},
+        {"variants",   entry.variants},
+        {"seed",       entry.seed}
+    };
+}
+
+[[nodiscard]] auto foliage_stroke_result_json(const Foliage_stroke_result& result) -> json
+{
+    return json{
+        {"stamps",             result.stamps},
+        {"attempts",           result.attempts},
+        {"placed",             result.placed},
+        {"removed",            result.removed},
+        {"refused_by_spacing", result.refused_by_spacing},
+        {"without_surface",    result.without_surface},
+        {"on_sealed_support",  result.on_sealed_support},
+        {"recorded",           result.recorded}
+    };
+}
+
+[[nodiscard]] auto foliage_kind_name(const Foliage_stroke_kind kind) -> const char*
+{
+    return (kind == Foliage_stroke_kind::paint) ? "paint" : "remove";
+}
+
+// One float argument within its range; absent leaves out_value empty.
+[[nodiscard]] auto read_foliage_setting(const json& args, const char* key, const float min_value, const float max_value, std::optional<float>& out_value) -> std::string
+{
+    if (!args.contains(key)) {
+        return {};
+    }
+    const json& value  = args.at(key);
+    const float number = value.is_number() ? to_float_or_infinity(value) : std::numeric_limits<float>::quiet_NaN();
+    if (!std::isfinite(number) || (number < min_value) || (number > max_value)) {
+        return fmt::format("{} must be a number {} - {}, not {}", key, min_value, max_value, value.dump());
+    }
+    out_value = number;
+    return {};
+}
+
+} // anonymous namespace
+
+auto Mcp_server::query_level_foliage_paint_settings(const json& args) -> std::string
+{
+    const std::string unrecognized = unrecognized_keys(args, {});
+    if (!unrecognized.empty()) {
+        return make_error_content("level_get_foliage_paint_settings: unrecognized argument(s): " + unrecognized + " (it takes none)");
+    }
+    Foliage_paint_tool* const tool = m_context.foliage_paint_tool;
+    if (tool == nullptr) {
+        return make_error_content("level_get_foliage_paint_settings: the Foliage Paint tool is not available");
+    }
+    const Foliage_paint_config& config = tool->get_config();
+    json palette = json::array();
+    for (const Foliage_palette_entry& entry : tool->get_palette()) {
+        palette.push_back(foliage_palette_entry_json(entry));
+    }
+    const std::string& refusal = tool->get_paint_refusal();
+    return make_json_content(json{
+        {"brush_radius",               config.brush_radius},
+        {"paint_density",              config.paint_density},
+        {"remove_density",             config.remove_density},
+        {"align_to_surface",           config.align_to_surface},
+        {"remove_only_palette_shapes", config.remove_only_palette_shapes},
+        {"seed",                       config.seed},
+        {"palette",                    palette},
+        {"palette_text",               config.palette},
+        {"paint_refusal",              refusal.empty() ? json(nullptr) : json(refusal)}
+    }).dump();
+}
+
+auto Mcp_server::action_level_set_foliage_paint_settings(const json& args) -> std::string
+{
+    const std::string tool_name = "level_set_foliage_paint_settings";
+    const std::string unrecognized = unrecognized_keys(
+        args, {"brush_radius", "paint_density", "remove_density", "align_to_surface", "remove_only_palette_shapes", "seed", "palette"}
+    );
+    if (!unrecognized.empty()) {
+        return make_error_content(
+            tool_name + ": unrecognized argument(s): " + unrecognized +
+            " (accepted: brush_radius, paint_density, remove_density, align_to_surface, remove_only_palette_shapes, seed, palette)"
+        );
+    }
+    Foliage_paint_tool* const tool = m_context.foliage_paint_tool;
+    if ((tool == nullptr) || (m_context.level_kits == nullptr)) {
+        return make_error_content(tool_name + ": the Foliage Paint tool is not available");
+    }
+    // Every argument is read and checked first: a refusal changes nothing.
+    std::optional<float> brush_radius;
+    std::optional<float> paint_density;
+    std::optional<float> remove_density;
+    std::string error = read_foliage_setting(args, "brush_radius", c_foliage_min_brush_radius, c_foliage_max_brush_radius, brush_radius);
+    if (error.empty()) {
+        error = read_foliage_setting(args, "paint_density", c_foliage_min_paint_density, c_foliage_max_paint_density, paint_density);
+    }
+    if (error.empty()) {
+        error = read_foliage_setting(args, "remove_density", 0.0f, 1.0f, remove_density);
+    }
+    if (!error.empty()) {
+        return make_error_content(tool_name + ": " + error + "; nothing changed");
+    }
+    for (const char* key : {"align_to_surface", "remove_only_palette_shapes"}) {
+        if (args.contains(key) && !args.at(key).is_boolean()) {
+            return make_error_content(tool_name + ": " + key + " must be true or false; nothing changed");
+        }
+    }
+    if (args.contains("seed")) {
+        const json& value = args.at("seed");
+        if (!value.is_number_integer() || (value.get<std::int64_t>() < 0) || (value.get<std::int64_t>() > kit_seed_max)) {
+            return make_error_content(tool_name + ": seed must be an integer 0 - " + std::to_string(kit_seed_max) + ", not " + value.dump() + "; nothing changed");
+        }
+    }
+    std::optional<std::vector<Foliage_palette_entry>> palette;
+    if (args.contains("palette")) {
+        const json& palette_json = args.at("palette");
+        if (!palette_json.is_array()) {
+            return make_error_content(tool_name + ": palette must be an array of entries; nothing changed");
+        }
+        const Level_kits& level_kits = *m_context.level_kits;
+        std::vector<Foliage_palette_entry> entries;
+        for (std::size_t i = 0, end = palette_json.size(); i < end; ++i) {
+            Foliage_palette_entry entry;
+            // A parameters object reads at the default level lengths; the canonical text gives exact values.
+            const std::string entry_error = read_foliage_palette_entry(level_kits, Kit_lengths{}, palette_json[i], entry);
+            if (!entry_error.empty()) {
+                return make_error_content(tool_name + " palette[" + std::to_string(i) + "]: " + entry_error + "; nothing changed");
+            }
+            entries.push_back(std::move(entry));
+        }
+        const std::string problem = check_foliage_palette(level_kits.get_library(), entries);
+        if (!problem.empty()) {
+            return make_error_content(tool_name + ": palette " + problem + "; nothing changed");
+        }
+        palette = std::move(entries);
+    }
+
+    if (brush_radius.has_value()) {
+        tool->set_brush_radius(brush_radius.value());
+    }
+    if (paint_density.has_value()) {
+        tool->set_paint_density(paint_density.value());
+    }
+    if (remove_density.has_value()) {
+        tool->set_remove_density(remove_density.value());
+    }
+    if (args.contains("align_to_surface")) {
+        tool->set_up_axis(args.at("align_to_surface").get<bool>() ? Foliage_up::surface_normal : Foliage_up::world);
+    }
+    if (args.contains("remove_only_palette_shapes")) {
+        tool->set_remove_filter(args.at("remove_only_palette_shapes").get<bool>() ? Foliage_remove_filter::palette_shapes : Foliage_remove_filter::all_shapes);
+    }
+    if (args.contains("seed")) {
+        tool->set_seed(args.at("seed").get<int>());
+    }
+    if (palette.has_value()) {
+        tool->set_palette(palette.value());
+    }
+    return query_level_foliage_paint_settings(json::object());
+}
+
+auto Mcp_server::query_level_foliage_brush(const json& args) -> std::string
+{
+    const std::string unrecognized = unrecognized_keys(args, {"include_stamp_centers"});
+    if (!unrecognized.empty()) {
+        return make_error_content("level_get_foliage_brush: unrecognized argument(s): " + unrecognized + " (accepted: include_stamp_centers)");
+    }
+    bool include_stamp_centers = false;
+    if (args.contains("include_stamp_centers")) {
+        if (!args.at("include_stamp_centers").is_boolean()) {
+            return make_error_content("level_get_foliage_brush: include_stamp_centers must be a boolean");
+        }
+        include_stamp_centers = args.at("include_stamp_centers").get<bool>();
+    }
+    Foliage_paint_tool* const tool = m_context.foliage_paint_tool;
+    if (tool == nullptr) {
+        return make_error_content("level_get_foliage_brush: the Foliage Paint tool is not available");
+    }
+    const std::optional<Foliage_brush>& brush        = tool->get_brush();
+    const std::shared_ptr<Scene_root>   brush_scene  = brush.has_value() ? brush->scene_root.lock() : std::shared_ptr<Scene_root>{};
+    const bool                          stroke_open  = tool->is_stroke_open();
+    const std::shared_ptr<Scene_root>   stroke_scene = tool->get_stroke_scene();
+    const Foliage_paint_last_stroke&    last         = tool->get_last_stroke();
+    json last_json = nullptr;
+    if (last.outcome != Foliage_stroke_outcome::none) {
+        last_json = foliage_stroke_result_json(last.result);
+        last_json["kind"]       = foliage_kind_name(last.kind);
+        last_json["outcome"]    = c_str(last.outcome);
+        last_json["scene_name"] = last.scene_name;
+        last_json["seed"]       = last.seed;
+        last_json["refusal"]    = last.refusal.empty() ? json(nullptr) : json(last.refusal);
+    }
+    json stroke_json = nullptr;
+    if (stroke_open) {
+        stroke_json = foliage_stroke_result_json(tool->get_stroke_result());
+        stroke_json["kind"]       = foliage_kind_name(tool->get_stroke_kind());
+        stroke_json["scene_name"] = stroke_scene ? json(stroke_scene->get_name()) : json(nullptr);
+    }
+    const Tool* const priority_tool = (m_context.tools != nullptr) ? m_context.tools->get_priority_tool() : nullptr;
+    json reply{
+        {"tool_active", priority_tool == tool},
+        {"has_brush",   brush_scene != nullptr},
+        {"scene_name",  brush_scene ? json(brush_scene->get_name()) : json(nullptr)},
+        {"center",      brush_scene ? vec3_json(brush->center) : json(nullptr)},
+        {"normal",      brush_scene ? vec3_json(brush->normal) : json(nullptr)},
+        {"radius",      tool->get_config().brush_radius},
+        {"seed",        tool->get_config().seed},
+        {"stroke_open", stroke_open},
+        {"stroke",      stroke_json},
+        {"last_stroke", last_json}
+    };
+    if (include_stamp_centers) {
+        json stamp_centers = json::array();
+        for (const glm::vec3& center : tool->get_stamp_centers()) {
+            stamp_centers.push_back(vec3_json(center));
+        }
+        reply["stamp_centers"]           = std::move(stamp_centers);
+        reply["stamp_centers_truncated"] = tool->is_stamp_centers_truncated();
+    }
+    return make_json_content(reply).dump();
+}
 
 auto Mcp_server::query_level_region_contents(const json& args) -> std::string
 {

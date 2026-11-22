@@ -140,7 +140,8 @@ public:
         Command*                   command,
         erhe::window::Mouse_button button,
         bool                       call_on_button_down_without_motion,
-        std::optional<uint32_t>    modifier_mask = {}
+        std::optional<uint32_t>    modifier_mask  = {},
+        Drag_modifier_match        modifier_match = Drag_modifier_match::subset
     );
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)

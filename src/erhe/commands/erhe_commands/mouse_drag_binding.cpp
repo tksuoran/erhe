@@ -11,11 +11,13 @@ Mouse_drag_binding::Mouse_drag_binding(
     Command* const                   command,
     const erhe::window::Mouse_button button,
     const bool                       call_on_button_down_without_motion,
-    const std::optional<uint32_t>    modifier_mask
+    const std::optional<uint32_t>    modifier_mask,
+    const Drag_modifier_match        modifier_match
 )
     : Mouse_binding                       {command, modifier_mask}
     , m_button                            {button }
     , m_call_on_button_down_without_motion{call_on_button_down_without_motion}
+    , m_modifier_match                    {modifier_match}
 {
 }
 
@@ -32,9 +34,15 @@ auto Mouse_drag_binding::on_button(Input_arguments& input) -> bool
 {
     auto* const command = get_command();
 
-    if (m_modifier_mask.has_value() && (m_modifier_mask.value() & input.modifier_mask) != m_modifier_mask.value()) {
-        log_input_event_filtered->trace("{} rejected drag due to modifier mask mismatch",command->get_name());
-        return ensure_inactive();
+    if (m_modifier_mask.has_value()) {
+        const uint32_t mask    = m_modifier_mask.value();
+        const bool     matches = (m_modifier_match == Drag_modifier_match::exact)
+            ? (!input.variant.button_pressed || (mask == input.modifier_mask))
+            : ((mask & input.modifier_mask) == mask);
+        if (!matches) {
+            log_input_event_filtered->trace("{} rejected drag due to modifier mask mismatch", command->get_name());
+            return ensure_inactive();
+        }
     }
 
     if (command->get_command_state() == State::Disabled) {
@@ -98,7 +106,7 @@ auto Mouse_drag_binding::on_motion(Input_arguments& input) -> bool
         return false;
     }
 
-    if (m_modifier_mask.has_value() && (m_modifier_mask.value() & input.modifier_mask) != m_modifier_mask.value()) {
+    if ((m_modifier_match == Drag_modifier_match::subset) && m_modifier_mask.has_value() && ((m_modifier_mask.value() & input.modifier_mask) != m_modifier_mask.value())) {
         log_input_event_filtered->trace("{} rejected drag {} due to modifier mask mismatch", command->get_name(), input.variant.button_pressed ? "press" : "release");
         return ensure_inactive();
     }

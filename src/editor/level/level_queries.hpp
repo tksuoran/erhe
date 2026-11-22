@@ -18,7 +18,7 @@
 #include <vector>
 
 namespace erhe::physics  { class ICollision_shape; }
-namespace erhe::raytrace { class IScene; }
+namespace erhe::raytrace { class IGeometry; class IScene; }
 namespace erhe::scene    { class Mesh; class Mesh_primitive; }
 
 namespace editor {
@@ -81,6 +81,33 @@ public:
     const Surface_options&                    options,
     std::span<const erhe::scene::Mesh* const> excluded
 ) -> Point_surface;
+
+class Surface_ray_hit
+{
+public:
+    bool                     found   {false};
+    float                    distance{0.0f};
+    glm::vec3                position{0.0f};
+    glm::vec3                normal  {0.0f}; // unit, toward the ray's origin
+    const erhe::scene::Mesh* mesh    {nullptr};
+    // The hit triangle, for a caller that needs its facet (Primitive_shape::get_mesh_facet_from_triangle()).
+    std::size_t                        primitive_index{static_cast<std::size_t>(-1)};
+    const erhe::raytrace::IGeometry*   rt_geometry    {nullptr};
+    unsigned int                       triangle_id    {0};
+};
+
+// A mesh whose faces are surfaces for placement: a content mesh that is neither pass_through (water) nor foliage.
+[[nodiscard]] auto is_placement_surface(const erhe::scene::Mesh& mesh) -> bool;
+
+// FD2.3: the nearest front face of a surface mesh (not excluded, pass_through or foliage) along the unit direction
+// within max_distance; no allocation.
+[[nodiscard]] auto find_ray_surface(
+    erhe::raytrace::IScene&                   committed_rt_scene,
+    glm::vec3                                 origin,
+    glm::vec3                                 direction,
+    float                                     max_distance,
+    std::span<const erhe::scene::Mesh* const> excluded
+) -> Surface_ray_hit;
 
 // The content meshes of the scene that carry a kit piece record, by id.
 void get_kit_piece_meshes(Scene_root& scene_root, std::vector<std::shared_ptr<erhe::scene::Mesh>>& out_meshes);

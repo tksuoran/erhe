@@ -3,6 +3,7 @@
 #include "geometry_graph/geometry_graph.hpp"
 #include "editor_item_bits.hpp"
 #include "graph_editor/graph_editor_window_base.hpp"
+#include "operations/operation.hpp"
 
 #include "config/generated/preview_edge_lines_config.hpp"
 #include "erhe_imgui/imgui_window.hpp"
@@ -117,7 +118,8 @@ public:
     // object through read_parameters() and records before / after state
     // in a Geometry_graph_parameter_operation. Used by the MCP
     // geometry_graph_set_parameter tool.
-    void set_node_parameters(const std::shared_ptr<Geometry_graph_node>& node, const nlohmann::json& parameters);
+    // A refused change (a live edit is open) is applied back; out_refusal names the reason.
+    [[nodiscard]] auto set_node_parameters(const std::shared_ptr<Geometry_graph_node>& node, const nlohmann::json& parameters, std::string& out_refusal) -> Operation_outcome;
 
     // Show the window (so it renders for a screenshot) and set the node
     // editor's zoom immediately (view scale; > 1 zooms in). Deterministic

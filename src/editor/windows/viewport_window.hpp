@@ -97,6 +97,7 @@ private:
     bool                                               m_was_focused{false};
     bool                                               m_brush_drag_and_drop_active{false};
     bool                                               m_viewport_child_window_focused{false};
+    bool                                               m_drawn_last_frame{false};
     // Pointer over the viewport image for the scene view hover (picking, hover
     // tools, drop previews): input requested, or an ImGui drag and drop over it.
     bool                                               m_viewport_child_window_hovered{false};

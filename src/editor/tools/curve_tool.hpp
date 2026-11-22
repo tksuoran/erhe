@@ -23,6 +23,7 @@ namespace editor {
 
 class App_message_bus;
 class Curve_set_operation;
+enum class Operation_outcome : unsigned int;
 class Curve_tool;
 class Scene_root;
 class Tools;
@@ -147,6 +148,8 @@ public:
     void apply_point_edit (const std::optional<glm::mat4>& world_delta) override;
     void commit_point_edit() override;
     void cancel_point_edit() override;
+    // Puts the path from before the point edit back (a cancel, a refused commit).
+    void restore_point_edit(erhe::scene::Curve& curve);
 
     static constexpr std::size_t parts_per_point = 3;
 
@@ -160,7 +163,7 @@ private:
     void update_segment_handles();
     [[nodiscard]] auto get_segment_of(std::size_t index) const -> std::optional<std::size_t>;
     void prune_selection  ();
-    void execute          (const std::shared_ptr<Curve_set_operation>& operation);
+    [[nodiscard]] auto execute(const std::shared_ptr<Curve_set_operation>& operation) -> Operation_outcome;
     [[nodiscard]] auto is_valid_index(const erhe::math::Curve_path& path, std::size_t index) const -> bool;
     [[nodiscard]] auto pick_insert_location(Viewport_scene_view& viewport_scene_view, const glm::vec2& pointer) const -> std::optional<erhe::math::Curve_location>;
 

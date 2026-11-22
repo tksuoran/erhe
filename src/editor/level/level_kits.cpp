@@ -33,6 +33,7 @@
 #include "scene/node_physics.hpp"
 #include "scene/node_physics_system.hpp"
 #include "scene/scene_root.hpp"
+#include "scene/scene_view.hpp"
 #include "tools/selection_tool.hpp"
 
 #include "erhe_verify/verify.hpp"
@@ -46,6 +47,7 @@
 #include "erhe_profile/profile.hpp"
 #include "erhe_raytrace/iscene.hpp"
 #include "erhe_scene/curve.hpp"
+#include "erhe_primitive/primitive.hpp"
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/node.hpp"
 #include "erhe_scene/scene.hpp"
@@ -89,6 +91,8 @@ namespace {
 
 // Smooth shapes keep their base rims hard: an edge sharper than this is a crease.
 constexpr float c_smooth_crease_angle_degrees = 80.0f;
+// How far the placement ray behind a hovered foliage mesh reaches.
+constexpr float c_placement_ray_distance = 10000.0f;
 
 // Corner normals averaged over the facets around each vertex within the crease angle of the corner's facet.
 void set_crease_corner_normals(erhe::geometry::Geometry& geometry, const float crease_angle_degrees)
@@ -845,7 +849,8 @@ auto Level_kits::get_effective_auto_connect() const -> bool
 
 auto Level_kits::execute_entry(const std::shared_ptr<Operation>& operation) -> std::string
 {
-    m_context.operation_stack->execute_now(operation);
+    // Refused (its execute, or a live edit of another party) or done; a save's deferral reads as done (it runs after the save).
+    static_cast<void>(m_context.operation_stack->execute_now(operation));
     return operation->is_refused() ? operation->get_error() : std::string{};
 }
 
@@ -962,6 +967,95 @@ auto Level_kits::make_placement_pose(
         .surface_found     = placement.surface_found,
         .support_mesh      = placement.support_mesh
     };
+}
+
+namespace {
+
+// A raytrace hit names its mesh by a const pointer (precedent: level_kits_surface_attachment.cpp).
+[[nodiscard]] auto make_surface_placement_hit(const Surface_ray_hit& hit) -> Hover_placement_hit
+{
+    std::shared_ptr<erhe::scene::Mesh> surface_mesh = std::const_pointer_cast<erhe::scene::Mesh>(
+        std::dynamic_pointer_cast<const erhe::scene::Mesh>(hit.mesh->shared_from_this())
+    );
+    GEO::index_t facet = GEO::NO_INDEX;
+    const std::vector<erhe::scene::Mesh_primitive>& primitives = surface_mesh->get_primitives();
+    if (hit.primitive_index < primitives.size()) {
+        const std::shared_ptr<erhe::primitive::Primitive_shape> shape = primitives[hit.primitive_index].primitive->get_shape_for_raytrace();
+        if (shape) {
+            facet = shape->get_mesh_facet_from_triangle(hit.rt_geometry, hit.triangle_id);
+        }
+    }
+    return Hover_placement_hit{
+        .position        = hit.position,
+        .normal          = hit.normal,
+        .source          = Hover_placement_source::surface,
+        .mesh            = std::move(surface_mesh),
+        .primitive_index = hit.primitive_index,
+        .facet           = facet
+    };
+}
+
+} // anonymous namespace
+
+auto Level_kits::find_placement_surface(Scene_root& scene_root, const glm::vec3 origin, const glm::vec3 direction) const -> std::optional<Hover_placement_hit>
+{
+    erhe::raytrace::IScene& rt_scene = scene_root.get_raytrace_scene();
+    rt_scene.commit();
+    const Surface_ray_hit hit = find_ray_surface(rt_scene, origin, direction, c_placement_ray_distance, {});
+    if (!hit.found || (hit.mesh == nullptr)) {
+        return {};
+    }
+    return make_surface_placement_hit(hit);
+}
+
+auto Level_kits::get_placement_hover(const Scene_view& scene_view) const -> std::optional<Hover_placement_hit>
+{
+    const std::optional<glm::vec3> ray_origin    = scene_view.get_control_ray_origin_in_world();
+    const std::optional<glm::vec3> ray_direction = scene_view.get_control_ray_direction_in_world();
+    const Hover_entry* const       nearest       = scene_view.get_nearest_hover(Hover_entry::content_bit | Hover_entry::grid_bit);
+    if ((nearest == nullptr) || !nearest->valid || !nearest->position.has_value() || !ray_origin.has_value() || !ray_direction.has_value()) {
+        return {};
+    }
+    const auto make_hit = [&ray_origin](const Hover_entry& entry) -> Hover_placement_hit {
+        Hover_placement_hit hit{.position = entry.position.value(), .normal = entry.normal};
+        if (entry.slot == Hover_entry::grid_slot) {
+            hit.source     = Hover_placement_source::grid;
+            hit.grid       = entry.grid_weak.lock();
+            hit.grid_frame = entry.grid_frame;
+        } else {
+            hit.mesh            = entry.scene_mesh_weak.lock();
+            hit.source          = hit.mesh ? Hover_placement_source::surface : Hover_placement_source::analytic;
+            hit.primitive_index = entry.scene_mesh_primitive_index;
+            hit.facet           = entry.facet;
+        }
+        // The side of the surface the pointer ray came from is the side an item is placed on.
+        if (hit.normal.has_value() && (glm::dot(hit.normal.value(), ray_origin.value() - hit.position) < 0.0f)) {
+            hit.normal = -hit.normal.value();
+        }
+        return hit;
+    };
+    const std::shared_ptr<erhe::scene::Mesh> mesh = nearest->scene_mesh_weak.lock();
+    if ((nearest->slot != Hover_entry::content_slot) || !mesh || ((mesh->get_flag_bits() & Editor_item_flags::foliage) == 0)) {
+        return make_hit(*nearest);
+    }
+    // F1.3: foliage is no surface for placement; the ray passes it.
+    const Hover_entry&                grid       = scene_view.get_hover(Hover_entry::grid_slot);
+    const bool                        grid_valid = grid.valid && grid.position.has_value();
+    const std::shared_ptr<Scene_root> scene_root = scene_view.get_scene_root();
+    if (scene_root) {
+        erhe::raytrace::IScene& rt_scene = scene_root->get_raytrace_scene();
+        rt_scene.commit();
+        const Surface_ray_hit hit = find_ray_surface(rt_scene, ray_origin.value(), glm::normalize(ray_direction.value()), c_placement_ray_distance, {});
+        // The rule of Scene_view::get_nearest_hover(): the grid wins only when strictly nearer.
+        const float grid_distance = grid_valid ? glm::distance(ray_origin.value(), grid.position.value()) : 0.0f;
+        if (hit.found && (hit.mesh != nullptr) && (!grid_valid || (glm::distance(ray_origin.value(), hit.position) <= grid_distance))) {
+            return make_surface_placement_hit(hit);
+        }
+    }
+    if (grid_valid) {
+        return make_hit(grid);
+    }
+    return {};
 }
 
 void Level_kits::get_default_slot_materials(const Kit_shape_definition& shape, std::vector<std::string>& out_names) const
@@ -1665,6 +1759,23 @@ auto Level_kits::place(Scene_root& scene_root, const std::span<const Kit_placeme
     return result;
 }
 
+auto Level_kits::make_foliage_operation(Scene_root& scene_root, const std::span<const Kit_placement> placements, Kit_place_result& result) -> std::shared_ptr<Operation>
+{
+    result = Kit_place_result{};
+    for (std::size_t i = 0, end = placements.size(); i < end; ++i) {
+        if (!placements[i].foliage_radius.has_value()) {
+            result.error       = "a foliage placement needs a foliage radius";
+            result.error_index = i;
+            return {};
+        }
+    }
+    std::vector<std::shared_ptr<Operation>> operations;
+    if (!prepare_placements(scene_root, placements, Kit_snap::none, result, operations) || result.pieces.empty()) {
+        return {};
+    }
+    return std::make_shared<Compound_operation>(Compound_operation::Parameters{.operations = std::move(operations)});
+}
+
 auto Level_kits::prepare_placements(
     Scene_root&                              scene_root,
     const std::span<const Kit_placement>     placements,
@@ -1726,6 +1837,30 @@ auto Level_kits::prepare_placements(
         if (!std::isfinite(placement.scale.x) || !std::isfinite(placement.scale.y) || !std::isfinite(placement.scale.z) ||
             !(placement.scale.x > 0.0f) || !(placement.scale.y > 0.0f) || !(placement.scale.z > 0.0f)) {
             return fail(i, fmt::format("the scale ({}, {}, {}) must be positive", placement.scale.x, placement.scale.y, placement.scale.z));
+        }
+        if (placement.foliage_support && !placement.foliage_radius.has_value()) {
+            return fail(i, "a foliage support needs a foliage radius");
+        }
+        if (placement.foliage_radius.has_value()) {
+            const float radius = placement.foliage_radius.value();
+            if (!std::isfinite(radius) || (radius < 0.0f) || (radius > c_foliage_radius_max)) {
+                return fail(i, fmt::format("the foliage radius {} is outside 0 - {} m", radius, c_foliage_radius_max));
+            }
+            if (placement.connect.has_value()) {
+                return fail(i, "a foliage item joins no connector");
+            }
+            if (placement.parent || placement.parent_index.has_value()) {
+                return fail(i, "a foliage item's parent is its support: give no parent");
+            }
+            if (placement.foliage_support && (placement.foliage_support->get_item_host() != &scene_root)) {
+                return fail(i, fmt::format("the foliage support '{}' is not in scene '{}'", placement.foliage_support->get_name(), scene_root.get_name()));
+            }
+            if (placement.foliage_support && is_instance_content(*placement.foliage_support)) {
+                return fail(i, fmt::format("the foliage support '{}' is inside a reference instance: nothing is added there", placement.foliage_support->get_name()));
+            }
+            if (placement.foliage_support && !(std::abs(glm::length(placement.surface.direction) - 1.0f) < 1.0e-3f)) {
+                return fail(i, "the surface direction must be a unit vector");
+            }
         }
         std::optional<Kit_join_pose> join{};
         if (placement.connect.has_value() && (placement.scale != glm::vec3{1.0f})) {
@@ -1793,10 +1928,14 @@ auto Level_kits::prepare_placements(
             materials.push_back(resolver.resolve(m_library, shape.material_slots[slot], given));
         }
 
-        // The earlier pieces of this call are not surfaces yet; a connector join is exact, so it is not snapped to the surface.
+        // The earlier pieces of this call are not surfaces yet; a connector join is exact, so it is not snapped to the surface;
+        // a foliage item stands where its stroke put it (FD6.3).
+        const bool              foliage = placement.foliage_radius.has_value();
         const Surface_placement surface = joins[i].has_value()
             ? Surface_placement{.pose = Surface_pose{.position = joins[i]->position, .rotation = joins[i]->rotation, .scale = glm::vec3{1.0f}}}
-            : snapped_pose(scene_root, brush->get_bounding_box(), placement.position, placement.rotation, placement.scale, snap, lengths.module, placement.surface);
+            : foliage
+                ? Surface_placement{.pose = Surface_pose{.position = placement.position, .rotation = placement.rotation, .scale = placement.scale}}
+                : snapped_pose(scene_root, brush->get_bounding_box(), placement.position, placement.rotation, placement.scale, snap, lengths.module, placement.surface);
         const glm::vec3 position        = surface.pose.position;
         const glm::quat rotation        = surface.pose.rotation;
         const glm::mat4 world_from_node =
@@ -1809,7 +1948,7 @@ auto Level_kits::prepare_placements(
         // S2.1: a piece placed snapped onto a support is inserted under it, unless the call names its parent or joins it.
         std::shared_ptr<erhe::scene::Node>    support;
         std::optional<Kit_surface_attachment> surface_record;
-        if ((placement.surface.attach == Surface_attach::on) && surface.surface_found && !joins[i].has_value() && !parent) {
+        if (!foliage && (placement.surface.attach == Surface_attach::on) && surface.surface_found && !joins[i].has_value() && !parent) {
             support = find_surface_support(surface.support_mesh);
             if (support) {
                 surface_record = make_surface_record(
@@ -1820,6 +1959,19 @@ auto Level_kits::prepare_placements(
                 parent = support;
             } else {
                 support.reset();
+            }
+        }
+        // FD6.2: a foliage item goes under the mesh it was painted on, with a record when that mesh is a support.
+        if (placement.foliage_support) {
+            parent = placement.foliage_support;
+            const std::shared_ptr<erhe::scene::Node> foliage_support = find_surface_support(dynamic_cast<const erhe::scene::Mesh*>(placement.foliage_support.get()));
+            if (foliage_support) {
+                surface_record = make_surface_record(
+                    brush->get_bounding_box(), world_from_node, *foliage_support, placement.surface.direction, placement.surface.orient, placement.surface.rest
+                );
+            }
+            if (surface_record.has_value()) {
+                support = foliage_support;
             }
         }
         if (!parent) {
@@ -1844,6 +1996,10 @@ auto Level_kits::prepare_placements(
             insert.node->enable_flag_bits(Editor_item_flags::pass_through);
         }
         write_kit_piece(*insert.node.get(), Kit_piece_data{.shape = shape.id, .parameters = values[i].to_canonical_text()});
+        if (foliage) {
+            insert.node->enable_flag_bits(Editor_item_flags::foliage);
+            insert.node->set_value(Kit_piece::foliage_radius_property, placement.foliage_radius.value());
+        }
         if (surface_record.has_value()) {
             insert.node->set_value(Kit_piece::surface_attachment_property, make_surface_attachment_text(surface_record.value()));
         }
@@ -2573,7 +2729,7 @@ auto Level_kits::ungroup(Scene_root& scene_root, const std::shared_ptr<erhe::sce
     result.parent   = group->get_parent().lock();
     result.children = group->get_children();
     // Removing a node moves its children to its parent, world transforms kept, and restores them on undo.
-    m_context.operation_stack->execute_now(
+    result.error = execute_entry(
         std::make_shared<Item_insert_remove_operation>(
             Item_insert_remove_operation::Parameters{
                 .context = m_context,
@@ -2583,6 +2739,10 @@ auto Level_kits::ungroup(Scene_root& scene_root, const std::shared_ptr<erhe::sce
             }
         )
     );
+    if (!result.error.empty()) {
+        result.parent.reset();
+        result.children.clear();
+    }
     return result;
 }
 
@@ -2613,7 +2773,7 @@ auto Level_kits::duplicate(Scene_root& scene_root, const std::shared_ptr<erhe::s
     world_from_node[3] = glm::vec4{position, 1.0f};
     clone->set_world_from_node(world_from_node);
     set_copied_brush_collision_shapes(scene_root, *clone);
-    m_context.operation_stack->execute_now(
+    result.error = execute_entry(
         std::make_shared<Item_insert_remove_operation>(
             Item_insert_remove_operation::Parameters{
                 .context         = m_context,
@@ -2624,7 +2784,9 @@ auto Level_kits::duplicate(Scene_root& scene_root, const std::shared_ptr<erhe::s
             }
         )
     );
-    result.node = clone;
+    if (result.error.empty()) {
+        result.node = clone;
+    }
     return result;
 }
 
@@ -3036,6 +3198,7 @@ auto Level_kits::set_parameters(const std::shared_ptr<erhe::scene::Node>& node, 
         .ground          = before.ground
     };
     std::vector<std::shared_ptr<Operation>> operations;
+    const std::vector<erhe::scene::Mesh_primitive> before_primitives = before.primitives;
     operations.push_back(std::make_shared<Kit_piece_parameters_operation>(mesh, std::move(before), std::move(after)));
     Scene_root* const scene_root = dynamic_cast<Scene_root*>(mesh->get_item_host());
     if (scene_root != nullptr) {
@@ -3052,6 +3215,10 @@ auto Level_kits::set_parameters(const std::shared_ptr<erhe::scene::Node>& node, 
             ? operations.front()
             : std::make_shared<Compound_operation>(Compound_operation::Parameters{.operations = std::move(operations)})
     );
+    // A refused entry after a live preview: the piece shows its primitives from before the drag again.
+    if (!result.error.empty()) {
+        apply_preview_primitives(m_context, mesh, before_primitives);
+    }
     return result;
 }
 
@@ -4442,6 +4609,7 @@ void Level_kits::build_auto_connections(
         std::shared_ptr<erhe::scene::Node> node;
         Kit_connector                      world;
         Kit_connector                      local;
+        bool                               locked{false}; // a locked kit layout holds the node
     };
     std::vector<Frame> frames;
     std::vector<Kit_connector> local;
@@ -4451,8 +4619,9 @@ void Level_kits::build_auto_connections(
             !transform_connectors(local, node->world_from_node(), world)) {
             return true;
         }
+        const bool locked = static_cast<bool>(find_locking_kit_layout(*node));
         for (std::size_t i = 0; i < local.size(); ++i) {
-            frames.push_back(Frame{node, world[i], local[i]});
+            frames.push_back(Frame{node, world[i], local[i], locked});
         }
         return true;
     });
@@ -4489,7 +4658,9 @@ void Level_kits::build_auto_connections(
                 continue;
             }
             for (const Frame& other : frames) {
-                if ((other.node == piece) || !is_compatible(own.local, other.local) || find_locking_kit_layout(*other.node)) {
+                // The co-location test first: it is the cheapest and rejects nearly every pair (all tests here are pure).
+                if ((other.node == piece) || (glm::distance(own.world.position, other.world.position) > 1.0e-4f) || other.locked ||
+                    !is_compatible(own.local, other.local)) {
                     continue;
                 }
                 // Only typed connectors (wall, wall-floor, floor, rail) auto-connect: touching generic pieces (tiles) do not chain.
@@ -4500,8 +4671,7 @@ void Level_kits::build_auto_connections(
                 // Two wall connectors meet at a corner at any angle; floors meet edge to edge, facing.
                 const bool  wall_pair = shared.contains(Kit_connector_type::wall);
                 const float facing    = glm::dot(own.world.outward, other.world.outward);
-                if ((glm::distance(own.world.position, other.world.position) > 1.0e-4f) ||
-                    (!wall_pair && (facing > -0.99999f)) || (wall_pair && (facing > 0.99f)) || !is_free(other.node, other.local.name)) {
+                if ((!wall_pair && (facing > -0.99999f)) || (wall_pair && (facing > 0.99f)) || !is_free(other.node, other.local.name)) {
                     continue; // a wall pair meets at any angle but not pointing the same way (a duplicate in place)
                 }
                 if (check_attach(*piece, *other.node).refusal != Kit_attach_refusal::none) {

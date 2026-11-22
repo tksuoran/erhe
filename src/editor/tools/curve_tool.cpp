@@ -768,9 +768,19 @@ void Curve_tool::commit_point_edit()
         return;
     }
     std::string what = m_edit.segment.has_value() ? fmt::format("move segment {}", m_edit.segment.value()) : std::string{"move points"};
-    m_context.operation_stack->execute_now(
-        std::make_shared<Curve_set_operation>(curve, std::move(m_edit.before), curve->get_path(), std::move(what))
-    );
+    // The path is live already; a refused record (a live edit is open) puts the path from before the drag back.
+    if (m_context.operation_stack->execute_now(
+        std::make_shared<Curve_set_operation>(curve, m_edit.before, curve->get_path(), std::move(what))
+    ) == Operation_outcome::refused) {
+        restore_point_edit(*curve);
+    }
+}
+
+void Curve_tool::restore_point_edit(erhe::scene::Curve& curve)
+{
+    if (!paths_equal(curve.get_path(), m_edit.before)) {
+        curve.set_path(m_edit.before);
+    }
 }
 
 void Curve_tool::cancel_point_edit()
@@ -783,8 +793,8 @@ void Curve_tool::cancel_point_edit()
         m_context.level_kits->end_layout_preview();
     }
     const std::shared_ptr<erhe::scene::Curve> curve = std::move(m_edit.curve);
-    if (curve && !paths_equal(curve->get_path(), m_edit.before)) {
-        curve->set_path(m_edit.before);
+    if (curve) {
+        restore_point_edit(*curve);
     }
 }
 
@@ -926,17 +936,19 @@ auto Curve_tool::on_select_miss() -> bool
         log_tools->warn("Curve point insert refused: {}", error);
         return true;
     }
-    execute(operation);
-    m_selection.clear();
-    m_selection.push_back(index_of(index, Curve_point_part::position));
+    if (execute(operation) == Operation_outcome::executed) {
+        m_selection.clear();
+        m_selection.push_back(index_of(index, Curve_point_part::position));
+    }
     return true;
 }
 
-void Curve_tool::execute(const std::shared_ptr<Curve_set_operation>& operation)
+auto Curve_tool::execute(const std::shared_ptr<Curve_set_operation>& operation) -> Operation_outcome
 {
-    if (operation && (m_context.operation_stack != nullptr)) {
-        m_context.operation_stack->execute_now(operation);
+    if (!operation || (m_context.operation_stack == nullptr)) {
+        return Operation_outcome::refused;
     }
+    return m_context.operation_stack->execute_now(operation);
 }
 
 auto Curve_tool::can_run(const Curve_tool_action action) const -> bool
@@ -987,8 +999,10 @@ auto Curve_tool::run(const Curve_tool_action action) -> bool
                 log_tools->warn("Curve point removal refused: {}", error);
                 return true;
             }
-            m_selection.clear();
-            execute(operation);
+            // A deferred removal also invalidates the selected indices.
+            if (execute(operation) != Operation_outcome::refused) {
+                m_selection.clear();
+            }
             return true;
         }
         case Curve_tool_action::add_point_at_start:
@@ -1000,9 +1014,10 @@ auto Curve_tool::run(const Curve_tool_action action) -> bool
                 log_tools->warn("Curve point add refused: {}", error);
                 return true;
             }
-            execute(operation);
-            m_selection.clear();
-            m_selection.push_back(index_of(index, Curve_point_part::position));
+            if (execute(operation) == Operation_outcome::executed) {
+                m_selection.clear();
+                m_selection.push_back(index_of(index, Curve_point_part::position));
+            }
             return true;
         }
         case Curve_tool_action::set_kind_corner:
@@ -1014,12 +1029,12 @@ auto Curve_tool::run(const Curve_tool_action action) -> bool
                                                                  Curve_point_kind::free;
             std::vector<std::size_t> indices;
             get_selected_point_indices(indices);
-            execute(make_curve_set_points_kind_operation(curve, indices, kind));
+            static_cast<void>(execute(make_curve_set_points_kind_operation(curve, indices, kind)));
             prune_selection();
             return true;
         }
         case Curve_tool_action::toggle_closed: {
-            execute(make_curve_toggle_closed_operation(curve));
+            static_cast<void>(execute(make_curve_toggle_closed_operation(curve)));
             return true;
         }
         default: {

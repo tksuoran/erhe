@@ -110,3 +110,8 @@
 
 [TASK::kit-layout-composition]{planned-2026-11-20;GitHub-issue-301;doc/plans/kit_layout_composition.md}
 ?next{©User-rulings-Q1-Q7->build-order-steps-1-6}
+
+[TASK::foliage-paint-tool]{started-2026-11-21;branch=main(UNPUSHED);GitHub-issue-302;doc/plans/foliage_paint_tool_implementation.md}
+✓steps-1-8{flag+rays|index|system+radius|sampler+palette|paint|live-edits|remove|tool|palette-rows|scale;commits-in-activeContext;behavior=doc/editor/level_tools.md"Foliage paint"}
+✓step-9-final-pass{2026-11-22;review+fix-round+re-reviews;gates-in-activeContext;open=doc/plans/foliage_paint_tool_implementation.md"Open"}
+?next{©User-windowed-test+rulings->push-on-©User-instruction}

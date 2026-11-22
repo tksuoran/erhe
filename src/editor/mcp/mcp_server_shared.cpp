@@ -5,6 +5,7 @@
 
 #include "app_context.hpp"
 #include "brushes/brush_tool.hpp"
+#include "level/foliage_paint_tool.hpp"
 #include "editor_log.hpp"
 #include "physics/physics_tool.hpp"
 #include "prefabs/instance_structure.hpp"
@@ -770,6 +771,7 @@ auto c_str(const Mcp_tool tool) -> const char*
         case Mcp_tool::weight_paint:   return "weight_paint";
         case Mcp_tool::physics:        return "physics";
         case Mcp_tool::travel:         return "travel";
+        case Mcp_tool::foliage_paint:  return "foliage_paint";
         case Mcp_tool::count:          return "";
     }
     return "";
@@ -803,6 +805,7 @@ auto get_mcp_tool(const App_context& context, const Mcp_tool tool) -> Tool*
 #else
         case Mcp_tool::travel:         return nullptr;
 #endif
+        case Mcp_tool::foliage_paint:  return context.foliage_paint_tool;
         case Mcp_tool::count:          return nullptr;
     }
     return nullptr;

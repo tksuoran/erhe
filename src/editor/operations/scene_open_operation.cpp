@@ -1,6 +1,7 @@
 #include "operations/scene_open_operation.hpp"
 
 #include "app_context.hpp"
+#include "app_message_bus.hpp"
 #include "app_scenes.hpp"
 #include "app_settings.hpp"
 #include "assets/asset_manager.hpp"
@@ -115,6 +116,9 @@ void Scene_open_operation::execute(App_context& context)
     if ((context.scene_views != nullptr) && !context.OpenXR) {
         context.scene_views->open_new_viewport_scene_view_node(m_scene_root);
     }
+
+    // Homes the global tools here when they have no scene.
+    context.app_message_bus->scene_created.send_message(Scene_created_message{m_scene_root});
 }
 
 void Scene_open_operation::undo(App_context& context)
@@ -130,6 +134,7 @@ void Scene_open_operation::undo(App_context& context)
     }
     m_scene_root->unregister_from_editor_scenes(*context.app_scenes);
     m_scene_root->remove_browser_window();
+    context.app_message_bus->release_tools.queue_message(Release_tools_message{.scene_root = m_scene_root});
 }
 
 void queue_open_scene_gltf(

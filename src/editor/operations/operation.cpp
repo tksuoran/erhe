@@ -2,6 +2,10 @@
 
 namespace editor {
 
+Operation::~Operation() noexcept
+{
+}
+
 void Operation::on_lossless_undo(App_context&)
 {
     // Default: an operation that cannot rebuild itself keeps what it holds.
@@ -57,7 +61,7 @@ void Operation::set_refused(std::string reason)
     m_refused = true;
 }
 
-auto execute_unless_refused(App_context& context, const std::span<const std::shared_ptr<Operation>> operations) -> const Operation*
+auto execute_unless_refused(App_context& context, const std::span<const std::shared_ptr<Operation>> operations) -> std::optional<std::string>
 {
     for (std::size_t i = 0, end = operations.size(); i < end; ++i) {
         operations[i]->execute(context);
@@ -65,10 +69,10 @@ auto execute_unless_refused(App_context& context, const std::span<const std::sha
             for (std::size_t j = i; j > 0; --j) {
                 operations[j - 1]->undo(context);
             }
-            return operations[i].get();
+            return operations[i]->get_error();
         }
     }
-    return nullptr;
+    return std::nullopt;
 }
 
 }

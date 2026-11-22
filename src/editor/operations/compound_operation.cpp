@@ -32,9 +32,9 @@ void Compound_operation::execute(App_context& context)
     log_operations->trace("Op Execute Begin {}", describe());
 
     // A refused child undid itself and the earlier ones are undone, so the entry leaves nothing behind.
-    const Operation* const refused = execute_unless_refused(context, m_parameters.operations);
-    if (refused != nullptr) {
-        set_refused(refused->get_error());
+    std::optional<std::string> refusal = execute_unless_refused(context, m_parameters.operations);
+    if (refusal.has_value()) {
+        set_refused(std::move(refusal.value()));
         log_operations->info("Op Execute {} refused: {}", describe(), get_error());
         return;
     }

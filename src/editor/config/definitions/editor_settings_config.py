@@ -1,7 +1,7 @@
 from erhe_codegen import *
 
 struct("Editor_settings_config",
-    version=21,
+    version=22,
     short_desc="Editor settings",
     long_desc="Runtime-editable settings saved to editor_settings.json.",
     developer=False,
@@ -63,6 +63,8 @@ struct("Editor_settings_config",
         # Snap To Surface and Orient To Surface, shared by kit placement and the
         # Transform tool (doc/editor/level_tools.md "Surface settings").
         field("surface_snap",         StructRef("Surface_snap_config"),    added_in=20),
+        # The Foliage Paint tool's values and palette (doc/editor/level_tools.md "Foliage paint").
+        field("foliage_paint",        StructRef("Foliage_paint_config"),   added_in=22),
         # The default export settings that adding a scene's export settings
         # copies (doc/editor/prepared_assets.md "Export settings").
         field("export_settings",      StructRef("Scene_export_settings"),  added_in=16),

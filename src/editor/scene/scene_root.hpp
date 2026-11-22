@@ -96,6 +96,7 @@ class Draw_mode_system;
 class Rig_system;
 class Geometry_graph_mesh_system;
 class Node_physics_system;
+class Foliage_system;
 class Joint_system;
 class Physics_drag_constraint;
 class Node_physics;
@@ -438,6 +439,9 @@ public:
     // (doc/editor/physics.md). The scene drives it from the node-system change
     // sites, so no pass scans the tree for bodies.
     [[nodiscard]] auto get_node_physics_system() -> Node_physics_system&;
+
+    // The scene's foliage index and the node system that feeds it (doc/editor/level_tools.md "Foliage paint").
+    [[nodiscard]] auto get_foliage_system() -> Foliage_system&;
 
     // The scene's navigation seed nodes (doc/editor/navigation.md "Seeds"),
     // kept at node registration, unregistration and on_navigation_seed_changed().
@@ -831,6 +835,7 @@ private:
     std::unique_ptr<Rig_system>                     m_rig_system;
     std::unique_ptr<Geometry_graph_mesh_system>     m_geometry_graph_mesh_system;
     std::unique_ptr<Node_physics_system>            m_node_physics_system;
+    std::unique_ptr<Foliage_system>                 m_foliage_system;
     std::unique_ptr<Joint_system>                   m_joint_system;
     // Own mutex: register_node runs on load workers.
     mutable ERHE_PROFILE_MUTEX(std::mutex, m_navigation_seed_mutex);

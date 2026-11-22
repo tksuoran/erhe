@@ -1329,6 +1329,7 @@ void add_nature_plant_shapes(std::vector<Kit_shape_definition>& shapes)
 
         Kit_shape_definition shape;
         shape.id              = "nature.palm";
+        shape.foliage_radius  = 2.0f;
         shape.kit             = "nature";
         shape.display_name    = "Palm";
         shape.description     =
@@ -1357,6 +1358,7 @@ void add_nature_plant_shapes(std::vector<Kit_shape_definition>& shapes)
     {
         Kit_shape_definition shape;
         shape.id              = "nature.leaf_plant";
+        shape.foliage_radius  = 0.6f;
         shape.former_ids      = {"nature.leaf_plant.v2"};
         shape.kit             = "nature";
         shape.display_name    = "Leaf plant";
@@ -1388,6 +1390,7 @@ void add_nature_plant_shapes(std::vector<Kit_shape_definition>& shapes)
     {
         Kit_shape_definition shape;
         shape.id              = "nature.palm_clump";
+        shape.foliage_radius  = 1.0f;
         shape.kit             = "nature";
         shape.display_name    = "Palm clump";
         shape.description     =
@@ -1414,6 +1417,7 @@ void add_nature_plant_shapes(std::vector<Kit_shape_definition>& shapes)
     {
         Kit_shape_definition shape;
         shape.id              = "nature.palm_shrub";
+        shape.foliage_radius  = 0.6f;
         shape.former_ids      = {"nature.palm_shrub.v2"};
         shape.kit             = "nature";
         shape.display_name    = "Palm shrub";

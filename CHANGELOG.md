@@ -9,6 +9,13 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::item`: `item.hpp` - `Item_base::handle_name_change()`, the protected virtual hook `set_name()` calls
+  before the name changes; `hierarchy.hpp` - `Hierarchy::is_child_name_index_consistent()` and the counts
+  `c_child_name_index_build_count` / `c_child_name_index_drop_count` (`doc/erhe/item.md` "Sibling-unique names").
+- `erhe::commands`: `binding_desc.hpp` - `Drag_modifier_match` (`subset`, `exact`) and
+  `Binding_desc::drag_modifier_match`, the last argument of `Commands::bind_command_to_mouse_drag()`
+  and of the `Mouse_drag_binding` constructor (`mouse_drag_binding.hpp`, default `subset`)
+  (`doc/erhe/commands.md` "Binding model").
 - `erhe::scene_renderer`: `pvs_page_streamer.hpp` - `Pvs_page_streamer::get_counts()`
   (`Pvs_page_streamer_counts`: requests queued, the read running, finished reads not taken)
   and `Draw_list_scene::get_pvs_page_streamer_counts()` (`doc/erhe/draw_list_renderer.md` Q6).
@@ -193,6 +200,12 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
   `ERHE_PRIMITIVE_INDEX` (doc/erhe/graphics.md "Draw records").
 
 ### Changed
+
+- `erhe::item`: `hierarchy.hpp` - a parent of more than 16 children keeps a child name index, so attaching,
+  renaming and detaching a child and `Hierarchy::make_sibling_unique_name()` no longer scan the siblings
+  (O(1) amortized per attach; a removal from a suffix series can cost one scan of that series at the next
+  attach of the freed suffix); the sibling-unique rename logs at trace instead of info (`doc/erhe/item.md`
+  "Sibling-unique names").
 
 - `erhe::scene_renderer`: `Pvs_page_streamer` takes a `Pvs_page_read_executor`
   (`std::function<tf::Executor*()>`, called at each spawn of its read task; empty or a null

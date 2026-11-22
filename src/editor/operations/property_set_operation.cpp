@@ -238,12 +238,12 @@ void Property_set_operation::execute(App_context& context)
             }
         }
     }
-    const Operation* const refused = execute_unless_refused(context, m_follow_ups);
-    if (refused != nullptr) {
+    std::optional<std::string> refusal = execute_unless_refused(context, m_follow_ups);
+    if (refusal.has_value()) {
         // A follow-up refused the change (a floor fit, K0.3): the write is taken back and the operation refused with it.
         m_follow_ups.clear();
         static_cast<void>(apply(context, m_before));
-        set_refused(refused->get_error());
+        set_refused(std::move(refusal.value()));
     }
 }
 
@@ -360,12 +360,12 @@ void Property_set_apply_operation::execute(App_context& context)
         m_follow_ups_recorded = true;
         record_follow_ups(context);
     }
-    const Operation* const refused = execute_unless_refused(context, m_follow_ups);
-    if (refused != nullptr) {
+    std::optional<std::string> refusal = execute_unless_refused(context, m_follow_ups);
+    if (refusal.has_value()) {
         // A follow-up refused the change (a floor fit, K0.3): the targets take their values back.
         m_follow_ups.clear();
         restore_before(context);
-        set_refused(refused->get_error());
+        set_refused(std::move(refusal.value()));
     }
 }
 

@@ -35,6 +35,7 @@
 #include "erhe_primitive/material.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_scene/curve.hpp"
+#include "erhe_primitive/primitive.hpp"
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/node.hpp"
 #include "erhe_scene/scene.hpp"
@@ -405,6 +406,14 @@ void Brush_tool::on_selection(const Selection_message& message)
 void Brush_tool::clear_active_brush()
 {
     m_active_brush.set_key(Asset_key{});
+}
+
+auto Brush_tool::get_preview_world_position() const -> std::optional<glm::vec3>
+{
+    if (!m_preview_node || !m_preview_mesh || (m_preview_node->get_parent_node() == nullptr)) {
+        return {};
+    }
+    return glm::vec3{m_preview_node->position_in_world()};
 }
 
 auto Brush_tool::get_effective_brush() const -> std::shared_ptr<Brush>
@@ -803,6 +812,17 @@ void Brush_tool::on_motion()
         return;
     }
     m_hover = *nearest_hover;
+    // F1.3, G8: the Brush tool places on the surface behind a hovered foliage mesh; the hover reported stays the pointer's.
+    const std::shared_ptr<erhe::scene::Mesh> nearest_mesh = nearest_hover->scene_mesh_weak.lock();
+    const bool over_foliage =
+        (nearest_hover->slot == Hover_entry::content_slot) && nearest_mesh &&
+        ((nearest_mesh->get_flag_bits() & Editor_item_flags::foliage) != 0) && (m_context.level_kits != nullptr);
+    // Over foliage the pass-through and the kit preview read this one hit; elsewhere the kit preview finds its own.
+    std::optional<Hover_placement_hit> placement;
+    if (over_foliage) {
+        placement = m_context.level_kits->get_placement_hover(*scene_view);
+        m_hover   = make_placement_hover_entry(*scene_view, placement);
+    }
     m_hover_world_position = nearest_hover->position;
     m_hover_world_normal   = nearest_hover->normal;
     // A back-face hit (a double-sided plane seen from behind) faces the viewer, so the search goes into the surface (U51).
@@ -821,7 +841,42 @@ void Brush_tool::on_motion()
         }
     }
 
-    update_preview_mesh();
+    update_preview_mesh(over_foliage ? &placement : nullptr);
+}
+
+auto Brush_tool::make_placement_hover_entry(const Scene_view& scene_view, const std::optional<Hover_placement_hit>& placement) const -> Hover_entry
+{
+    if (!placement.has_value()) {
+        return Hover_entry{};
+    }
+    if (placement->source == Hover_placement_source::grid) {
+        return scene_view.get_hover(Hover_entry::grid_slot);
+    }
+    if (!placement->mesh) {
+        return Hover_entry{};
+    }
+    // The surface hit as a content hover: the face frame of the non-kit placement reads its primitive and facet.
+    Hover_entry entry{};
+    entry.slot                       = Hover_entry::content_slot;
+    entry.mask                       = Hover_entry::content_bit;
+    entry.valid                      = true;
+    entry.scene_mesh_weak            = placement->mesh;
+    entry.scene_mesh_primitive_index = placement->primitive_index;
+    entry.position                   = placement->position;
+    entry.normal                     = placement->normal;
+    entry.facet                      = placement->facet;
+    const std::vector<erhe::scene::Mesh_primitive>& primitives = placement->mesh->get_primitives();
+    if (placement->primitive_index < primitives.size()) {
+        const std::shared_ptr<erhe::primitive::Primitive_shape> shape = primitives[placement->primitive_index].primitive->get_shape_for_raytrace();
+        if (shape) {
+            entry.geometry = shape->get_geometry_const();
+        }
+    }
+    if (!entry.geometry || (entry.facet == GEO::NO_INDEX)) {
+        entry.scene_mesh_primitive_index = std::numeric_limits<std::size_t>::max();
+        entry.geometry.reset();
+    }
+    return entry;
 }
 
 void Brush_tool::preview_drag_and_drop(std::shared_ptr<Brush> brush)
@@ -938,21 +993,6 @@ auto Brush_tool::update_brush_frame(Brush& brush) -> bool
     return true;
 }
 
-auto Brush_tool::get_world_from_grid_hover_point() const -> glm::mat4
-{
-    std::shared_ptr<const Grid> hover_grid = m_hover.grid_weak.lock();
-    if (!hover_grid) {
-        return glm::mat4{1};
-    }
-
-    const glm::vec3 position_in_grid0 = glm::vec3{m_hover.grid_frame.grid_from_world * glm::vec4{m_hover.position.value(), 1.0f}};
-    const glm::vec3 position_in_grid  = m_snap_to_grid ? hover_grid->snap_grid_position(position_in_grid0) : position_in_grid0;
-    const glm::mat4 offset            = erhe::math::create_translation<float>(position_in_grid);
-    const glm::mat4 world_from_grid   = m_hover.grid_frame.world_from_grid * offset;
-
-    return world_from_grid;
-}
-
 auto Brush_tool::update_hover_frame_from_grid() -> bool
 {
     std::shared_ptr<const Grid> hover_grid = m_hover.grid_weak.lock();
@@ -968,7 +1008,7 @@ auto Brush_tool::update_hover_frame_from_grid() -> bool
     return true;
 }
 
-void Brush_tool::update_preview_mesh_node_transform()
+void Brush_tool::update_preview_mesh_node_transform(const std::optional<Hover_placement_hit>* const motion_placement)
 {
     m_hover_facet_corner_count.reset();
     m_brush_placement_frame.reset();
@@ -997,7 +1037,7 @@ void Brush_tool::update_preview_mesh_node_transform()
 
     Brush& brush = *shared_brush.get();
     if (m_kit_brush && (shared_brush == m_kit_brush)) {
-        update_kit_preview_transform(brush);
+        update_kit_preview_transform(brush, motion_placement);
         return;
     }
     const bool brush_frame_ok = update_brush_frame(brush);
@@ -1037,24 +1077,30 @@ void Brush_tool::update_preview_mesh_node_transform()
     m_preview_node->set_parent(scene_root->get_hosted_scene()->get_root_node());
 }
 
-void Brush_tool::update_kit_preview_transform(Brush& brush)
+void Brush_tool::update_kit_preview_transform(Brush& brush, const std::optional<Hover_placement_hit>* const motion_placement)
 {
     m_kit_pose.reset();
     clear_kit_join();
     const std::shared_ptr<Scene_root>& scene_root = get_scene_root();
-    if (!scene_root || !m_hover_world_position.has_value()) {
+    Scene_view* const scene_view = get_hover_scene_view();
+    if (!scene_root || (scene_view == nullptr)) {
         return;
     }
-    // On content the hovered point; on the grid the grid-snapped point, as the face-aligned placement.
-    const glm::vec3 point = (m_hover.slot == Hover_entry::grid_slot)
-        ? glm::vec3{get_world_from_grid_hover_point()[3]}
-        : m_hover_world_position.value();
-    // U51: placed along the normal of the surface under the pointer (the grid's normal on the grid).
+    // FD2.4: everything about the placement comes from this one hit, foliage passed through.
     Level_kits& level_kits = *m_context.level_kits;
+    const std::optional<Hover_placement_hit> placement = (motion_placement != nullptr) ? *motion_placement : level_kits.get_placement_hover(*scene_view);
+    if (!placement.has_value()) {
+        return;
+    }
+    // On content the surface point; on the grid the grid-snapped point, as the face-aligned placement.
+    const glm::vec3 point = (placement.value().source == Hover_placement_source::grid)
+        ? get_grid_point(placement.value())
+        : placement.value().position;
+    // U51: placed along the normal of the surface under the pointer (the grid's normal on the grid).
     m_kit_pose = level_kits.make_placement_pose(
-        *scene_root, brush.get_bounding_box(), point, m_hover_world_normal, m_kit_yaw_steps, level_kits.get_placement_settings()
+        *scene_root, brush.get_bounding_box(), point, placement.value().normal, m_kit_yaw_steps, level_kits.get_placement_settings()
     );
-    update_kit_join(*scene_root);
+    update_kit_join(*scene_root, placement.value());
     // add_preview_mesh() gave the preview the kit brush's primitive at scale 1 under the scene root;
     // a new kit brush makes a new preview, so only the transform changes here.
     m_preview_node->set_parent_from_node(
@@ -1071,7 +1117,17 @@ void Brush_tool::clear_kit_join()
     }
 }
 
-void Brush_tool::update_kit_join(Scene_root& scene_root)
+auto Brush_tool::get_grid_point(const Hover_placement_hit& placement) const -> glm::vec3
+{
+    if (!placement.grid) {
+        return placement.position;
+    }
+    const glm::vec3 position_in_grid0 = glm::vec3{placement.grid_frame.grid_from_world * glm::vec4{placement.position, 1.0f}};
+    const glm::vec3 position_in_grid  = m_snap_to_grid ? placement.grid->snap_grid_position(position_in_grid0) : position_in_grid0;
+    return glm::vec3{placement.grid_frame.world_from_grid * glm::vec4{position_in_grid, 1.0f}};
+}
+
+void Brush_tool::update_kit_join(Scene_root& scene_root, const Hover_placement_hit& placement)
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -1081,14 +1137,14 @@ void Brush_tool::update_kit_join(Scene_root& scene_root)
     const float reach      = level_kits.get_connector_snap_distance();
     if (
         m_kit_join_suspended || !(reach > 0.0f) || m_kit_connectors.empty() || !m_kit_pose.has_value() ||
-        (m_hover.slot != Hover_entry::content_slot) || !m_hover_world_position.has_value()
+        (placement.source != Hover_placement_source::surface)
     ) {
         return;
     }
     // The hovered mesh is the piece's node (Brush::make_instance()), or a floor layout's slab, whose parent is the target (K6);
     // the indicator cache knows a floor without parsing its layout value again.
     Kit_connector_indicators& indicators = level_kits.get_connector_indicators();
-    std::shared_ptr<erhe::scene::Node> piece = m_hover.scene_mesh_weak.lock();
+    std::shared_ptr<erhe::scene::Node> piece = placement.mesh;
     bool floor = false;
     if (piece && !carries_kit_piece(*piece)) {
         std::shared_ptr<erhe::scene::Node> parent = piece->get_parent_node();
@@ -1106,7 +1162,7 @@ void Brush_tool::update_kit_join(Scene_root& scene_root)
     if (local.empty() || !transform_connectors(local, piece->world_from_node(), m_kit_target_connectors)) {
         return;
     }
-    const glm::vec3 hover_point = m_hover_world_position.value();
+    const glm::vec3 hover_point = placement.position;
     // The nearest free one within reach (inclusive); the first in the shape's order on a tie.
     std::optional<std::size_t> nearest{};
     float nearest_distance = 0.0f;
@@ -1437,7 +1493,7 @@ void Brush_tool::do_insert_operation(Brush& brush)
     );
 }
 
-void Brush_tool::add_preview_mesh(Brush& brush)
+void Brush_tool::add_preview_mesh(Brush& brush, const std::optional<Hover_placement_hit>* const motion_placement)
 {
     const std::shared_ptr<Brush> active_brush = m_active_brush.get_as<Brush>();
     const bool kit_preview = m_kit_brush && (&brush == m_kit_brush.get());
@@ -1493,10 +1549,10 @@ void Brush_tool::add_preview_mesh(Brush& brush)
     erhe::scene::set_mesh_parent(m_preview_mesh, m_preview_node);
     m_preview_node->set_parent(scene_root->get_scene().get_root_node());
 
-    update_preview_mesh_node_transform();
+    update_preview_mesh_node_transform(motion_placement);
 }
 
-void Brush_tool::update_preview_mesh()
+void Brush_tool::update_preview_mesh(const std::optional<Hover_placement_hit>* const motion_placement)
 {
     const std::shared_ptr<Brush> brush = get_effective_brush();
 
@@ -1508,7 +1564,7 @@ void Brush_tool::update_preview_mesh()
             return;
         }
 
-        add_preview_mesh(*brush.get());
+        add_preview_mesh(*brush.get(), motion_placement);
         return;
     }
 
@@ -1522,7 +1578,7 @@ void Brush_tool::update_preview_mesh()
         remove_preview_mesh();
     }
 
-    update_preview_mesh_node_transform();
+    update_preview_mesh_node_transform(motion_placement);
 }
 
 void Brush_tool::tool_properties(erhe::imgui::Imgui_window& /*imgui_window*/)
@@ -1679,7 +1735,6 @@ void Brush_tool::tool_render(const Render_context& render_context)
 #if 0
     if (m_show_receiver_frame) {
         //if (!hover_scene_mesh && hover_grid) {
-        //    const glm::mat4 world_from_hover = get_world_from_grid_hover_point();
         //    constexpr glm::vec3 C    {0.0f, 0.0f, 0.0f};
         //    constexpr glm::vec3 C_t  {1.0f, 0.0f, 0.0f};
         //    constexpr glm::vec3 C_b  {0.0f, 1.0f, 0.0f};

@@ -3,6 +3,7 @@
 #include "erhe_item/unique_id.hpp"
 
 #include <memory>
+#include <optional>
 #include <span>
 #include <string>
 #include <unordered_set>
@@ -14,6 +15,13 @@ namespace erhe {
 namespace editor {
 
 class App_context;
+
+// What Operation_stack::execute_now() did with an operation.
+enum class Operation_outcome : unsigned int {
+    executed = 0, // executed and recorded
+    refused,      // not executed or its execute refused: is_refused() and get_error() say why
+    deferred      // waits in the queue until a scene save ends
+};
 
 class Operation
 {
@@ -75,7 +83,7 @@ private:
     bool                       m_refused{false};
 };
 
-// Executes the operations in order; at a refused one, undoes the ones before it in reverse and returns it (null when none is).
-[[nodiscard]] auto execute_unless_refused(App_context& context, std::span<const std::shared_ptr<Operation>> operations) -> const Operation*;
+// Executes the operations in order; at a refused one, undoes the ones before it in reverse and returns its reason (a copy).
+[[nodiscard]] auto execute_unless_refused(App_context& context, std::span<const std::shared_ptr<Operation>> operations) -> std::optional<std::string>;
 
 }

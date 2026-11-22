@@ -68,6 +68,8 @@ public:
     void apply_point_edit (const std::optional<glm::mat4>& world_delta) override;
     void commit_point_edit() override;
     void cancel_point_edit() override;
+    // Puts the control point's offset from before the point edit back (a cancel, a refused commit).
+    void restore_point_edit(Lattice_node& lattice);
 
 protected:
     void render_extras(const Render_context& context, std::optional<std::size_t> hovered) override;

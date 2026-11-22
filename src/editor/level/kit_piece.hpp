@@ -45,9 +45,14 @@ public:
     static const erhe::property::Property<std::string> attachment_property;
     // The surface attachment (doc/editor/level_tools.md "Surface attachments"): make_surface_attachment_text(); empty when none.
     static const erhe::property::Property<std::string> surface_attachment_property;
+    // The foliage item's radius in meters (doc/editor/level_tools.md "Foliage paint"); outside the mesh key.
+    static const erhe::property::Property<float>       foliage_radius_property;
 
     [[nodiscard]] static auto all_properties() -> const std::vector<const erhe::property::Dependency_property*>&;
 };
+
+// The largest Kit_piece.foliage_radius the property's validation takes, in meters.
+inline constexpr float c_foliage_radius_max = 100.0f;
 
 [[nodiscard]] auto carries_kit_piece(const erhe::scene::Node& node) -> bool;
 
@@ -58,6 +63,9 @@ void write_kit_piece(erhe::scene::Node& node, const Kit_piece_data& data);
 // The piece's own connector switches, the defaults (all enabled) for a node without values; its layout's hiding (U39) is
 // added by Level_kits::get_connector_switches().
 [[nodiscard]] auto read_piece_connector_switches(const erhe::scene::Node& node) -> Kit_connector_switches;
+
+// The node is a mesh carrying Editor_item_flags::foliage.
+[[nodiscard]] auto is_foliage_mesh(const erhe::scene::Node& node) -> bool;
 
 // True for Kit_piece.connectors_enabled and Kit_piece.disabled_connectors.
 [[nodiscard]] auto is_connector_switch_property(const erhe::property::Dependency_property& property) -> bool;

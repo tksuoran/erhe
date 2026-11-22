@@ -25,6 +25,7 @@ Foundational entity system for erhe. Provides identity, flags, naming, tags, par
 
 ### Item_base
 - `get_id()`, `get_name()`, `set_name()`, `describe(level)`
+- `handle_name_change(new_name)` - virtual, called by `set_name()` before the name changes (not for an unchanged name); `Hierarchy` overrides it, see "Sibling-unique names"
 - `get_flag_bits()`, `set_flag_bits()`, `enable_flag_bits()`, `disable_flag_bits()`
 - `is_visible()`, `is_selected()`, `show()`, `hide()`, `set_visible()`, `set_selected()` - `show` / `hide` / `set_visible` write a local `visible_property` value; `clear_value(visible_property)` returns to the inherited / default value
 - `register_flag_bit_property(name, owner_type, bit, ui)` (static) - a persistent flag bit as a bridged boolean property (D18) of `owner_type`; the library's own persistent bits are registered this way (`lock_edit_property`, `show_in_ui_property`, `exclude_from_prefab_property`, `ik_lock_property`, the channel locks), and the application registers its bits' properties the same way (the editor's `Editor_item_properties`)
@@ -45,7 +46,7 @@ Foundational entity system for erhe. Provides identity, flags, naming, tags, par
 - `set_parent(shared_ptr)`, `set_parent(shared_ptr, position)` - reparent with depth update
 - `get_parent()`, `get_children()`, `get_depth()`, `get_root()`
 - `get_path()`, `get_reference_path()` - the item's path, see "Item paths"
-- `make_sibling_unique_name(parent, wanted_name, exclude)` (static), `is_name_available(name)`, `handle_sibling_unique_rename(unique_name)` - see "Sibling-unique names"
+- `make_sibling_unique_name(parent, wanted_name, exclude)` (static), `is_name_available(name)`, `handle_sibling_unique_rename(unique_name)`, `handle_name_change(new_name)` - see "Sibling-unique names"
 - `get_child_count()`, `get_child_count(filter)`, `get_index_in_parent()`, `get_index_of_child()`
 - `is_ancestor()`
 - `remove()` - splice out node, reparent children to parent
@@ -298,7 +299,37 @@ and is the identifier a USD prim path is.
   instantiation all attach through it, so none of them carries naming code. A
   site that names an item it has already attached calls
   `make_sibling_unique_name` itself. A site that needs the name an item was
-  created with looks the item up by path or id, not by name.
+  created with looks the item up by path or id, not by name. The rename
+  logs at trace: a bulk insert (a foliage stroke, a kit layout's children, a
+  flat glTF scene) renames every item it adds.
+- The child name index: a parent with more than
+  `c_child_name_index_build_count` (16) children keeps their names in a hash
+  map of name to holder count and, per base of a held `<base>_<n>` (n
+  written as `std::to_string` writes it), the series' first free suffix:
+  every `<base>_<n>` below it is held and `<base>_<first free>` is not. It
+  drops the index below `c_child_name_index_drop_count` (8) children; with
+  fewer children `make_sibling_unique_name` and `is_name_available` scan the
+  children, which gives the same names. Attaching a child adds its name and,
+  when the name is the series' first free suffix, moves the first free
+  suffix past the held ones after it; removing the last holder of a
+  `<base>_<n>` lowers the first free suffix to n, and a series without a
+  held name has no entry. `make_sibling_unique_name` and `is_name_available`
+  only read the index. An attach and a rename cost O(1) amortized; a
+  removal from a series can cost one scan of the series' held suffixes
+  above it, at the next attach of the freed suffix.
+- Each child records the parent whose index holds its name;
+  `set_parent()` leaves that index first, whatever the child's parent
+  pointer says, `handle_remove_child` and `handle_add_child` keep it with
+  `m_children`, `Item_base::set_name` reaches `Hierarchy::handle_name_change`
+  (protected), the copy constructor and copy assignment build the index of
+  the cloned children, and a parent's destructor releases its children
+  from it. `is_child_name_index_consistent()` compares the index with the
+  children, and `hierarchy_sanity_check()` logs a mismatch in a Debug build.
+  The index shares the protection of `m_children`: one writer per parent at
+  a time, the main thread or a worker holding the scene's `item_host_mutex`.
+  It costs 16 bytes per item (the index pointer and the owner pointer) and,
+  on a parent that has one, about 80 bytes per child (a hash node with the
+  name copied) and per suffixed series.
 - `handle_sibling_unique_rename(unique_name)` is the rename the attach
   performs. The base renames the item; the editor's `Content_library_node`
   also renames the item an owning entry wraps, because the item's name is the

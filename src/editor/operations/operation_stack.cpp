@@ -21,10 +21,6 @@
 
 namespace editor {
 
-Operation::~Operation() noexcept
-{
-}
-
 #pragma region Commands
 Undo_command::Undo_command(erhe::commands::Commands& commands, App_context& context)
     : Command  {commands, "undo"}
@@ -118,14 +114,14 @@ void Operation_stack::queue(const std::shared_ptr<Operation>& operation)
     // Not while an operation is executing - re-entrant execution is
     // illegal, so a follow-up queued BY an executing operation keeps the
     // deferred semantics (and lands outside the group).
-    if (m_grouping && !m_executing && !is_held()) {
+    if (m_group.is_open() && !m_executing && (get_admission(Operation_request::queue) == Operation_admission::execute)) {
         begin_recording();
         operation->execute(m_context);
         end_recording();
         if (operation->is_refused()) {
             log_operations->warn("Operation {} refused, not recorded: {}", operation->describe(), operation->get_error());
         } else {
-            m_group_collected.push_back(operation);
+            m_group.add(operation);
         }
         return;
     }
@@ -175,14 +171,24 @@ auto Operation_stack::get_queued_count() -> std::size_t
     return m_queued.size() + m_queued_from_threads.size();
 }
 
-void Operation_stack::execute_now(const std::shared_ptr<Operation>& operation)
+auto Operation_stack::execute_now(const std::shared_ptr<Operation>& operation) -> Operation_outcome
 {
     verify_main_thread();
     ERHE_VERIFY(!m_executing);
-    if (is_held()) {
-        log_operations->info("Operation deferred until the running scene save ends");
-        m_queued.push_back(operation);
-        return;
+    switch (get_admission(Operation_request::execute_now)) {
+        case Operation_admission::refuse: {
+            operation->set_refused(get_undo_block_reason());
+            log_operations->warn("Operation {} refused: {}", operation->describe(), operation->get_error());
+            return Operation_outcome::refused;
+        }
+        case Operation_admission::hold: {
+            log_operations->info("Operation {} deferred: {}", operation->describe(), get_undo_block_reason());
+            m_queued.push_back(operation);
+            return Operation_outcome::deferred;
+        }
+        case Operation_admission::execute: {
+            break;
+        }
     }
 
     begin_recording();
@@ -190,48 +196,152 @@ void Operation_stack::execute_now(const std::shared_ptr<Operation>& operation)
     end_recording();
     if (operation->is_refused()) {
         log_operations->warn("Operation {} refused, not recorded: {}", operation->describe(), operation->get_error());
-        return;
+        return Operation_outcome::refused;
     }
-    if (m_grouping) {
-        m_group_collected.push_back(operation);
-        return;
+    if (m_group.is_open()) {
+        m_group.add(operation);
+        return Operation_outcome::executed;
     }
     m_executed.push_back(operation);
     m_undone.clear();
+    return Operation_outcome::executed;
 }
 
 void Operation_stack::begin_group()
 {
     verify_main_thread();
     ERHE_VERIFY(!m_executing);
-    ERHE_VERIFY(!m_grouping);
-    m_grouping = true;
-    m_group_collected.clear();
+    m_group.open();
 }
 
 auto Operation_stack::end_group() -> std::size_t
 {
     verify_main_thread();
-    ERHE_VERIFY(m_grouping);
-    m_grouping = false;
-
-    const std::size_t count = m_group_collected.size();
-    if (count == 1) {
-        // A single operation needs no wrapper.
-        m_executed.push_back(std::move(m_group_collected.front()));
-        m_undone.clear();
-    } else if (count > 1) {
-        // The collected operations have already executed; the compound's
-        // execute() only ever runs again on redo, like any recorded entry.
-        m_executed.push_back(
-            std::make_shared<Compound_operation>(
-                Compound_operation::Parameters{std::move(m_group_collected)}
-            )
-        );
+    const std::size_t count = m_group.get_size();
+    std::shared_ptr<Operation> entry = m_group.close();
+    // An empty group records nothing and keeps the redo history.
+    if (entry) {
+        m_executed.push_back(std::move(entry));
         m_undone.clear();
     }
-    m_group_collected.clear();
     return count;
+}
+
+auto Operation_stack::get_admission(const Operation_request request) const -> Operation_admission
+{
+    return get_operation_admission(request, is_held() ? Save_hold::held : Save_hold::none, m_live_edit);
+}
+
+auto Operation_stack::begin_live_edit(std::string reason, std::function<void()> on_abandoned, std::string& out_refusal) -> Live_edit_token
+{
+    verify_main_thread();
+    ERHE_VERIFY(!m_executing);
+    if (const char* const block = get_undo_block_reason(); block != nullptr) {
+        out_refusal = block;
+        return {};
+    }
+    out_refusal.clear();
+    return m_live_edit.begin(std::move(reason), std::move(on_abandoned));
+}
+
+auto Operation_stack::is_live_edit_open() const -> bool
+{
+    return m_live_edit.is_open();
+}
+
+auto Operation_stack::get_live_edit_reason() const -> const char*
+{
+    return m_live_edit.get_reason();
+}
+
+auto Operation_stack::is_live_edit_owner(const Live_edit_token& token, const char* call) const -> bool
+{
+    if (m_live_edit.is_owner(token)) {
+        return true;
+    }
+    log_operations->warn("{} refused: the token names no open live edit", call);
+    return false;
+}
+
+auto Operation_stack::execute_in_live_edit(const Live_edit_token& token, const std::shared_ptr<Operation>& operation) -> bool
+{
+    verify_main_thread();
+    ERHE_VERIFY(!m_executing);
+    if (!is_live_edit_owner(token, "execute_in_live_edit")) {
+        return false;
+    }
+    begin_recording();
+    operation->execute(m_context);
+    end_recording();
+    if (operation->is_refused()) {
+        log_operations->warn("Operation {} refused, not recorded: {}", operation->describe(), operation->get_error());
+        return true;
+    }
+    m_live_edit.add(operation);
+    return true;
+}
+
+auto Operation_stack::end_live_edit(Live_edit_token& token) -> Live_edit_end
+{
+    verify_main_thread();
+    ERHE_VERIFY(!m_executing);
+    if (!is_live_edit_owner(token, "end_live_edit")) {
+        return Live_edit_end::refused;
+    }
+    token = Live_edit_token{};
+    std::shared_ptr<Operation> entry = m_live_edit.end();
+    if (!entry) {
+        return Live_edit_end::unchanged; // no entry, the redo history stays
+    }
+    if (m_group.is_open()) {
+        m_group.add(entry); // inside a batch the edit is a member of the batch's entry
+    } else {
+        m_executed.push_back(std::move(entry));
+        m_undone.clear();
+    }
+    return Live_edit_end::recorded;
+}
+
+void Operation_stack::end_live_previews()
+{
+    // As undo(): a live kit parameter drag ends first, so the operations find the committed state (D3.6).
+    if (m_context.level_kits != nullptr) {
+        m_context.level_kits->cancel_parameter_preview();
+        m_context.level_kits->end_layout_preview();
+        m_context.level_kits->clear_flow_summary();
+    }
+}
+
+auto Operation_stack::cancel_live_edit(Live_edit_token& token) -> bool
+{
+    verify_main_thread();
+    ERHE_VERIFY(!m_executing);
+    if (!is_live_edit_owner(token, "cancel_live_edit")) {
+        return false;
+    }
+    token = Live_edit_token{};
+    end_live_previews();
+    m_executing = true;
+    m_live_edit.cancel(m_context);
+    m_executing = false;
+    return true;
+}
+
+void Operation_stack::abandon_live_edit()
+{
+    verify_main_thread();
+    ERHE_VERIFY(!m_executing);
+    if (!m_live_edit.is_open()) {
+        return;
+    }
+    log_operations->info("Live edit abandoned: {}", m_live_edit.get_reason());
+    end_live_previews();
+    m_executing = true;
+    const std::function<void()> on_abandoned = m_live_edit.abandon(m_context);
+    m_executing = false;
+    if (on_abandoned) {
+        on_abandoned();
+    }
 }
 
 void Operation_stack::update()
@@ -256,11 +366,12 @@ void Operation_stack::update()
         }
     }
 
-    if (is_held()) {
+    // A save or a live edit holds the queued operations; undo and redo are declined (get_undo_block_reason()).
+    if (get_admission(Operation_request::queue) == Operation_admission::hold) {
         if (m_undo_requested || m_redo_requested) {
             m_undo_requested = false;
             m_redo_requested = false;
-            log_operations->info("Undo / redo declined: a scene save is in progress");
+            log_operations->info("Undo / redo declined: {}", get_undo_block_reason());
         }
         return;
     }
@@ -306,6 +417,9 @@ auto Operation_stack::get_undo_block_reason() const -> const char*
 {
     if (is_held()) {
         return "a scene save is in progress";
+    }
+    if (m_live_edit.is_open()) {
+        return m_live_edit.get_reason();
     }
     // Undo / redo must not run underneath a live mesh component edit (the G
     // slide, a gizmo component drag, a numeric component edit): it snapshots
@@ -416,6 +530,8 @@ auto Operation_stack::free_undone_loads() -> Operation_stack::Free_undone_loads_
 
 void Operation_stack::clear_history()
 {
+    // A scene close abandons an open live edit first (abandon_live_edit()); nothing drops one unseen.
+    ERHE_VERIFY(!m_live_edit.is_open());
     verify_main_thread();
     ERHE_VERIFY(!m_executing);
 
@@ -446,6 +562,7 @@ void Operation_stack::collect_item_references(std::unordered_set<const erhe::Ite
     for (const std::shared_ptr<Operation>& operation : m_queued) {
         operation->collect_item_references(out_items);
     }
+    m_live_edit.collect_item_references(out_items);
 }
 
 void Operation_stack::redo()

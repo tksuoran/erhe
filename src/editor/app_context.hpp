@@ -73,6 +73,7 @@ class Background_apply_meter;
 class Brdf_slice;
 class Brush_preview;
 class Brush_tool;
+class Foliage_paint_tool;
 class Clipboard;
 class Viewport_context_menu;
 class Clipboard_window;
@@ -348,6 +349,7 @@ public:
     Asset_manager*                     asset_manager        {nullptr};
     Brdf_slice*                        brdf_slice           {nullptr};
     Brush_tool*                        brush_tool           {nullptr};
+    Foliage_paint_tool*                foliage_paint_tool   {nullptr};
     Clipboard*                         clipboard            {nullptr};
     Viewport_context_menu*             viewport_context_menu{nullptr};
     Clipboard_window*                  clipboard_window     {nullptr};

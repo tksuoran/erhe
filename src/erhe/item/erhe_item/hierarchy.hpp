@@ -102,6 +102,13 @@ public:
     // wraps, because that item's name is the one the user sees.
     virtual void handle_sibling_unique_rename(const std::string& unique_name);
 
+    // True when the child name index holds exactly the names of the children (doc/erhe/item.md "Sibling-unique names").
+    [[nodiscard]] auto is_child_name_index_consistent() const -> bool;
+
+    // A parent keeps a child name index above this many children and drops it below the second count.
+    static constexpr std::size_t c_child_name_index_build_count = 16;
+    static constexpr std::size_t c_child_name_index_drop_count  = 8;
+
     [[nodiscard]] auto get_parent          () const -> std::weak_ptr<Hierarchy>;
     [[nodiscard]] auto get_depth           () const -> size_t;
     [[nodiscard]] auto get_children        () const -> const std::vector<std::shared_ptr<Hierarchy>>&;
@@ -194,9 +201,27 @@ public:
     }
 
 protected:
+    // Overrides Item_base: keeps the parent's child name index current.
+    void handle_name_change(std::string_view new_name) override;
+
     std::weak_ptr<Hierarchy>                m_parent{};
     std::vector<std::shared_ptr<Hierarchy>> m_children;
     std::size_t                             m_depth {0};
+
+private:
+    class Child_name_index;
+
+    [[nodiscard]] static auto get_unique_name_base(std::string_view wanted_name) -> std::string_view;
+
+    void index_child_name      (Hierarchy& child);
+    void unindex_child_name    (Hierarchy& child);
+    void build_child_name_index();
+    void drop_child_name_index ();
+
+    // The names of m_children while there are more than a few (doc/erhe/item.md "Sibling-unique names").
+    std::unique_ptr<Child_name_index> m_child_names;
+    // The parent whose m_child_names holds this item's name, null when none does.
+    Hierarchy*                        m_name_index_owner{nullptr};
 };
 
 // The item `path` names below `root`, in the form get_path() returns: an

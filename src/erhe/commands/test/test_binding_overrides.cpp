@@ -413,3 +413,70 @@ TEST(Binding_overrides, modifier_key_binding_dispatches_before_mask_less_binding
     EXPECT_EQ(ctrl.call_count,  1);
     EXPECT_EQ(plain.call_count, 3);
 }
+
+namespace {
+
+auto mouse_button_event_with(const erhe::window::Mouse_button button, const bool pressed, const uint32_t modifier_mask) -> erhe::window::Input_event
+{
+    erhe::window::Input_event event{};
+    event.type = erhe::window::Input_event_type::mouse_button_event;
+    event.u.mouse_button_event = erhe::window::Mouse_button_event{.button = button, .pressed = pressed, .modifier_mask = modifier_mask};
+    return event;
+}
+
+auto mouse_move_event_with(const float dx, const uint32_t modifier_mask) -> erhe::window::Input_event
+{
+    erhe::window::Input_event event{};
+    event.type = erhe::window::Input_event_type::mouse_move_event;
+    event.u.mouse_move_event = erhe::window::Mouse_move_event{.x = 10.0f, .y = 10.0f, .dx = dx, .dy = 0.0f, .modifier_mask = modifier_mask};
+    return event;
+}
+
+} // anonymous namespace
+
+TEST(Binding_overrides, exact_drag_binding_matches_the_press_modifiers_exactly)
+{
+    Commands commands;
+    Counting_command exact {commands, "Test.exact"};
+    Counting_command subset{commands, "Test.subset"};
+    commands.register_command(&exact);
+    commands.register_command(&subset);
+    commands.bind_command_to_mouse_drag(&exact,  erhe::window::Mouse_button_left,  true, 0u, erhe::commands::Drag_modifier_match::exact);
+    commands.bind_command_to_mouse_drag(&subset, erhe::window::Mouse_button_right, true, 0u);
+
+    constexpr uint32_t alt = erhe::window::Key_modifier_bit_menu;
+    constexpr uint32_t super_bit = erhe::window::Key_modifier_bit_super;
+    send(commands, mouse_button_event_with(erhe::window::Mouse_button_left, true, alt));
+    EXPECT_EQ(exact.call_count, 0) << "an exact mask 0 refuses a press with Alt";
+    send(commands, mouse_button_event_with(erhe::window::Mouse_button_left, false, alt));
+    send(commands, mouse_button_event_with(erhe::window::Mouse_button_left, true, super_bit));
+    EXPECT_EQ(exact.call_count, 0) << "an exact mask 0 refuses a press with Super";
+    send(commands, mouse_button_event_with(erhe::window::Mouse_button_left, false, super_bit));
+    send(commands, mouse_button_event_with(erhe::window::Mouse_button_right, true, alt));
+    EXPECT_EQ(subset.call_count, 1) << "a subset mask 0 matches any modifiers";
+    send(commands, mouse_button_event_with(erhe::window::Mouse_button_right, false, alt));
+
+    // A plain press is taken; a modifier pressed during the drag does not end it.
+    send(commands, mouse_button_event_with(erhe::window::Mouse_button_left, true, 0u));
+    EXPECT_EQ(exact.call_count, 1);
+    send(commands, mouse_move_event_with(5.0f, erhe::window::Key_modifier_bit_shift));
+    EXPECT_EQ(exact.get_command_state(), erhe::commands::State::Active) << "a modifier pressed during the drag does not end it";
+    EXPECT_GT(exact.call_count, 1);
+    send(commands, mouse_button_event_with(erhe::window::Mouse_button_left, false, erhe::window::Key_modifier_bit_shift));
+    EXPECT_EQ(exact.get_command_state(), erhe::commands::State::Inactive);
+    const int after_drag = exact.call_count;
+
+    // A user binding with Ctrl keeps the exact match of the default binding.
+    const Binding_desc ctrl_drag{.kind = Binding_kind::mouse_drag, .code = static_cast<int>(erhe::window::Mouse_button_left), .modifier_mask = erhe::window::Key_modifier_bit_ctrl};
+    ASSERT_TRUE(commands.set_binding_override(exact, std::span<const Binding_desc>{&ctrl_drag, 1}));
+    send(commands, mouse_button_event_with(erhe::window::Mouse_button_left, true, erhe::window::Key_modifier_bit_ctrl | alt));
+    EXPECT_EQ(exact.call_count, after_drag) << "Ctrl + Alt is not exactly Ctrl";
+    send(commands, mouse_button_event_with(erhe::window::Mouse_button_left, false, erhe::window::Key_modifier_bit_ctrl | alt));
+    send(commands, mouse_button_event_with(erhe::window::Mouse_button_left, true, erhe::window::Key_modifier_bit_ctrl));
+    EXPECT_EQ(exact.call_count, after_drag + 1);
+    send(commands, mouse_button_event_with(erhe::window::Mouse_button_left, false, erhe::window::Key_modifier_bit_ctrl));
+    std::vector<Binding_desc> effective;
+    commands.get_effective_bindings(exact, effective);
+    ASSERT_EQ(effective.size(), 1u);
+    EXPECT_EQ(effective[0].drag_modifier_match, erhe::commands::Drag_modifier_match::exact);
+}

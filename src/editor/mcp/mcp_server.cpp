@@ -674,6 +674,15 @@ auto Mcp_server::process_queued_requests() -> int
             continue;
         }
 
+        // A live edit (a foliage stroke of the tool) excludes other changes until it ends.
+        if ((m_context.operation_stack != nullptr) && m_context.operation_stack->is_live_edit_open() && !is_allowed_during_live_edit(req->tool_name)) {
+            req->result_promise.set_value(
+                make_error_content(fmt::format("'{}' refused: {}", req->tool_name, m_context.operation_stack->get_live_edit_reason()))
+            );
+            log_mcp->info("MCP server: '{}' refused while a live edit is open", req->tool_name);
+            continue;
+        }
+
         // Per-request exception boundary. process_queued_requests() runs on the
         // main thread, so a handler that throws would skip the set_value() below,
         // break the waiting HTTP thread's promise (observed as
@@ -709,6 +718,54 @@ auto Mcp_server::process_queued_requests() -> int
     }
 
     return count;
+}
+
+// The tools that run while a live edit is open (doc/editor/operations.md "Live edits"): reads that change no scene, undo or
+// asset state, and the input drivers, whose commands' operations wait or are refused at the undo stack. Every other tool,
+// batch among them, is refused. validate_tool_list_against_dispatch() verifies each name is a dispatched tool.
+auto Mcp_server::get_live_edit_tools() -> std::span<const std::string_view>
+{
+    static constexpr std::array<std::string_view, 31> tools{
+        "get_async_status",
+        "wait_frames",
+        "list_scenes",
+        "get_viewports",
+        "get_selection",
+        "get_undo_redo_stack",
+        "get_save_status",
+        "get_scene_nodes",
+        "get_node_details",
+        "get_scene_materials",
+        "level_get_pieces",
+        "level_get_foliage",
+        "level_get_foliage_brush",
+        "level_get_foliage_paint_settings",
+        "capture_screenshot",
+        "get_input_state",
+        "inject_input_events",
+        "mouse_click",
+        "mouse_drag",
+        "mouse_release",
+        "mouse_wheel",
+        "key_press",
+        "get_imgui_windows",
+        "get_imgui_items",
+        "get_imgui_item_rect",
+        "imgui_click",
+        "imgui_hover",
+        "imgui_scroll",
+        "imgui_scroll_to_item",
+        "level_get_kits",
+        // A shutdown abandons an open live edit (~Editor()), as closing the window does.
+        "request_exit"
+    };
+    return tools;
+}
+
+auto Mcp_server::is_allowed_during_live_edit(const std::string& tool_name) -> bool
+{
+    const std::span<const std::string_view> tools = get_live_edit_tools();
+    return std::find(tools.begin(), tools.end(), std::string_view{tool_name}) != tools.end();
 }
 
 auto Mcp_server::get_dispatch_table() -> std::span<const Mcp_server::Tool_dispatch_entry>
@@ -788,6 +845,12 @@ auto Mcp_server::get_dispatch_table() -> std::span<const Mcp_server::Tool_dispat
         { "level_refresh_layout",           &Mcp_server::action_level_refresh_layout          },
         { "level_wrap_with_path",           &Mcp_server::action_level_wrap_with_path          },
         { "level_get_pieces",               &Mcp_server::query_level_pieces                   },
+        { "level_get_foliage",              &Mcp_server::query_level_foliage                  },
+        { "level_foliage_paint",            &Mcp_server::action_level_foliage_paint           },
+        { "level_foliage_remove",           &Mcp_server::action_level_foliage_remove          },
+        { "level_get_foliage_paint_settings", &Mcp_server::query_level_foliage_paint_settings },
+        { "level_set_foliage_paint_settings", &Mcp_server::action_level_set_foliage_paint_settings },
+        { "level_get_foliage_brush",        &Mcp_server::query_level_foliage_brush            },
         { "level_set_piece_parameters",     &Mcp_server::action_level_set_piece_parameters    },
         { "level_set_piece_material",       &Mcp_server::action_level_set_piece_material      },
         { "level_replace_pieces",           &Mcp_server::action_level_replace_pieces          },

@@ -600,8 +600,18 @@ auto Selection::delete_selection() -> bool
 
 auto Selection::delete_items(const std::vector<std::shared_ptr<erhe::Item_base>>& items) -> bool
 {
-    if (items.empty()) {
+    const std::shared_ptr<Operation> op = make_delete_operation(items);
+    if (!op) {
         return false;
+    }
+    m_context.operation_stack->queue(op);
+    return true;
+}
+
+auto Selection::make_delete_operation(const std::vector<std::shared_ptr<erhe::Item_base>>& items) -> std::shared_ptr<Operation>
+{
+    if (items.empty()) {
+        return {};
     }
 
     Compound_operation::Parameters compound_parameters;
@@ -616,8 +626,10 @@ auto Selection::delete_items(const std::vector<std::shared_ptr<erhe::Item_base>>
     // unconditionally. (The previous for_each<Hierarchy> collection had abort
     // semantics: the first locked item ended the whole traversal, leaving
     // even unlocked siblings uncollected.)
+    // An item given beside one of its ancestors is collected once, with whichever reaches it first.
+    std::unordered_set<const erhe::Item_base*> collected;
     std::function<void(erhe::Hierarchy&, bool)> collect_item =
-        [&recursive_selection, &collect_item](erhe::Hierarchy& item, bool inside_prefab_instance) {
+        [&recursive_selection, &collected, &collect_item](erhe::Hierarchy& item, bool inside_prefab_instance) {
         if (!inside_prefab_instance && item.is_lock_edit()) {
             return; // Skip locked items and their children
         }
@@ -627,6 +639,9 @@ auto Selection::delete_items(const std::vector<std::shared_ptr<erhe::Item_base>>
         // re-registered skin creates, duplicating proxies on every
         // delete+undo cycle.
         if ((item.get_flag_bits() & editor::Editor_item_flags::bone_proxy) != 0) {
+            return;
+        }
+        if (!collected.insert(&item).second) {
             return;
         }
         recursive_selection.push_back(item.shared_from_this());
@@ -698,13 +713,9 @@ auto Selection::delete_items(const std::vector<std::shared_ptr<erhe::Item_base>>
         );
     }
     if (compound_parameters.operations.empty()) {
-        return false;
+        return {};
     }
-
-    const auto op = std::make_shared<Compound_operation>(std::move(compound_parameters));
-
-    m_context.operation_stack->queue(op);
-    return true;
+    return std::make_shared<Compound_operation>(std::move(compound_parameters));
 }
 
 auto Selection::cut_selection() -> bool

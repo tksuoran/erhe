@@ -1067,6 +1067,7 @@ void add_nature_shapes(std::vector<Kit_shape_definition>& shapes)
     {
         Kit_shape_definition shape;
         shape.id              = "nature.tree";
+        shape.foliage_radius  = 1.5f;
         shape.former_ids      = {"nature.tree.v2"};
         shape.kit             = "nature";
         shape.display_name    = "Tree";
@@ -1092,6 +1093,7 @@ void add_nature_shapes(std::vector<Kit_shape_definition>& shapes)
     {
         Kit_shape_definition shape;
         shape.id              = "nature.bush";
+        shape.foliage_radius  = 0.6f;
         shape.former_ids      = {"nature.bush.v2"};
         shape.kit             = "nature";
         shape.display_name    = "Bush";

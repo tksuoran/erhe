@@ -650,6 +650,9 @@ auto Item_base::get_gltf_uid() const -> const std::string&
 
 void Item_base::set_name(const std::string_view name)
 {
+    if (name != m_name) {
+        handle_name_change(name);
+    }
     m_name = name;
     m_debug_label = erhe::utility::Debug_label{fmt::format("{}##{}", name, get_id())};
     bump_item_mutation_serial();

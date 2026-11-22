@@ -14,7 +14,7 @@ The tasks a session continuing earlier work picks up, in order (`AGENTS.md`
 "Session handoff"). Items 1 and 2 come first; items 3 - 13 each need a user
 decision or hardware (Quest, the external 120 Hz display, an NVIDIA GPU):
 ask the user which to pick. Item 14 starts with writing its plan. Items 15,
-17, 18 and 20 wait for the user's review.
+17, 18 and 20 wait for the user's review. Item 21 continues at its final pass.
 
 0. The user rulings on the D8 coder decisions ("Prepared assets" below,
    `doc/plans/prepared_assets_design.md` D8).
@@ -80,6 +80,13 @@ ask the user which to pick. Item 14 starts with writing its plan. Items 15,
     The user's windowed test ("State") and the review of the planner's
     choices ("For the user to review") of
     `doc/plans/level_kit_surface_attachment.md`.
+21. Foliage paint tool (GitHub issue 302): steps 1 - 8 are built and
+    committed; step 9 is in progress - read
+    `doc/plans/foliage_paint_tool_implementation.md` "9 Final pass" first
+    (uncommitted fixes of a coder may be in the working tree, its report in
+    `logs/foliage_final_fixes_report.md`). Then the user's windowed test
+    and rulings (`doc/plans/foliage_paint_tool.md` "For the user to rule
+    on"), then the push.
 
 ## Quest session follow-ups
 
@@ -171,6 +178,15 @@ Plans: `doc/plans/prepared_assets_design.md` (D8 per-step "Open" notes),
 
 ## Editor defects found in passing
 
+- A mouse drag that is active when its tool loses priority keeps the mouse:
+  `Commands::on_mouse_button_event()` skips bindings whose host is disabled,
+  so the release never reaches the command, it stays Active and
+  `m_active_mouse_command` is never cleared; every later mouse command is
+  refused. `Paint_tool` and `Physics_tool` do not inactivate their drag
+  command on priority loss, `Weight_paint_tool` ends its stroke but leaves
+  the command Active. Reproduce: Paint tool, left drag, a hotbar key, then
+  release. Found by reading; the fix belongs in `erhe::commands` (a held
+  command whose host is disabled is made inactive).
 - `Mesh_operation::make_entries()` holds the scene's `item_host_mutex` for
   the whole geometry computation of an async mesh operation, so the main
   thread stalls in `flush_draw_lists` while it runs (five chained
@@ -436,8 +452,71 @@ Plans: `doc/plans/culling.md`, `doc/plans/occlusion_culling.md`.
 - Debug line anti-aliasing: joined polylines, content wide lines, a Metal run
   (`doc/plans/debug_renderer_anti_aliasing.md`).
 
+## Foliage scale
+
+Costs that grow with the number of foliage items or mesh nodes, measured in
+the scale step of the foliage paint tool (`doc/editor/level_tools.md`
+"Foliage paint", Scale; working size 1,000 items,
+`doc/plans/foliage_paint_tool.md` F12). Headless editor, one support
+carrying 1,000 items.
+
+- The carry of a surface attachment is one surface search per item:
+  `Level_kits::compute_surface_carry()`
+  (`level_kits_surface_attachment.cpp`, from
+  `build_surface_carry_follow_ups()`) costs 17 ms per item in Debug and
+  0.22 ms in Release, linear in the carried count: a shape change of a
+  support with 1,000 items takes 17.6 s in Debug, 0.25 s in Release, and
+  runs at every step of a live parameter drag. The remedy is a carry by
+  proportional place without a search
+  (`doc/plans/foliage_paint_tool_design.md` FD0.9).
+- `Level_kits::build_auto_connections()` (`level_kits.cpp`) calls
+  `get_local_connectors()` on every kit piece of the scene on every follow
+  operation, about 35 us per piece in Debug: most of the time of moving
+  one unrelated piece (7 ms at 1,200 items and 17 ms at 5,000 in Release).
+  It should read only the pieces near the changed ones.
+- `gather_attachments()` (`level_kits_attachment.cpp`) runs three times
+  per follow operation, each a scan of the scene with a hash map of its
+  own; one gather per follow operation serves all three.
+- A saved scene carries each item's mesh, about 26 KB per item (36.6 MB
+  at 1,200 items, 109 MB at 5,000), and the open uploads all of it before
+  the kit refresh points the items at the shared kit brushes. Kit pieces
+  need a saved form that names the kit brush and carries no mesh.
+- Scene open: after the rendergraph prepare one frame takes 0.49 s at
+  1,200 mesh nodes and 4.9 s at 5,000 (Release), growing faster than the
+  node count (likely the raytrace scene preparation); open until idle is
+  2.4 s and 13.5 s. In Debug the open of 1,400 items takes 74 s.
+- Kit brushes are held only weakly, so every stroke and every scene open
+  makes the brushes of its palette's variants again: about 1 s in Debug
+  and 80 ms in Release on the first stamp of each stroke. The tool's
+  palette can hold its brushes while the tool is active.
+- A reopened scene runs about 1.5 ms per frame slower than the same scene
+  before its save (the cause is not known).
+- Items painted in one MCP call stay out of the raytrace scene's BVH for
+  30 commits, so the rays of that call's later stamps test them linearly;
+  interactive painting commits once a frame and is not affected.
+- `erhe.raytrace.geometry` logs one info line per mesh at load ("BVH
+  build ... in 0 ms"): one line per foliage item.
+
 ## Verify scripts
 
+- `scripts/viewport_input_focus_verify.py` fails check 6.1 (a brush dragged
+  from the Hierarchy and dropped on a box adds one node): the drag never
+  starts. `erhe::imgui::begin_drag_drop_source()` (`imgui_helpers.cpp`)
+  requires the source item to be hovered on the frame the drag starts, and
+  the script's 20-frame `mouse_drag` leaves the Hierarchy row on its first
+  step, before ImGui reports a drag, so no payload is set; whether it
+  starts depends on the window layout. Decide: drop the hover gate (ImGui's
+  own `BeginDragDropSource` checks the active item), or keep the script's
+  first drag step inside the row.
+- `scripts/mesh_modeling_verify.py` has no section selection, so its
+  component box and paint select checks run only with the whole script.
+- `scripts/undo_reference_clearing_smoke_test.py` fails 1 of 58 on the
+  headless editor: "tool references: brdf_slice armed". The BRDF slice gets
+  its material only while the Properties window draws the selected material
+  with its "BRDF Slice" tree node expanded (`Brdf_slice::show_brdf_slice()`,
+  called from `properties.cpp`), and the script selects the material without
+  expanding that node. The script also has no port or editor option: it
+  needs a wrapper that starts the editor and sets its `PORT`.
 - `curve_verify.py` fails 1 of 157 on Linux headless (2026-11-20): "a
   magenta curve_selected_color ... draw the selected curve magenta at the
   next start (848 vs 0)". Reported cause, not confirmed: the curve tool's

@@ -76,8 +76,8 @@ so it lands as its own top-level entry and is gated normally. The nesting case
 exists on the synchronous path (`load.async_gltf_load: false`), where
 `end_group` really does wrap the import in a `Compound_operation`.
 
-One related quirk interacts with the hook: `undo()` does not check
-`!m_grouping`, and `queue()` inside a group neither clears nor consults
+One related quirk interacts with the hook: `undo()` does not check whether
+the batch group is open (`m_group`, an `Operation_group`), and `queue()` inside a group neither clears nor consults
 `m_undone`, so an MCP `batch` of `[X, undo]` can reach `m_undone.size() == 1`
 and drop the payload of an entry that the already-executed sibling `X` was
 recorded after. There is no redo hazard, because `end_group` discards the

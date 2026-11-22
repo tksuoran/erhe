@@ -1,11 +1,13 @@
 #include "level/kit_piece.hpp"
 #include "level/kit_shape.hpp"
+#include "editor_item_bits.hpp"
 
 #include "erhe_property/attached_group.hpp"
 #include "erhe_property/property_metadata.hpp"
 #include "erhe_scene/curve.hpp"
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/node.hpp"
+#include "erhe_scene/node_system.hpp"
 
 #include <algorithm>
 #include <nlohmann/json.hpp>
@@ -25,6 +27,7 @@ using erhe::property::Property_metadata;
 using erhe::property::Property_ui;
 
 constexpr std::string_view c_group = "Kit Piece";
+constexpr std::string_view c_foliage_group = "Foliage";
 
 } // anonymous namespace
 
@@ -125,6 +128,32 @@ const Property<std::string> Kit_piece::surface_attachment_property = Property<st
     }
 );
 
+// A write outside 0 - 100 m is dropped, so the foliage index only ever reads a valid radius.
+const Property<float> Kit_piece::foliage_radius_property = Property<float>::register_attached(
+    "foliage_radius", Kit_piece::property_owner_type(), erhe::scene::Node::property_owner_type(),
+    Property_metadata{
+        .default_value    = 0.0f,
+        .property_changed = erhe::scene::node_system_property_changed,
+        .inherits         = false,
+        .ui               = Property_ui{
+            .min          = 0.0f,
+            .max          = c_foliage_radius_max,
+            .group        = c_foliage_group,
+            .tooltip      = "m; the foliage item's radius: painting keeps other foliage at least the larger radius away",
+            .label        = "Foliage Radius",
+            // F1.2: on every mesh carrying the foliage flag, kit piece or not.
+            .visible_when = [](const erhe::property::Dependency_object& object) -> bool {
+                const erhe::scene::Node* const node = dynamic_cast<const erhe::scene::Node*>(&object);
+                return (node != nullptr) && is_foliage_mesh(*node);
+            }
+        }
+    },
+    [](const erhe::property::Property_value& value) -> bool {
+        const float* const radius = std::get_if<float>(&value);
+        return (radius != nullptr) && std::isfinite(*radius) && (*radius >= 0.0f) && (*radius <= c_foliage_radius_max);
+    }
+);
+
 auto Kit_piece::all_properties() -> const std::vector<const Dependency_property*>&
 {
     static const std::vector<const Dependency_property*> s_properties{
@@ -133,9 +162,15 @@ auto Kit_piece::all_properties() -> const std::vector<const Dependency_property*
         connectors_enabled_property .get_ptr(),
         disabled_connectors_property.get_ptr(),
         attachment_property         .get_ptr(),
-        surface_attachment_property .get_ptr()
+        surface_attachment_property .get_ptr(),
+        foliage_radius_property     .get_ptr()
     };
     return s_properties;
+}
+
+auto is_foliage_mesh(const erhe::scene::Node& node) -> bool
+{
+    return (dynamic_cast<const erhe::scene::Mesh*>(&node) != nullptr) && ((node.get_flag_bits() & Editor_item_flags::foliage) != 0);
 }
 
 auto carries_kit_piece(const erhe::scene::Node& node) -> bool

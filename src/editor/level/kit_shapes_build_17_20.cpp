@@ -1419,6 +1419,7 @@ void add_build_17_20_shapes(std::vector<Kit_shape_definition>& shapes)
     {
         Kit_shape_definition shape;
         shape.id              = "nature.bamboo";
+        shape.foliage_radius  = 0.5f;
         shape.kit             = "nature";
         shape.display_name    = "Bamboo";
         shape.description     =

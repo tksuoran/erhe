@@ -1816,6 +1816,7 @@ void add_build_21_24_shapes(std::vector<Kit_shape_definition>& shapes)
     {
         Kit_shape_definition shape;
         shape.id              = "nature.blocky_tree";
+        shape.foliage_radius  = 1.5f;
         shape.kit             = "nature";
         shape.display_name    = "Blocky tree";
         shape.description     =

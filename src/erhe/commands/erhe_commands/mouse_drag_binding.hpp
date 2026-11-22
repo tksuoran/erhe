@@ -1,5 +1,6 @@
 #pragma once
 
+#include "erhe_commands/binding_desc.hpp"
 #include "erhe_commands/mouse_binding.hpp"
 
 namespace erhe::commands {
@@ -12,7 +13,8 @@ public:
         Command*                   command,
         erhe::window::Mouse_button button,
         bool                       call_on_button_down_without_motion,
-        std::optional<uint32_t>    modifier_mask = {}
+        std::optional<uint32_t>    modifier_mask  = {},
+        Drag_modifier_match        modifier_match = Drag_modifier_match::subset
     );
     Mouse_drag_binding();
     ~Mouse_drag_binding() noexcept override;
@@ -27,6 +29,7 @@ private:
 
     erhe::window::Mouse_button m_button;
     bool                       m_call_on_button_down_without_motion;
+    Drag_modifier_match        m_modifier_match{Drag_modifier_match::subset};
 };
 
 } // namespace erhe::commands

@@ -15,6 +15,8 @@
 #include "level/level_queries.hpp"
 #include "level/level_repeat.hpp"
 
+#include "scene/hover_placement.hpp"
+
 #include "app_message.hpp"
 #include "config/generated/connector_snap_axis_mode.hpp"
 #include "config/generated/connector_snap_orientation.hpp"
@@ -62,6 +64,7 @@ class Brush;
 class Kit_connection_end;
 class Operation;
 class Scene_root;
+class Scene_view;
 
 // The material of one slot of a piece (D3.4): a material of the scene, else a palette material by name (found in
 // the scene's content library or added to it), else, with both empty, the slot's default palette material.
@@ -207,6 +210,11 @@ public:
     Surface_options                            surface{};    // applied after the module snap (D7.3)
     std::optional<std::size_t>                 index_in_parent{}; // none: after the parent's children
     std::optional<Kit_connect>                 connect;      // the pose is the join (D3.12): position, rotation, module snap and surface unused
+    // FD6: a foliage item: the flag and this radius; the pose is taken as given (no module snap, no surface search).
+    std::optional<float>                       foliage_radius{};
+    // FD6.2: the foliage item's parent; a support find_surface_support() accepts also gets the record of
+    // surface.direction, surface.orient and surface.rest.
+    std::shared_ptr<erhe::scene::Node>         foliage_support{};
 };
 
 // What a kit layout generation starts from (D3.9): the items read, their brushes and bounds, the run and its poses in
@@ -695,6 +703,12 @@ public:
         const Kit_placement_settings&   settings
     ) const -> Kit_placement_pose;
 
+    // FD2.4: the nearest content or grid hover of the view; on a foliage mesh the nearest surface along the pointer ray
+    // behind it (or the grid when nearer). Casts a ray only when foliage is hovered; called at hover changes.
+    [[nodiscard]] auto get_placement_hover(const Scene_view& scene_view) const -> std::optional<Hover_placement_hit>;
+    // The ray form: the nearest surface mesh hit along the ray (unit direction), foliage passed through; none without one.
+    [[nodiscard]] auto find_placement_surface(Scene_root& scene_root, glm::vec3 origin, glm::vec3 direction) const -> std::optional<Hover_placement_hit>;
+
     // A material of the palette material's color, outside every content library; null for a name not in the palette.
     [[nodiscard]] auto get_preview_material(std::string_view palette_name) -> std::shared_ptr<erhe::primitive::Material>;
     // The scene's material of the name; null when its content library has none.
@@ -735,6 +749,9 @@ public:
 
     // Validates every placement, then places all of them as one Compound_operation (one undo entry).
     [[nodiscard]] auto place(Scene_root& scene_root, std::span<const Kit_placement> placements, Kit_snap snap) -> Kit_place_result;
+    // FD6.4: foliage placements (each with foliage_radius, no parent) checked as place() checks; the one Compound_operation
+    // of their inserts, not executed (the stroke runs it); null with result.error or with nothing to place.
+    [[nodiscard]] auto make_foliage_operation(Scene_root& scene_root, std::span<const Kit_placement> placements, Kit_place_result& result) -> std::shared_ptr<Operation>;
 
     // The connector frames the views draw, with their per-piece cache (doc/editor/level_tools.md "Connector indicators").
     [[nodiscard]] auto get_connector_indicators() -> Kit_connector_indicators&;

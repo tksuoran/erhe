@@ -158,7 +158,8 @@ void Commands::bind_command_to_mouse_drag(
     Command* const                   command,
     const erhe::window::Mouse_button button,
     const bool                       call_on_button_down_without_motion,
-    const std::optional<uint32_t>    modifier_mask
+    const std::optional<uint32_t>    modifier_mask,
+    const Drag_modifier_match        modifier_match
 )
 {
     record_default_binding(
@@ -167,7 +168,8 @@ void Commands::bind_command_to_mouse_drag(
             .kind                                    = Binding_kind::mouse_drag,
             .code                                    = static_cast<int>(button),
             .modifier_mask                           = modifier_mask,
-            .drag_call_on_button_down_without_motion = call_on_button_down_without_motion
+            .drag_call_on_button_down_without_motion = call_on_button_down_without_motion,
+            .drag_modifier_match                     = modifier_match
         }
     );
 }
@@ -300,10 +302,12 @@ auto Commands::set_binding_override_nolock(Command& command, const std::span<con
 
     // Command-owned drag semantics come from the command's default drag
     // binding (Binding_desc::drag_call_on_button_down_without_motion).
-    bool drag_call_on_button_down_without_motion = false;
+    bool                drag_call_on_button_down_without_motion = false;
+    Drag_modifier_match drag_modifier_match                     = Drag_modifier_match::subset;
     for (const Binding_entry& entry : m_default_bindings) {
         if ((entry.command == &command) && (entry.desc.kind == Binding_kind::mouse_drag)) {
             drag_call_on_button_down_without_motion = entry.desc.drag_call_on_button_down_without_motion;
+            drag_modifier_match                     = entry.desc.drag_modifier_match;
             break;
         }
     }
@@ -334,6 +338,7 @@ auto Commands::set_binding_override_nolock(Command& command, const std::span<con
         }
         Binding_desc stored = desc;
         stored.drag_call_on_button_down_without_motion = drag_call_on_button_down_without_motion;
+        stored.drag_modifier_match                     = drag_modifier_match;
         new_override.bindings.push_back(stored);
     }
 
@@ -448,7 +453,8 @@ void Commands::add_dispatch_binding(Command* const command, const Binding_desc& 
         case Binding_kind::mouse_drag: {
             m_mouse_bindings.push_back(
                 std::make_unique<Mouse_drag_binding>(
-                    command, static_cast<erhe::window::Mouse_button>(desc.code), desc.drag_call_on_button_down_without_motion, desc.modifier_mask
+                    command, static_cast<erhe::window::Mouse_button>(desc.code), desc.drag_call_on_button_down_without_motion, desc.modifier_mask,
+                    desc.drag_modifier_match
                 )
             );
             break;

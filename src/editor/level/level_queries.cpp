@@ -66,16 +66,6 @@ constexpr float        c_walkable_over_polygon = 1.0e-3f;
     return lhs->get_id() < rhs->get_id();
 }
 
-class Surface_hit
-{
-public:
-    bool      found   {false};
-    float     distance{0.0f};
-    glm::vec3 position{0.0f};
-    glm::vec3 normal  {0.0f, 1.0f, 0.0f};
-    const erhe::scene::Mesh* mesh{nullptr};
-};
-
 [[nodiscard]] auto get_hit_mesh(const erhe::raytrace::Hit& hit) -> const erhe::scene::Mesh*
 {
     const erhe::scene::Raytrace_primitive* const raytrace_primitive = (hit.instance != nullptr)
@@ -84,9 +74,9 @@ public:
     return (raytrace_primitive != nullptr) ? raytrace_primitive->mesh : nullptr;
 }
 
-// A mesh whose faces are surfaces: a content mesh that is neither excluded nor pass_through (water: what rests or snaps
-// passes through it to what is below), and one of `only` when that is not empty. Every surface ray and search of this
-// file asks it.
+// A mesh whose faces are surfaces: a content mesh that is neither excluded, pass_through (water: what rests or snaps
+// passes through it to what is below) nor foliage, and one of `only` when that is not empty. Every surface ray and
+// search of this file asks it.
 [[nodiscard]] auto is_surface_mesh(
     const erhe::scene::Mesh* const                  mesh,
     const std::span<const erhe::scene::Mesh* const> excluded,
@@ -95,7 +85,7 @@ public:
 {
     return
         (mesh != nullptr) &&
-        ((mesh->get_flag_bits() & Editor_item_flags::pass_through) == 0) &&
+        ((mesh->get_flag_bits() & (Editor_item_flags::pass_through | Editor_item_flags::foliage)) == 0) &&
         (std::find(excluded.begin(), excluded.end(), mesh) == excluded.end()) &&
         (only.empty() || (std::find(only.begin(), only.end(), mesh) != only.end()));
 }
@@ -140,7 +130,7 @@ private:
     const std::span<const erhe::scene::Mesh* const> excluded,
     const float                                     min_distance,
     const float                                     max_distance
-) -> Surface_hit
+) -> Surface_ray_hit
 {
     const Surface_hit_filter filter{direction, excluded};
     erhe::raytrace::Ray ray{
@@ -157,16 +147,20 @@ private:
     erhe::raytrace::Hit hit;
     rt_scene.intersect(ray, hit);
     if (hit.instance == nullptr) {
-        return Surface_hit{};
+        return Surface_ray_hit{};
     }
     // The hit normal is the unnormalized geometric normal.
     const float length = glm::length(hit.normal);
-    return Surface_hit{
-        .found    = true,
-        .distance = ray.t_far,
-        .position = origin + ray.t_far * direction,
-        .normal   = (length > 0.0f) ? (hit.normal / length) : -direction,
-        .mesh     = get_hit_mesh(hit)
+    const erhe::scene::Raytrace_primitive* const raytrace_primitive = static_cast<const erhe::scene::Raytrace_primitive*>(hit.instance->get_user_data());
+    return Surface_ray_hit{
+        .found           = true,
+        .distance        = ray.t_far,
+        .position        = origin + ray.t_far * direction,
+        .normal          = (length > 0.0f) ? (hit.normal / length) : -direction,
+        .mesh            = get_hit_mesh(hit),
+        .primitive_index = (raytrace_primitive != nullptr) ? raytrace_primitive->primitive_index : static_cast<std::size_t>(-1),
+        .rt_geometry     = hit.geometry,
+        .triangle_id     = hit.triangle_id
     };
 }
 
@@ -191,11 +185,11 @@ public:
     Surface_distance         result{};
     for (const glm::vec3& point : get_base_points(get_footprint_bounds(local_bounds, start.scale, frame), frame)) {
         // Each ray starts at the top face above its base point, so a sunk piece rises.
-        const glm::vec3   base   = get_world_point(start, point);
-        const glm::vec3   top    = get_world_point(start, get_top_point(local_bounds, frame, point));
-        const float       back   = glm::dot(base - top, direction);
-        const glm::vec3   origin = top - (std::max(0.0f, c_min_ray_height - back) * direction);
-        const Surface_hit hit    = cast_surface_ray(rt_scene, origin, direction, excluded, c_rise_tolerance, c_max_distance);
+        const glm::vec3       base   = get_world_point(start, point);
+        const glm::vec3       top    = get_world_point(start, get_top_point(local_bounds, frame, point));
+        const float           back   = glm::dot(base - top, direction);
+        const glm::vec3       origin = top - (std::max(0.0f, c_min_ray_height - back) * direction);
+        const Surface_ray_hit hit    = cast_surface_ray(rt_scene, origin, direction, excluded, c_rise_tolerance, c_max_distance);
         if (!hit.found) {
             continue;
         }
@@ -338,7 +332,7 @@ public:
 };
 
 // The first face seen from the front along a downward ray, within max_distance.
-[[nodiscard]] auto cast_height_ray(erhe::raytrace::IScene& rt_scene, const glm::vec3 origin, const float max_distance) -> Surface_hit
+[[nodiscard]] auto cast_height_ray(erhe::raytrace::IScene& rt_scene, const glm::vec3 origin, const float max_distance) -> Surface_ray_hit
 {
     return cast_surface_ray(rt_scene, origin, glm::vec3{0.0f, -1.0f, 0.0f}, {}, 0.0f, max_distance);
 }
@@ -492,6 +486,22 @@ auto find_point_surface(
     };
 }
 
+auto is_placement_surface(const erhe::scene::Mesh& mesh) -> bool
+{
+    return is_surface_mesh(&mesh, {});
+}
+
+auto find_ray_surface(
+    erhe::raytrace::IScene&                         committed_rt_scene,
+    const glm::vec3                                 origin,
+    const glm::vec3                                 direction,
+    const float                                     max_distance,
+    const std::span<const erhe::scene::Mesh* const> excluded
+) -> Surface_ray_hit
+{
+    return cast_surface_ray(committed_rt_scene, origin, direction, excluded, 0.0f, max_distance);
+}
+
 void get_kit_piece_meshes(Scene_root& scene_root, std::vector<std::shared_ptr<erhe::scene::Mesh>>& out_meshes)
 {
     out_meshes.clear();
@@ -548,9 +558,9 @@ void make_height_map(Scene_root& scene_root, const Height_map_grid& grid, Height
     const float range = grid.max.y - grid.min.y;
     for (std::size_t row = 0; row < grid.rows; ++row) {
         for (std::size_t column = 0; column < grid.columns; ++column) {
-            Height_map_cell&  cell   = out_height_map.cells[(row * grid.columns) + column];
-            const glm::vec2   xz     = get_cell_center(grid, column, row);
-            const Surface_hit hit    = cast_height_ray(rt_scene, glm::vec3{xz.x, grid.max.y, xz.y}, range);
+            Height_map_cell&      cell = out_height_map.cells[(row * grid.columns) + column];
+            const glm::vec2       xz   = get_cell_center(grid, column, row);
+            const Surface_ray_hit hit  = cast_height_ray(rt_scene, glm::vec3{xz.x, grid.max.y, xz.y}, range);
             cell = Height_map_cell{};
             if (!hit.found) {
                 continue;
@@ -773,8 +783,9 @@ void run_level_check(
     out_check.agent                = Kit_agent{};
     get_kit_piece_meshes(scene_root, out_check.pieces);
     out_check.piece_count = out_check.pieces.size();
+    // F1.6: foliage overlaps by intent and rests on what it was painted on.
     for (const std::shared_ptr<erhe::scene::Mesh>& mesh : out_check.pieces) {
-        if (!has_any_tag(mesh->get_tags(), options.exclude_tags)) {
+        if (!has_any_tag(mesh->get_tags(), options.exclude_tags) && ((mesh->get_flag_bits() & Editor_item_flags::foliage) == 0)) {
             out_check.tested.push_back(mesh);
         }
     }
@@ -844,7 +855,7 @@ void run_level_check(
                 continue;
             }
             // The piece under the island's point: the first upward face within the climb.
-            const Surface_hit hit = cast_height_ray(rt_scene, island.point + glm::vec3{0.0f, climb, 0.0f}, 2.0f * climb);
+            const Surface_ray_hit hit = cast_height_ray(rt_scene, island.point + glm::vec3{0.0f, climb, 0.0f}, 2.0f * climb);
             std::shared_ptr<erhe::scene::Mesh> mesh{};
             if (hit.found && (hit.mesh != nullptr)) {
                 for (const std::shared_ptr<erhe::scene::Mesh>& piece : out_check.pieces) {

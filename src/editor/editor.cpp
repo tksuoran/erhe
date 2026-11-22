@@ -67,6 +67,7 @@
 #include "asset_browser/asset_browser.hpp"
 #include "assets/asset_load_tick_context.hpp"
 #include "assets/asset_fetch.hpp"
+#include "level/foliage_paint_tool.hpp"
 #include "level/kit_layout_region_tool.hpp"
 #include "level/level_kit_window.hpp"
 #include "level/kit_thumbnails.hpp"
@@ -3911,6 +3912,20 @@ public:
             }
             ERHE_INIT_STEP_END
 
+            ERHE_INIT_STEP_BEGIN("Foliage_paint_tool")
+            {
+                m_foliage_paint_tool = std::make_unique<Foliage_paint_tool>(
+                    m_editor_settings.foliage_paint,
+                    *m_level_kits.get(),
+                    *m_commands.get(),
+                    m_app_context,
+                    *m_app_message_bus.get(),
+                    *m_icon_set.get(),
+                    *m_tools.get()
+                );
+            }
+            ERHE_INIT_STEP_END
+
             ERHE_INIT_STEP_BEGIN("Group 2")
             {
                 m_create = std::make_unique<Create>(
@@ -4245,6 +4260,11 @@ public:
                 }
             }
         );
+        m_release_tools_subscription = m_app_message_bus->release_tools.subscribe(
+            [this](Release_tools_message& message) {
+                release_tools(message.scene_root);
+            }
+        );
         m_items_removed_subscription = m_app_message_bus->items_removed.subscribe(
             [this](Items_removed_message& message) {
                 on_items_removed(message);
@@ -4438,6 +4458,10 @@ public:
             join_outstanding_frame();
             m_render_thread->stop();
         }
+        // An open live edit (a foliage stroke) is cancelled while the parts its operations reach are alive.
+        if (m_operation_stack) {
+            m_operation_stack->abandon_live_edit();
+        }
         // A running scene save reads the scene the teardown below destroys.
         if (m_scene_save_service) {
             m_scene_save_service->shutdown();
@@ -4592,6 +4616,7 @@ public:
         m_app_context.context_window           = m_window                .get();
         m_app_context.brdf_slice               = m_brdf_slice            .get();
         m_app_context.brush_tool               = m_brush_tool            .get();
+        m_app_context.foliage_paint_tool       = m_foliage_paint_tool    .get();
         m_app_context.clipboard                = m_clipboard             .get();
         m_app_context.viewport_context_menu    = m_viewport_context_menu .get();
         m_app_context.clipboard_window         = m_clipboard_window      .get();
@@ -4895,6 +4920,26 @@ public:
         m_tools_scene_root.reset();
     }
 
+    // From the message bus pump (Release_tools_message).
+    void release_tools(const std::shared_ptr<Scene_root>& scene_root)
+    {
+        if (!m_tools_attached_to_scene || (m_tools_scene_root.lock() != scene_root)) {
+            return;
+        }
+        detach_tools();
+        attach_tools_to_latest_scene();
+    }
+
+    // Scenes are registered in open order; with none open the next
+    // Scene_created_message homes the tools.
+    void attach_tools_to_latest_scene()
+    {
+        const std::vector<std::shared_ptr<Scene_root>>& scene_roots = m_app_scenes->get_scene_roots();
+        if (!scene_roots.empty()) {
+            attach_tools(scene_roots.back());
+        }
+    }
+
     // Moves the global tools into scene_root (a registered scene). From the
     // message bus pump (Home_tools_message).
     void home_tools(const std::shared_ptr<Scene_root>& scene_root)
@@ -4967,6 +5012,9 @@ public:
         if (!scene_root) {
             return;
         }
+
+        // The close clears the undo history: an open live edit (a foliage stroke) is cancelled first, while its scene is whole.
+        m_operation_stack->abandon_live_edit();
 
         const bool is_tools_scene = m_tools_attached_to_scene && (m_tools_scene_root.lock() == scene_root);
 
@@ -5082,14 +5130,8 @@ public:
             m_scene_builder->set_scene_root(std::shared_ptr<Scene_root>{});
         }
 
-        // Re-home the tools to the most recently opened remaining scene
-        // (scenes are registered in open order), when one exists; otherwise
-        // the next Scene_created_message re-attaches them.
         if (is_tools_scene) {
-            const std::vector<std::shared_ptr<Scene_root>>& remaining = m_app_scenes->get_scene_roots();
-            if (!remaining.empty()) {
-                attach_tools(remaining.back());
-            }
+            attach_tools_to_latest_scene();
         }
 
         // Queue the scene for the scene-close leak watchdog. The watch itself
@@ -5868,6 +5910,7 @@ public:
     // on_scene_created, cleared when that scene is closed).
     std::weak_ptr<Scene_root>               m_tools_scene_root{};
     erhe::message_bus::Subscription<Home_tools_message> m_home_tools_subscription;
+    erhe::message_bus::Subscription<Release_tools_message> m_release_tools_subscription;
 
     // No dependencies (constructors)
     std::unique_ptr<erhe::commands::Commands      > m_commands;
@@ -6063,6 +6106,7 @@ public:
 #endif
 
     std::unique_ptr<Brush_tool         >                     m_brush_tool;
+    std::unique_ptr<Foliage_paint_tool >                     m_foliage_paint_tool;
     std::unique_ptr<Create             >                     m_create;
     std::unique_ptr<Grid_tool          >                     m_grid_tool;
     std::unique_ptr<Material_paint_tool>                     m_material_paint_tool;

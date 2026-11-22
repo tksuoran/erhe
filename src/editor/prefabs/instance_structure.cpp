@@ -113,6 +113,12 @@ auto is_instance_structure_protected(const erhe::Item_base& item) -> bool
     return (find_carrier(parent.get(), arc) != nullptr) || static_cast<bool>(find_locking_kit_layout(item));
 }
 
+auto is_instance_content(const erhe::Hierarchy& hierarchy) -> bool
+{
+    const erhe::Composition_arc* arc = nullptr;
+    return find_carrier(&hierarchy, arc) != nullptr;
+}
+
 auto refuses_instance_child(const erhe::Hierarchy& parent) -> bool
 {
     const erhe::Composition_arc* arc = nullptr;

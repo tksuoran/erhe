@@ -143,6 +143,15 @@ instead of hanging.
   proxies; if that ever becomes synchronous, snapshot before `set_parent`.
   Bone proxies are deliberately excluded from `m_parent_changes` and do leave
   with the item, so they are announced, which is correct.
+
+  The two directions that bring the item into the scene - execute of
+  `Mode::insert` and undo of `Mode::remove` - note its subtree attached
+  after their `set_parent` when the item is in a scene afterwards, so a
+  removal undone in the same frame (a live edit cancelled, as a foliage
+  remove stroke refused at a later stamp; the undo of an insert and its
+  redo in one frame) is not announced and no subscriber drops the restored
+  nodes (the selection keeps them). An item inserted under a detached
+  parent is in no scene and keeps its removal note.
 - **Scene unregistration** - `Asset_manager::on_scene_unregistered`, reached
   from `App_scenes::unregister_scene_root`. This is the route
   `Scene_open_operation::undo` takes: it unbinds the viewports showing the

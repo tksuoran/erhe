@@ -248,6 +248,15 @@ public:
     std::shared_ptr<Scene_root> scene_root{};
 };
 
+// Queued when scene_root left the editor's scene list without a close (undo
+// of a scene open). Handled by Editor: tools homed in it move to the most
+// recently opened remaining scene. Queue-only, as Home_tools_message.
+class Release_tools_message
+{
+public:
+    std::shared_ptr<Scene_root> scene_root{};
+};
+
 struct Tool_select_message
 {
 };

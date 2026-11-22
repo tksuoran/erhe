@@ -57,6 +57,7 @@
 #include "rig/rigid_skin.hpp"
 #include "scene/node_physics.hpp"
 #include "scene/node_physics_system.hpp"
+#include "level/foliage_system.hpp"
 #include "scene/scene_commands.hpp"
 #include "scene/scene_payload_release.hpp"
 #include "scene/viewport_scene_view.hpp"
@@ -282,6 +283,8 @@ Scene_root::Scene_root(
     m_scene->add_node_system(*m_node_physics_system.get());
     m_rig_system = std::make_unique<Rig_system>(m_app_message_bus);
     m_scene->add_node_system(*m_rig_system.get());
+    m_foliage_system = std::make_unique<Foliage_system>();
+    m_scene->add_node_system(*m_foliage_system.get());
     // Not a node system: a joint prim is no node, so it is reported through
     // the prim registration hook rather than the node hooks (D3).
     m_joint_system = std::make_unique<Joint_system>(*this);
@@ -480,8 +483,12 @@ Scene_root::~Scene_root() noexcept
         if (m_geometry_graph_mesh_system) {
             m_scene->remove_node_system(*m_geometry_graph_mesh_system.get());
         }
+        if (m_foliage_system) {
+            m_scene->remove_node_system(*m_foliage_system.get());
+        }
     }
     m_draw_mode_system.reset();
+    m_foliage_system.reset();
     m_rig_system.reset();
     m_geometry_graph_mesh_system.reset();
     // The physics system tears its bodies down through the joint system, so
@@ -2415,6 +2422,9 @@ void Scene_root::on_mesh_flags_changed(const std::shared_ptr<erhe::scene::Mesh>&
     if (m_draw_list_scene) {
         m_draw_list_scene->enqueue_set_flags(mesh, new_flag_bits);
     }
+    if (mesh && m_foliage_system && (((old_flag_bits ^ new_flag_bits) & Editor_item_flags::foliage) != 0)) {
+        m_foliage_system->on_flags_changed(*mesh);
+    }
     // Only visibility and activity decide what is traced (selection, hover
     // and the other flags do not).
     constexpr uint64_t traced_flags = erhe::Item_flags::visible | erhe::Item_flags::active;
@@ -2622,6 +2632,11 @@ auto Scene_root::get_geometry_graph_mesh_system() -> Geometry_graph_mesh_system&
 auto Scene_root::get_node_physics_system() -> Node_physics_system&
 {
     return *m_node_physics_system.get();
+}
+
+auto Scene_root::get_foliage_system() -> Foliage_system&
+{
+    return *m_foliage_system.get();
 }
 
 auto Scene_root::find_card_texture(const std::string& path) const -> std::shared_ptr<erhe::graphics::Texture>

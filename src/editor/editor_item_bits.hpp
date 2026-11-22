@@ -97,6 +97,9 @@ public:
     // Authored: the mesh is no ground - not navigation input (doc/editor/navigation.md "Input"), no surface for snap
     // to surface or support (doc/editor/level_tools.md "Surface placement"); a kit piece of a bodiless shape carries it.
     static constexpr uint64_t pass_through              = erhe::Item_flags::application_bit(29);
+    // Authored: the mesh is foliage - no surface for placement rays (doc/editor/level_tools.md "Surface placement");
+    // hover, selection and every other ray still see it.
+    static constexpr uint64_t foliage                   = erhe::Item_flags::application_bit(30);
 
     // The bits register_editor_item_bits() reports as transient
     // (erhe::Item_flags::get_transient_bits()) and as purpose inputs

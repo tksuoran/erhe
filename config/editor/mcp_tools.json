@@ -570,7 +570,7 @@
     "name": "redo"
   },
   {
-    "description": "Ask the editor to exit after the current frame, exactly like closing the window: unsaved changes are discarded. The response is sent before the shutdown starts; poll /health until it stops answering to know the process is gone. Used by ctest to stop the editor it launched for mcp_server_tests.",
+    "description": "Ask the editor to exit after the current frame, exactly like closing the window: unsaved changes are discarded. The response is sent before the shutdown starts; poll /health until it stops answering to know the process is gone. Used by ctest to stop the editor it launched for mcp_server_tests. Runs while a live edit (a foliage stroke) is open: the shutdown abandons it.",
     "inputSchema": {
       "properties": {},
       "type": "object"
@@ -2119,7 +2119,7 @@
     "name": "level_wrap_with_path"
   },
   {
-    "description": "Every kit piece of a scene (nodes carrying Kit_piece), in node id order: id, name, shape, known_shape, parameters (the values and derive, the names derived from the seed) and parameters_text (the saved canonical text with hexadecimal floats), stairs (straight stairs alone: step_count, step_rise, tread_depth, run, slope_degrees - the layout its values produce), mesh_key, position and rotation_xyzw (world), world_aabb {min, max}, materials (slot name to material name, from the mesh primitives in slot order), brush_id (equal ids share one mesh), shares_brush_primitive (each mesh primitive is its brush's part of that slot), follows_kit (the piece's mesh and collision shape are its kit brush's: true for every placed piece and for a loaded piece the load refreshed) and problem (why it does not follow: an unknown shape or parameter values that do not read or are out of range - such a piece keeps the mesh the file holds; empty when it follows), collision (the kind at the piece's values: convex_hull | triangle_mesh | box | none), physics {motion_mode, collision_shape (the description of the body's shape: a box piece's is a compound of one box), box (a box body's box {min, max} in the body's space: the piece's local space at the node's world scale, so the mesh bounds times the scale; null for any other shape), has_body} and pass_through (the mesh carries the pass_through flag: it is not navigation input and no surface for snap to surface or support; a piece of a shape whose collision is none), light_frames (the shape's light frames at the piece's values, as level_get_kits lists them), lights (the piece's kit light nodes, children carrying Kit_light.frame: id, name, frame, position and direction (where it shines) in the piece's local space, type, color, intensity, range, inner_spot_angle, outer_spot_angle and cast_shadow; doc/editor/level_tools.md \"Lights on pieces\"), uid (the node's glTF uid, by which an attachment names its target), attachments (one entry per connection the piece records, in connector order: state active | dormant, reason (why a dormant one is not followed: the target is not in the scene, a connector the shape lacks or a disabled one, a child of a locked kit layout node), target_uid, target_id and target_name (null when the target is not in the scene), connector, target_connector, twist_steps and gap; doc/editor/level_tools.md \"Connections\", \"Attachments\"; the connections other pieces record naming this one: level_get_connections) attachment (the first entry of attachments; null when it has none) and surface_attachment (the piece's place on its support, its parent; doc/editor/level_tools.md \"Surface attachments\": state active (the parent is the mesh node the record's target uid names) | off_surface (attached, but the last change of the support left no face of it on the piece's line; the record's on_surface is false) | inert (kept, not followed: reason says why - another parent, no parent, a parent that is no mesh, a record that does not read), reason, target_uid, target_id and target_name (the parent when active, else the scene's node of the uid; null when none), position (the rest point as a proportion of the support's node-space bounds, 0 at their minimum and 1 at their maximum per axis), direction (the unit search direction in the support's node space), orient, rest (leading_face | anchor); null when the piece records none; written as the canonical JSON text of the Kit_piece.surface_attachment property).",
+    "description": "Every kit piece of a scene (nodes carrying Kit_piece), in node id order: id, name, shape, known_shape, parameters (the values and derive, the names derived from the seed) and parameters_text (the saved canonical text with hexadecimal floats), stairs (straight stairs alone: step_count, step_rise, tread_depth, run, slope_degrees - the layout its values produce), mesh_key, position and rotation_xyzw (world), world_aabb {min, max}, materials (slot name to material name, from the mesh primitives in slot order), brush_id (equal ids share one mesh), shares_brush_primitive (each mesh primitive is its brush's part of that slot), follows_kit (the piece's mesh and collision shape are its kit brush's: true for every placed piece and for a loaded piece the load refreshed) and problem (why it does not follow: an unknown shape or parameter values that do not read or are out of range - such a piece keeps the mesh the file holds; empty when it follows), collision (the kind at the piece's values: convex_hull | triangle_mesh | box | none), physics {motion_mode, collision_shape (the description of the body's shape: a box piece's is a compound of one box), box (a box body's box {min, max} in the body's space: the piece's local space at the node's world scale, so the mesh bounds times the scale; null for any other shape), has_body} and pass_through (the mesh carries the pass_through flag: it is not navigation input and no surface for snap to surface or support; a piece of a shape whose collision is none), foliage (the mesh carries the foliage flag: no surface for placement rays - snap to surface, support, the height map, the Brush tool and viewport Create / Paste placement - while hover and selection still hit it; Level Check leaves it out; doc/editor/level_tools.md \"Surface placement\"), foliage_radius (Kit_piece.foliage_radius in meters, 0 unless set; doc/editor/level_tools.md \"Foliage paint\"), light_frames (the shape's light frames at the piece's values, as level_get_kits lists them), lights (the piece's kit light nodes, children carrying Kit_light.frame: id, name, frame, position and direction (where it shines) in the piece's local space, type, color, intensity, range, inner_spot_angle, outer_spot_angle and cast_shadow; doc/editor/level_tools.md \"Lights on pieces\"), uid (the node's glTF uid, by which an attachment names its target), attachments (one entry per connection the piece records, in connector order: state active | dormant, reason (why a dormant one is not followed: the target is not in the scene, a connector the shape lacks or a disabled one, a child of a locked kit layout node), target_uid, target_id and target_name (null when the target is not in the scene), connector, target_connector, twist_steps and gap; doc/editor/level_tools.md \"Connections\", \"Attachments\"; the connections other pieces record naming this one: level_get_connections) attachment (the first entry of attachments; null when it has none) and surface_attachment (the piece's place on its support, its parent; doc/editor/level_tools.md \"Surface attachments\": state active (the parent is the mesh node the record's target uid names) | off_surface (attached, but the last change of the support left no face of it on the piece's line; the record's on_surface is false) | inert (kept, not followed: reason says why - another parent, no parent, a parent that is no mesh, a record that does not read), reason, target_uid, target_id and target_name (the parent when active, else the scene's node of the uid; null when none), position (the rest point as a proportion of the support's node-space bounds, 0 at their minimum and 1 at their maximum per axis), direction (the unit search direction in the support's node space), orient, rest (leading_face | anchor); null when the piece records none; written as the canonical JSON text of the Kit_piece.surface_attachment property).",
     "inputSchema": {
       "properties": {
         "scene_name": {
@@ -2133,6 +2133,217 @@
       "type": "object"
     },
     "name": "level_get_pieces"
+  },
+  {
+    "description": "The foliage items of a scene from its foliage index (doc/editor/level_tools.md \"Foliage paint\"): the mesh nodes carrying the foliage flag, each at its world position with its radius (Kit_piece.foliage_radius). Without center and radius: every item of the scene; with both: the items whose position is within radius of center. Brings node transforms up to date first. Returns scene_name, count, items (id, name, shape (the Kit_piece shape, empty for a mesh that is no kit piece), position, radius, parent (the parent node's id, null at the root)) in id order, max_radius (the largest radius the index holds) and density (count within the sphere over the area of its great circle, items per square meter; null without a sphere and for a sphere of radius 0).",
+    "inputSchema": {
+      "properties": {
+        "scene_name": {
+          "description": "Name of the scene",
+          "type": "string"
+        },
+        "center": {
+          "description": "Center of the query sphere [x, y, z], world space; given together with radius",
+          "items": {
+            "type": "number"
+          },
+          "type": "array"
+        },
+        "radius": {
+          "description": "Radius of the query sphere in meters (>= 0); given together with center",
+          "type": "number"
+        }
+      },
+      "required": [
+        "scene_name"
+      ],
+      "type": "object"
+    },
+    "name": "level_get_foliage"
+  },
+  {
+    "description": "Paint foliage as ONE stroke of the foliage paint tool (doc/editor/level_tools.md \"Foliage paint\"): each stamp, in order, makes round(density * pi * radius^2) attempts (1 - 1024) about its center; an attempt picks a palette entry by weight and casts up to 8 candidate rays inside the brush sphere against the surface meshes (foliage is passed through), and the first candidate point at least max(r, r_q) from every foliage item of the scene (and of the stroke so far) places a piece of the entry there: upright (world up) or, with align_to_surface, along the hit normal, turned by a yaw of the entry's range, one of the entry's variants, with the foliage flag and the entry's radius, as a child of the mesh it was painted on; on a kit piece or a kit layout's generated mesh it also gets a surface attachment record. The stroke is one undo entry (none when nothing was placed); inside a batch it joins the batch's entry. A refused stamp (a non-finite center, a zero normal) cancels the whole stroke: nothing is painted and nothing recorded. A brush radius not above 0, a density below 0, a palette that does not check or has no entry of weight above 0 fail the call. Every input is an argument; no tool setting is read or changed. Returns scene_name, stamps, attempts, placed, refused_by_spacing, without_surface and on_sealed_support (candidates: refused by the spacing rule, without a surface hit, hitting a mesh inside a reference instance, which takes no foliage), recorded (the stroke changed the scene and is in the undo history: its own entry, or inside a batch a part of the batch's entry) and items (id, name, shape, position, rotation_xyzw (world), radius, parent (node id, null at the root), attached (holds a surface attachment record), mesh_key) in placement order.",
+    "inputSchema": {
+      "properties": {
+        "scene_name": {
+          "description": "Name of the scene",
+          "type": "string"
+        },
+        "stamps": {
+          "description": "The stamps in order: {center [x, y, z] (world), normal [x, y, z] (the brush's surface normal, not zero)}",
+          "items": {
+            "properties": {
+              "center": {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array",
+                "description": "Brush center, world space"
+              },
+              "normal": {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array",
+                "description": "Brush normal, world space; normalized on use"
+              }
+            },
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "radius": {
+          "description": "Brush radius in meters, above 0 (default 2)",
+          "type": "number"
+        },
+        "density": {
+          "description": "Paint density: items per square meter of the brush circle one stamp tries to add, >= 0 (default 0.5)",
+          "type": "number"
+        },
+        "seed": {
+          "description": "Seed of the stroke's draws (default 1); the same seed on the same scene paints the same foliage",
+          "type": "integer"
+        },
+        "align_to_surface": {
+          "description": "Turn each item onto the hit normal instead of world up (default false)",
+          "type": "boolean"
+        },
+        "palette": {
+          "description": "The palette entries: {shape (id), parameters (object as level_place_pieces takes, or the canonical text; default the shape's defaults), materials (a material name per slot, empty for the slot default), weight (0 - 1000, default 1), radius (meters, default the shape's foliage radius; required for a shape without one), yaw_min, yaw_max (degrees, default 0 - 360), variants (1 - 64, default 8; 1 for a shape without derived values), seed (the entry's base seed, default 0)}",
+          "items": {
+            "type": "object"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "scene_name",
+        "stamps",
+        "palette"
+      ],
+      "type": "object"
+    },
+    "name": "level_foliage_paint"
+  },
+  {
+    "description": "Remove foliage as ONE remove stroke of the foliage paint tool (doc/editor/level_tools.md \"Foliage paint\"): each stamp, in order, takes the foliage items whose placement point (indexed world position) lies in the brush sphere of its center, keeps those of an only_shapes shape when only_shapes is given (a mesh that is no kit piece has no shape and is then kept), visits them by position (x, then y, then z, then id) and draws once per item from the seed's \"foliage remove\" stream: an item whose draw is below density * 2^24 is removed with its subtree, through the operation the Delete command uses. Only items carrying the foliage flag are taken. The stroke is one undo entry (none when nothing was removed, and the redo history then stays); inside a batch it joins the batch's entry; undo restores each item with its parent, records and radius. Items an edit lock (lock_edit) or the lock of a kit layout node protects take their draw and are kept. A refused stamp (a center that is not finite as a float, beyond its range) cancels the whole stroke: nothing is removed, nothing recorded, the selection as before. A brush radius not above 0 or not finite, a density outside 0 - 1 or not finite, an unknown shape id in only_shapes and a center that is not three numbers fail the call. Every input is an argument; no tool setting is read or changed. Returns scene_name, stamps, removed (items, each with its subtree), recorded (the stroke changed the scene and is in the undo history: its own entry, or inside a batch a part of the batch's entry) and removed_ids (the removed foliage items' node ids, in removal order).",
+    "inputSchema": {
+      "properties": {
+        "scene_name": {
+          "description": "Name of the scene",
+          "type": "string"
+        },
+        "stamps": {
+          "description": "The stamps in order: {center [x, y, z] (world), normal [x, y, z] (optional; a remove stamp does not read it)}",
+          "items": {
+            "properties": {
+              "center": {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array",
+                "description": "Brush center, world space"
+              },
+              "normal": {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array",
+                "description": "Brush normal, world space; accepted for the form of level_foliage_paint stamps and not read"
+              }
+            },
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "radius": {
+          "description": "Brush radius in meters, above 0 (default 2)",
+          "type": "number"
+        },
+        "density": {
+          "description": "Remove density: the share of the items in the brush one stamp removes, 0 - 1 (default 1)",
+          "type": "number"
+        },
+        "seed": {
+          "description": "Seed of the stroke's draws (default 1); the same seed on the same items removes the same items",
+          "type": "integer"
+        },
+        "only_shapes": {
+          "description": "Shape ids (Remove Only Palette Shapes): only kit pieces of these shapes are removed; empty or absent for every foliage item",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "scene_name",
+        "stamps"
+      ],
+      "type": "object"
+    },
+    "name": "level_foliage_remove"
+  },
+  {
+    "description": "The Foliage Paint tool's values and palette (doc/editor/level_tools.md \"Foliage paint\"): brush_radius (meters, 0.1 - 50), paint_density (items per square meter of the brush circle one paint stamp tries to add, 0.01 - 100), remove_density (the share of the items in the brush one remove stamp takes, 0 - 1), align_to_surface, remove_only_palette_shapes, seed (the next stroke's seed; it advances after every stroke of the tool), palette (the entries in order: shape, parameters (the canonical text, empty for the shape's defaults), materials (a palette material name per slot, empty for the slot default), weight, radius, yaw_min, yaw_max, variants, seed), palette_text (the canonical text the editor settings hold) and paint_refusal (why a paint stroke cannot begin with this palette - an empty palette, an entry that does not check, no entry of weight above 0; null when one can). Runs while a stroke is open.",
+    "inputSchema": {
+      "properties": {},
+      "type": "object"
+    },
+    "name": "level_get_foliage_paint_settings"
+  },
+  {
+    "description": "Set the Foliage Paint tool's values and palette (doc/editor/level_tools.md \"Foliage paint\"), as its Tool Properties widgets do; every argument is optional and an absent one keeps its value. An unknown argument, a value out of its range (brush_radius 0.1 - 50, paint_density 0.01 - 100, remove_density 0 - 1, seed an integer 0 - 1000000) or a palette entry that does not read or check (an unknown shape, values out of range, a weight above 1000, yaw limits out of order, more materials than slots) fails the call and nothing changes. A palette replaces the whole palette; an empty array clears it. Returns the settings as level_get_foliage_paint_settings does.",
+    "inputSchema": {
+      "properties": {
+        "brush_radius": {
+          "description": "Brush radius in meters, 0.1 - 50",
+          "type": "number"
+        },
+        "paint_density": {
+          "description": "Items per square meter of the brush circle one paint stamp tries to add, 0.01 - 100",
+          "type": "number"
+        },
+        "remove_density": {
+          "description": "The share of the foliage items in the brush one remove stamp takes, 0 - 1",
+          "type": "number"
+        },
+        "align_to_surface": {
+          "description": "Painted items stand on the surface normal instead of world up",
+          "type": "boolean"
+        },
+        "remove_only_palette_shapes": {
+          "description": "A remove stroke takes only kit pieces of the palette entries' shapes",
+          "type": "boolean"
+        },
+        "seed": {
+          "description": "The next stroke's seed, 0 - 1000000",
+          "type": "integer"
+        },
+        "palette": {
+          "description": "The palette entries: {shape (id), parameters (an object as level_place_pieces takes, read at the default level lengths, or the canonical text; default the shape's defaults), materials (a material name per slot, empty for the slot default), weight (0 - 1000, default 1), radius (meters, default the shape's foliage radius; required for a shape without one), yaw_min, yaw_max (degrees, default 0 - 360), variants (1 - 64, default 8; 1 for a shape without derived values), seed (the entry's base seed, default 0)}",
+          "items": {
+            "type": "object"
+          },
+          "type": "array"
+        }
+      },
+      "type": "object"
+    },
+    "name": "level_set_foliage_paint_settings"
+  },
+  {
+    "description": "The Foliage Paint tool's brush and stroke (doc/editor/level_tools.md \"Foliage paint\"), for checks that drive the mouse: tool_active (the tool is the active toolbox tool), has_brush, scene_name, center and normal (the surface point under the pointer and its unit normal toward the pointer, null without a brush), radius (the brush radius setting), seed (the next stroke's seed), stroke_open, stroke (the open stroke: kind paint | remove, scene_name and its counts so far - stamps, attempts, placed, removed, refused_by_spacing, without_surface, on_sealed_support, recorded; null when none is open), last_stroke (the last stroke the tool began or tried: kind, outcome ended | cancelled | abandoned | refused, scene_name, seed (the seed it drew from), refusal (why it did not begin, null otherwise) and its counts; null before the first) and, with include_stamp_centers, stamp_centers and stamp_centers_truncated. Runs while a stroke is open.",
+    "inputSchema": {
+      "properties": {
+        "include_stamp_centers": {
+          "description": "Also return stamp_centers (the first 1024 stamp centers of the open stroke, else of the last one that began, in stamp order) and stamp_centers_truncated (the stroke stamped more than those). Default false.",
+          "type": "boolean"
+        }
+      },
+      "type": "object"
+    },
+    "name": "level_get_foliage_brush"
   },
   {
     "description": "Change a kit piece's parameter values (doc/editor/level_tools.md \"Parameter changes\") as ONE undo entry: the given parameters merge over the piece's current values (derive, when given, replaces the mask; a value for a derived parameter is an error naming it; a changed seed or mask derives the masked values again, otherwise the saved values stand), and the piece takes the mesh and collision shape of the kit brush for the new values (shared with every piece of equal values), keeping its id, name, transform, children, the material of every slot and its static body. An unknown key or parameter, a value of the wrong type or outside its range (the message names the parameter and its range), or a node that is not a kit piece fails the call and nothing changes. Values equal to the current ones change nothing and record no undo entry. Returns scene_name, id, name, shape, changed, parameters (effective values and derive), mesh_key, brush_id, world_aabb {min, max}, triangle_count and materials. Also returns flow (doc/editor/level_tools.md \"Flow report\"): what the property flow of the call's undo entry did - taken, not_taken, responses, new_connections, removed_connections, apart_connections, refusal, limit_reached, rounds, pending and summary - or null when the entry ran no flow.",
@@ -2938,7 +3149,7 @@
     "name": "level_check"
   },
   {
-    "description": "Read the Brush tool's kit mode placement preview (doc/editor/level_tools.md \"Level Kit window\", doc/editor/brushes.md \"Kit mode\"). Read-only. Returns active (kit mode on: a shape chosen in the Level Kit window and the Brush tool not left since), tool_active (the Brush tool is the priority tool), rotation_step_degrees, yaw_steps, surface_rest (the Surface Rest setting the preview follows: 'leading_face' or 'anchor'), hover_position (the world point the Brush tool hovers, null without a hover), hover_normal (the unit world normal of the surface or grid there, null without one; the preview searches against it) and visible (a preview is shown). In kit mode also shape, parameters (the values of the kit brush), mesh_key, brush_id, bounds {min, max} (the brush's mesh bounds in its own space) and materials (slot name to the palette material the next piece gets, chosen in the Level Kit window); with a visible preview also position, rotation_xyzw, surface_found and world_aabb: the transform a click in the viewport places the next piece at, in the scene root's space. Always, in and outside kit mode, connector_snap_distance (the reach of the connector join, the Connector Snap setting; 0 = no join), connector_join_suspended (the connector snap suspend key, Shift by default, was held at the last preview update) and connector_join: null, or the connector join the preview shows (step 40: the hovered kit piece's nearest free enabled connector within reach; free: no other kit piece's connector joined there) with target_piece_id, target_connector, connector (the new piece's, whose outward opposes the target's most), twist_steps (the quarter turn nearest the rotation steps' yaw angle), distance (meters from the hover point to the target connector) and flowed (K9.2: the preview shows the values the target supplies over the join, with parameters and materials as the placed piece takes them; the position is the join at those values); a click places through that join, the pose level_place_pieces gives with connect {connector, to_piece_id, to_connector, twist_steps}.",
+    "description": "Read the Brush tool's kit mode placement preview (doc/editor/level_tools.md \"Level Kit window\", doc/editor/brushes.md \"Kit mode\"). Read-only. Returns active (kit mode on: a shape chosen in the Level Kit window and the Brush tool not left since), tool_active (the Brush tool is the priority tool), rotation_step_degrees, yaw_steps, surface_rest (the Surface Rest setting the preview follows: 'leading_face' or 'anchor'), hover_position (the world point the Brush tool hovers, null without a hover), hover_normal (the unit world normal of the surface or grid there, null without one; the preview searches against it), preview_position (the world origin of the shown preview, kit mode or not; null without one) and visible (a preview is shown). In kit mode also shape, parameters (the values of the kit brush), mesh_key, brush_id, bounds {min, max} (the brush's mesh bounds in its own space) and materials (slot name to the palette material the next piece gets, chosen in the Level Kit window); with a visible preview also position, rotation_xyzw, surface_found and world_aabb: the transform a click in the viewport places the next piece at, in the scene root's space. Always, in and outside kit mode, connector_snap_distance (the reach of the connector join, the Connector Snap setting; 0 = no join), connector_join_suspended (the connector snap suspend key, Shift by default, was held at the last preview update) and connector_join: null, or the connector join the preview shows (step 40: the hovered kit piece's nearest free enabled connector within reach; free: no other kit piece's connector joined there) with target_piece_id, target_connector, connector (the new piece's, whose outward opposes the target's most), twist_steps (the quarter turn nearest the rotation steps' yaw angle), distance (meters from the hover point to the target connector) and flowed (K9.2: the preview shows the values the target supplies over the join, with parameters and materials as the placed piece takes them; the position is the join at those values); a click places through that join, the pose level_place_pieces gives with connect {connector, to_piece_id, to_connector, twist_steps}.",
     "inputSchema": {
       "properties": {},
       "type": "object"
@@ -12104,7 +12315,7 @@
     "name": "inject_input_events"
   },
   {
-    "description": "Report the input state the injected events (inject_input_events) have built up, with active_tool (the stable name of the active toolbox tool: brush, move, rotate, scale, selection, paint, material_paint, weight_paint, physics or travel (the OpenXR headset travel tool), null when none; set_active_tool sets it), active_mouse_command (the name of the mouse command a drag keeps active, null when none) and last_hovered_scene (the name of the scene of the last hovered viewport, which the Level Kit window acts on; null when none): the pointer position in window pixels and whether one has been set, the mouse buttons held, the modifier keys the next event without its own 'modifiers' will carry, whether cursor_enter / window_focus have been sent, and whether an input gesture is currently stepping (with its frame, total frames, injected event count, pending event count and held_frames: the frames a new click's press has been held so that ImGui does not read it as the second click of the previous one). The headless window reports no cursor position of its own, so this is the record of where the injected pointer is.",
+    "description": "Report the input state the injected events (inject_input_events) have built up, with active_tool (the stable name of the active toolbox tool: brush, move, rotate, scale, selection, paint, material_paint, weight_paint, physics, foliage_paint or travel (the OpenXR headset travel tool), null when none; set_active_tool sets it), active_mouse_command (the name of the mouse command a drag keeps active, null when none) and last_hovered_scene (the name of the scene of the last hovered viewport, which the Level Kit window acts on; null when none): the pointer position in window pixels and whether one has been set, the mouse buttons held, the modifier keys the next event without its own 'modifiers' will carry, whether cursor_enter / window_focus have been sent, and whether an input gesture is currently stepping (with its frame, total frames, injected event count, pending event count and held_frames: the frames a new click's press has been held so that ImGui does not read it as the second click of the previous one). The headless window reports no cursor position of its own, so this is the record of where the injected pointer is.",
     "inputSchema": {
       "properties": {},
       "required": [],
@@ -12113,7 +12324,7 @@
     "name": "get_input_state"
   },
   {
-    "description": "Make a toolbox tool the active (priority) tool, as choosing it in the hotbar does, or make no tool active with null. Takes the stable names get_input_state reports as active_tool: brush, move, rotate, scale, selection, paint, material_paint, weight_paint, physics, travel. Returns the active_tool after the change. As with the hotbar, the Move, Rotate and Scale tools show their gizmo part while active and hide it when another tool becomes active (set_gizmo_visibility gives the parts back); the Selection tool clears the selection when it loses priority, and the Brush tool ends its kit mode and drops its active brush. A call without 'tool' is refused, and so is a name whose tool this build or run lacks (travel outside OpenXR).",
+    "description": "Make a toolbox tool the active (priority) tool, as choosing it in the hotbar does, or make no tool active with null. Takes the stable names get_input_state reports as active_tool: brush, move, rotate, scale, selection, paint, material_paint, weight_paint, physics, travel, foliage_paint. Returns the active_tool after the change. As with the hotbar, the Move, Rotate and Scale tools show their gizmo part while active and hide it when another tool becomes active (set_gizmo_visibility gives the parts back); the Selection tool clears the selection when it loses priority, and the Brush tool ends its kit mode and drops its active brush. A call without 'tool' is refused, and so is a name whose tool this build or run lacks (travel outside OpenXR).",
     "inputSchema": {
       "properties": {
         "tool": {

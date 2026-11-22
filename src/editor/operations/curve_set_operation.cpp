@@ -38,12 +38,12 @@ void Curve_set_operation::execute(App_context& context)
             context.level_kits->append_curve_follow_ups(*m_curve, m_before, m_follow_ups);
         }
     }
-    const Operation* const refused = execute_unless_refused(context, m_follow_ups);
-    if (refused != nullptr) {
+    std::optional<std::string> refusal = execute_unless_refused(context, m_follow_ups);
+    if (refusal.has_value()) {
         // A follow-up refused the change (a floor fit, K0.3): the path goes back and the edit is refused with it.
         m_follow_ups.clear();
         m_curve->set_path(m_before);
-        set_refused(refused->get_error());
+        set_refused(std::move(refusal.value()));
     }
 }
 

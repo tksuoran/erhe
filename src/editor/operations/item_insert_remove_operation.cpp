@@ -39,6 +39,19 @@ void note_subtree_removed(App_context& context, const std::shared_ptr<erhe::Hier
     }
 }
 
+// The subtree coming (back) into a scene: a removal noted earlier in the same frame is not announced. An item that
+// ends up in no scene (under a detached parent) keeps its note.
+void note_subtree_attached(App_context& context, const std::shared_ptr<erhe::Hierarchy>& item)
+{
+    if ((context.asset_manager == nullptr) || !item || (item->get_item_host() == nullptr)) {
+        return;
+    }
+    context.asset_manager->note_item_attached(item.get());
+    for (const std::shared_ptr<erhe::Hierarchy>& child : item->get_children()) {
+        note_subtree_attached(context, child);
+    }
+}
+
 [[nodiscard]] auto is_in_subtree(const std::shared_ptr<erhe::Item_base>& item, const std::shared_ptr<erhe::Hierarchy>& root) -> bool
 {
     std::shared_ptr<erhe::Hierarchy> node = std::dynamic_pointer_cast<erhe::Hierarchy>(item);
@@ -209,6 +222,7 @@ void Item_insert_remove_operation::execute(App_context& context)
         m_item->set_parent(m_after_parent, m_index_in_parent);
     }
     if (m_mode == Mode::insert) {
+        note_subtree_attached(context, m_item);
         m_inserted_once = true;
         // A kit piece's Attached row names its target, which may be the node coming (back) into the scene.
         queue_kit_piece_rows_refresh(context);
@@ -256,6 +270,7 @@ void Item_insert_remove_operation::undo(App_context& context)
 
     if (m_mode == Mode::remove) {
         reattach_keeping_local_transform(m_item, m_before_parent, m_index_in_parent);
+        note_subtree_attached(context, m_item);
     } else {
         m_item->set_parent(m_before_parent, m_index_in_parent);
     }

@@ -298,6 +298,11 @@ public:
     void set_tags         (const std::set<std::string>& tags);
 
 protected:
+    // Called by set_name() before the name changes, while get_name() still returns the old name.
+    virtual void handle_name_change(const std::string_view new_name) {
+        static_cast<void>(new_name);
+    }
+
     // Writes one Item_flags::derived bit from its property's effective
     // value (the property changed callback of visible here, of
     // shadow_cast / lightmapped in Mesh).
