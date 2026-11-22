@@ -61,11 +61,18 @@ void Imgui_windows::queue(std::function<void()>&& operation)
 
 void Imgui_windows::flush_queue()
 {
-    const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_queued_operations_mutex}; // TODO Can this be avoided?
-    while (!m_queued_operations.empty()) {
-        auto op = m_queued_operations.back();
-        m_queued_operations.pop_back();
-        op();
+    // An operation runs outside the lock: it may queue another one, which this flush then runs too.
+    for (;;) {
+        std::function<void()> operation;
+        {
+            const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_queued_operations_mutex};
+            if (m_queued_operations.empty()) {
+                return;
+            }
+            operation = std::move(m_queued_operations.back());
+            m_queued_operations.pop_back();
+        }
+        operation();
     }
 }
 
