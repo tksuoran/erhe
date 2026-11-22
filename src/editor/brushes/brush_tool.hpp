@@ -275,7 +275,6 @@ private:
     Brush_pick_command                      m_pick_command;
     Brush_rotate_command                    m_rotate_cw_command;
     Brush_rotate_command                    m_rotate_ccw_command;
-    erhe::commands::Lambda_command          m_toggle_brush_preview_command;
     erhe::commands::Float_threshold_command m_pick_using_float_input_command;
 
     ERHE_PROFILE_MUTEX(std::mutex,     m_brush_mutex);
@@ -290,7 +289,6 @@ private:
     bool                               m_debug_visualization   {false};
     bool                               m_show_receiver_frame   {true};
     bool                               m_show_brush_frame      {true};
-    bool                               m_show_preview          {true};
 
     bool                               m_parent_to_active        {false};
     bool                               m_parent_to_scene_root    {true};

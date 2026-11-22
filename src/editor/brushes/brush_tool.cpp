@@ -147,15 +147,6 @@ Brush_tool::Brush_tool(
     , m_pick_command                  {commands, context}
     , m_rotate_cw_command             {commands, context, 1}
     , m_rotate_ccw_command            {commands, context, -1}
-    , m_toggle_brush_preview_command  {
-        commands,
-        "Brush.toggle_preview",
-        [this]() -> bool {
-            m_show_preview = !m_show_preview;
-            update_preview_mesh();
-            return true;
-        }
-    }
     , m_pick_using_float_input_command{commands, m_pick_command, 0.6f, 0.4f}
 {
     ERHE_PROFILE_FUNCTION();
@@ -170,7 +161,6 @@ Brush_tool::Brush_tool(
     commands.register_command(&m_pick_using_float_input_command);
     commands.register_command(&m_rotate_cw_command);
     commands.register_command(&m_rotate_ccw_command);
-    commands.register_command(&m_toggle_brush_preview_command);
     commands.bind_command_to_update      (&m_preview_command);
     // Plain right press only: a right press with a modifier belongs to the camera (Alt + right drag tumbles).
     commands.bind_command_to_mouse_button(&m_insert_command, erhe::window::Mouse_button_right, erhe::commands::Button_trigger::Button_pressed, 0);
@@ -178,7 +168,6 @@ Brush_tool::Brush_tool(
     //commands.bind_command_to_mouse_button(&m_rotate_ccw_command, erhe::window::Mouse_button_x2,    true);
     commands.bind_command_to_key(&m_rotate_cw_command,            erhe::window::Key_z);
     commands.bind_command_to_key(&m_rotate_ccw_command,           erhe::window::Key_x);
-    commands.bind_command_to_key(&m_toggle_brush_preview_command, erhe::window::Key_c);
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
     erhe::xr::Headset*    headset  = headset_view.get_headset();
@@ -274,7 +263,6 @@ Brush_tool::Brush_tool(
     m_rotate_cw_command             .set_host(this);
     m_rotate_ccw_command            .set_host(this);
     m_pick_using_float_input_command.set_host(this);
-    m_toggle_brush_preview_command  .set_host(this);
 }
 
 void Brush_tool::set_active_brush(const std::shared_ptr<Brush>& brush)
@@ -973,7 +961,6 @@ void Brush_tool::preview_drag_and_drop(std::shared_ptr<Brush> brush)
 {
     if (brush) {
         leave_kit_mode();
-        m_show_preview = true;
     }
     m_drag_and_drop_brush = brush;
     on_motion();
@@ -1651,8 +1638,7 @@ void Brush_tool::update_preview_mesh(const std::optional<Hover_placement_hit>* c
 
     // A drag shows its preview whether or not the tool is active (or its preview is toggled off).
     const bool dragged = static_cast<bool>(m_drag_and_drop_brush) || (m_kit_item_viewport != nullptr);
-    const bool shown   = m_show_preview || (m_kit_item_viewport != nullptr);
-    if (!m_preview_mesh && (is_enabled() || dragged) && shown) {
+    if (!m_preview_mesh && (is_enabled() || dragged)) {
         if (!brush || !m_hover.position.has_value() || (!hover_scene_mesh && !hover_grid)) {
             return;
         }
@@ -1665,7 +1651,6 @@ void Brush_tool::update_preview_mesh(const std::optional<Hover_placement_hit>* c
         (!dragged && !is_enabled()) ||
         !brush ||
         !m_hover.position.has_value() ||
-        !shown ||
         (!hover_scene_mesh && !hover_grid)
     ) {
         remove_preview_mesh();
@@ -1754,16 +1739,6 @@ void Brush_tool::tool_properties(erhe::imgui::Imgui_window& /*imgui_window*/)
     //ImGui::Checkbox   ("Debug Visualization", &m_debug_visualization);
     ImGui::Checkbox   ("Show Receiver Frame", &m_show_receiver_frame);
     ImGui::Checkbox   ("Show Brush Frame",    &m_show_brush_frame);
-    ImGui::Checkbox   ("Show Preview",        &m_show_preview);
-
-    if (ImGui::IsItemEdited()) {
-        if (m_show_preview) {
-            update_preview_mesh();
-        }
-        else {
-            remove_preview_mesh();
-        }
-    }
 
     ///if (!m_brush_item_tree) {
     ///    std::shared_ptr<Content_library> content_library = get_content_library();
