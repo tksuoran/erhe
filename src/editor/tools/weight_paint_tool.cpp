@@ -8,6 +8,7 @@
 #include "operations/paint_weights_operation.hpp"
 #include "renderers/render_context.hpp"
 #include "scene/scene_view.hpp"
+#include "tools/channel_paint.hpp"
 #include "tools/tools.hpp"
 #include "tools/weight_display.hpp"
 
@@ -298,6 +299,7 @@ auto Weight_paint_tool::begin_stroke() -> bool
     m_stroke_mesh              = scene_mesh;
     m_stroke_primitive_index   = content.scene_mesh_primitive_index;
     m_stroke_geometry          = content.geometry;
+    ensure_vertex_corners(*scene_mesh, *m_stroke_geometry); // the GPU patch of a dab reads the table
     m_stroke_skin              = skin;
     m_stroke_joint_local_index = joint_local_index;
     m_stroke_active            = true;

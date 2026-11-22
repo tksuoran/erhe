@@ -74,6 +74,10 @@ private:
     std::vector<std::uint32_t>                  m_changed;
 };
 
+// Builds the geometry's vertex-to-corner table when it has none (a Geometry
+// loaded from a scene file), under the mesh's item host mutex. Main thread.
+void ensure_vertex_corners(const erhe::scene::Mesh& mesh, erhe::geometry::Geometry& geometry);
+
 enum class Channel_fill_mode : unsigned int
 {
     fill = 0, // the masked channels take the value

@@ -9,7 +9,9 @@
 #include "erhe_graphics/device.hpp"
 #include "erhe_dataformat/vertex_format.hpp"
 #include "erhe_geometry/geometry.hpp"
+#include "erhe_item/item_host.hpp"
 #include "erhe_primitive/primitive.hpp"
+#include "erhe_profile/profile.hpp"
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/node.hpp"
 #include "erhe_scene_renderer/mesh_memory.hpp"
@@ -17,6 +19,7 @@
 #include <geogram/mesh/mesh.h>
 
 #include <algorithm>
+#include <mutex>
 
 namespace editor {
 
@@ -85,6 +88,20 @@ namespace {
 }
 
 } // anonymous namespace
+
+void ensure_vertex_corners(const erhe::scene::Mesh& mesh, erhe::geometry::Geometry& geometry)
+{
+    if (geometry.has_connectivity()) {
+        return;
+    }
+    erhe::Item_host* const item_host = mesh.get_item_host();
+    if (item_host != nullptr) {
+        const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> scene_lock{item_host->item_host_mutex};
+        geometry.update_connectivity();
+    } else {
+        geometry.update_connectivity();
+    }
+}
 
 Channel_paint_stroke::Channel_paint_stroke(App_context& context)
     : m_context{context}

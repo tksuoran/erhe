@@ -750,17 +750,9 @@ void Paint_tool::paint()
         }
         case Paint_mode::Point: {
             const GEO::index_t vertex = geo_mesh.facet_corners.vertex(nearest_corner);
-            if (geometry.has_connectivity()) {
-                for (const GEO::index_t corner : geometry.get_vertex_corners(vertex)) {
-                    paint_corner(*scene_mesh, content.scene_mesh_primitive_index, corner, color);
-                }
-            } else {
-                // A loaded Geometry has no connectivity tables and a tool builds none on a shared Geometry.
-                for (GEO::index_t corner = 0, end = geo_mesh.facet_corners.nb(); corner < end; ++corner) {
-                    if (geo_mesh.facet_corners.vertex(corner) == vertex) {
-                        paint_corner(*scene_mesh, content.scene_mesh_primitive_index, corner, color);
-                    }
-                }
+            ensure_vertex_corners(*scene_mesh, geometry); // a loaded Geometry has no table yet
+            for (const GEO::index_t corner : geometry.get_vertex_corners(vertex)) {
+                paint_corner(*scene_mesh, content.scene_mesh_primitive_index, corner, color);
             }
             break;
         }
