@@ -94,6 +94,7 @@ Icon_set::Icon_set(
     type_icons[editor::Editor_item_types::index_raytrace            ] = { .code = icons.raytrace,    .color = glm::vec4{0.5f, 0.5f, 0.5f, 1.0f}};
     type_icons[editor::Editor_item_types::index_grid                ] = { .code = icons.grid,        .color = glm::vec4{0.0f, 0.6f, 0.0f, 1.0f}};
     type_icons[erhe::Item_type::index_texture             ] = { .code = icons.texture,     .color = glm::vec4{0.5f, 0.8f, 1.0f, 1.0f}};
+    type_icons[editor::Editor_item_types::index_graph_texture       ] = { .code = icons.texture,     .color = glm::vec4{0.5f, 0.8f, 1.0f, 1.0f}};
     type_icons[editor::Editor_item_types::index_asset_folder        ] = { .code = icons.folder,      .color = glm::vec4{1.0f, 0.5f, 0.0f, 1.0f}};
     type_icons[editor::Editor_item_types::index_asset_file_gltf     ] = { .code = icons.scene,       .color = glm::vec4{0.0f, 1.0f, 0.0f, 1.0f}};
     type_icons[editor::Editor_item_types::index_asset_file_geogram  ] = { .code = icons.scene,       .color = glm::vec4{0.0f, 0.8f, 1.0f, 1.0f}};
