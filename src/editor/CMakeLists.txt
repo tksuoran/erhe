@@ -393,6 +393,8 @@ erhe_target_sources_grouped(
     level/kit_item.cpp
     level/kit_item.hpp
     level/kit_item_payload.hpp
+    level/kit_item_slot.cpp
+    level/kit_item_slot.hpp
     level/kit_layout.cpp
     level/kit_layout_connectors.cpp
     level/kit_layout_connectors.hpp

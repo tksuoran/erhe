@@ -13,6 +13,7 @@
 #include "app_settings.hpp"
 #include "config/generated/editor_settings_config.hpp"
 #include "brushes/brush.hpp"
+#include "brushes/brush_tool.hpp"
 #include "brushes/brush_placement.hpp"
 #include "content_library/content_library.hpp"
 #include "editor_log.hpp"
@@ -35,6 +36,7 @@
 #include "scene/scene_root.hpp"
 #include "scene/scene_view.hpp"
 #include "tools/selection_tool.hpp"
+#include "tools/tools.hpp"
 
 #include "erhe_verify/verify.hpp"
 #include "erhe_geometry/geometry.hpp"
@@ -471,6 +473,30 @@ void Level_kits::end_kit_item_drag()
     }
     m_dragged_kit_item_token = 0;
     m_dragged_kit_item       = Kit_item{};
+}
+
+void Level_kits::activate_kit_item(const Kit_item& item)
+{
+    if (!item.is_valid() || (m_context.imgui_windows == nullptr)) {
+        return;
+    }
+    // Next frame's prepare phase, as the Level Kit window's choice: a new brush uploads its mesh.
+    m_context.imgui_windows->queue(
+        [this, item]() {
+            Brush_tool* const brush_tool = m_context.brush_tool;
+            if (brush_tool == nullptr) {
+                return;
+            }
+            const std::shared_ptr<Brush> brush = get_brush(item.get_values());
+            if (!brush) {
+                log_scene->warn("Kit slot: the shape made no geometry for {}", item.get_values().to_canonical_text());
+                return;
+            }
+            m_context.tools->set_priority_tool(brush_tool);
+            brush_tool->set_kit_brush(item.get_values(), brush, item.get_slot_materials());
+            m_context.app_message_bus->kit_values_changed.send_message(Kit_values_changed_message{.change = Kit_values_change::kit_item});
+        }
+    );
 }
 
 void Level_kits::on_kit_piece_record_changed(const erhe::scene::Node& node)

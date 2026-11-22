@@ -25,6 +25,7 @@
 #include "erhe_primitive/lod.hpp"
 #include "erhe_window/window_event_handler.hpp"
 #include "level/level_queries.hpp"
+#include "windows/inventory_slot_payload.hpp"
 #include "config/generated/connector_snap_orientation.hpp"
 #include "config/generated/surface_drag_direction.hpp"
 
@@ -74,6 +75,7 @@ enum class Scene_save_source_binding : unsigned int; // scene/scene_save_service
 
 class App_context;
 class Brush;
+class Kit_item;
 enum class Transform_drag_kind : unsigned int;
 class Scene_export;
 class Scene_id_capture;
@@ -460,6 +462,13 @@ private:
     auto action_unload_asset    (const nlohmann::json& args) -> std::string;
     auto action_set_tool_asset  (const nlohmann::json& args) -> std::string;
     auto action_set_inventory_slot(const nlohmann::json& args) -> std::string;
+    auto query_inventory_slots  (const nlohmann::json& args) -> std::string;
+    auto action_activate_inventory_slot(const nlohmann::json& args) -> std::string;
+    // The section argument of the inventory tools: "grid" (the default) or "hotbar"; returns the error.
+    auto read_inventory_section (const nlohmann::json& args, Slot_drag_payload::Section& out_section) -> std::string;
+    // doc/editor/level_tools.md "Kit slots": the kit_item argument of set_inventory_slot, and a slot's item as reported.
+    auto read_kit_item_json     (const nlohmann::json& object, const std::string& scene_name, Kit_item& out_item) -> std::string;
+    [[nodiscard]] auto kit_item_json(const Kit_item& item) const -> nlohmann::json;
     auto action_save_container  (const nlohmann::json& args) -> std::string;
     // R7 asset workflow verbs
     auto action_load_asset_file           (const nlohmann::json& args) -> std::string;

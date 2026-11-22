@@ -98,6 +98,9 @@ public:
     [[nodiscard]] auto draw(const Kit_shape_definition& shape, float size) -> bool;
     // ImGui time: the shape's image without a button (a drag tooltip), or an empty square until it exists.
     void draw_image(const Kit_shape_definition& shape, float size);
+    // ImGui time, a kit slot: follows the last hovered viewport's scene and queues the shape's render when none was
+    // requested and the lengths are known; returns whether its image exists (then draw() shows it).
+    [[nodiscard]] auto prepare_slot_image(const Kit_shape_definition& shape) -> bool;
     // Queues every shape not requested yet, as if each row were drawn (MCP request_all); needs the lengths of
     // follow_scene(). Returns the number queued.
     auto request_all() -> std::size_t;

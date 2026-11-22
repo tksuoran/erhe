@@ -1,6 +1,7 @@
 #pragma once
 
 #include "assets/asset_reference.hpp"
+#include "level/kit_item.hpp"
 #include "tools/tool.hpp"
 #include "tools/tool_window.hpp"
 
@@ -78,9 +79,13 @@ public:
     std::string              graph_node_kind {}; // Non-empty (with type) for graph-node slots ("geometry_graph" / "texture_graph")
     std::string              graph_node_type {}; // Node factory type; non-empty means graph-node slot
     std::string              graph_node_label{}; // Palette display label for the slot button
+    Kit_item                 kit_item        {}; // Has a shape for kit slots (doc/editor/level_tools.md "Kit slots"); held valid
 
     [[nodiscard]] auto get_brush   () const -> std::shared_ptr<Brush>;
     [[nodiscard]] auto get_material() const -> std::shared_ptr<erhe::primitive::Material>;
+    [[nodiscard]] auto is_kit_slot () const -> bool;
+    // Vacant: every kind's content reset, the asset references released (their usership labels kept).
+    void clear();
 };
 
 class Toggle_menu_visibility_command : public erhe::commands::Command
@@ -201,6 +206,7 @@ private:
     void update_node_transform ();
     void slot_button           (uint32_t id, Slot_entry& entry);
     void handle_slot_update    ();
+    void activate_kit_slot     (const Slot_entry& entry);
     void update_slot_from_tool (Tool* tool);
 
     void init_hotbar();

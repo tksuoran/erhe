@@ -3149,7 +3149,7 @@
     "name": "level_check"
   },
   {
-    "description": "Read the Brush tool's kit mode placement preview (doc/editor/level_tools.md \"Level Kit window\", doc/editor/brushes.md \"Kit mode\"). Read-only. Returns active (kit mode on: a shape chosen in the Level Kit window and the Brush tool not left since), tool_active (the Brush tool is the priority tool), rotation_step_degrees, yaw_steps, surface_rest (the Surface Rest setting the preview follows: 'leading_face' or 'anchor'), hover_position (the world point the Brush tool hovers, null without a hover), hover_normal (the unit world normal of the surface or grid there, null without one; the preview searches against it), preview_position (the world origin of the shown preview, kit mode or not; null without one) and visible (a preview is shown). In kit mode also shape, parameters (the values of the kit brush), mesh_key, brush_id, bounds {min, max} (the brush's mesh bounds in its own space) and materials (slot name to the palette material the next piece gets, chosen in the Level Kit window); with a visible preview also position, rotation_xyzw, surface_found and world_aabb: the transform a click in the viewport places the next piece at, in the scene root's space. Always, in and outside kit mode, connector_snap_distance (the reach of the connector join, the Connector Snap setting; 0 = no join), connector_join_suspended (the connector snap suspend key, Shift by default, was held at the last preview update) and connector_join: null, or the connector join the preview shows (step 40: the hovered kit piece's nearest free enabled connector within reach; free: no other kit piece's connector joined there) with target_piece_id, target_connector, connector (the new piece's, whose outward opposes the target's most), twist_steps (the quarter turn nearest the rotation steps' yaw angle), distance (meters from the hover point to the target connector) and flowed (K9.2: the preview shows the values the target supplies over the join, with parameters and materials as the placed piece takes them; the position is the join at those values); a click places through that join, the pose level_place_pieces gives with connect {connector, to_piece_id, to_connector, twist_steps}.",
+    "description": "Read the Brush tool's kit mode placement preview (doc/editor/level_tools.md \"Level Kit window\", doc/editor/brushes.md \"Kit mode\"). Read-only. Returns active (kit mode on: a shape chosen in the Level Kit window and the Brush tool not left since), tool_active (the Brush tool is the priority tool), rotation_step_degrees, yaw_steps, surface_rest (the Surface Rest setting the preview follows: 'leading_face' or 'anchor'), hover_position (the world point the Brush tool hovers, null without a hover), hover_normal (the unit world normal of the surface or grid there, null without one; the preview searches against it), preview_position (the world origin of the shown preview, kit mode or not; null without one) and visible (a preview is shown). In kit mode also shape, parameters (the values of the kit brush), mesh_key, brush_id, bounds {min, max} (the brush's mesh bounds in its own space) and materials (slot name to the palette material the next piece gets, chosen in the Level Kit window); with a visible preview also position, rotation_xyzw, surface_found and world_aabb: the transform a click in the viewport places the next piece at, in the scene root's space. Always, in and outside kit mode, connector_snap_distance (the reach of the connector join, the Connector Snap setting; 0 = no join), connector_join_suspended (the connector snap suspend key, Shift by default, was held at the last preview update) and connector_join: null, or the connector join the preview shows (step 40: the hovered kit piece's nearest free enabled connector within reach; free: no other kit piece's connector joined there) with target_piece_id, target_connector, connector (the new piece's, whose outward opposes the target's most), twist_steps (the quarter turn nearest the rotation steps' yaw angle), distance (meters from the hover point to the target connector) and flowed (K9.2: the preview shows the values the target supplies over the join, with parameters and materials as the placed piece takes them; the position is the join at those values); a click places through that join, the pose level_place_pieces gives with connect {connector, to_piece_id, to_connector, twist_steps}. Always also kit_item_drag: null, or while a kit item dragged from the Level Kit window is over a viewport (doc/editor/level_tools.md \"Dragging a kit item\") an object with active, the item's shape, parameters, mesh_key, brush_id, bounds, materials and visible, and with a visible preview its position, rotation_xyzw, surface_found and world_aabb; the top-level pose fields are then absent and visible false (kit mode's own preview is not shown), while connector_join and hover_position are the drag's.",
     "inputSchema": {
       "properties": {},
       "type": "object"
@@ -6316,20 +6316,60 @@
     "name": "set_tool_asset"
   },
   {
-    "description": "Adopt a manager-known brush / material into an Inventory grid slot exactly as a drag-drop would (Asset_reference::adopt; the slot becomes a declared user and its autosaved v4 key is the returned 'key'), or clear the slot's asset references with 'clear': true. Look up item ids via get_scene_materials / get_scene_brushes / query_asset_manager.",
+    "description": "Set the content of one Inventory grid or hotbar slot (doc/editor/level_tools.md \"Kit slots\"). Give exactly one of: item_id, a manager-known brush / material adopted exactly as a drag-drop would (Asset_reference::adopt; the slot becomes a declared user and its autosaved v4 key is the returned 'key'); kit_item, a level kit item {shape, parameters, materials} as level_place_pieces takes them - the slot becomes a kit slot (the Brush tool in kit mode with these values and slot materials when activated) and keeps a copy of the item; tool, a toolbox tool name as set_active_tool takes it (null for a vacant slot), the slot becomes that tool's slot; or 'clear': true, which clears the slot's brush / material references, and a kit slot's kit item (the kit slot becomes vacant). A hotbar slot change reaches the hotbar at once; every change is saved with the settings. Look up item ids via get_scene_materials / get_scene_brushes / query_asset_manager; get_inventory_slots reads the slots back.",
     "inputSchema": {
       "properties": {
         "clear": {
-          "description": "Clear the slot's brush / material references instead of adopting",
+          "description": "Clear the slot's brush / material references and a kit slot's kit item instead of setting content",
           "type": "boolean"
         },
         "item_id": {
-          "description": "Item id of a manager-known brush or material (required unless clearing)",
+          "description": "Item id of a manager-known brush or material",
           "type": "integer"
         },
+        "kit_item": {
+          "description": "A level kit item: shape (an id or a former id), parameters (the canonical parameter text as a string, used as given; or an object of parameter name to value over the shape's defaults at the lengths of scene_name, with 'derive', then derived and validated as level_place_pieces does; left out: those defaults) and materials (an object of material slot name to kit palette material name; a slot not named takes its default)",
+          "properties": {
+            "materials": {
+              "type": "object"
+            },
+            "parameters": {
+              "type": [
+                "object",
+                "string"
+              ]
+            },
+            "shape": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "shape"
+          ],
+          "type": "object"
+        },
+        "scene_name": {
+          "description": "The scene whose module and wall height a kit_item's defaults resolve against; required unless the kit_item's parameters are a string",
+          "type": "string"
+        },
+        "section": {
+          "description": "Which slots: the Inventory grid (default) or the hotbar row",
+          "enum": [
+            "grid",
+            "hotbar"
+          ],
+          "type": "string"
+        },
         "slot_index": {
-          "description": "Zero-based Inventory grid slot index",
+          "description": "Zero-based slot index in the section",
           "type": "integer"
+        },
+        "tool": {
+          "description": "Toolbox tool name (brush, move, rotate, scale, selection, paint, material_paint, weight_paint, physics, travel, foliage_paint), or null for a vacant slot",
+          "type": [
+            "string",
+            "null"
+          ]
         }
       },
       "required": [
@@ -6338,6 +6378,38 @@
       "type": "object"
     },
     "name": "set_inventory_slot"
+  },
+  {
+    "description": "Read the Inventory window's grid and hotbar slots (doc/editor/level_tools.md \"Kit slots\"). Read-only. Returns grid and hotbar, each an array in slot order of {index, kind (empty, tool, brush, material, operation, graph_node or kit), tool (the slot's toolbox tool name as set_active_tool takes it, empty when none), tool_name (the tool description the settings store), kit_item}; kit_item is null, or for a kit slot {shape, display_name, parameter_text (the canonical parameter text), parameters (by name, with derive), materials (slot name to kit palette material name)}, and a kit slot also reports config {kit_shape, kit_parameters, kit_materials}: the fields the settings save for it.",
+    "inputSchema": {
+      "properties": {},
+      "type": "object"
+    },
+    "name": "get_inventory_slots"
+  },
+  {
+    "description": "Activate an Inventory slot the way the editor does (doc/editor/level_tools.md \"Kit slots\"): a hotbar slot as its number key or a click in the hotbar selects it (a tool slot makes its tool active, a brush slot the Brush tool with that brush, a kit slot the Brush tool in kit mode with the slot's shape, values and slot materials); a grid slot as a click in the Inventory window, which activates kit slots only. A kit slot's activation lands at the start of the next frame (level_get_placement_preview reads it). Refused for an out-of-range index and for a grid slot that is no kit slot.",
+    "inputSchema": {
+      "properties": {
+        "section": {
+          "description": "Which slots: the Inventory grid (default) or the hotbar row",
+          "enum": [
+            "grid",
+            "hotbar"
+          ],
+          "type": "string"
+        },
+        "slot_index": {
+          "description": "Zero-based slot index in the section",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "slot_index"
+      ],
+      "type": "object"
+    },
+    "name": "activate_inventory_slot"
   },
   {
     "description": "Instantiate a glTF file as a prefab into a scene: the file is parsed once (cached app-wide) and inserted as a clone that stays a reference to the source file. Instances share GPU buffers; insertion is undoable. The FIRST instantiation of a file loads its template asynchronously and returns {instantiated:false, loading:true} with no node_id - poll get_async_status until asset_loads and queued_operations are 0, then find the node via get_scene_nodes. Once the template is cached (any later instantiation of the same file) the response is immediate and carries node_id.",

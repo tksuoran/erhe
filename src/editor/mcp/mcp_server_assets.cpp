@@ -20,6 +20,7 @@
 #include "content_library/content_library.hpp"
 #include "scene/scene_root.hpp"
 #include "tools/material_paint_tool.hpp"
+#include "level/kit_item.hpp"
 #include "windows/inventory_window.hpp"
 
 #include "erhe_item/item.hpp"
@@ -29,6 +30,8 @@
 #include <fmt/format.h>
 #include <nlohmann/json.hpp>
 
+#include <algorithm>
+#include <array>
 #include <filesystem>
 #include <memory>
 #include <mutex>
@@ -377,6 +380,12 @@ auto Mcp_server::action_save_container(const json& args) -> std::string
 
 auto Mcp_server::action_set_inventory_slot(const json& args) -> std::string
 {
+    for (const auto& [key, value] : args.items()) {
+        static constexpr std::array<std::string_view, 7> accepted{"section", "slot_index", "clear", "item_id", "kit_item", "scene_name", "tool"};
+        if (std::find(accepted.begin(), accepted.end(), key) == accepted.end()) {
+            return make_error_content("set_inventory_slot: unrecognized argument '" + key + "' (accepted: section, slot_index, clear, item_id, kit_item, scene_name, tool)");
+        }
+    }
     if (m_context.inventory_window == nullptr) {
         return make_error_content("Inventory window not available");
     }
@@ -387,29 +396,68 @@ auto Mcp_server::action_set_inventory_slot(const json& args) -> std::string
         return make_error_content("Missing required 'slot_index'");
     }
     const int slot_index = args["slot_index"].get<int>();
+    Slot_drag_payload::Section section{Slot_drag_payload::Section::grid};
+    const std::string section_error = read_inventory_section(args, section);
+    if (!section_error.empty()) {
+        return make_error_content("set_inventory_slot: " + section_error);
+    }
+    const char* const section_name = (section == Slot_drag_payload::Section::hotbar) ? "hotbar" : "grid";
+    const int content_count = (args.value("clear", false) ? 1 : 0) + (args.contains("item_id") ? 1 : 0) + (args.contains("kit_item") ? 1 : 0) + (args.contains("tool") ? 1 : 0);
+    if (content_count > 1) {
+        return make_error_content("set_inventory_slot: give one of clear, item_id, kit_item and tool");
+    }
 
     if (args.value("clear", false)) {
-        if (!m_context.inventory_window->adopt_into_grid_slot(slot_index, {})) {
+        if (!m_context.inventory_window->adopt_into_slot(section, slot_index, {})) {
             return make_error_content("slot_index out of range");
         }
-        return make_json_content({{"slot_index", slot_index}, {"cleared", true}}).dump();
+        return make_json_content({{"section", section_name}, {"slot_index", slot_index}, {"cleared", true}}).dump();
+    }
+
+    if (args.contains("kit_item")) {
+        Kit_item item;
+        const std::string error = read_kit_item_json(args.at("kit_item"), args.value("scene_name", ""), item);
+        if (!error.empty()) {
+            return make_error_content("set_inventory_slot: " + error);
+        }
+        if (!m_context.inventory_window->set_kit_item_slot(section, slot_index, item)) {
+            return make_error_content("slot_index out of range");
+        }
+        return make_json_content({{"section", section_name}, {"slot_index", slot_index}, {"kit_item", kit_item_json(item)}}).dump();
+    }
+
+    if (args.contains("tool")) {
+        const json& tool_name = args.at("tool");
+        Tool* tool = nullptr;
+        if (!tool_name.is_null()) {
+            const std::optional<Mcp_tool> mcp_tool = tool_name.is_string() ? find_mcp_tool(tool_name.get<std::string>()) : std::optional<Mcp_tool>{};
+            tool = mcp_tool.has_value() ? get_mcp_tool(m_context, mcp_tool.value()) : nullptr;
+            if (tool == nullptr) {
+                return make_error_content("set_inventory_slot: tool must be a toolbox tool name of set_active_tool or null, not " + tool_name.dump());
+            }
+        }
+        if (!m_context.inventory_window->set_tool_slot(section, slot_index, tool)) {
+            return make_error_content("slot_index out of range");
+        }
+        return make_json_content({{"section", section_name}, {"slot_index", slot_index}, {"tool", get_mcp_tool_name(m_context, tool)}}).dump();
     }
 
     if (!args.contains("item_id") || !args["item_id"].is_number_integer()) {
-        return make_error_content("Missing required 'item_id' (or pass 'clear': true)");
+        return make_error_content("Missing required 'item_id' (or pass 'clear': true, 'kit_item' or 'tool')");
     }
     const std::size_t item_id = static_cast<std::size_t>(args["item_id"].get<std::int64_t>());
     const std::shared_ptr<erhe::Item_base> item = m_context.asset_manager->find_loaded_by_id(item_id);
     if (!item) {
         return make_error_content(fmt::format("No manager-known asset with item id {}", item_id));
     }
-    if (!m_context.inventory_window->adopt_into_grid_slot(slot_index, item)) {
+    if (!m_context.inventory_window->adopt_into_slot(section, slot_index, item)) {
         return make_error_content("slot_index out of range or item is not a brush / material");
     }
     // The written v4 slot key is exactly make_key of the adopted item -
     // returned here so key-flip legs verify scope / path / uid without
     // reading the autosaved config file.
     return make_json_content({
+        {"section",    section_name},
         {"slot_index", slot_index},
         {"item_name",  item->get_name()},
         {"item_id",    item->get_id()},

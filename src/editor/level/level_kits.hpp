@@ -755,6 +755,9 @@ public:
     // The dragged item the payload names; null when its drag ended or another drag began.
     [[nodiscard]] auto find_dragged_kit_item(const Kit_item_payload& payload) const -> const Kit_item*;
     void end_kit_item_drag();
+    // A kit slot's activation (doc/editor/level_tools.md "Kit slots"), queued to the next prepare phase: the Brush tool
+    // becomes the active tool in kit mode with the item's values and slot materials, used as stored.
+    void activate_kit_item(const Kit_item& item);
 
     // Validates every placement, then places all of them as one Compound_operation (one undo entry).
     [[nodiscard]] auto place(Scene_root& scene_root, std::span<const Kit_placement> placements, Kit_snap snap) -> Kit_place_result;

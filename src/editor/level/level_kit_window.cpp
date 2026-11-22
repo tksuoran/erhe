@@ -122,10 +122,10 @@ Level_kit_window::Level_kit_window(
             m_connect_selection_changed = true;
         }
     );
-    // The Brush tool took the next seed after a placed piece: the rows show its values.
+    // The Brush tool took the next seed after a placed piece, or a kit slot was activated: the rows show its state.
     m_kit_values_changed_subscription = app_message_bus.kit_values_changed.subscribe(
-        [this](Kit_values_changed_message&) {
-            on_kit_values_changed();
+        [this](Kit_values_changed_message& message) {
+            on_kit_values_changed(message.change);
         }
     );
     // A connector switch edit, its undo and redo: the Connect rows offer the enabled connectors only (U33).
@@ -203,10 +203,22 @@ void Level_kit_window::level_settings_imgui(Scene_root& scene_root)
     }
 }
 
-void Level_kit_window::on_kit_values_changed()
+void Level_kit_window::on_kit_values_changed(const Kit_values_change change)
 {
     const Brush_tool* const brush_tool = m_context.brush_tool;
-    if ((brush_tool == nullptr) || (m_shape == nullptr) || (brush_tool->get_kit_shape() != m_shape)) {
+    if ((brush_tool == nullptr) || !brush_tool->is_kit_mode()) {
+        return;
+    }
+    if (change == Kit_values_change::kit_item) {
+        // The slot's shape, values and slot materials, as choosing the shape and setting them would give.
+        const Kit_shape_definition* const shape = brush_tool->get_kit_shape();
+        if (m_shape != shape) {
+            m_shape = shape;
+            get_shape_connectors(brush_tool->get_kit_values(), m_connect_place_connectors);
+            m_connect_place_connector = m_connect_place_connectors.empty() ? std::string{} : m_connect_place_connectors.front().name;
+        }
+        m_place_slot_materials = brush_tool->get_kit_slot_materials();
+    } else if (brush_tool->get_kit_shape() != m_shape) {
         return;
     }
     m_place_values  = brush_tool->get_kit_values();

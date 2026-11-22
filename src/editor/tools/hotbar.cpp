@@ -13,6 +13,9 @@
 #include "app_settings.hpp"
 #include "graphics/icon_set.hpp"
 #include "graphics/thumbnails.hpp"
+#include "level/kit_item_slot.hpp"
+#include "level/kit_thumbnails.hpp"
+#include "level/level_kits.hpp"
 #include "preview/brush_preview.hpp"
 #include "preview/material_preview.hpp"
 #include "erhe_primitive/material.hpp"
@@ -113,6 +116,24 @@ auto Slot_entry::get_brush() const -> std::shared_ptr<Brush>
 auto Slot_entry::get_material() const -> std::shared_ptr<erhe::primitive::Material>
 {
     return material.get_as<erhe::primitive::Material>();
+}
+
+auto Slot_entry::is_kit_slot() const -> bool
+{
+    return kit_item.get_shape() != nullptr;
+}
+
+void Slot_entry::clear()
+{
+    tool = nullptr;
+    brush   .set_key(Asset_key{});
+    material.set_key(Asset_key{});
+    command          = nullptr;
+    operation_params = Operation_params{};
+    graph_node_kind .clear();
+    graph_node_type .clear();
+    graph_node_label.clear();
+    kit_item = Kit_item{};
 }
 
 namespace {
@@ -934,11 +955,22 @@ void Hotbar::handle_slot_update()
 {
     if ((m_slot >= m_slot_first) && (m_slot <= m_slot_last)) {
         const Slot_entry& entry = m_slots.at(m_slot);
+        if (entry.is_kit_slot()) {
+            activate_kit_slot(entry);
+            return;
+        }
         m_context.tools->set_priority_tool(entry.tool);
         const std::shared_ptr<Brush> brush = entry.get_brush();
         if (brush && (m_context.brush_tool != nullptr)) {
             m_context.brush_tool->set_active_brush(brush);
         }
+    }
+}
+
+void Hotbar::activate_kit_slot(const Slot_entry& entry)
+{
+    if (m_context.level_kits != nullptr) {
+        m_context.level_kits->activate_kit_item(entry.kit_item);
     }
 }
 
@@ -1041,7 +1073,28 @@ void Hotbar::slot_button(const uint32_t id, Slot_entry& entry)
     // Brush slot: render thumbnail
     const std::shared_ptr<Brush>                     entry_brush    = entry.get_brush();
     const std::shared_ptr<erhe::primitive::Material> entry_material = entry.get_material();
-    if (entry_brush && m_context.thumbnails && m_context.brush_preview) {
+    if (entry.is_kit_slot() && (m_context.level_kits != nullptr)) {
+        // Kit slot: the shape's thumbnail, the Brush tool icon until it exists.
+        const Kit_shape_definition& shape      = *entry.kit_item.get_shape();
+        Kit_thumbnails&             thumbnails = m_context.level_kits->get_thumbnails();
+        Tool* const                 tool       = entry.tool;
+        bool pressed = false;
+        if (thumbnails.prepare_slot_image(shape)) {
+            pressed = thumbnails.draw(shape, icon_size);
+            ImGui::SameLine();
+        } else if ((tool != nullptr) && (tool->get_icon() != nullptr)) {
+            pressed = m_context.icon_set->icon_button(id, tool->get_icon(), tool->get_icon_font(), icon_size, tint_color, background_color);
+        } else {
+            pressed = ImGui::Button(shape.display_name.c_str(), ImVec2{icon_size, icon_size});
+            ImGui::SameLine();
+        }
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("%s", make_kit_item_tooltip(entry.kit_item).c_str());
+        }
+        if (pressed) {
+            activate_kit_slot(entry);
+        }
+    } else if (entry_brush && m_context.thumbnails && m_context.brush_preview) {
         Tool* tool = entry.tool;
         const bool is_boosted = (tool != nullptr) && (tool->get_priority_boost() > 0);
         std::shared_ptr<Brush> brush = entry_brush;
@@ -1162,6 +1215,10 @@ void Hotbar::slot_button(const uint32_t id, Slot_entry& entry)
 void Hotbar::update_slot_from_tool(Tool* tool)
 {
     if (tool == nullptr) {
+        return;
+    }
+    // The current slot stays when it holds the tool (a kit or brush slot of the Brush tool).
+    if ((m_slot < m_slots.size()) && (m_slots.at(m_slot).tool == tool)) {
         return;
     }
     for (size_t i = 0, end = m_slots.size(); i < end; ++i) {

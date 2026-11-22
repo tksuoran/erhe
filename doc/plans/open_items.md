@@ -331,6 +331,14 @@ Plans: `doc/plans/prepared_assets_design.md` (D8 per-step "Open" notes),
 
 ## Interactive checks for the user
 
+- Kit item drag and kit slots (`doc/editor/level_tools.md` "Dragging a kit
+  item", "Kit slots"): checked headless only (`level_tools_verify.py
+  --only-kit-drag`, `--only-kit-slots`); the windowed drag from the Level Kit
+  window into a viewport and onto Inventory slots, and the load of saved kit
+  slots from `user_state.json` in a normal session, have not run by hand.
+- Geometry Spreadsheet: the hovered row's highlight in the viewport
+  (`doc/editor/geometry_spreadsheet.md` section 5); the headless camera could
+  not show it.
 - Content edge lines on the vertex-shader ribbon (`content_line_ribbon.vert`,
   `doc/erhe/scene_renderer.md`): the skinned variant (a posed skinned mesh's
   edge lines follow the pose) and the multiview variant in the headset have
@@ -357,6 +365,11 @@ Plans: `doc/plans/prepared_assets_design.md` (D8 per-step "Open" notes),
 
 ## Performance and measurement
 
+- Threaded rendering against its design: capture the benchmark scenes with
+  Tracy and compare what each phase does (thread, overlap, where the waits
+  sit) with `doc/editor/render_thread.md` sections 2.1 - 2.7, 3.3 and 3.4;
+  report and propose improvements before building them
+  (`scripts/render_thread_bench.py --tracy`, `scripts/tracy_zone_summary.py`).
 - Layout nodes recompute only when there is a need. `Layout_system::update`
   recomputes every layout every frame (`doc/erhe/layout.md`); it shall run
   a layout when a `Layout` value of the node or of a child changes, when
@@ -586,6 +599,15 @@ carrying 1,000 items.
 
 ## Editor features
 
+- Kit items, further targets and sources (`doc/editor/level_tools.md`
+  "Dragging a kit item"): the foliage tool palette accepts a dragged kit item
+  (user, 2026-11-22: "later also to foliage tool palette"); a kit slot dragged
+  from the Inventory window into a viewport places its piece; the hotbar
+  overlay itself accepts drops; the XR radial menu shows a kit slot's
+  thumbnail. For the user to review: a drop places one piece and leaves the
+  tool as it was, a non-chosen row carries the shape's defaults, a kit slot's
+  values are used as stored (not resolved against the scene's lengths again),
+  and a kit slot in the Inventory grid activates on a click.
 - Property rows: migrate the remaining hand-written `Property_editor` rows
   (each named by a `Property_row_id` enumerator) into registered properties,
   so every row is identified by its property; then remove `Property_row_id`

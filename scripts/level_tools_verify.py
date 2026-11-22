@@ -256,7 +256,7 @@ Usage: python3 scripts/level_tools_verify.py [--editor <binary>] [--image <png p
        [--layout-image <png path>] [--group-image <png path>] [--path-image <png path>] [--only-walkable] [--only-transform] [--only-layouts]
        [--only-path-layouts] [--only-window-layout] [--only-replace] [--only-layout-selection] [--only-scatter] [--only-connectors] [--only-attachments] [--only-connector-types] [--only-polygon-floor] [--only-connection-records] [--only-property-flow] [--only-riders] [--only-surface-attachment] [--only-flow-preview] [--only-connector-snap]
        [--only-layout-indicators] [--only-region-handles] [--only-layout-handles] [--only-segment-handles] [--only-more-shapes] [--only-former-ids] [--only-layout-connectors] [--only-stairs-layout] [--only-stairs-drag-uploads]
-       [--only-piece-lights] [--piece-lights-shape <shape id>] [--only-wrap-with-path] [--only-create-menu] [--only-kit-drag] [--only-foliage-flag] [--only-foliage-index] [--only-foliage-paint] [--only-foliage-remove] [--only-foliage-tool]
+       [--only-piece-lights] [--piece-lights-shape <shape id>] [--only-wrap-with-path] [--only-create-menu] [--only-kit-drag] [--only-kit-slots] [--only-foliage-flag] [--only-foliage-index] [--only-foliage-paint] [--only-foliage-remove] [--only-foliage-tool]
        [--only-thumbnails] [--thumbnails-image <png path>] [--only-machine-kit]
 (default editor: build_ninja_linux_vulkan_headless/bin/editor when built, else build/Ninja_Vulkan_Debug/bin/editor)
 """
@@ -22819,6 +22819,219 @@ def check_kit_drag(editor):
     hide_windows_shown_since(editor, windows)
 
 
+INVENTORY_WINDOW = "Inventory"
+
+
+def inventory_slots(editor):
+    return editor.call("get_inventory_slots", {})
+
+
+def slot_content(slot):
+    """What a slot holds, for comparing a restored slot with the one before."""
+    return {"kind": slot.get("kind"), "tool": slot.get("tool"), "kit_item": slot.get("kit_item")}
+
+
+def wait_slot(editor, section, index, predicate, timeout=10.0):
+    """Polls get_inventory_slots (one frame per call) until the slot satisfies the predicate; returns the last slot."""
+    deadline = time.monotonic() + timeout
+    slot = inventory_slots(editor)[section][index]
+    while (not predicate(slot)) and (time.monotonic() < deadline):
+        slot = inventory_slots(editor)[section][index]
+    return slot
+
+
+def window_rect(editor, name):
+    return next((w for w in editor.call("get_imgui_windows").get("windows", []) if (w.get("display_name") == name) and w.get("active")), None)
+
+
+def check_kit_slots(editor):
+    """Kit items in Inventory grid and hotbar slots (doc/editor/level_tools.md "Kit slots"): real ImGui drags from the Level
+    Kit window's rows into slots, slot to slot swaps, the right click, the activation and the saved fields."""
+    import curve_verify as cv  # noqa: E402 - frames the camera from the viewport's real size
+    saved = Saved_tool_settings(editor)
+    windows = shown_windows(editor, editor.scene_names())
+    original = inventory_slots(editor)
+    grid_free = [s["index"] for s in original["grid"] if s["kind"] == "empty"]
+    hotbar_index = len(original["hotbar"]) - 1
+    if len(grid_free) < 2:
+        check("kit slots setup: two vacant Inventory grid slots", False, json.dumps([s["kind"] for s in original["grid"]]))
+        return
+    grid_a, grid_b = grid_free[0], grid_free[1]
+    scene = create_scene(editor)
+    slab = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [
+        {"shape": "basic.floor_slab", "position": [0.0, 0.0, 0.0], "name": "ks slab", "parameters": {"width": 8.0, "depth": 8.0}}]})["pieces"][0]
+    editor.wait_idle()
+    slab_top = slab["world_aabb"]["max"][1]
+    viewport = cv.frame_camera(editor, scene, [0.0, 9.0, 12.0], [0.0, 0.0, 0.0],
+                               [[x, slab_top, z] for x in (-4.0, 4.0) for z in (-4.0, 4.0)])
+    hover(editor, viewport, [0.0, slab_top, 0.0])  # the window acts on the last hovered viewport
+    opened = open_window(editor, WINDOW) and open_window(editor, INVENTORY_WINDOW)
+    # Both windows open floating at the same place: the Inventory moves left of the Level Kit window, off the viewport.
+    kit_rect, inventory_rect = window_rect(editor, WINDOW), window_rect(editor, INVENTORY_WINDOW)
+    if opened and kit_rect and inventory_rect:
+        grab = [float(round(inventory_rect["x"] + 60.0)), float(round(inventory_rect["y"] + 8.0))]
+        dx = (kit_rect["x"] - 8.0 - inventory_rect["width"]) - inventory_rect["x"]
+        editor.call("mouse_drag", {"from": grab, "to": [grab[0] + float(round(dx)), grab[1]], "frames": 8})
+        editor.wait_idle()
+        inventory_rect = window_rect(editor, INVENTORY_WINDOW)
+    check("kit slots setup: the Level Kit and Inventory windows are open side by side",
+          opened and bool(inventory_rect) and bool(kit_rect) and (inventory_rect["x"] + inventory_rect["width"] <= kit_rect["x"]),
+          f"level kit {kit_rect and (kit_rect['x'], kit_rect['width'])}, inventory {inventory_rect and (inventory_rect['x'], inventory_rect['width'])}")
+    saved_checks = {label: is_checked(editor, label) for label in ("Snap To Module", "Snap To Surface", "Orient To Surface", "New Seed Per Piece", "Place As Layout")}
+    settings_ok = (set_checkbox(editor, "Snap To Module", True) and set_checkbox(editor, "Snap To Surface", True)
+                   and set_checkbox(editor, "Orient To Surface", False) and set_checkbox(editor, "New Seed Per Piece", True)
+                   and set_checkbox(editor, "Place As Layout", False))
+    saved_distance = editor.call("get_surface_snap_settings", {}).get("connector_snap_distance", 0.0)
+    editor.call("set_surface_snap_settings", {"connector_snap_distance": 0.0})
+    kits = editor.call("level_get_kits", {"scene_name": scene})
+    shapes = {s["id"]: s for s in kits["shapes"]}
+
+    def defaults_of(shape_id):
+        return {p["name"]: p["default"] for p in shapes[shape_id]["parameters"]}
+
+    def default_materials_of(shape_id):
+        return {m["slot"]: m["default_material"] for m in shapes[shape_id]["material_slots"]}
+
+    def tool_state():
+        p = preview(editor)
+        return {"tool": active_tool(editor), "kit mode": p.get("active"), "shape": p.get("shape"), "parameters": p.get("parameters"),
+                "materials": p.get("materials"), "yaw_steps": p.get("yaw_steps"),
+                "selection": sorted(i["id"] for i in editor.call("get_selection")["items"])}
+
+    def slot_center(section, index):
+        rect = item_rect(editor, INVENTORY_WINDOW, f"Inventory {section} slot {index + 1}")
+        return [float(round(rect["center_x"])), float(round(rect["center_y"]))]
+
+    def drag_row_to_slot(label, section, index):
+        rect = item_rect(editor, WINDOW, label)
+        editor.call("mouse_drag", {"from": [rect["center_x"], rect["center_y"]], "to": slot_center(section, index), "frames": 12})
+        editor.wait_idle()
+
+    click(editor, "Wall")
+    entered = wait_preview(editor, lambda r: r.get("active") and (r.get("shape") == "architecture.wall"))
+    editor.call("select_items", {"scene_name": scene, "ids": [slab["id"]]})
+    editor.wait_idle()
+    check("kit slots setup: kit mode with the Wall, the slab selected, New Seed Per Piece on", settings_ok and entered.get("active"), json.dumps(entered)[:300])
+
+    # A row the Brush tool does not place, onto a grid slot: the shape's defaults and default materials.
+    before = tool_state()
+    drag_row_to_slot("Block", "grid", grid_a)
+    block_slot = wait_slot(editor, "grid", grid_a, lambda s: s["kind"] == "kit")
+    block_item = block_slot.get("kit_item") or {}
+    block_parameters = dict(block_item.get("parameters") or {})
+    block_parameters.pop("derive", None)
+    expected = defaults_of("basic.block")
+    check("dragging the Block row onto a vacant grid slot makes a kit slot of the Block at its defaults with its default materials",
+          (block_slot["kind"] == "kit") and (block_item.get("shape") == "basic.block") and (block_slot.get("tool") == "brush")
+          and all(abs(block_parameters.get(k, 1.0e9) - v) < 1.0e-5 for k, v in expected.items() if isinstance(v, float))
+          and (block_item.get("materials") == default_materials_of("basic.block")),
+          f"{json.dumps(block_slot)[:500]} defaults {expected}")
+    after = tool_state()
+    check("the drop onto the slot leaves the active tool, kit mode (shape, values, materials) and the selection as they were",
+          after == before, state_differences(before, after))
+
+    # The chosen row after edits, onto a hotbar slot: the edited values and slot material, a copy.
+    type_into(editor, "length", "2.5")
+    click(editor, "wall material")
+    editor.call("imgui_click", {"label": "Kit Wood"})
+    edited = wait_preview(editor, lambda r: (abs(((r.get("parameters") or {}).get("length") or 0.0) - 2.5) < 1.0e-5)
+                          and ((r.get("materials") or {}).get("wall") == "Kit Wood"))
+    drag_row_to_slot("Wall", "hotbar", hotbar_index)
+    wall_slot = wait_slot(editor, "hotbar", hotbar_index, lambda s: s["kind"] == "kit")
+    wall_item = wall_slot.get("kit_item") or {}
+    check("dragging the chosen Wall row after editing length 2.5 and Kit Wood onto a hotbar slot makes a kit slot carrying those",
+          (wall_item.get("shape") == "architecture.wall") and (abs((wall_item.get("parameters") or {}).get("length", 0.0) - 2.5) < 1.0e-5)
+          and (wall_item.get("materials") == {"wall": "Kit Wood"}) and (wall_item.get("parameters") == edited.get("parameters")),
+          f"edited {json.dumps(edited.get('parameters'))} {edited.get('materials')}, slot {json.dumps(wall_item)[:400]}")
+    type_into(editor, "length", "3.5")
+    wait_preview(editor, lambda r: abs(((r.get("parameters") or {}).get("length") or 0.0) - 3.5) < 1.0e-5)
+    later = inventory_slots(editor)["hotbar"][hotbar_index].get("kit_item")
+    check("editing the window's length row afterwards leaves the hotbar slot's item as it was", later == wall_item,
+          f"{json.dumps(later)[:300]}")
+    config = wall_slot.get("config") or {}
+    check("the hotbar kit slot saves its shape id, canonical parameter text and slot materials",
+          (config.get("kit_shape") == "architecture.wall") and (config.get("kit_parameters") == wall_item.get("parameter_text"))
+          and (config.get("kit_materials") == ["Kit Wood"]), json.dumps(config))
+
+    # Activation as the hotbar's number key: kit mode with the slot's shape, values and materials, shown by the window.
+    click(editor, "Block")
+    wait_preview(editor, lambda r: r.get("shape") == "basic.block")
+    editor.call("activate_inventory_slot", {"section": "hotbar", "slot_index": hotbar_index})
+    active = wait_preview(editor, lambda r: r.get("active") and (r.get("shape") == "architecture.wall"))
+    check("activating the hotbar kit slot makes the Brush tool active in kit mode with the slot's shape, values and slot materials",
+          (active_tool(editor) == "brush") and active.get("active") and (active.get("shape") == "architecture.wall")
+          and (active.get("parameters") == wall_item.get("parameters")) and (active.get("materials") == wall_item.get("materials")),
+          f"{active_tool(editor)} {json.dumps({k: active.get(k) for k in ('active', 'shape', 'parameters', 'materials')})}")
+    drag_row_to_slot("Wall", "grid", grid_b)
+    shown = wait_slot(editor, "grid", grid_b, lambda s: s["kind"] == "kit").get("kit_item")
+    check("the Level Kit window shows the slot's values and materials: its chosen Wall row carries the slot's item",
+          shown == wall_item, f"{json.dumps(shown)[:300]}")
+
+    # A kit mode click places the slot's values; New Seed Per Piece advances the tool's seed, never the slot's.
+    known = {slab["id"]}
+    depth = undo_depth(editor)
+    aim = [-2.1, slab_top, 0.9]
+    hover(editor, viewport, aim)
+    wait_preview(editor, lambda r: r.get("visible") and close(r.get("hover_position") or [99, 99, 99], aim, 0.15))
+    x, y = window_point(viewport, aim)
+    editor.call("mouse_click", {"x": float(round(x)), "y": float(round(y)), "button": binding_input(editor, "Brush_tool.insert", "mouse_button")})
+    editor.wait_idle()
+    added = new_pieces(editor, scene, known)
+    placed = added[0] if len(added) == 1 else {}
+    placed_parameters = dict(placed.get("parameters") or {})
+    slot_parameters = dict(wall_item.get("parameters") or {})
+    placed_parameters.pop("derive", None)
+    slot_parameters.pop("derive", None)
+    next_seed = (preview(editor).get("parameters") or {}).get("seed")
+    check("a kit mode click places one wall with exactly the slot's values and slot material, one undo entry",
+          (len(added) == 1) and (placed.get("shape") == "architecture.wall") and (placed_parameters == slot_parameters)
+          and (placed.get("materials") == {"wall": "Kit Wood"}) and (undo_depth(editor) == depth + 1),
+          f"added {[(p.get('shape'), p.get('parameters'), p.get('materials')) for p in added]}")
+    after_place = inventory_slots(editor)["hotbar"][hotbar_index].get("kit_item")
+    check("with New Seed Per Piece the tool took the next seed and the hotbar slot's item is unchanged",
+          (next_seed != slot_parameters.get("seed")) and (after_place == wall_item),
+          f"tool seed {next_seed}, slot {json.dumps(after_place)[:300]}")
+
+    # Slot to slot: the kit items travel whole; the drags activate nothing.
+    before = tool_state()
+    editor.call("mouse_drag", {"from": slot_center("grid", grid_a), "to": slot_center("grid", grid_b), "frames": 12})
+    editor.wait_idle()
+    swapped = inventory_slots(editor)["grid"]
+    check("dragging the Block kit slot onto the Wall kit slot swaps them, the tool's state unchanged",
+          ((swapped[grid_a].get("kit_item") or {}).get("shape") == "architecture.wall") and (swapped[grid_a].get("kit_item") == wall_item)
+          and (swapped[grid_b].get("kit_item") == block_item) and (tool_state() == before),
+          f"{grid_a}: {json.dumps(swapped[grid_a].get('kit_item'))[:200]}, {grid_b}: {json.dumps(swapped[grid_b].get('kit_item'))[:200]}; "
+          f"{state_differences(before, tool_state())}")
+    editor.call("mouse_drag", {"from": slot_center("grid", grid_b), "to": slot_center("hotbar", hotbar_index), "frames": 12})
+    editor.wait_idle()
+    moved = inventory_slots(editor)
+    check("dragging a grid kit slot onto the hotbar kit slot swaps them across the sections",
+          (moved["hotbar"][hotbar_index].get("kit_item") == block_item) and (moved["grid"][grid_b].get("kit_item") == wall_item),
+          f"hotbar {json.dumps(moved['hotbar'][hotbar_index].get('kit_item'))[:200]}, grid {json.dumps(moved['grid'][grid_b].get('kit_item'))[:200]}")
+    for index in (grid_a, grid_b):
+        center = slot_center("grid", index)
+        editor.call("mouse_click", {"x": center[0], "y": center[1], "button": "right"})
+        editor.wait_idle()
+    cleared = inventory_slots(editor)["grid"]
+    check("a right click clears a kit slot", all(cleared[i]["kind"] == "empty" for i in (grid_a, grid_b)),
+          json.dumps([cleared[i] for i in (grid_a, grid_b)])[:300])
+
+    # Restore the hotbar slot (its tool) and the window settings.
+    restore = original["hotbar"][hotbar_index]
+    editor.call("set_inventory_slot", {"section": "hotbar", "slot_index": hotbar_index, "tool": restore["tool"] or None})
+    restored = inventory_slots(editor)
+    check("the group gives the slots back as they were",
+          [slot_content(s) for s in restored["grid"]] == [slot_content(s) for s in original["grid"]]
+          and [slot_content(s) for s in restored["hotbar"]] == [slot_content(s) for s in original["hotbar"]],
+          json.dumps([slot_content(s) for s in restored["hotbar"]])[:400])
+    editor.call("set_surface_snap_settings", {"connector_snap_distance": saved_distance})
+    for label, value in saved_checks.items():
+        set_checkbox(editor, label, value)
+    saved.restore()
+    editor.close(scene)
+    hide_windows_shown_since(editor, windows)
+
+
 def check_foliage_tool_exit(editor):
     """Plan check 11: request_exit with a stroke held open ends the editor cleanly - the shutdown abandons the stroke.
     The run's last act on its own editor, after the end-of-run state check."""
@@ -22931,6 +23144,7 @@ def main():
     parser.add_argument("--only-foliage-remove", action="store_true", help="run the foliage remove stroke checks alone: level_foliage_remove (FD10)")
     parser.add_argument("--only-foliage-tool", action="store_true", help="run the Foliage Paint tool checks alone: the drags, the wheel, Escape, the context menu and the live edit rules of a held stroke (FD11, FD13.2)")
     parser.add_argument("--only-kit-drag", action="store_true", help="run the checks of dragging a kit item from the Level Kit window into a viewport alone")
+    parser.add_argument("--only-kit-slots", action="store_true", help="run the checks of kit items in Inventory grid and hotbar slots alone")
     parser.add_argument("--only-create-menu", action="store_true", help="run the checks of path stairs from the UI and the Create menu's Level Kit submenu alone (U46, U47)")
     parser.add_argument("--only-wrap-with-path", action="store_true", help="run the Wrap with Path checks alone (MCP and the Scene Hierarchy context menu, U45)")
     parser.add_argument("--only-former-ids", action="store_true", help="run the checks of the former shape ids alone (U55)")
@@ -23151,6 +23365,8 @@ def main():
             groups = [("create menu", check_create_menu)]
         elif args.only_kit_drag:
             groups = [("kit drag", check_kit_drag)]
+        elif args.only_kit_slots:
+            groups = [("kit slots", check_kit_slots)]
         elif args.only_piece_lights:
             groups = [("piece lights", check_piece_lights, work, args.piece_lights_shape)]
         elif args.only_region_handles:
@@ -23225,6 +23441,7 @@ def main():
                 ("wrap with path", check_wrap_with_path, work),
                 ("create menu", check_create_menu),
                 ("kit drag", check_kit_drag),
+                ("kit slots", check_kit_slots),
                 ("foliage flag", check_foliage_flag, work),
                 ("Level Kit window foliage brush", level_kit_window(lambda e, s, _: check_foliage_brush(e, s))),
                 ("foliage index", check_foliage_index, work),

@@ -17,6 +17,11 @@
 #include "graph_editor/graph_node_drag_payload.hpp"
 #include "graphics/icon_set.hpp"
 #include "graphics/thumbnails.hpp"
+#include "level/kit_item.hpp"
+#include "level/kit_item_payload.hpp"
+#include "level/kit_item_slot.hpp"
+#include "level/kit_thumbnails.hpp"
+#include "level/level_kits.hpp"
 #include "preview/brush_preview.hpp"
 #include "preview/material_preview.hpp"
 #include "erhe_primitive/material.hpp"
@@ -31,6 +36,7 @@
 
 #include "erhe_commands/command.hpp"
 #include "erhe_commands/commands.hpp"
+#include "erhe_imgui/imgui_item_recorder.hpp"
 #include "erhe_imgui/imgui_renderer.hpp"
 #include "erhe_utility/bit_helpers.hpp"
 
@@ -89,18 +95,11 @@ Inventory_window::Inventory_window(
     m_grid_slots.resize(grid_count);
     m_hotbar_slots.resize(m_hotbar_slot_count);
 
-    // Save tool / command slot names for later resolution (after tools are
-    // registered). Brush / material references need no deferred pass: their
-    // keys go straight into the Slot_entry Asset_references here and resolve
+    // Tool, command, graph node and kit fields resolve after the tools are registered (collect_tools). Brush / material
+    // references need no deferred pass: their keys go straight into the Slot_entry Asset_references here and resolve
     // lazily (resolve_slot_references).
-    m_saved_grid_names.reserve(config.grid_slots.size());
-    for (const Inventory_slot& slot : config.grid_slots) {
-        m_saved_grid_names.push_back(Saved_slot_name{slot.tool_name, slot.command_name, slot.operation_params, slot.graph_node_kind, slot.graph_node_type, slot.graph_node_label});
-    }
-    m_saved_hotbar_names.reserve(config.hotbar_slots.size());
-    for (const Inventory_slot& slot : config.hotbar_slots) {
-        m_saved_hotbar_names.push_back(Saved_slot_name{slot.tool_name, slot.command_name, slot.operation_params, slot.graph_node_kind, slot.graph_node_type, slot.graph_node_label});
-    }
+    m_saved_grid_slots   = config.grid_slots;
+    m_saved_hotbar_slots = config.hotbar_slots;
 
     const auto load_slot_references = [](std::vector<Slot_entry>& slots, const std::vector<Inventory_slot>& saved_slots, const bool hotbar) {
         for (int i = 0; i < static_cast<int>(slots.size()); ++i) {
@@ -131,39 +130,10 @@ void Inventory_window::collect_tools()
         }
     }
 
-    // Resolve saved grid slot names
-    const int grid_count = m_column_count * m_row_count;
-    for (int i = 0; i < grid_count; ++i) {
-        if (i < static_cast<int>(m_saved_grid_names.size())) {
-            const Saved_slot_name& saved = m_saved_grid_names[i];
-            m_grid_slots[i].tool  = resolve_tool(saved.tool_name);
-            if (!saved.command_name.empty() && (m_context.commands != nullptr)) {
-                m_grid_slots[i].command          = m_context.commands->find_command(saved.command_name);
-                m_grid_slots[i].operation_params = saved.operation_params;
-            }
-            // Graph-node slots are plain strings; no resolution needed.
-            m_grid_slots[i].graph_node_kind  = saved.graph_node_kind;
-            m_grid_slots[i].graph_node_type  = saved.graph_node_type;
-            m_grid_slots[i].graph_node_label = saved.graph_node_label;
-        }
-    }
-    m_saved_grid_names.clear();
-
-    // Resolve saved hotbar slot names
-    for (int i = 0; i < m_hotbar_slot_count; ++i) {
-        if (i < static_cast<int>(m_saved_hotbar_names.size())) {
-            const Saved_slot_name& saved = m_saved_hotbar_names[i];
-            m_hotbar_slots[i].tool = resolve_tool(saved.tool_name);
-            if (!saved.command_name.empty() && (m_context.commands != nullptr)) {
-                m_hotbar_slots[i].command          = m_context.commands->find_command(saved.command_name);
-                m_hotbar_slots[i].operation_params = saved.operation_params;
-            }
-            m_hotbar_slots[i].graph_node_kind  = saved.graph_node_kind;
-            m_hotbar_slots[i].graph_node_type  = saved.graph_node_type;
-            m_hotbar_slots[i].graph_node_label = saved.graph_node_label;
-        }
-    }
-    m_saved_hotbar_names.clear();
+    resolve_saved_slots(m_grid_slots,   m_saved_grid_slots,   false);
+    resolve_saved_slots(m_hotbar_slots, m_saved_hotbar_slots, true);
+    m_saved_grid_slots.clear();
+    m_saved_hotbar_slots.clear();
 
     // The default scene's content library normally exists by now, so saved
     // brush / material references resolve here; scenes still loading resolve
@@ -182,6 +152,34 @@ void Inventory_window::collect_tools()
     }
 
     apply_hotbar();
+}
+
+void Inventory_window::resolve_saved_slots(std::vector<Slot_entry>& slots, const std::vector<Inventory_slot>& saved_slots, const bool hotbar)
+{
+    for (std::size_t i = 0, end = std::min(slots.size(), saved_slots.size()); i < end; ++i) {
+        const Inventory_slot& saved = saved_slots[i];
+        Slot_entry&           slot  = slots[i];
+        slot.tool = resolve_tool(saved.tool_name);
+        if (!saved.command_name.empty() && (m_context.commands != nullptr)) {
+            slot.command          = m_context.commands->find_command(saved.command_name);
+            slot.operation_params = saved.operation_params;
+        }
+        // Graph-node slots are plain strings; no resolution needed.
+        slot.graph_node_kind  = saved.graph_node_kind;
+        slot.graph_node_type  = saved.graph_node_type;
+        slot.graph_node_label = saved.graph_node_label;
+        if (saved.kit_shape.empty() || (m_context.level_kits == nullptr)) {
+            continue;
+        }
+        const Kit_item_slot_reading reading = read_kit_item_slot(m_context.level_kits->get_library(), saved);
+        slot.clear();
+        if (reading.item.has_value()) {
+            slot.tool     = m_context.brush_tool;
+            slot.kit_item = reading.item.value();
+        } else {
+            log_tools->warn("Inventory {} slot {}: kit item '{}' left vacant: {}", hotbar ? "hotbar" : "grid", i + 1, saved.kit_shape, reading.problem);
+        }
+    }
 }
 
 auto Inventory_window::has_new_tool() const -> bool
@@ -256,7 +254,7 @@ auto Inventory_window::render_slot(const int id, Slot_entry& slot, const bool is
     const std::shared_ptr<erhe::primitive::Material> slot_material = slot.get_material();
 
     bool changed  = false;
-    bool has_item = (slot.tool != nullptr) || slot_brush || slot_material || (slot.command != nullptr) || !slot.graph_node_type.empty();
+    bool has_item = (slot.tool != nullptr) || slot_brush || slot_material || (slot.command != nullptr) || !slot.graph_node_type.empty() || slot.is_kit_slot();
 
     const ImVec2 button_size{c_slot_size, c_slot_size};
 
@@ -269,8 +267,20 @@ auto Inventory_window::render_slot(const int id, Slot_entry& slot, const bool is
 
     bool thumbnail_drawn = false;
 
+    // Kit slot: the shape's thumbnail; a click activates it (doc/editor/level_tools.md "Kit slots").
+    if (slot.is_kit_slot() && (m_context.level_kits != nullptr)) {
+        thumbnail_drawn = true;
+        const bool pressed = kit_slot_button(slot);
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("%s", make_kit_item_tooltip(slot.kit_item).c_str());
+        }
+        if (pressed && is_target) {
+            m_context.level_kits->activate_kit_item(slot.kit_item);
+        }
+    }
+
     // Brush slot: render thumbnail
-    if (slot_brush && m_context.thumbnails && m_context.brush_preview) {
+    if (!thumbnail_drawn && slot_brush && m_context.thumbnails && m_context.brush_preview) {
         std::shared_ptr<Brush> brush = slot_brush;
         // Tier 2 (doc/editor/brushes.md G3): the slot spins
         // while the brush geometry is being prepared and keeps its size.
@@ -353,6 +363,11 @@ auto Inventory_window::render_slot(const int id, Slot_entry& slot, const bool is
         }
     }
 
+    // MCP (get_imgui_items) addresses the slot's item as "Inventory grid slot N" / "Inventory hotbar slot N".
+    if (((section == 1) || (section == 2)) && erhe::imgui::is_item_recording()) {
+        erhe::imgui::set_item_debug_label(fmt::format("Inventory {} slot {}", (section == 2) ? "hotbar" : "grid", slot_index + 1));
+    }
+
     // Drag source
     if (is_source && has_item) {
         if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceAllowNullID)) {
@@ -369,7 +384,9 @@ auto Inventory_window::render_slot(const int id, Slot_entry& slot, const bool is
             snprintf(drag.graph_node_type,  sizeof(drag.graph_node_type),  "%s", slot.graph_node_type.c_str());
             snprintf(drag.graph_node_label, sizeof(drag.graph_node_label), "%s", slot.graph_node_label.c_str());
             ImGui::SetDragDropPayload(c_inventory_slot_payload_type, &drag, sizeof(Slot_drag_payload));
-            if (slot_brush) {
+            if (slot.is_kit_slot()) {
+                ImGui::TextUnformatted(slot.kit_item.get_display_name().c_str());
+            } else if (slot_brush) {
                 ImGui::Text("%s", slot_brush->get_name().c_str());
             } else if (slot_material) {
                 ImGui::Text("%s", slot_material->get_name().c_str());
@@ -386,13 +403,7 @@ auto Inventory_window::render_slot(const int id, Slot_entry& slot, const bool is
 
     // Right-click to clear
     if (is_target && has_item && ImGui::IsItemClicked(ImGuiMouseButton_Right)) {
-        slot.tool = nullptr;
-        slot.brush   .set_key(Asset_key{}); // releases the usership
-        slot.material.set_key(Asset_key{});
-        slot.command = nullptr;
-        slot.graph_node_kind.clear();
-        slot.graph_node_type.clear();
-        slot.graph_node_label.clear();
+        slot.clear(); // releases the asset userships
         changed = true;
     }
 
@@ -425,10 +436,12 @@ auto Inventory_window::render_slot(const int id, Slot_entry& slot, const bool is
                     slot         = *source_slot;
                     *source_slot = old_dest;
                     set_slot_labels(*source_slot, source.section == Slot_section::hotbar, source.index);
-                } else {
+                    changed = true;
+                } else if (source.section == Slot_section::palette) {
                     // Palette: copy only. Reconstruct from the payload;
                     // adopt() records exactly the dragged objects as this
-                    // slot's asset userships.
+                    // slot's asset userships. Palette entries are tool slots:
+                    // a kit slot travels whole, it is never reconstructed.
                     Slot_entry source_entry;
                     source_entry.tool = source.tool;
                     if ((source.brush != nullptr) && (m_context.asset_manager != nullptr)) {
@@ -443,22 +456,30 @@ auto Inventory_window::render_slot(const int id, Slot_entry& slot, const bool is
                     source_entry.graph_node_type  = source.graph_node_type;
                     source_entry.graph_node_label = source.graph_node_label;
                     slot = source_entry;
+                    changed = true;
                 }
-                changed = true;
+            }
+
+            // Accept a kit item dragged out of the Level Kit window: a copy of it as it was when the drag started.
+            const ImGuiPayload* kit_payload = ImGui::AcceptDragDropPayload(c_kit_item_payload_type);
+            if ((kit_payload != nullptr) && (m_context.level_kits != nullptr)) {
+                const Kit_item_payload& payload = *static_cast<const Kit_item_payload*>(kit_payload->Data);
+                const Kit_item* const   item    = m_context.level_kits->find_dragged_kit_item(payload);
+                if ((item != nullptr) && item->is_valid()) {
+                    slot.clear();
+                    slot.tool     = m_context.brush_tool;
+                    slot.kit_item = *item;
+                    changed = true;
+                }
             }
 
             // Accept an operation dragged out of the Operations window.
             const ImGuiPayload* op_payload = ImGui::AcceptDragDropPayload(c_operation_payload_type);
             if (op_payload != nullptr) {
                 const Operation_drag_payload& op = *static_cast<const Operation_drag_payload*>(op_payload->Data);
-                slot.tool = nullptr;
-                slot.brush   .set_key(Asset_key{});
-                slot.material.set_key(Asset_key{});
+                slot.clear();
                 slot.command          = op.command;
                 slot.operation_params = op.params;
-                slot.graph_node_kind.clear();
-                slot.graph_node_type.clear();
-                slot.graph_node_label.clear();
                 changed = true;
             }
 
@@ -466,10 +487,7 @@ auto Inventory_window::render_slot(const int id, Slot_entry& slot, const bool is
             const ImGuiPayload* graph_node_payload = ImGui::AcceptDragDropPayload(c_graph_node_payload_type);
             if (graph_node_payload != nullptr) {
                 const Graph_node_drag_payload& node = *static_cast<const Graph_node_drag_payload*>(graph_node_payload->Data);
-                slot.tool = nullptr;
-                slot.brush   .set_key(Asset_key{});
-                slot.material.set_key(Asset_key{});
-                slot.command          = nullptr;
+                slot.clear();
                 slot.graph_node_kind  = node.kind;
                 slot.graph_node_type  = node.type_name;
                 slot.graph_node_label = node.label;
@@ -488,13 +506,9 @@ auto Inventory_window::render_slot(const int id, Slot_entry& slot, const bool is
                 if (node) {
                     std::shared_ptr<Brush> dropped_brush = std::dynamic_pointer_cast<Brush>(node);
                     if (dropped_brush) {
+                        slot.clear();
                         slot.brush.adopt(*m_context.asset_manager, dropped_brush);
-                        slot.material.set_key(Asset_key{});
                         slot.tool     = m_context.brush_tool;
-                        slot.command  = nullptr;
-                        slot.graph_node_kind.clear();
-                        slot.graph_node_type.clear();
-                        slot.graph_node_label.clear();
                         changed       = true;
                     }
                     std::shared_ptr<erhe::primitive::Material> dropped_material =
@@ -503,17 +517,17 @@ auto Inventory_window::render_slot(const int id, Slot_entry& slot, const bool is
                         const std::shared_ptr<Brush> current_brush = slot.get_brush();
                         if (current_brush) {
                             // Slot has a brush: find or create a forked brush with this material
-                            slot.brush.adopt(*m_context.asset_manager, find_or_create_brush_with_material(current_brush, dropped_material));
+                            const std::shared_ptr<Brush> forked_brush = find_or_create_brush_with_material(current_brush, dropped_material);
+                            Tool* const                  slot_tool    = slot.tool;
+                            slot.clear();
+                            slot.brush.adopt(*m_context.asset_manager, forked_brush);
+                            slot.tool = slot_tool;
                         } else {
-                            // Empty or tool slot: make it a material slot
+                            // Empty, tool or kit slot: make it a material slot
+                            slot.clear();
                             slot.material.adopt(*m_context.asset_manager, dropped_material);
-                            slot.brush.set_key(Asset_key{});
                             slot.tool     = m_context.material_paint_tool;
                         }
-                        slot.command = nullptr;
-                        slot.graph_node_kind.clear();
-                        slot.graph_node_type.clear();
-                        slot.graph_node_label.clear();
                         changed = true;
                     }
                 }
@@ -535,35 +549,128 @@ auto Inventory_window::render_slot(const int id, Slot_entry& slot, const bool is
     return changed;
 }
 
-auto Inventory_window::adopt_into_grid_slot(const int slot_index, const std::shared_ptr<erhe::Item_base>& item) -> bool
+auto Inventory_window::find_slot(const Slot_drag_payload::Section section, const int slot_index) -> Slot_entry*
 {
-    if ((slot_index < 0) || (slot_index >= static_cast<int>(m_grid_slots.size())) || (m_context.asset_manager == nullptr)) {
+    std::vector<Slot_entry>* const slots =
+        (section == Slot_section::grid)   ? &m_grid_slots   :
+        (section == Slot_section::hotbar) ? &m_hotbar_slots : nullptr;
+    if ((slots == nullptr) || (slot_index < 0) || (slot_index >= static_cast<int>(slots->size()))) {
+        return nullptr;
+    }
+    return &slots->at(static_cast<std::size_t>(slot_index));
+}
+
+auto Inventory_window::get_slots(const Slot_drag_payload::Section section) const -> const std::vector<Slot_entry>*
+{
+    return
+        (section == Slot_section::grid)   ? &m_grid_slots   :
+        (section == Slot_section::hotbar) ? &m_hotbar_slots : nullptr;
+}
+
+void Inventory_window::on_slot_changed(const Slot_drag_payload::Section section, const int slot_index)
+{
+    Slot_entry* const slot = find_slot(section, slot_index);
+    if (slot != nullptr) {
+        set_slot_labels(*slot, section == Slot_section::hotbar, slot_index);
+    }
+    if (section == Slot_section::hotbar) {
+        apply_hotbar();
+    }
+    touch_settings();
+}
+
+auto Inventory_window::adopt_into_slot(const Slot_drag_payload::Section section, const int slot_index, const std::shared_ptr<erhe::Item_base>& item) -> bool
+{
+    Slot_entry* const slot = find_slot(section, slot_index);
+    if ((slot == nullptr) || (m_context.asset_manager == nullptr)) {
         return false;
     }
-    Slot_entry& slot = m_grid_slots.at(static_cast<std::size_t>(slot_index));
     if (!item) {
-        slot.brush   .set_key(Asset_key{});
-        slot.material.set_key(Asset_key{});
-        set_slot_labels(slot, false, slot_index);
+        if (slot->is_kit_slot()) {
+            slot->clear();
+        } else {
+            slot->brush   .set_key(Asset_key{});
+            slot->material.set_key(Asset_key{});
+        }
+        on_slot_changed(section, slot_index);
         return true;
     }
     const std::shared_ptr<Brush> brush = std::dynamic_pointer_cast<Brush>(item);
     if (brush) {
-        slot.brush.adopt(*m_context.asset_manager, brush);
-        slot.material.set_key(Asset_key{});
-        slot.tool = m_context.brush_tool;
-        set_slot_labels(slot, false, slot_index);
+        slot->clear();
+        slot->brush.adopt(*m_context.asset_manager, brush);
+        slot->tool = m_context.brush_tool;
+        on_slot_changed(section, slot_index);
         return true;
     }
     const std::shared_ptr<erhe::primitive::Material> material = std::dynamic_pointer_cast<erhe::primitive::Material>(item);
     if (material) {
-        slot.material.adopt(*m_context.asset_manager, material);
-        slot.brush.set_key(Asset_key{});
-        slot.tool = m_context.material_paint_tool;
-        set_slot_labels(slot, false, slot_index);
+        slot->clear();
+        slot->material.adopt(*m_context.asset_manager, material);
+        slot->tool = m_context.material_paint_tool;
+        on_slot_changed(section, slot_index);
         return true;
     }
     return false;
+}
+
+auto Inventory_window::set_kit_item_slot(const Slot_drag_payload::Section section, const int slot_index, const Kit_item& item) -> bool
+{
+    Slot_entry* const slot = find_slot(section, slot_index);
+    if ((slot == nullptr) || !item.is_valid()) {
+        return false;
+    }
+    slot->clear();
+    slot->tool     = m_context.brush_tool;
+    slot->kit_item = item;
+    on_slot_changed(section, slot_index);
+    return true;
+}
+
+auto Inventory_window::set_tool_slot(const Slot_drag_payload::Section section, const int slot_index, Tool* const tool) -> bool
+{
+    Slot_entry* const slot = find_slot(section, slot_index);
+    if (slot == nullptr) {
+        return false;
+    }
+    slot->clear();
+    slot->tool = tool;
+    on_slot_changed(section, slot_index);
+    return true;
+}
+
+auto Inventory_window::activate_slot(const Slot_drag_payload::Section section, const int slot_index) -> std::string
+{
+    Slot_entry* const slot = find_slot(section, slot_index);
+    if (slot == nullptr) {
+        return "slot_index out of range";
+    }
+    if (section == Slot_section::hotbar) {
+        if (m_context.hotbar == nullptr) {
+            return "the hotbar is not available";
+        }
+        m_context.hotbar->activate_slot(static_cast<std::size_t>(slot_index));
+        return {};
+    }
+    // A grid slot activates on a click only as a kit slot (render_slot).
+    if (!slot->is_kit_slot() || (m_context.level_kits == nullptr)) {
+        return "only a kit slot of the grid activates";
+    }
+    m_context.level_kits->activate_kit_item(slot->kit_item);
+    return {};
+}
+
+auto Inventory_window::kit_slot_button(const Slot_entry& slot) -> bool
+{
+    const Kit_shape_definition& shape      = *slot.kit_item.get_shape();
+    Kit_thumbnails&             thumbnails = m_context.level_kits->get_thumbnails();
+    if (thumbnails.prepare_slot_image(shape)) {
+        static_cast<void>(thumbnails.draw(shape, c_slot_size));
+    } else {
+        static_cast<void>(ImGui::Button(shape.display_name.c_str(), ImVec2{c_slot_size, c_slot_size}));
+    }
+    // A click is a release over the slot that ended no drag: a press that starts a slot drag activates nothing.
+    return ImGui::IsItemDeactivated() && ImGui::IsItemHovered() && (ImGui::GetDragDropPayload() == nullptr);
 }
 
 auto Inventory_window::find_or_create_brush_with_material(
@@ -713,6 +820,21 @@ void Inventory_window::apply_hotbar()
     m_context.hotbar->set_slots(m_hotbar_slots);
 }
 
+auto Inventory_window::make_config_slot(const Slot_entry& entry) -> Inventory_slot
+{
+    Inventory_slot slot;
+    slot.tool_name        = (entry.tool != nullptr) ? entry.tool->get_description() : "";
+    slot.brush_asset      = to_asset_reference_data(entry.brush.get_key());
+    slot.material_asset   = to_asset_reference_data(entry.material.get_key());
+    slot.command_name     = (entry.command != nullptr) ? entry.command->get_name() : "";
+    slot.operation_params = entry.operation_params;
+    slot.graph_node_kind  = entry.graph_node_kind;
+    slot.graph_node_type  = entry.graph_node_type;
+    slot.graph_node_label = entry.graph_node_label;
+    write_kit_item_slot(entry.kit_item, slot);
+    return slot;
+}
+
 void Inventory_window::write_config(Inventory_config& config) const
 {
     config.column_count      = m_column_count;
@@ -729,16 +851,7 @@ void Inventory_window::write_config(Inventory_config& config) const
     const auto write_slots = [](const std::vector<Slot_entry>& entries, std::vector<Inventory_slot>& out_slots) {
         out_slots.clear();
         for (const Slot_entry& entry : entries) {
-            Inventory_slot slot;
-            slot.tool_name        = (entry.tool != nullptr) ? entry.tool->get_description() : "";
-            slot.brush_asset      = to_asset_reference_data(entry.brush.get_key());
-            slot.material_asset   = to_asset_reference_data(entry.material.get_key());
-            slot.command_name     = (entry.command != nullptr) ? entry.command->get_name() : "";
-            slot.operation_params = entry.operation_params;
-            slot.graph_node_kind  = entry.graph_node_kind;
-            slot.graph_node_type  = entry.graph_node_type;
-            slot.graph_node_label = entry.graph_node_label;
-            out_slots.push_back(slot);
+            out_slots.push_back(make_config_slot(entry));
         }
     };
     write_slots(m_grid_slots,   config.grid_slots);

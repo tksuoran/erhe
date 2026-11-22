@@ -28,7 +28,7 @@ struct("Operation_params",
 )
 
 struct("Inventory_slot",
-    version=1,
+    version=2,
     short_desc="Inventory Slot",
     long_desc="A single slot in the inventory or hotbar grid",
     developer=False,
@@ -129,6 +129,35 @@ struct("Inventory_slot",
             short_desc="Graph node label",
             long_desc="Palette display label shown on a graph-node slot button",
             visible=True,
+            developer=False
+        ),
+        field(
+            "kit_shape",
+            String,
+            added_in=2,
+            default='""',
+            short_desc="Kit shape",
+            long_desc="Level kit shape id (or a former id) of a kit slot; non-empty means kit slot, the Brush tool in kit mode places the shape",
+            visible=True,
+            developer=False
+        ),
+        field(
+            "kit_parameters",
+            String,
+            added_in=2,
+            default='""',
+            short_desc="Kit parameters",
+            long_desc="Canonical parameter text of a kit slot (Kit_parameter_values::to_canonical_text()); ignored unless kit_shape is non-empty",
+            visible=True,
+            developer=False
+        ),
+        field(
+            "kit_materials",
+            Vector(String),
+            added_in=2,
+            short_desc="Kit slot materials",
+            long_desc="Palette material name per material slot of a kit slot's shape, in slot order; an empty name takes the slot's default",
+            visible=False,
             developer=False
         ),
     ],

@@ -97,7 +97,7 @@ private:
     [[nodiscard]] auto make_kit_item(const Kit_shape_definition& shape, const Scene_root& scene_root) const -> Kit_item;
     // D3.4: the selected piece's slot takes the palette material in the queued call, one undo entry.
     void queue_slot_material    (const std::shared_ptr<Scene_root>& scene_root, const std::shared_ptr<erhe::scene::Mesh>& piece, std::size_t slot, const std::string& palette_name);
-    void on_kit_values_changed  ();
+    void on_kit_values_changed  (Kit_values_change change);
     // Hands the Brush tool the kit brush of m_place_values and makes it the active tool in kit mode (D4.4).
     void queue_kit_brush        ();
     void update_place_hint      ();

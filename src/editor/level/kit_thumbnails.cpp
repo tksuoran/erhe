@@ -12,6 +12,8 @@
 #include "graphics/thumbnails.hpp"
 #include "preview/brush_preview.hpp"
 #include "scene/scene_root.hpp"
+#include "scene/viewport_scene_view.hpp"
+#include "scene/viewport_scene_views.hpp"
 
 #include "erhe_geometry/geometry.hpp"
 #include "erhe_graphics/command_buffer.hpp"
@@ -542,6 +544,22 @@ void Kit_thumbnails::draw_image(const Kit_shape_definition& shape, const float s
             .debug_label       = "Kit_thumbnails::draw_image()"
         }
     ));
+}
+
+auto Kit_thumbnails::prepare_slot_image(const Kit_shape_definition& shape) -> bool
+{
+    if (m_context.scene_views != nullptr) {
+        const std::shared_ptr<Viewport_scene_view> scene_view = m_context.scene_views->last_scene_view();
+        const std::shared_ptr<Scene_root>          scene_root = scene_view ? scene_view->get_scene_root() : std::shared_ptr<Scene_root>{};
+        if (scene_root) {
+            follow_scene(scene_root);
+        }
+    }
+    const std::size_t shape_index = get_shape_index(shape);
+    if ((m_thumbnails[shape_index].state == Kit_thumbnail_state::none) && m_lengths.has_value()) {
+        queue(shape_index);
+    }
+    return m_thumbnails[shape_index].has_image && static_cast<bool>(m_texture);
 }
 
 void Kit_thumbnails::make_texture(erhe::graphics::Command_buffer& command_buffer)

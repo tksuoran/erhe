@@ -993,6 +993,8 @@ auto Mcp_server::get_dispatch_table() -> std::span<const Mcp_server::Tool_dispat
         { "unload_asset",                   &Mcp_server::action_unload_asset                  },
         { "set_tool_asset",                 &Mcp_server::action_set_tool_asset                },
         { "set_inventory_slot",             &Mcp_server::action_set_inventory_slot            },
+        { "get_inventory_slots",            &Mcp_server::query_inventory_slots                },
+        { "activate_inventory_slot",        &Mcp_server::action_activate_inventory_slot       },
         { "save_container",                 &Mcp_server::action_save_container                },
         { "load_asset_file",                &Mcp_server::action_load_asset_file               },
         { "reference_asset_into_scene",     &Mcp_server::action_reference_asset_into_scene    },

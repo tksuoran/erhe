@@ -24,9 +24,12 @@ add_executable(${_target}
     # nlohmann_json; the piece record (the attachment) erhe::scene and nlohmann_json; the light frames glm and fmt; the snap to
     # surface search (surface_snap_search.hpp) is header-only; the surface attachment carry glm and erhe::math.
     # The foliage index needs glm and erhe::verify.
+    # The kit item slot conversions need fmt and the Inventory_slot struct (header only) of the editor's config codegen.
     # The foliage sampler needs glm (with the kit random stream and the scatter pick); the foliage palette nlohmann_json and fmt.
     # The foliage system needs erhe::scene, erhe::utility, the piece record and the editor's log_scene (editor_log.cpp).
     ${CMAKE_CURRENT_SOURCE_DIR}/../kit_connection_flow.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../kit_item.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../kit_item_slot.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../kit_connector.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../kit_layout.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../kit_layout_connectors.cpp
@@ -82,6 +85,7 @@ add_executable(${_target}
     test_kit_collision.cpp
     test_kit_connection_flow.cpp
     test_kit_connector.cpp
+    test_kit_item_slot.cpp
     test_kit_layout.cpp
     test_kit_layout_connectors.cpp
     test_kit_layout_outline.cpp

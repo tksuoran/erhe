@@ -38,7 +38,7 @@ Defines the Tool abstraction and the Tools container, plus several concrete tool
 
 - **`Hover_tool`** -- Background tool that tracks what the pointer hovers over and displays information. Subscribes to hover messages.
 
-- **`Hotbar`** -- VR/desktop toolbar showing tool icons for quick switching. Its slots are the Inventory window's hotbar row, saved in the settings with the names of the toolbox tools known at that save (`Inventory_config::known_tools`). A toolbox tool missing from that list at startup (a tool new to the build, a first run) resets the row: every slot is cleared, the slot count grows to the tool count when it is smaller, and the tools fill the slots in registration order. An empty slot draws as a disabled box.
+- **`Hotbar`** -- VR/desktop toolbar showing tool icons for quick switching. Its slots are the Inventory window's hotbar row, saved in the settings with the names of the toolbox tools known at that save (`Inventory_config::known_tools`). A toolbox tool missing from that list at startup (a tool new to the build, a first run) resets the row: every slot is cleared, the slot count grows to the tool count when it is smaller, and the tools fill the slots in registration order. An empty slot draws as a disabled box. A slot holds a tool, a brush, a material, an operation, a graph node or a level kit item (a kit slot, `doc/editor/level_tools.md` "Kit slots").
 
 - **`Hud`** -- Head-up display for VR mode (rendertarget-based ImGui host).
 

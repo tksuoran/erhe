@@ -39,8 +39,10 @@
 #include "scene/viewport_scene_view.hpp"
 #include "scene/viewport_scene_views.hpp"
 #include "transform/transform_tool.hpp"
+#include "windows/inventory_window.hpp"
 #include "windows/viewport_window.hpp"
 #include "tools/curve_tool.hpp"
+#include "tools/hotbar.hpp"
 #include "tools/debug_visualizations.hpp"
 #include "tools/selection_tool.hpp"
 #include "tools/tools.hpp"
@@ -5448,6 +5450,181 @@ auto Mcp_server::query_level_flow_report(const json& args) -> std::string
         {"recording_serial", serial},
         {"latest",           serial == get_recording_serial()},
         {"flow",             (serial == 0) ? json(nullptr) : flow_report_json(m_context.level_kits->get_last_flow_report())}
+    }).dump();
+}
+
+// A kit slot's item (doc/editor/level_tools.md "Kit slots"): shape, parameters as canonical text or an object over the
+// scene's defaults, materials by slot name (palette names).
+auto Mcp_server::read_kit_item_json(const json& object, const std::string& scene_name, Kit_item& out_item) -> std::string
+{
+    if (!object.is_object()) {
+        return "kit_item must be an object {shape, parameters, materials}";
+    }
+    const std::string unrecognized = unrecognized_keys(object, {"shape", "parameters", "materials"});
+    if (!unrecognized.empty()) {
+        return "kit_item: unrecognized key(s): " + unrecognized + " (accepted: shape, parameters, materials)";
+    }
+    Level_kits&              level_kits = *m_context.level_kits;
+    const Kit_shape_library& library    = level_kits.get_library();
+    const std::string        shape_id   = object.value("shape", "");
+    const Kit_shape_definition* const shape = library.find(shape_id);
+    if (shape == nullptr) {
+        return "kit_item: unknown shape '" + shape_id + "' (level_get_kits lists the shapes)";
+    }
+    Kit_parameter_values values;
+    const json parameters = object.value("parameters", json());
+    if (parameters.is_string()) {
+        const std::string error = read_kit_piece_record(library, shape_id, parameters.get<std::string>(), values);
+        if (!error.empty()) {
+            return "kit_item: " + error;
+        }
+    } else {
+        Scene_root* const scene_root = find_scene(scene_name);
+        if (scene_root == nullptr) {
+            return "kit_item: parameters as an object or left out start from the defaults at the lengths of scene_name; no scene '" + scene_name + "'";
+        }
+        values = level_kits.make_default_values(*scene_root, *shape);
+        if (!parameters.is_null()) {
+            const std::string error = apply_parameters_json(parameters, values);
+            if (!error.empty()) {
+                return "kit_item: " + error;
+            }
+        }
+        const Kit_lengths lengths = level_kits.get_lengths(*scene_root);
+        values.resolve_derived(lengths.module, lengths.wall_height);
+        const std::string range_error = values.validate();
+        if (!range_error.empty()) {
+            return "kit_item: " + range_error;
+        }
+    }
+    std::vector<std::string> slot_materials;
+    level_kits.get_default_slot_materials(*shape, slot_materials);
+    if (object.contains("materials")) {
+        const json& materials = object.at("materials");
+        if (!materials.is_object()) {
+            return "kit_item: materials must be an object of slot name to kit palette material name";
+        }
+        for (const auto& [slot, value] : materials.items()) {
+            const std::vector<std::string>::const_iterator i = std::find(shape->material_slots.begin(), shape->material_slots.end(), slot);
+            if (i == shape->material_slots.end()) {
+                return "kit_item: " + shape->id + " has no material slot '" + slot + "'";
+            }
+            if (!value.is_string() || (library.find_palette_material(value.get<std::string>()) == nullptr)) {
+                return "kit_item: materials['" + slot + "'] must name a kit palette material (level_get_kits: palette), not " + value.dump();
+            }
+            slot_materials[static_cast<std::size_t>(i - shape->material_slots.begin())] = value.get<std::string>();
+        }
+    }
+    out_item = Kit_item{values, slot_materials};
+    return out_item.validate();
+}
+
+auto Mcp_server::kit_item_json(const Kit_item& item) const -> json
+{
+    const Kit_shape_definition* const shape = item.get_shape();
+    if (shape == nullptr) {
+        return json(nullptr);
+    }
+    json materials = json::object();
+    const std::vector<std::string>& slot_materials = item.get_slot_materials();
+    for (std::size_t i = 0, end = std::min(slot_materials.size(), shape->material_slots.size()); i < end; ++i) {
+        materials[shape->material_slots[i]] = slot_materials[i];
+    }
+    return json{
+        {"shape",          shape->id},
+        {"display_name",   shape->display_name},
+        {"parameter_text", item.get_values().to_canonical_text()},
+        {"parameters",     values_json(item.get_values())},
+        {"materials",      materials}
+    };
+}
+
+auto Mcp_server::query_inventory_slots(const json& args) -> std::string
+{
+    const std::string unrecognized = unrecognized_keys(args, {});
+    if (!unrecognized.empty()) {
+        return make_error_content("get_inventory_slots: unrecognized argument(s): " + unrecognized + " (it takes none)");
+    }
+    if (m_context.inventory_window == nullptr) {
+        return make_error_content("get_inventory_slots: Inventory window not available");
+    }
+    const auto slots_json = [this](const std::vector<Slot_entry>& slots) -> json {
+        json result = json::array();
+        for (std::size_t i = 0, end = slots.size(); i < end; ++i) {
+            const Slot_entry&    slot   = slots[i];
+            const Inventory_slot config = Inventory_window::make_config_slot(slot);
+            const char* const    kind   =
+                slot.is_kit_slot()                  ? "kit"        :
+                !slot.brush.get_key().is_empty()    ? "brush"      :
+                !slot.material.get_key().is_empty() ? "material"   :
+                (slot.command != nullptr)           ? "operation"  :
+                !slot.graph_node_type.empty()       ? "graph_node" :
+                (slot.tool != nullptr)              ? "tool"       : "empty";
+            json entry{
+                {"index",     i},
+                {"kind",      kind},
+                {"tool",      get_mcp_tool_name(m_context, slot.tool)},
+                {"tool_name", config.tool_name},
+                {"kit_item",  kit_item_json(slot.kit_item)}
+            };
+            if (slot.is_kit_slot()) {
+                entry["config"] = json{
+                    {"kit_shape",      config.kit_shape},
+                    {"kit_parameters", config.kit_parameters},
+                    {"kit_materials",  config.kit_materials}
+                };
+            }
+            result.push_back(entry);
+        }
+        return result;
+    };
+    const Inventory_window& inventory = *m_context.inventory_window;
+    return make_json_content({
+        {"grid",   slots_json(*inventory.get_slots(Slot_drag_payload::Section::grid))},
+        {"hotbar", slots_json(*inventory.get_slots(Slot_drag_payload::Section::hotbar))}
+    }).dump();
+}
+
+auto Mcp_server::read_inventory_section(const json& args, Slot_drag_payload::Section& out_section) -> std::string
+{
+    const json section = args.value("section", json("grid"));
+    if (section == json("grid")) {
+        out_section = Slot_drag_payload::Section::grid;
+        return {};
+    }
+    if (section == json("hotbar")) {
+        out_section = Slot_drag_payload::Section::hotbar;
+        return {};
+    }
+    return "section must be 'grid' or 'hotbar', not " + section.dump();
+}
+
+auto Mcp_server::action_activate_inventory_slot(const json& args) -> std::string
+{
+    const std::string unrecognized = unrecognized_keys(args, {"section", "slot_index"});
+    if (!unrecognized.empty()) {
+        return make_error_content("activate_inventory_slot: unrecognized argument(s): " + unrecognized + " (accepted: section, slot_index)");
+    }
+    if (m_context.inventory_window == nullptr) {
+        return make_error_content("activate_inventory_slot: Inventory window not available");
+    }
+    Slot_drag_payload::Section section{Slot_drag_payload::Section::grid};
+    const std::string section_error = read_inventory_section(args, section);
+    if (!section_error.empty()) {
+        return make_error_content("activate_inventory_slot: " + section_error);
+    }
+    if (!args.contains("slot_index") || !args.at("slot_index").is_number_integer()) {
+        return make_error_content("activate_inventory_slot: missing required 'slot_index'");
+    }
+    const int         slot_index = args.at("slot_index").get<int>();
+    const std::string error      = m_context.inventory_window->activate_slot(section, slot_index);
+    if (!error.empty()) {
+        return make_error_content("activate_inventory_slot: " + error);
+    }
+    return make_json_content({
+        {"section",    (section == Slot_drag_payload::Section::hotbar) ? "hotbar" : "grid"},
+        {"slot_index", slot_index},
+        {"activated",  true}
     }).dump();
 }
 

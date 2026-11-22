@@ -118,10 +118,17 @@ public:
     std::shared_ptr<erhe::scene::Mesh> mesh{};
 };
 
-// The Brush tool's kit values changed without the Level Kit window's rows: it took the next seed after a placed piece
-// ("New Seed Per Piece", doc/editor/level_tools.md). Brush_tool::get_kit_values() holds them.
+// What changed the Brush tool's kit values without the Level Kit window's rows (doc/editor/level_tools.md).
+enum class Kit_values_change : unsigned int {
+    next_seed = 0, // the tool took the next seed after a placed piece ("New Seed Per Piece")
+    kit_item       // a kit slot was activated: the shape, the values and the slot materials are the slot's ("Kit slots")
+};
+
+// Brush_tool::get_kit_values() and get_kit_slot_materials() hold the changed state.
 class Kit_values_changed_message
 {
+public:
+    Kit_values_change change{Kit_values_change::next_seed};
 };
 
 // A Kit_layout value of a node was written by an operation (execute, undo, redo; App_context::on_item_property_changed()).

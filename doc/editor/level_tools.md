@@ -4611,6 +4611,9 @@ The payload (type `c_kit_item_payload_type`, `kit_item_payload.hpp`) is a
 `Level_kits::find_dragged_kit_item(payload)`, and the window releases it
 (`end_kit_item_drag()`) on the first frame without a payload of the type.
 
+The targets are a viewport (below) and the Inventory window's grid and
+hotbar slots ("Kit slots").
+
 Over a viewport the Brush tool previews the item exactly as kit mode would
 place it ("Placing in the viewport": the pose, module snap, the surface
 options, the connector join with its supplied values, the suspend key), with
@@ -4630,6 +4633,61 @@ no seed on a drop.
 `kit_item_drag` ("MCP"); the verify script drives a real drag
 (`mouse_drag` with `hold` from the row into the viewport, then
 `mouse_release`; `level_tools_verify.py --only-kit-drag`).
+
+### Kit slots
+
+An Inventory window slot, of the grid or of the hotbar row, can hold a kit
+item: `Slot_entry::kit_item` (`tools/hotbar.hpp`), a kit slot when it has a
+shape (`is_kit_slot()`). A kit slot's tool is the Brush tool; it holds no
+brush or material reference, command or graph node, and its kit brush is no
+asset: `Level_kits::get_brush()` makes it from the values at activation. A
+slot holds only valid items: every way in validates.
+
+- A kit item dropped from the Level Kit window ("Dragging a kit item") on a
+  slot replaces the slot's content with a copy of the item as it was when the
+  drag started; later edits of the window's rows leave the slot as it is.
+  `Slot_entry::clear()` resets every kind's content, and every accepted drop
+  starts from it.
+- A kit slot dragged onto another slot swaps with it as the other kinds do:
+  the `Slot_entry` travels whole, the kit item with it. A drag from the tools
+  palette copies its tool; only palette entries are rebuilt from the drag
+  payload. A right click clears a kit slot.
+- A kit slot shows its shape's thumbnail ("Shape thumbnails";
+  `Kit_thumbnails::prepare_slot_image()` follows the last hovered viewport's
+  scene as the window's rows do and queues the render), and until the image
+  exists the display name in the Inventory window and the Brush tool icon in
+  the hotbar. The tooltip names the shape (display name and id), its
+  parameter values and its slot materials; a slot drag's tooltip shows the
+  display name. MCP addresses the Inventory window's slot items as
+  `Inventory grid slot N` and `Inventory hotbar slot N` (`get_imgui_items`).
+- Activating a kit slot - a click on it in the Inventory window (a release
+  that ended no drag), or selecting it in the hotbar by a click, a number key
+  or `Hotbar.previous_tool` / `next_tool` - calls
+  `Level_kits::activate_kit_item()`. The next prepare phase makes the Brush
+  tool the active tool and hands it the item's kit brush, values and slot
+  materials (`Brush_tool::set_kit_brush()`): the state choosing that shape in
+  the Level Kit window and setting those values gives. The values are used as
+  stored, not resolved again against the scene's lengths. The tool sends
+  `Kit_values_changed_message` with `Kit_values_change::kit_item`, and the
+  window's rows take the tool's shape, values and slot materials. Selecting a
+  brush slot afterwards leaves kit mode as choosing a palette brush does.
+  With New Seed Per Piece the tool takes the next seed after each placed
+  piece; the slot's item stays as it is.
+- The settings save a kit slot in `Inventory_slot` (version 2) as
+  `kit_shape` (the shape id), `kit_parameters` (the canonical parameter
+  text, `Kit_parameter_values::to_canonical_text()`) and `kit_materials` (one
+  palette name per slot) through `write_kit_item_slot()`; the Inventory window
+  reads them back once the tools are registered with `read_kit_item_slot()`
+  (`level/kit_item_slot.hpp`), which reads the shape and the text as a piece
+  record does (`read_kit_piece_record()`, "Former shape ids"). A shape id the
+  library does not know, a text that does not read or validate, more names
+  than the shape has slots or a name not in the palette leaves the slot
+  vacant with one warning line naming the slot and the reason. A slot stored
+  with a former id is saved again with the shape's id.
+
+MCP: `set_inventory_slot` with `kit_item`, `get_inventory_slots` and
+`activate_inventory_slot` ("MCP"); `level_tools_verify.py --only-kit-slots`
+("Verification").
 
 ## MCP
 
@@ -4938,6 +4996,23 @@ no seed on a drop.
   `hover_position` are the drag's.
 - `get_surface_snap_settings {}` and `set_surface_snap_settings {snap, orient, attach, ...}`:
   the shared settings ("Surface settings").
+- `set_inventory_slot {section, slot_index, kit_item, scene_name}` ("Kit
+  slots"): `section` `grid` (the default) or `hotbar`; `kit_item` `{shape,
+  parameters, materials}` as `level_place_pieces` takes a piece, with
+  `parameters` either the canonical text, used as given, or an object over
+  the shape's defaults at the lengths of `scene_name`, derived and validated;
+  `materials` names palette materials by slot, a slot not named taking its
+  default. The slot becomes a kit slot of the item; the reply echoes it. The
+  tool's other forms (`item_id`, `tool`, `clear`, which also clears a kit
+  slot) are in `config/editor/mcp_tools.json`.
+- `get_inventory_slots {}`: per section (`grid`, `hotbar`), per slot its
+  `kind` (`kit` among the others), `tool` and `kit_item` (`shape`,
+  `display_name`, `parameter_text`, `parameters`, `materials`), and for a kit
+  slot `config`, the `kit_shape`, `kit_parameters` and `kit_materials` the
+  settings save.
+- `activate_inventory_slot {section, slot_index}`: a hotbar slot as its number
+  key selects it (`Hotbar::activate_slot()`), a grid kit slot as a click on
+  it; a grid slot of another kind is refused.
 - `level_get_pieces {scene_name}`: every node carrying `Kit_piece`, in node id
   order: its record (`parameters` with `derive`, and `parameters_text`), `mesh_key`, world
   position and rotation, `world_aabb`, `materials` (slot name to material
@@ -6684,6 +6759,27 @@ Kit window and the MCP tools both call; their scene-free parts are in
   open and no crash trace. The viewport scene view's destruction is not
   reached mid-stroke: only the undo of a scene builder's viewport
   operation destroys one, and undo is refused while a stroke is open.
+  `--only-kit-slots` runs the checks of "Kit slots" with real ImGui drags
+  (`mouse_drag` from a shape row or a slot onto a slot, its windows side by
+  side): the Block row (not the one the tool places) onto a vacant grid slot
+  giving a kit slot of the Block's defaults and default materials, the tool's
+  state and the selection unchanged; the chosen Wall row after a length and a
+  slot material edit onto a hotbar slot carrying those, a later row edit
+  leaving the slot as it is, and the slot's `config` holding the shape id,
+  the parameter text and the material; `activate_inventory_slot` of the
+  hotbar slot giving kit mode with the slot's shape, values and materials,
+  and the window's Wall row then carrying the slot's item; a kit mode click
+  placing a wall with exactly those values and material, one undo entry,
+  the tool's seed advanced and the slot's item unchanged; slot to slot
+  swaps within the grid and between the grid and the hotbar; a right click
+  clearing kit slots; and the slots given back as they were.
+- `editor_level_tests` `Kit_item_slot`: a kit item written into
+  `Inventory_slot` and read back is the same item and writes the same
+  fields; edited values and a derive mask survive; a former id reads as its
+  shape and writes the shape's id; a slot without a kit shape reads as no
+  item without a problem; an unknown id, malformed text, a value out of
+  range, an unknown palette name and too many names give no item and a
+  reason; the tooltip names the shape, its values and its materials.
 - `Mcp_test.document_edits_record_one_undo_entry_each` places three pieces as
   one undo entry, changes a piece's parameters and snaps a raised piece onto
   the one below it, groups it, mirrors the group, duplicates it and ungroups
@@ -6704,3 +6800,4 @@ Kit window and the MCP tools both call; their scene-free parts are in
 - [Foliage paint tool: requirements](../plans/foliage_paint_tool.md)
 - [Foliage paint tool: design](../plans/foliage_paint_tool_design.md)
 - [Foliage paint tool: implementation steps](../plans/foliage_paint_tool_implementation.md)
+- The Foliage Paint tool's palette as a target of a kit item drag ("Dragging a kit item").
