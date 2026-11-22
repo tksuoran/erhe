@@ -216,7 +216,7 @@
         "behind_content": false,
         "cell_size": 1,
         "cell_div": 10,
-        "cell_count": 15,
+        "cell_count": 0,
         "label_enable": true,
         "label_text_fraction": 0.1,
         "label_spacing": 1,

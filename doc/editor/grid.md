@@ -99,6 +99,10 @@ hover (`Brush_tool`, `Reference_frame`, `Hover_tool`) take the plane, its
 normal / tangent / bitangent and `Grid::snap_world_position(frame, ...)` from
 the entry, so placement lands on the plane the view shows.
 
+`Grid.cell_count` bounds the intersection region to that many cells from the
+grid origin along each plane axis; 0, the default, leaves it unbounded, so
+hover and placement reach the whole plane.
+
 ## Depth
 
 The grid pipeline tests depth and never writes it. `Grid_depth_mode` selects

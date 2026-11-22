@@ -113,7 +113,7 @@ const Property<bool>      Grid::snap_enabled_property        = ERHE_GRID_PROPERT
 const Property<bool>      Grid::behind_content_property      = ERHE_GRID_PROPERTY(bool,      behind_content,      (false), (Property_ui{.tooltip = "Draw the grid behind all scene content instead of depth testing it at its plane", .label = "Behind Content"}));
 const Property<float>     Grid::cell_size_property           = ERHE_GRID_PROPERTY(float,     cell_size,           (1.0f), (slider(0.01f, 10.0f, "Cell Size", {}, true)));
 const Property<int>       Grid::cell_div_property            = ERHE_GRID_PROPERTY(int,       cell_div,            (2), (slider(1.0f, 10.0f, "Cell Div", "Minor cells per major cell")));
-const Property<int>       Grid::cell_count_property          = ERHE_GRID_PROPERTY(int,       cell_count,          (100), (Property_ui{.min = 1.0f, .max = 10000.0f, .tooltip = "Cells per axis that bound the ray intersection (snap) region; the rendered grid is infinite", .label = "Cell Count"}));
+const Property<int>       Grid::cell_count_property          = ERHE_GRID_PROPERTY(int,       cell_count,          (0), (Property_ui{.min = 0.0f, .max = 10000.0f, .tooltip = "Cells per axis that bound the ray intersection (snap) region; 0 leaves it unbounded. The rendered grid is always infinite", .label = "Cell Count"}));
 const Property<glm::vec4> Grid::level0_color_property        = ERHE_GRID_PROPERTY(glm::vec4, level0_color, (glm::vec4{0.0f, 0.0f, 0.01f, 1.0f}), (color("Level 0 Color", c_lines)));
 const Property<glm::vec4> Grid::level1_color_property        = ERHE_GRID_PROPERTY(glm::vec4, level1_color, (glm::vec4{0.0f, 0.0f, 0.0f, 1.0f}), (color("Level 1 Color", c_lines)));
 const Property<glm::vec4> Grid::level2_color_property        = ERHE_GRID_PROPERTY(glm::vec4, level2_color, (glm::vec4{0.01f, 0.0f, 0.0f, 1.0f}), (color("Level 2 Color", c_lines)));
@@ -477,13 +477,12 @@ auto Grid::intersect_ray(const Grid_frame& frame, const glm::vec3& ray_origin_in
     }
     const glm::vec3 position_in_grid = ray_origin_in_grid + intersection.value() * ray_direction_in_grid;
 
-    if (
-        (position_in_grid.x < -m_cell_size * static_cast<float>(m_cell_count)) ||
-        (position_in_grid.x >  m_cell_size * static_cast<float>(m_cell_count)) ||
-        (position_in_grid.z < -m_cell_size * static_cast<float>(m_cell_count)) ||
-        (position_in_grid.z >  m_cell_size * static_cast<float>(m_cell_count))
-    ) {
-        return {};
+    // Cell count 0 leaves the intersection region unbounded
+    if (m_cell_count > 0) {
+        const float extent = m_cell_size * static_cast<float>(m_cell_count);
+        if ((std::abs(position_in_grid.x) > extent) || (std::abs(position_in_grid.z) > extent)) {
+            return {};
+        }
     }
 
     return glm::vec3{

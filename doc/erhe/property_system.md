@@ -1751,7 +1751,7 @@ plane; per grid, so it does not inherit, and session state, so it carries
 no serialize flag, section 4.23), `center` and `rotation` (degrees,
 `visible_when` the plane is not the Node plane), `intersect_enable`,
 `snap_enabled`, `cell_size` (logarithmic 0.01..10), `cell_div` (1..10),
-`cell_count` (the snap region bound), the four `level<N>_color` and
+`cell_count` (the snap region bound; 0 = unbounded), the four `level<N>_color` and
 `level<N>_width` rows (group `Lines`) and `label_enable` /
 `label_text_fraction` / `label_spacing` / `label_fade` / `label_color`
 (group `Axis Labels`). The private members the render, snap and
