@@ -274,8 +274,8 @@ void Id_renderer::prepare(const Prepare_parameters& parameters, Id_pass_prepared
     const Primitive_interface_settings primitive_settings{
         .color_source = Primitive_color_source::id_offset
     };
-    const uint32_t                        force_enable_mask          = make_shader_bool_mask(Shader_bool::VARIANT_ID_RENDER);
-    const uint32_t                        boolean_mask_force_disable = 0; // TODO: Maybe disable some features for ID rendering?
+    const Shader_bool_mask                force_enable_mask          = make_shader_bool_mask(Shader_bool::VARIANT_ID_RENDER);
+    const Shader_bool_mask                boolean_mask_force_disable = 0; // TODO: Maybe disable some features for ID rendering?
     const erhe::primitive::Primitive_mode primitive_mode{erhe::primitive::Primitive_mode::polygon_fill};
 
     // Leaf-function scratch (AGENTS.md): the buckets hold raw Mesh pointers

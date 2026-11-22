@@ -76,8 +76,8 @@ public:
     // shared by the bucket, fullscreen and draw-list entry points alike, and
     // binding materials must not require naming a draw list.
     Material_set*                                                      material_source  {nullptr};
-    uint32_t                                                           shader_key_boolean_mask_force_enable {0};
-    uint32_t                                                           shader_key_boolean_mask_force_disable{0};
+    Shader_bool_mask                                                   shader_key_boolean_mask_force_enable {0};
+    Shader_bool_mask                                                   shader_key_boolean_mask_force_disable{0};
     uint64_t                                                           frame_number     {0};
     bool                                                               reverse_depth    {true};
     erhe::math::Depth_range                                            depth_range      {erhe::math::Depth_range::zero_to_one};

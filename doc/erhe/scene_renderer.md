@@ -141,8 +141,8 @@ membership.
 `Material_interface` builds the `Material` struct of `material_block`
 (`material.materials[]`, binding 0, std430) at startup in one of two
 layouts with the same member names and order: every float field as a
-32-bit float (320 bytes per record), or as a 16-bit float (`float16_t`,
-`f16vec2`, `f16vec4`; 192 bytes) when `use_half_material_records()` holds
+32-bit float (368 bytes per record), or as a 16-bit float (`float16_t`,
+`f16vec2`, `f16vec4`; 224 bytes) when `use_half_material_records()` holds
 (`Material_interface::half_records`): the device reports
 `storage_buffer_16bit_access` and `shader_float16`, and
 `Graphics_config::material_record_half` is `on`, or `auto` on Android. The
@@ -157,13 +157,29 @@ a texture (within the fp16 texcoord bound of 2048 texels), colors below
 8-bit quantization, emissive to 65504 at most. The startup log line
 "Material records: ..." names the layout in effect.
 
+### Detail blend fields of a material record
+
+The record's tail after `input_sources` carries the detail blend values of
+`erhe::primitive::Material` (`doc/plans/detail_blend_weight_design.md` BD2):
+`uvec2 detail_blend_channels` (the weight channel of vertex color 0 and the
+height channel of the slot's texture, as component indices), which completes
+the 16 bytes of `input_sources`; the detail blend slot's `rotation_scale`
+(`vec4`); `vec4 detail_blend_parameters` (height influence, transition
+width, noise amount, noise scale); the slot's texture handle
+(`uvec2 detail_blend_texture`) and its `offset` (`vec2`). The struct size
+rounds up to a multiple of 16 bytes: 368 bytes in the 32-bit layout, 224 in
+the half layout, whose last 4 bytes are padding. `Material_record_inputs`
+holds the same fields (`detail_blend_channels`, `detail_blend_parameters`,
+`detail_blend_texture`) and the default records the property defaults. The
+switch and the noise space are no record fields: they are shader variant
+axes.
+
 ### Where a material record's base color and alpha come from
 
 A material record carries `uvec2 input_sources` -
 `erhe::primitive::Material_input_source` for the base color and for the
-fragment alpha - beside `uvec4 texture_channels` at the tail of the struct,
-with an explicit `uvec2` of padding after it so the struct size stays a
-multiple of 16 bytes. `value` (0) is the multiply the shader has always done:
+fragment alpha - beside `uvec4 texture_channels`, followed by the detail
+blend fields above. `value` (0) is the multiply the shader has always done:
 the material's factor, the slot's texture where one is bound, and the mesh's
 vertex color where the mesh carries one. `vertex_color` (1) makes the mesh's
 color attribute that input on its own, the factor and the texture unread;

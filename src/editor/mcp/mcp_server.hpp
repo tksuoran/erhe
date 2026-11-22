@@ -72,6 +72,7 @@ enum class Prepare_target : unsigned int; // parsers/gltf.hpp
 enum class Prepared_drop : unsigned int; // assets/prepared_status.hpp
 enum class Scene_save_job : unsigned int; // scene/scene_save_service.hpp
 enum class Scene_save_source_binding : unsigned int; // scene/scene_save_service.hpp
+enum class Channel_fill_mode : unsigned int; // tools/channel_paint.hpp
 
 class App_context;
 class Brush;
@@ -560,6 +561,12 @@ private:
     auto query_mesh_geometry_info             (const nlohmann::json& args) -> std::string;
     auto query_mesh_attribute_values          (const nlohmann::json& args) -> std::string;
     auto action_set_mesh_attribute_values     (const nlohmann::json& args) -> std::string;
+    auto action_paint_vertex_channel          (const nlohmann::json& args) -> std::string;
+    auto action_fill_vertex_channel           (const nlohmann::json& args) -> std::string;
+    auto action_invert_vertex_channel         (const nlohmann::json& args) -> std::string;
+    auto fill_or_invert_vertex_channel        (const nlohmann::json& args, Channel_fill_mode mode) -> std::string;
+    auto query_paint_brush_settings           (const nlohmann::json& args) -> std::string;
+    auto action_set_paint_brush_settings      (const nlohmann::json& args) -> std::string;
     auto query_mesh_buffer_info               (const nlohmann::json& args) -> std::string;
     auto query_mesh_buffer_data               (const nlohmann::json& args) -> std::string;
     auto action_clear_mesh_component_selection(const nlohmann::json& args) -> std::string;

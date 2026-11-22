@@ -144,10 +144,16 @@ constexpr erhe::property::Enum_entry c_material_input_source_entries[] = {
     {"Vertex Color", static_cast<int32_t>(Material_input_source::vertex_color)},
 };
 
+constexpr erhe::property::Enum_entry c_detail_blend_noise_space_entries[] = {
+    {"World", static_cast<int32_t>(Detail_blend_noise_space::world)},
+    {"Node",  static_cast<int32_t>(Detail_blend_noise_space::node)},
+};
+
 } // anonymous namespace
 
 const erhe::property::Enum_info c_texture_channel_enum_info{"Texture_channel", c_texture_channel_entries};
 const erhe::property::Enum_info c_material_input_source_enum_info{"Material_input_source", c_material_input_source_entries};
+const erhe::property::Enum_info c_detail_blend_noise_space_enum_info{"Detail_blend_noise_space", c_detail_blend_noise_space_entries};
 
 constexpr erhe::property::Enum_entry c_sampler_address_mode_entries[] = {
     {"Repeat",          static_cast<int32_t>(erhe::graphics::Sampler_address_mode::repeat)},
@@ -305,6 +311,28 @@ auto to_uint32(const Material_input_source input_source) -> uint32_t
         case Material_input_source::vertex_color: return 1u;
         default: {
             ERHE_FATAL("Bad Material_input_source");
+        }
+    }
+}
+
+auto c_str(const Detail_blend_noise_space noise_space) -> const char*
+{
+    switch (noise_space) {
+        case Detail_blend_noise_space::world: return "World";
+        case Detail_blend_noise_space::node:  return "Node";
+        default: {
+            ERHE_FATAL("Bad Detail_blend_noise_space");
+        }
+    }
+}
+
+auto to_uint32(const Detail_blend_noise_space noise_space) -> uint32_t
+{
+    switch (noise_space) {
+        case Detail_blend_noise_space::world: return 0u;
+        case Detail_blend_noise_space::node:  return 1u;
+        default: {
+            ERHE_FATAL("Bad Detail_blend_noise_space");
         }
     }
 }

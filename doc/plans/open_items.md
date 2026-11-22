@@ -14,7 +14,8 @@ The tasks a session continuing earlier work picks up, in order (`AGENTS.md`
 "Session handoff"). Items 1 and 2 come first; items 3 - 13 each need a user
 decision or hardware (Quest, the external 120 Hz display, an NVIDIA GPU):
 ask the user which to pick. Item 14 starts with writing its plan. Items 15,
-17, 18 and 20 wait for the user's review. Item 21 continues at its final pass.
+17, 18 and 20 wait for the user's review. Item 21 continues at its final pass. Item 22 waits
+for the user's test.
 
 0. The user rulings on the D8 coder decisions ("Prepared assets" below,
    `doc/plans/prepared_assets_design.md` D8).
@@ -87,6 +88,9 @@ ask the user which to pick. Item 14 starts with writing its plan. Items 15,
     `logs/foliage_final_fixes_report.md`). Then the user's windowed test
     and rulings (`doc/plans/foliage_paint_tool.md` "For the user to rule
     on"), then the push.
+22. Detail blend weight (height blended per vertex weight): every step
+    is built. The user's windowed test ("User test") and rulings ("Open")
+    of `doc/plans/detail_blend_weight_implementation.md`, then the push.
 
 ## Quest session follow-ups
 
@@ -182,10 +186,9 @@ Plans: `doc/plans/prepared_assets_design.md` (D8 per-step "Open" notes),
   `Commands::on_mouse_button_event()` skips bindings whose host is disabled,
   so the release never reaches the command, it stays Active and
   `m_active_mouse_command` is never cleared; every later mouse command is
-  refused. `Paint_tool` and `Physics_tool` do not inactivate their drag
-  command on priority loss, `Weight_paint_tool` ends its stroke but leaves
-  the command Active. Reproduce: Paint tool, left drag, a hotbar key, then
-  release. Found by reading; the fix belongs in `erhe::commands` (a held
+  refused. `Physics_tool` does not inactivate its drag command on priority
+  loss, `Weight_paint_tool` ends its stroke but leaves the command Active.
+  Reproduce: Weight Paint tool, left drag, a hotbar key, then release. Found by reading; the fix belongs in `erhe::commands` (a held
   command whose host is disabled is made inactive).
 - `Mesh_operation::make_entries()` holds the scene's `item_host_mutex` for
   the whole geometry computation of an async mesh operation, so the main
@@ -521,6 +524,19 @@ carrying 1,000 items.
   starts depends on the window layout. Decide: drop the hover gate (ImGui's
   own `BeginDragDropSource` checks the active item), or keep the script's
   first drag step inside the row.
+- `scripts/scene_roundtrip_verify.py` on Windows passes its checks and
+  then exits 1: its cleanup unlinks the `phase6_*.erhe_editor` files under
+  `res/editor/scenes/` while the running editor still holds the stores
+  open after `close_scene`, which Windows refuses (WinError 32). The files
+  stay behind (gitignored).
+- `scripts/shader_fp16_verify.py` station `grazing` times out in the
+  Windows headless Debug editor: `create_shape` of the 192 x 96 uv sphere
+  takes about 10.6 s against the 10 s MCP client timeout. The other four
+  stations pass.
+- `Mcp_test.get_async_status_reports_background_work` times out (60 s) on
+  the first `ctest -L editor` run after a shader source change in Debug:
+  the shader module stats are recomputed on the cold SPIR-V cache and
+  keep `background_idle` false. The second run passes.
 - `scripts/mesh_modeling_verify.py` has no section selection, so its
   component box and paint select checks run only with the whole script.
 - `scripts/undo_reference_clearing_smoke_test.py` fails 1 of 58 on the

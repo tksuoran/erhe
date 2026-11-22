@@ -44,7 +44,7 @@ Defines the Tool abstraction and the Tools container, plus several concrete tool
 
 - **`Point_set_tool`** -- Base of the viewport point editing tools: `Lattice_tool` (a designated lattice's control points, `doc/editor/lattice_deform_geometry_node.md` "Viewport editing") and `Curve_tool` (the selected curve's points and handle ends, `doc/editor/curves.md` "Viewport editing"). The pick, the click selection, the Escape cancel, the handle drawing and the gizmo adapter are shared (`doc/editor/point_set_editing.md`).
 
-- **`Paint_tool`** -- Vertex color painting.
+- **`Paint_tool`** -- Vertex color painting: the modes Point, Corner and Polygon paint the palette color on the hovered vertex, corner or polygon; Brush paints with the channel brush ("Paint tool brush").
 
 - **`Material_paint_tool`** -- Assigns materials to faces.
 
@@ -240,6 +240,87 @@ margin, light cluster binning) and the session-only headset culling (OpenXR)
 and content draws switches, here so a headset session can change them from
 the Hud.
 
+## Channel painting
+
+The channel brush paints chosen channels of a mesh primitive's vertex color
+`corner_color_0`. Its scene-free core is `tools/channel_brush.hpp`
+(`Channel_brush_settings`, `Channel_brush_stroke`, `apply_dab()`, unit tests
+in `editor_ik_solver_tests`, `Channel_brush.*`):
+
+- Settings: radius, strength, a `vec4` target, the blend mode (`mix`, `add`,
+  `subtract`) and a channel mask (bit i is component i, `r`, `g`, `b`, `a`).
+- A dab is a world-space sphere. A vertex inside it gets alpha = strength
+  times the falloff `3p^2 - 2p^3`, `p = 1 - distance / radius`, at most 1.
+  The stroke keeps per vertex the value before the stroke and the greatest
+  alpha its dabs reached; a dab blends only where its alpha exceeds that
+  maximum, and blends from the value before the stroke, so overlapping dabs
+  converge to the target. Mix is `target * a + before * (1 - a)`, add
+  `before + target * a`, subtract `before - target * a`, clamped to [0, 1],
+  in the masked channels only.
+
+`Channel_paint_stroke` (`tools/channel_paint.hpp`) runs the core on one
+primitive: `begin()` takes the mesh, the primitive index and the settings and
+refuses, with the reason, a primitive without a `Geometry` or one whose base
+vertex buffer is not built yet. The vertex positions are taken through the
+node's world transform, and the value of a vertex is that of its first
+corner. Each `dab()` writes every corner of each changed vertex alike in the
+masked channels (the other channels of each corner keep their values),
+patches the GPU vertex buffer, and on its first write takes the primitive's
+optimization hold. `end()` returns one `Paint_colors_operation` for the
+caller to queue (a corner without a color before the stroke takes its vertex
+color, else white, as its undo value); `cancel()` writes the values before
+the stroke back. `make_channel_fill_operation()` sets the masked channels of
+every corner of the given meshes to a value (`fill`) or to one minus their
+value (`invert`): one `Paint_colors_operation` per `Geometry`, in one
+compound operation.
+
+The MCP tools are `paint_vertex_channel` (one stroke from a list of
+world-space centers), `fill_vertex_channel` and `invert_vertex_channel`
+(meshes by node ids or names); each is one undo entry. Values are read back
+with `get_mesh_attribute_values` (`domain` `corner`, attribute
+`corner_color_0`). `scripts/detail_blend_verify.py --only-paint` checks them
+against a CPU model of the brush.
+
+## Paint tool brush
+
+`Paint_tool`'s mode Brush paints a `Channel_paint_stroke` with a left drag:
+the press begins the stroke on the hovered mesh primitive, and each hover
+change on that primitive is a dab at the hovered surface point; over
+anything else the drag paints nothing. The release queues the stroke's
+operation, one undo entry. Escape during the drag cancels the stroke and
+queues nothing, as does the tool losing priority mid-drag (its drag command
+is then made inactive) and the stroke's mesh leaving the editor (a scene
+close, an undo).
+
+- Brush Paints: Weight paints one channel toward Target. The channel is the
+  weight channel of the hovered primitive's material when its detail blend
+  is on, else the tool's Channel value; Tool Properties states which and
+  why. Color paints all four channels toward the selected palette color.
+- Brush Radius, Strength and Blend (mix, add, subtract) are the channel
+  brush settings; a radius change reaches the open stroke's next dabs.
+- The brush sphere is drawn at the hovered surface point as three circles
+  of the radius in the world axis planes. Shift + wheel over a viewport
+  scales the radius by 1.1 per wheel step; the plain wheel zooms.
+- Fill and Invert act on the selected meshes, one undo entry each, with the
+  Weight channel rule (the material of each mesh's first primitive) and
+  Target as the fill value (`make_channel_fill_operation()`).
+- Show Detail Weight sets the viewport last hovered to
+  `Shader_debug::detail_blend_weight` and, switched off, gives it back the
+  mode it had; the tool's deactivation switches it off. A view whose mode
+  was changed since by other means keeps that mode, and the switch then
+  reads off.
+- A refused stroke (a primitive without a `Geometry`, a base vertex buffer
+  not built yet) paints nothing; Tool Properties shows the reason.
+
+The brush values (Brush Paints, Brush Radius, Strength, Target, Blend,
+Channel) are `Paint_brush_config`, saved with the editor settings
+(`Editor_settings_config::paint_brush`). The MCP tools
+`get_paint_brush_settings` and `set_paint_brush_settings` read and write them
+and the mode; the reply also reports the open stroke, the brush point, the
+channel the last hovered primitive gives, the last stroke and the viewport
+the switch set. `scripts/detail_blend_verify.py --only-tool` drives the tool
+through the input MCP tools.
+
 ## Public API / Integration Points
 
 - `Tools::register_tool()` -- register a tool
@@ -254,3 +335,7 @@ the Hud.
 
 - erhe::commands, erhe::imgui, erhe::scene
 - editor: App_context, App_message_bus, Icon_set, Mesh_memory, Scene_view
+
+## Future work
+
+- [plans/detail_blend_weight.md](../plans/detail_blend_weight.md): brush painting of a per vertex weight channel.

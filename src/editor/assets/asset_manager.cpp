@@ -2110,7 +2110,7 @@ auto Asset_manager::is_pinned(const erhe::Item_base* item) const -> bool
                 }
                 const erhe::primitive::Material_texture_samplers& samplers = material->get_data().texture_samplers;
                 for (const erhe::primitive::Material_texture_sampler* sampler :
-                     {&samplers.base_color, &samplers.metallic_roughness, &samplers.normal, &samplers.occlusion, &samplers.emissive})
+                     {&samplers.base_color, &samplers.metallic_roughness, &samplers.normal, &samplers.occlusion, &samplers.emissive, &samplers.detail_blend})
                 {
                     const erhe::Item_base* const texture_item = dynamic_cast<const erhe::Item_base*>(sampler->texture_reference.get());
                     if ((texture_item != nullptr) && (texture_item == item)) {

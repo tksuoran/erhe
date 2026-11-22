@@ -65,7 +65,7 @@ public:
     bool                                                         has_meshes{false};
     // The forced shader-key bits of the pass: the render phase applies
     // USE_DDGI only where the pass did not force it off.
-    uint32_t                                                     force_disable_mask{0};
+    Shader_bool_mask                                             force_disable_mask{0};
     std::vector<std::byte>                                       primitive_records;
     std::vector<erhe::graphics::Draw_indexed_primitives_indirect_command> draw_commands;
 

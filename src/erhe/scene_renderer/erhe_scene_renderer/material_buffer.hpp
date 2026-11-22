@@ -82,10 +82,19 @@ public:
 
     // Where the base color and the fragment alpha come from
     // (erhe::primitive::Material_input_source, as its enumerator value):
-    // (base_color, opacity). A uvec2 needs 8-byte alignment and the struct
-    // size a multiple of 16, so an explicit uvec2 of padding follows it.
+    // (base_color, opacity).
     std::size_t input_sources;                     // uvec2
-    std::size_t input_sources_padding;             // uvec2
+
+    // Detail blend (doc/plans/detail_blend_weight_design.md BD2): the weight
+    // and height channels as component indices, which complete the 16 bytes
+    // of input_sources; the height slot's transform; (height influence,
+    // transition width, noise amount, noise scale); the height slot's handle
+    // and offset. The struct size rounds up to a multiple of 16 bytes.
+    std::size_t detail_blend_channels;             // uvec2
+    std::size_t detail_blend_rotation_scale;       // vec4
+    std::size_t detail_blend_parameters;           // vec4
+    std::size_t detail_blend_texture;              // uvec2
+    std::size_t detail_blend_offset;               // vec2
 };
 
 // The texture half of one material record, resolved: the exact texture and
@@ -128,12 +137,16 @@ public:
     glm::vec4 normal_texture_decode_bias {0.0f, 0.0f, 0.0f, 0.0f};
     glm::uvec4 texture_channels          {0u, 0u, 0u, 0u};
     glm::uvec2 input_sources             {0u, 0u};
+    glm::uvec2 detail_blend_channels     {0u, 0u};
+    // (height influence, transition width, noise amount, noise scale)
+    glm::vec4  detail_blend_parameters   {0.0f, 0.0f, 0.0f, 0.0f};
 
     Material_texture_record_inputs base_color_texture        {};
     Material_texture_record_inputs metallic_roughness_texture{};
     Material_texture_record_inputs normal_texture            {};
     Material_texture_record_inputs occlusion_texture         {};
     Material_texture_record_inputs emissive_texture          {};
+    Material_texture_record_inputs detail_blend_texture      {};
 };
 
 // GPU samplers for the slot sampler states (erhe::primitive::

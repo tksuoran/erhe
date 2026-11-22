@@ -211,6 +211,16 @@ public:
     return (filter == erhe::graphics::Filter::linear) ? "linear" : "nearest";
 }
 
+// A detail blend weight or height channel: one of the four components.
+[[nodiscard]] auto rgba_channel_from_name(const std::string& name) -> std::optional<erhe::primitive::Texture_channel>
+{
+    if (name == "r") { return erhe::primitive::Texture_channel::r; }
+    if (name == "g") { return erhe::primitive::Texture_channel::g; }
+    if (name == "b") { return erhe::primitive::Texture_channel::b; }
+    if (name == "a") { return erhe::primitive::Texture_channel::a; }
+    return std::nullopt;
+}
+
 [[nodiscard]] auto find_texture_in_library(
     const std::vector<std::shared_ptr<erhe::graphics::Texture>>& tex_list,
     const json&                                                  ref,
@@ -561,6 +571,70 @@ void apply_slot_edit(const Slot_edit& edit, erhe::primitive::Material_texture_sa
         after_values.use_aniso_control = b;
         applied["use_aniso_control"] = b;
     }
+    if (try_read_bool(args, "detail_blend", b)) {
+        after_values.detail_blend = b;
+        applied["detail_blend"] = b;
+    }
+    {
+        const std::pair<const char*, erhe::primitive::Texture_channel*> channel_fields[] = {
+            {"detail_blend_weight_channel", &after_values.detail_blend_weight_channel},
+            {"detail_blend_height_channel", &after_values.detail_blend_height_channel}
+        };
+        for (const std::pair<const char*, erhe::primitive::Texture_channel*>& field : channel_fields) {
+            const auto it = args.find(field.first);
+            if (it == args.end()) {
+                continue;
+            }
+            const std::optional<erhe::primitive::Texture_channel> channel = it->is_string()
+                ? rgba_channel_from_name(it->get<std::string>())
+                : std::nullopt;
+            if (!channel.has_value()) {
+                return std::string{field.first} + " must be one of 'r', 'g', 'b', 'a'";
+            }
+            *field.second = channel.value();
+            applied[field.first] = it->get<std::string>();
+        }
+    }
+    {
+        const std::pair<const char*, float*> unit_fields[] = {
+            {"detail_blend_height_influence", &after_values.detail_blend_height_influence},
+            {"detail_blend_transition_width", &after_values.detail_blend_transition_width},
+            {"detail_blend_noise_amount",     &after_values.detail_blend_noise_amount}
+        };
+        for (const std::pair<const char*, float*>& field : unit_fields) {
+            switch (try_read_float(args, field.first, f, field_err)) {
+                case Field_status::Ok:         *field.second = clamp01(f); applied[field.first] = *field.second; break;
+                case Field_status::Invalid:    return field_err;
+                case Field_status::NotPresent: break;
+            }
+        }
+    }
+    switch (try_read_float(args, "detail_blend_noise_scale", f, field_err)) {
+        case Field_status::Ok: {
+            if (!(f > 0.0f)) {
+                return "detail_blend_noise_scale must be greater than 0";
+            }
+            after_values.detail_blend_noise_scale = f;
+            applied["detail_blend_noise_scale"] = f;
+            break;
+        }
+        case Field_status::Invalid:    return field_err;
+        case Field_status::NotPresent: break;
+    }
+    {
+        const auto space_it = args.find("detail_blend_noise_space");
+        if (space_it != args.end()) {
+            const std::string s = space_it->is_string() ? space_it->get<std::string>() : std::string{};
+            if (s == "world") {
+                after_values.detail_blend_noise_space = erhe::primitive::Detail_blend_noise_space::world;
+            } else if (s == "node") {
+                after_values.detail_blend_noise_space = erhe::primitive::Detail_blend_noise_space::node;
+            } else {
+                return "detail_blend_noise_space must be one of 'world', 'node'";
+            }
+            applied["detail_blend_noise_space"] = s;
+        }
+    }
 
     const auto ts_it = args.find("texture_samplers");
     if (ts_it != args.end()) {
@@ -583,7 +657,8 @@ void apply_slot_edit(const Slot_edit& edit, erhe::primitive::Material_texture_sa
             {"metallic_roughness", &after.texture_samplers.metallic_roughness},
             {"normal",             &after.texture_samplers.normal},
             {"occlusion",          &after.texture_samplers.occlusion},
-            {"emissive",           &after.texture_samplers.emissive}
+            {"emissive",           &after.texture_samplers.emissive},
+            {"detail_blend",       &after.texture_samplers.detail_blend}
         };
 
         std::vector<std::pair<const Named_slot*, Slot_edit>> parsed_edits;

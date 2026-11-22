@@ -353,7 +353,7 @@ auto counts_overdraw(const Composition_pass_data& data) -> bool
         (std::find(data.mesh_layers.begin(), data.mesh_layers.end(), Mesh_layer_id::content) != data.mesh_layers.end());
 }
 
-auto get_bucket_force_enable_mask(const Composition_pass_data& data) -> uint32_t
+auto get_bucket_force_enable_mask(const Composition_pass_data& data) -> erhe::scene_renderer::Shader_bool_mask
 {
     return (data.output == Composition_pass_output::depth_stencil)
         ? (data.shader_key_force_enable_mask | erhe::scene_renderer::make_shader_bool_mask(erhe::scene_renderer::Shader_bool::VARIANT_DEPTH_ONLY))

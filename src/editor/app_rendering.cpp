@@ -269,7 +269,7 @@ App_rendering::App_rendering(
             .blending_mode_policy         {Blending_mode_policy::opaque_primitives_only},
             .primitive_mode               {Primitive_mode::solid_wireframe},
             .filter                       {filter_not_selected},
-            .shader_key_force_enable_mask {solid_wireframe_supported ? make_shader_bool_mask(Shader_bool::SOLID_WIREFRAME) : uint32_t{0}},
+            .shader_key_force_enable_mask {solid_wireframe_supported ? make_shader_bool_mask(Shader_bool::SOLID_WIREFRAME) : erhe::scene_renderer::Shader_bool_mask{0}},
             .get_render_style             {render_style_not_selected},
             .get_appearance               {appearance_not_selected},
             .is_enabled                   {
@@ -288,7 +288,7 @@ App_rendering::App_rendering(
             .blending_mode_policy         {Blending_mode_policy::opaque_primitives_only},
             .primitive_mode               {Primitive_mode::solid_wireframe},
             .filter                       {filter_selected_or_hovered},
-            .shader_key_force_enable_mask {solid_wireframe_supported ? make_shader_bool_mask(Shader_bool::SOLID_WIREFRAME) : uint32_t{0}},
+            .shader_key_force_enable_mask {solid_wireframe_supported ? make_shader_bool_mask(Shader_bool::SOLID_WIREFRAME) : erhe::scene_renderer::Shader_bool_mask{0}},
             .get_render_style             {render_style_selected},
             .get_appearance               {appearance_selected},
             .is_enabled                   {
@@ -328,7 +328,7 @@ App_rendering::App_rendering(
     // at it. The one difference: where a line fragment is nearer than the
     // point's flat sprite depth, the line now blends over the point
     // instead of over the surface.
-    const uint32_t points_variant_mask = make_shader_bool_mask(Shader_bool::VARIANT_POINTS);
+    const erhe::scene_renderer::Shader_bool_mask points_variant_mask = make_shader_bool_mask(Shader_bool::VARIANT_POINTS);
 
     auto corner_points_not_selected = make_composition_pass(
         "Content corner points not selected",

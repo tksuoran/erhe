@@ -115,3 +115,7 @@
 ✓steps-1-8{flag+rays|index|system+radius|sampler+palette|paint|live-edits|remove|tool|palette-rows|scale;commits-in-activeContext;behavior=doc/editor/level_tools.md"Foliage paint"}
 ✓step-9-final-pass{2026-11-22;review+fix-round+re-reviews;gates-in-activeContext;open=doc/plans/foliage_paint_tool_implementation.md"Open"}
 ?next{©User-windowed-test+rulings->push-on-©User-instruction}
+
+[TASK::detail-blend-weight]{started-2026-11-22;branch=main(UNPUSHED);doc/plans/detail_blend_weight_implementation.md}
+✓steps-1-5{material|channel-brush|shader+debug-mode|Paint_tool-Brush|gates;commits+gates-in-activeContext}
+?next{©User-windowed-test("User test (windowed)")+rulings->push-on-©User-instruction}

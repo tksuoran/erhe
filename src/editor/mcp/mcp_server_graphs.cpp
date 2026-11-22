@@ -1023,8 +1023,9 @@ auto Mcp_server::action_set_material_texture_source(const json& args) -> std::st
     else if (slot_name == "normal")             sampler = &samplers.normal;
     else if (slot_name == "occlusion")          sampler = &samplers.occlusion;
     else if (slot_name == "emissive")           sampler = &samplers.emissive;
+    else if (slot_name == "detail_blend")       sampler = &samplers.detail_blend;
     else {
-        return make_error_content("Unknown material slot: " + slot_name + " (base_color|metallic_roughness|normal|occlusion|emissive)");
+        return make_error_content("Unknown material slot: " + slot_name + " (base_color|metallic_roughness|normal|occlusion|emissive|detail_blend)");
     }
 
     if (graph_texture_name.empty()) {
@@ -1173,7 +1174,8 @@ auto Mcp_server::query_scene_node_graphs(const json& args) -> std::string
                     {"metallic_roughness", &samplers.metallic_roughness},
                     {"normal",             &samplers.normal            },
                     {"occlusion",          &samplers.occlusion         },
-                    {"emissive",           &samplers.emissive          }
+                    {"emissive",           &samplers.emissive          },
+                    {"detail_blend",       &samplers.detail_blend      }
                 };
                 for (const std::pair<const char*, const erhe::primitive::Material_texture_sampler*>& slot : slots) {
                     if (slot.second->texture_reference.get() != static_cast<const erhe::graphics::Texture_reference*>(graph_texture.get())) {

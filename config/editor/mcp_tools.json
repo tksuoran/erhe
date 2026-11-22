@@ -138,7 +138,7 @@
     "name": "get_scene_materials"
   },
   {
-    "description": "Get detailed material properties",
+    "description": "Get detailed material properties: the values (detail blend values included) and every texture slot (detail_blend included)",
     "inputSchema": {
       "properties": {
         "material_name": {
@@ -5066,6 +5066,60 @@
                 }
               },
               "type": "object"
+            },
+            "detail_blend": {
+              "properties": {
+                "mag_filter": {
+                  "description": "Sampler magnification filter (default linear)",
+                  "enum": [
+                    "nearest",
+                    "linear"
+                  ],
+                  "type": "string"
+                },
+                "min_filter": {
+                  "description": "Sampler minification filter (default linear)",
+                  "enum": [
+                    "nearest",
+                    "linear"
+                  ],
+                  "type": "string"
+                },
+                "offset": {
+                  "description": "UV offset [u, v]",
+                  "items": {
+                    "type": "number"
+                  },
+                  "maxItems": 2,
+                  "minItems": 2,
+                  "type": "array"
+                },
+                "rotation": {
+                  "description": "UV rotation in radians",
+                  "type": "number"
+                },
+                "scale": {
+                  "description": "UV scale [u, v]",
+                  "items": {
+                    "type": "number"
+                  },
+                  "maxItems": 2,
+                  "minItems": 2,
+                  "type": "array"
+                },
+                "tex_coord": {
+                  "description": "UV channel index (e.g. 0 for TEXCOORD_0)",
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "texture": {
+                  "description": "Texture: string (name in content library), integer (texture id), or null to clear. Omit to keep current."
+                },
+                "wrap": {
+                  "description": "Sampler wrap (address) mode: a single string applied to both axes, or an array of 2 strings [u, v]. Values: 'repeat', 'clamp_to_edge', 'mirrored_repeat'. Slots without an explicit sampler render as clamp_to_edge; set 'repeat' for tiling textures. Replaces the slot's sampler (undoable)."
+                }
+              },
+              "type": "object"
             }
           },
           "type": "object"
@@ -5081,6 +5135,54 @@
         "use_circular_brushed_metal": {
           "description": "Enable circular brushed metal shading variant",
           "type": "boolean"
+        },
+        "detail_blend": {
+          "description": "Detail blend switch (default false): computes the detail weight from the painted vertex weight, the height texture (texture_samplers.detail_blend) and the surface noise",
+          "type": "boolean"
+        },
+        "detail_blend_weight_channel": {
+          "description": "Channel of vertex color 0 holding the painted weight (default r)",
+          "enum": [
+            "r",
+            "g",
+            "b",
+            "a"
+          ],
+          "type": "string"
+        },
+        "detail_blend_height_channel": {
+          "description": "Channel of the detail_blend slot's texture read as the height (default r)",
+          "enum": [
+            "r",
+            "g",
+            "b",
+            "a"
+          ],
+          "type": "string"
+        },
+        "detail_blend_height_influence": {
+          "description": "Height influence in [0, 1] (default 1); 0 makes the detail weight equal to the painted weight",
+          "type": "number"
+        },
+        "detail_blend_transition_width": {
+          "description": "Transition width in [0, 1] (default 0.2): share of the weight range over which one fragment goes from 0 to 1",
+          "type": "number"
+        },
+        "detail_blend_noise_amount": {
+          "description": "Surface noise amount in [0, 1] (default 0): share of the surface noise in the combined height",
+          "type": "number"
+        },
+        "detail_blend_noise_scale": {
+          "description": "Surface noise scale in cycles per meter, greater than 0 (default 1)",
+          "type": "number"
+        },
+        "detail_blend_noise_space": {
+          "description": "Space the surface noise is evaluated in (default node)",
+          "enum": [
+            "world",
+            "node"
+          ],
+          "type": "string"
         }
       },
       "required": [
@@ -5456,6 +5558,60 @@
                 }
               },
               "type": "object"
+            },
+            "detail_blend": {
+              "properties": {
+                "mag_filter": {
+                  "description": "Sampler magnification filter (default linear)",
+                  "enum": [
+                    "nearest",
+                    "linear"
+                  ],
+                  "type": "string"
+                },
+                "min_filter": {
+                  "description": "Sampler minification filter (default linear)",
+                  "enum": [
+                    "nearest",
+                    "linear"
+                  ],
+                  "type": "string"
+                },
+                "offset": {
+                  "description": "UV offset [u, v]",
+                  "items": {
+                    "type": "number"
+                  },
+                  "maxItems": 2,
+                  "minItems": 2,
+                  "type": "array"
+                },
+                "rotation": {
+                  "description": "UV rotation in radians",
+                  "type": "number"
+                },
+                "scale": {
+                  "description": "UV scale [u, v]",
+                  "items": {
+                    "type": "number"
+                  },
+                  "maxItems": 2,
+                  "minItems": 2,
+                  "type": "array"
+                },
+                "tex_coord": {
+                  "description": "UV channel index (e.g. 0 for TEXCOORD_0)",
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "texture": {
+                  "description": "Texture: string (name in content library), integer (texture id), or null to clear. Omit to keep current."
+                },
+                "wrap": {
+                  "description": "Sampler wrap (address) mode: a single string applied to both axes, or an array of 2 strings [u, v]. Values: 'repeat', 'clamp_to_edge', 'mirrored_repeat'. Slots without an explicit sampler render as clamp_to_edge; set 'repeat' for tiling textures. Replaces the slot's sampler (undoable)."
+                }
+              },
+              "type": "object"
             }
           },
           "type": "object"
@@ -5471,6 +5627,54 @@
         "use_circular_brushed_metal": {
           "description": "Enable circular brushed metal shading variant",
           "type": "boolean"
+        },
+        "detail_blend": {
+          "description": "Detail blend switch (default false): computes the detail weight from the painted vertex weight, the height texture (texture_samplers.detail_blend) and the surface noise",
+          "type": "boolean"
+        },
+        "detail_blend_weight_channel": {
+          "description": "Channel of vertex color 0 holding the painted weight (default r)",
+          "enum": [
+            "r",
+            "g",
+            "b",
+            "a"
+          ],
+          "type": "string"
+        },
+        "detail_blend_height_channel": {
+          "description": "Channel of the detail_blend slot's texture read as the height (default r)",
+          "enum": [
+            "r",
+            "g",
+            "b",
+            "a"
+          ],
+          "type": "string"
+        },
+        "detail_blend_height_influence": {
+          "description": "Height influence in [0, 1] (default 1); 0 makes the detail weight equal to the painted weight",
+          "type": "number"
+        },
+        "detail_blend_transition_width": {
+          "description": "Transition width in [0, 1] (default 0.2): share of the weight range over which one fragment goes from 0 to 1",
+          "type": "number"
+        },
+        "detail_blend_noise_amount": {
+          "description": "Surface noise amount in [0, 1] (default 0): share of the surface noise in the combined height",
+          "type": "number"
+        },
+        "detail_blend_noise_scale": {
+          "description": "Surface noise scale in cycles per meter, greater than 0 (default 1)",
+          "type": "number"
+        },
+        "detail_blend_noise_space": {
+          "description": "Space the surface noise is evaluated in (default node)",
+          "enum": [
+            "world",
+            "node"
+          ],
+          "type": "string"
         }
       },
       "required": [
@@ -6597,7 +6801,7 @@
           "type": "number"
         },
         "shader_debug": {
-          "description": "Shader debug mode (erhe::scene_renderer::Shader_debug value, as push_shader_debug takes), default 0 = none. Debug modes replace the lit color after exposure, so output 'linear' returns their values unscaled (at the color_format precision). 30 shadow_visibility: visibility of shadow_debug_light (1 = lit, 0 = shadowed; directional / spot / point shadow maps; 1 for a light that is not shadow-mapped). 36 world_position: the fragment world position xyz, the per-pixel receiver position with output 'linear' (MSAA-resolved pixels on silhouettes average positions; pass msaa_samples 0 for exact per-pixel positions). 37 base_color: the resolved base color the BxDF receives (material input source, factor, vertex color and base color texture multiplied), unlit, in linear space.",
+          "description": "Shader debug mode (erhe::scene_renderer::Shader_debug value, as push_shader_debug takes), default 0 = none. Debug modes replace the lit color after exposure, so output 'linear' returns their values unscaled (at the color_format precision). 30 shadow_visibility: visibility of shadow_debug_light (1 = lit, 0 = shadowed; directional / spot / point shadow maps; 1 for a light that is not shadow-mapped). 36 world_position: the fragment world position xyz, the per-pixel receiver position with output 'linear' (MSAA-resolved pixels on silhouettes average positions; pass msaa_samples 0 for exact per-pixel positions). 37 base_color: the resolved base color the BxDF receives (material input source, factor, vertex color and base color texture multiplied), unlit, in linear space. 38 detail_blend_weight: the detail weight of a detail blend material as grayscale (0 black, 1 white; black for a material with detail blend off).",
           "type": "integer"
         },
         "shadow_debug_light": {
@@ -6637,7 +6841,7 @@
     "name": "request_renderdoc_capture"
   },
   {
-    "description": "Push a shader debug view onto the viewport scene views: saves each affected view's current Shader Debug mode on a LIFO stack and sets the given mode, so pop_shader_debug can restore the user's own setting afterwards. Typical use: push texcoord debug, capture_screenshot, pop. Values follow erhe::scene_renderer::Shader_debug / the viewport's Shader Debug combo: 0 none, 1 vertex normal, 2 fragment normal, 4 tangent, 7 texcoord_0 (authored/interpolated UVs), 8 texcoord_1 (generated facet UVs), 9 base color texture, 10 vertex color RGB, 14 V.N, 24 metallic, 25 roughness, 30 shadow visibility (light slot 0), 32 texcoord_2 (lightmap UVs), 36 world position.",
+    "description": "Push a shader debug view onto the viewport scene views: saves each affected view's current Shader Debug mode on a LIFO stack and sets the given mode, so pop_shader_debug can restore the user's own setting afterwards. Typical use: push texcoord debug, capture_screenshot, pop. Values follow erhe::scene_renderer::Shader_debug / the viewport's Shader Debug combo: 0 none, 1 vertex normal, 2 fragment normal, 4 tangent, 7 texcoord_0 (authored/interpolated UVs), 8 texcoord_1 (generated facet UVs), 9 base color texture, 10 vertex color RGB, 14 V.N, 24 metallic, 25 roughness, 30 shadow visibility (light slot 0), 32 texcoord_2 (lightmap UVs), 36 world position, 37 base color (resolved), 38 detail blend weight.",
     "inputSchema": {
       "properties": {
         "shader_debug": {
@@ -8506,6 +8710,231 @@
       "type": "object"
     },
     "name": "set_mesh_attribute_values"
+  },
+  {
+    "description": "Paint one channel of a mesh primitive's vertex color (corner_color_0) with one channel brush stroke (doc/editor/tools.md \"Channel painting\"): a dab at each world-space center, in order. A dab blends each vertex within radius (node world transform applied) from its value before the stroke toward target by alpha = strength * falloff, falloff 3p^2 - 2p^3 with p = 1 - distance / radius; mix: target * alpha + before * (1 - alpha), add: before + target * alpha, subtract: before - target * alpha, clamped to [0, 1]. The stroke keeps per vertex the greatest alpha its dabs reached and blends only where a dab exceeds it, so overlapping dabs converge to the target. Every corner of a changed vertex takes the vertex's value (its first corner's value before the stroke) in the channel; the other three channels keep their values. One undo entry (a Paint colors operation), queued and run on the next frame. A primitive without a Geometry is refused. Read values back with get_mesh_attribute_values domain=corner attributes=[\"corner_color_0\"].",
+    "inputSchema": {
+      "properties": {
+        "scene_name": {
+          "description": "Name of the scene",
+          "type": "string"
+        },
+        "node_id": {
+          "description": "Node ID (preferred over node_name when both given)",
+          "type": "integer"
+        },
+        "node_name": {
+          "description": "Node name (used when node_id is absent)",
+          "type": "string"
+        },
+        "primitive_index": {
+          "description": "Mesh primitive index (default 0)",
+          "type": "integer"
+        },
+        "channel": {
+          "description": "The color_0 channel painted",
+          "enum": [
+            "r",
+            "g",
+            "b",
+            "a"
+          ],
+          "type": "string"
+        },
+        "centers": {
+          "description": "World-space dab centers [x, y, z], 1 - 4096, in stroke order",
+          "items": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array"
+          },
+          "type": "array"
+        },
+        "radius": {
+          "description": "Brush sphere radius in meters (> 0)",
+          "type": "number"
+        },
+        "strength": {
+          "description": "Brush strength in [0, 1] (default 1)",
+          "type": "number"
+        },
+        "target": {
+          "description": "Target value in [0, 1] (default 1)",
+          "type": "number"
+        },
+        "blend": {
+          "description": "Blend mode (default mix)",
+          "enum": [
+            "mix",
+            "add",
+            "subtract"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "scene_name",
+        "channel",
+        "centers",
+        "radius"
+      ],
+      "type": "object"
+    },
+    "name": "paint_vertex_channel"
+  },
+  {
+    "description": "Set one channel of the vertex color (corner_color_0) of every corner of the given meshes to value: every primitive that has a Geometry, whole mesh (doc/editor/tools.md \"Channel painting\"). The other three channels keep their values; a corner with no color takes its vertex color, else white, as its value before. One undo entry, queued and run on the next frame. Refused when no primitive of the meshes has a Geometry.",
+    "inputSchema": {
+      "properties": {
+        "scene_name": {
+          "description": "Name of the scene",
+          "type": "string"
+        },
+        "node_ids": {
+          "description": "Mesh node IDs",
+          "items": {
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "node_names": {
+          "description": "Mesh node names",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "channel": {
+          "description": "The color_0 channel painted",
+          "enum": [
+            "r",
+            "g",
+            "b",
+            "a"
+          ],
+          "type": "string"
+        },
+        "value": {
+          "description": "The value in [0, 1]",
+          "type": "number"
+        }
+      },
+      "required": [
+        "scene_name",
+        "channel",
+        "value"
+      ],
+      "type": "object"
+    },
+    "name": "fill_vertex_channel"
+  },
+  {
+    "description": "Invert one channel of the vertex color (corner_color_0) of every corner of the given meshes: the channel becomes 1 - its value. Every primitive that has a Geometry, whole mesh (doc/editor/tools.md \"Channel painting\"). The other three channels keep their values. One undo entry, queued and run on the next frame. Refused when no primitive of the meshes has a Geometry.",
+    "inputSchema": {
+      "properties": {
+        "scene_name": {
+          "description": "Name of the scene",
+          "type": "string"
+        },
+        "node_ids": {
+          "description": "Mesh node IDs",
+          "items": {
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "node_names": {
+          "description": "Mesh node names",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "channel": {
+          "description": "The color_0 channel painted",
+          "enum": [
+            "r",
+            "g",
+            "b",
+            "a"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "scene_name",
+        "channel"
+      ],
+      "type": "object"
+    },
+    "name": "invert_vertex_channel"
+  },
+  {
+    "description": "The Paint tool's Brush mode settings and state (doc/editor/tools.md \"Paint tool brush\"): tool_active, paint_mode (point, corner, polygon, brush), paints (weight: one channel toward target; color: all four channels toward the selected palette color), radius (meters), strength, target, blend (mix, add, subtract), channel (the channel a weight stroke paints on a material with detail blend off), stroke_active and changed_vertices (the open stroke), brush_center (the hovered surface point the brush sphere is drawn at, null without one), weight_channel {channel, source (material: the hovered material has detail blend on and gives its weight channel; tool: the channel value; no_mesh), mesh, primitive_index} for the mesh primitive last hovered, last_stroke {outcome (none, ended, cancelled, refused), mesh, primitive_index, channels, changed_vertices, recorded (queued as one undo entry), refusal} and detail_weight_view (the viewport scene view the Tool Properties switch Show Detail Weight set to the Detail Blend Weight debug mode, while it shows it; else null). Takes no arguments.",
+    "inputSchema": {
+      "properties": {},
+      "type": "object"
+    },
+    "name": "get_paint_brush_settings"
+  },
+  {
+    "description": "Set the Paint tool's Brush mode settings as its Tool Properties widgets do (doc/editor/tools.md \"Paint tool brush\"); every argument is optional and an absent one keeps its value. paint_mode is the tool's mode (leaving brush cancels an open brush stroke); the others are saved with the editor settings. An unknown argument or a value out of range fails the call and nothing changes. Returns the settings as get_paint_brush_settings does.",
+    "inputSchema": {
+      "properties": {
+        "paint_mode": {
+          "description": "The Paint tool mode",
+          "enum": [
+            "point",
+            "corner",
+            "polygon",
+            "brush"
+          ],
+          "type": "string"
+        },
+        "paints": {
+          "description": "weight: one channel toward target; color: all four channels toward the selected palette color",
+          "enum": [
+            "weight",
+            "color"
+          ],
+          "type": "string"
+        },
+        "radius": {
+          "description": "Brush sphere radius in meters, 0.01 - 100",
+          "type": "number"
+        },
+        "strength": {
+          "description": "Brush strength in [0, 1]",
+          "type": "number"
+        },
+        "target": {
+          "description": "The value a weight stroke paints toward, in [0, 1]; also the value of the Fill button",
+          "type": "number"
+        },
+        "blend": {
+          "description": "Blend mode",
+          "enum": [
+            "mix",
+            "add",
+            "subtract"
+          ],
+          "type": "string"
+        },
+        "channel": {
+          "description": "The color_0 channel a weight stroke paints on a material with detail blend off",
+          "enum": [
+            "r",
+            "g",
+            "b",
+            "a"
+          ],
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "name": "set_paint_brush_settings"
   },
   {
     "description": "Describe a primitive's GPU vertex / index buffer ranges without reading them: per stream the pool id, buffer id, byte offset, element count, stride and base_vertex; the index range and its per-mode sub-ranges (triangle fill, edge lines, corner points, polygon centroids); the vertex format's attributes with their offsets and formats; and the primitive's AABB with the position encoding and the exact scale / offset the vertex shader applies to a snorm16x3 position. Use this before get_mesh_buffer_data: it is what says which stream and byte offset to read, and how to decode what comes back.",
@@ -10874,7 +11303,7 @@
           "type": "string"
         },
         "slot": {
-          "description": "Texture slot: base_color (default), metallic_roughness, normal, occlusion, or emissive",
+          "description": "Texture slot: base_color (default), metallic_roughness, normal, occlusion, emissive, or detail_blend",
           "type": "string"
         }
       },

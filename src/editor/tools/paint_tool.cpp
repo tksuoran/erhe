@@ -6,27 +6,39 @@
 #include "app_context.hpp"
 #include "app_message_bus.hpp"
 #include "app_settings.hpp"
+#include "config/generated/paint_brush_blend.hpp"
+#include "config/generated/paint_brush_channel.hpp"
+#include "config/generated/paint_brush_config.hpp"
+#include "config/generated/paint_brush_target.hpp"
+#include "editor_log.hpp"
 #include "graphics/icon_set.hpp"
 #include "erhe_scene_renderer/mesh_memory.hpp"
 #include "operations/compound_operation.hpp"
 #include "operations/operation_stack.hpp"
 #include "operations/paint_colors_operation.hpp"
 #include "renderers/render_context.hpp"
+#include "scene/scene_root.hpp"
 #include "scene/scene_view.hpp"
+#include "scene/viewport_scene_view.hpp"
+#include "scene/viewport_scene_views.hpp"
+#include "windows/viewport_window.hpp"
 #include "tools/selection_tool.hpp"
 #include "tools/tools.hpp"
 
 #include "erhe_commands/commands.hpp"
+#include "erhe_commands/input_arguments.hpp"
 #include "erhe_dataformat/vertex_format.hpp"
 #include "erhe_imgui/imgui_helpers.hpp"
 #include "erhe_imgui/imgui_windows.hpp"
 #include "erhe_geometry/geometry.hpp"
 #include "erhe_graphics/buffer_transfer_queue.hpp"
+#include "erhe_primitive/material.hpp"
 #include "erhe_primitive/primitive.hpp"
 #include "erhe_renderer/primitive_renderer.hpp"
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/node.hpp"
 #include "erhe_verify/verify.hpp"
+#include "erhe_window/window_event_handler.hpp"
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
 #   include "xr/headset_view.hpp"
@@ -34,18 +46,40 @@
 #   include "erhe_xr/headset.hpp"
 #endif
 
+#include <glm/gtc/constants.hpp>
 #include <imgui/imgui.h>
 
 #include <fmt/core.h>
 #include <fmt/format.h>
 
 #include <algorithm>
+#include <cmath>
 #include <string>
 
 using erhe::geometry::get_pointf;
 using erhe::geometry::to_glm_vec3;
 
 namespace editor {
+
+namespace {
+
+constexpr float     c_brush_line_width = -2.0f; // pixels
+constexpr glm::vec4 c_brush_color{1.0f, 0.85f, 0.2f, 1.0f};
+
+constexpr const char* c_paint_channel_names[] = { "r", "g", "b", "a" };
+
+} // anonymous namespace
+
+auto c_str(const Paint_stroke_outcome outcome) -> const char*
+{
+    switch (outcome) {
+        case Paint_stroke_outcome::none:      return "none";
+        case Paint_stroke_outcome::ended:     return "ended";
+        case Paint_stroke_outcome::cancelled: return "cancelled";
+        case Paint_stroke_outcome::refused:   return "refused";
+    }
+    return "";
+}
 
 #pragma region Commands
 Paint_vertex_command::Paint_vertex_command(erhe::commands::Commands& commands, App_context& context)
@@ -96,9 +130,32 @@ void Paint_vertex_command::on_inactive()
     }
 }
 
+Paint_brush_radius_command::Paint_brush_radius_command(erhe::commands::Commands& commands, Paint_tool& tool)
+    : Command{commands, "Paint_tool.brush_radius"}
+    , m_tool {tool}
+{
+}
+
+auto Paint_brush_radius_command::try_call_with_input(erhe::commands::Input_arguments& input) -> bool
+{
+    return m_tool.adjust_brush_radius(input.variant.vector2.relative_value.y);
+}
+
+Paint_brush_cancel_command::Paint_brush_cancel_command(erhe::commands::Commands& commands, Paint_tool& tool)
+    : Command{commands, "Paint_tool.brush_cancel"}
+    , m_tool {tool}
+{
+}
+
+auto Paint_brush_cancel_command::try_call() -> bool
+{
+    return m_tool.cancel_brush_stroke();
+}
+
 #pragma endregion Commands
 
 Paint_tool::Paint_tool(
+    Paint_brush_config&          config,
     erhe::commands::Commands&    commands,
     erhe::imgui::Imgui_renderer& imgui_renderer,
     erhe::imgui::Imgui_windows&  imgui_windows,
@@ -109,10 +166,14 @@ Paint_tool::Paint_tool(
     Tools&                       tools
 )
     : Tool                          {context, tools, Tool_flags::toolbox}
+    , m_config                      {config}
     , m_window                      {imgui_renderer, imgui_windows, "Paint Tool", "paint_tool", [this]() { window_imgui(); }}
     , m_paint_vertex_command        {commands, context}
     , m_drag_redirect_update_command{commands, m_paint_vertex_command}
     , m_drag_enable_command         {commands, m_drag_redirect_update_command}
+    , m_brush_radius_command        {commands, *this}
+    , m_brush_cancel_command        {commands, *this}
+    , m_channel_stroke              {context}
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -123,11 +184,18 @@ Paint_tool::Paint_tool(
     m_paint_vertex_command        .set_host(this);
     m_drag_redirect_update_command.set_host(this);
     m_drag_enable_command         .set_host(this);
+    m_brush_radius_command        .set_host(this);
+    m_brush_cancel_command        .set_host(this);
 
     commands.register_command(&m_paint_vertex_command);
     commands.register_command(&m_drag_redirect_update_command);
     commands.register_command(&m_drag_enable_command);
+    commands.register_command(&m_brush_radius_command);
+    commands.register_command(&m_brush_cancel_command);
     commands.bind_command_to_mouse_drag(&m_paint_vertex_command, erhe::window::Mouse_button_left, true);
+    // Brush mode only; declining leaves the plain wheel's zoom and other tools' Escape alone.
+    commands.bind_command_to_mouse_wheel(&m_brush_radius_command, erhe::window::Key_modifier_bit_shift);
+    commands.bind_command_to_key        (&m_brush_cancel_command, erhe::window::Key_escape, erhe::commands::Button_trigger::Button_pressed);
 #if defined(ERHE_XR_LIBRARY_OPENXR)
     erhe::xr::Headset*    headset  = headset_view.get_headset();
     erhe::xr::Xr_actions* xr_right = (headset != nullptr) ? headset->get_actions_right() : nullptr;
@@ -194,13 +262,57 @@ Paint_tool::Paint_tool(
     m_hover_scene_view_subscription = app_message_bus.hover_scene_view.subscribe(
         [&](Hover_scene_view_message& message) {
             Tool::on_message(message);
+            update_brush();
         }
     );
+    m_hover_mesh_subscription = app_message_bus.hover_mesh.subscribe(
+        [this](Hover_mesh_message&) {
+            on_hover_mesh();
+        }
+    );
+    m_close_scene_subscription = app_message_bus.close_scene.subscribe(
+        [this](Close_scene_message& message) {
+            on_close_scene(static_cast<const erhe::Item_host*>(message.scene_root.get()));
+        }
+    );
+    m_items_removed_subscription = app_message_bus.items_removed.subscribe(
+        [this](Items_removed_message& message) {
+            on_items_removed(*message.removed.get());
+        }
+    );
+
+    m_config.radius   = std::clamp(m_config.radius,   c_paint_brush_min_radius, c_paint_brush_max_radius);
+    m_config.strength = std::clamp(m_config.strength, 0.0f, 1.0f);
+    m_config.target   = std::clamp(m_config.target,   0.0f, 1.0f);
 }
 
 void Paint_tool::tool_render(const Render_context& context)
 {
     if (!is_enabled()) {
+        return;
+    }
+    if (m_paint_mode == Paint_mode::Brush) {
+        if (!m_brush_center.has_value() || !context.scene_root || (m_brush_scene.lock() != context.scene_root)) {
+            return;
+        }
+        erhe::renderer::Primitive_renderer brush_renderer = context.get(
+            {
+                .primitive_type    = erhe::graphics::Primitive_type::line,
+                .stencil_reference = 2,
+                .draw_visible      = true,
+                .draw_hidden       = true,
+                .thin_lines        = false,
+                .xray              = true
+            }
+        );
+        for (std::size_t circle = 0; circle < 3; ++circle) {
+            const std::size_t base = circle * c_paint_brush_circle_segments;
+            for (std::size_t i = 0; i < c_paint_brush_circle_segments; ++i) {
+                const glm::vec3& p0 = m_brush_circle_points[base + i];
+                const glm::vec3& p1 = m_brush_circle_points[base + ((i + 1) % c_paint_brush_circle_segments)];
+                brush_renderer.add_line(c_brush_color, c_brush_line_width, p0, c_brush_color, c_brush_line_width, p1);
+            }
+        }
         return;
     }
     erhe::renderer::Primitive_renderer line_renderer = context.get({erhe::graphics::Primitive_type::line, 2, true, true});
@@ -246,16 +358,12 @@ void Paint_tool::tool_render(const Render_context& context)
     float        max_distance_squared = std::numeric_limits<float>::max();
     GEO::index_t nearest_vertex       = 0;
     GEO::index_t nearest_corner       = 0;
-    struct Vertex_position {
-        GEO::index_t vertex;
-        glm::vec3    position;
-    };
-    std::vector<Vertex_position> vertex_positions;
+    m_render_vertices.clear();
     for (GEO::index_t corner : geo_mesh.facets.corners(facet)) {
         const GEO::index_t vertex = geo_mesh.facet_corners.vertex(corner);
         const GEO::vec3f   p_in_mesh_ = get_pointf(geo_mesh.vertices, vertex);
         const glm::vec3    p_in_mesh = to_glm_vec3(p_in_mesh_);
-        vertex_positions.emplace_back(vertex, p_in_mesh);
+        m_render_vertices.push_back(Render_vertex{.vertex = vertex, .position = p_in_mesh});
         const float d2 = glm::distance2(hover_position_in_mesh, p_in_mesh);
         if (d2 < max_distance_squared) {
             max_distance_squared = d2;
@@ -266,7 +374,7 @@ void Paint_tool::tool_render(const Render_context& context)
 
     glm::vec3 n = glm::normalize(content.normal.value());
 
-    for (const Vertex_position& vertex_position : vertex_positions) {
+    for (const Render_vertex& vertex_position : m_render_vertices) {
         const glm::vec3 p = node->transform_point_from_local_to_world(vertex_position.position);
         line_renderer.add_lines(
             (vertex_position.vertex == nearest_vertex) 
@@ -280,10 +388,18 @@ void Paint_tool::tool_render(const Render_context& context)
 void Paint_tool::handle_priority_update(const int old_priority, const int new_priority)
 {
     if (new_priority < old_priority) {
+        // A drag in progress ends here: a Brush stroke is cancelled, the other modes' stroke ends as a release would.
+        if (m_channel_stroke.is_active()) {
+            finish_brush_stroke(Paint_stroke_outcome::cancelled);
+        }
+        m_paint_vertex_command.set_inactive();
+        restore_debug_view();
         disable_command_host();
+        m_brush_center.reset();
     }
     if (new_priority > old_priority) {
         enable_command_host();
+        update_brush();
     }
 }
 
@@ -327,6 +443,11 @@ auto Paint_tool::vertex_buffer_index_from_scnene_mesh_primitive_corner(
 
 void Paint_tool::end_stroke()
 {
+    if (m_channel_stroke.is_active()) {
+        finish_brush_stroke(Paint_stroke_outcome::ended);
+    }
+    m_brush_press = Brush_press::idle;
+
     // Release the optimization holds first: the operations queued below swap
     // in freshly rebuilt primitives whose optimized variant must be
     // publishable.
@@ -562,6 +683,10 @@ void Paint_tool::paint_vertex(
 
 void Paint_tool::paint()
 {
+    if (m_paint_mode == Paint_mode::Brush) {
+        paint_brush();
+        return;
+    }
     m_vertex = GEO::NO_INDEX;
     m_corner = GEO::NO_INDEX;
 
@@ -637,12 +762,18 @@ void Paint_tool::paint()
             }
             break;
         }
+        case Paint_mode::Brush: {
+            break;
+        }
     }
 }
 
 void Paint_tool::tool_properties(erhe::imgui::Imgui_window&)
 {
-    erhe::imgui::make_combo("Mode", m_paint_mode, c_paint_mode_strings, IM_ARRAYSIZE(c_paint_mode_strings));
+    int mode = static_cast<int>(m_paint_mode);
+    if (ImGui::Combo("Mode", &mode, c_paint_mode_strings, IM_ARRAYSIZE(c_paint_mode_strings))) {
+        set_paint_mode(static_cast<Paint_mode>(mode));
+    }
 
     ImGui::ColorEdit4("Color", &m_palette.at(m_selected_palette_slot).x, ImGuiColorEditFlags_Float);
 
@@ -667,6 +798,10 @@ void Paint_tool::tool_properties(erhe::imgui::Imgui_window&)
         ImGui::PopID();
         ++slot;
     }
+
+    if (m_paint_mode == Paint_mode::Brush) {
+        brush_properties();
+    }
 }
 
 void Paint_tool::window_imgui()
@@ -675,7 +810,10 @@ void Paint_tool::window_imgui()
     const ImVec2 button_size{110.0f * ui_scale, 0.0f};
 
     ImGui::SetNextItemWidth(200);
-    erhe::imgui::make_combo("Paint mode", m_paint_mode, c_paint_mode_strings, IM_ARRAYSIZE(c_paint_mode_strings));
+    int mode = static_cast<int>(m_paint_mode);
+    if (ImGui::Combo("Paint mode", &mode, c_paint_mode_strings, IM_ARRAYSIZE(c_paint_mode_strings))) {
+        set_paint_mode(static_cast<Paint_mode>(mode));
+    }
 
     if (m_vertex != GEO::NO_INDEX) {
         ImGui::Text("Vertex: %u", m_vertex);
@@ -737,5 +875,503 @@ void Paint_tool::window_imgui()
         }
     }
 }
+
+#pragma region Brush
+void Paint_tool::touch_settings()
+{
+    if (m_context.app_settings != nullptr) {
+        m_context.app_settings->settings_store().touch();
+    }
+}
+
+auto Paint_tool::get_config() const -> const Paint_brush_config&
+{
+    return m_config;
+}
+
+auto Paint_tool::get_paint_mode() const -> Paint_mode
+{
+    return m_paint_mode;
+}
+
+void Paint_tool::set_paint_mode(const Paint_mode mode)
+{
+    if ((mode != Paint_mode::Brush) && m_channel_stroke.is_active()) {
+        finish_brush_stroke(Paint_stroke_outcome::cancelled);
+        m_brush_press = Brush_press::stopped;
+    }
+    m_paint_mode = mode;
+    update_brush();
+}
+
+void Paint_tool::set_brush_target(const Paint_brush_target target)
+{
+    m_config.target_kind = target;
+    touch_settings();
+}
+
+void Paint_tool::set_brush_radius(const float radius)
+{
+    m_config.radius = std::clamp(radius, c_paint_brush_min_radius, c_paint_brush_max_radius);
+    // The open stroke's next dabs take the new radius.
+    if (m_channel_stroke.is_active()) {
+        m_channel_stroke.get_settings().radius = m_config.radius;
+    }
+    update_brush_circles();
+    touch_settings();
+}
+
+void Paint_tool::set_brush_strength(const float strength)
+{
+    m_config.strength = std::clamp(strength, 0.0f, 1.0f);
+    touch_settings();
+}
+
+void Paint_tool::set_brush_value(const float value)
+{
+    m_config.target = std::clamp(value, 0.0f, 1.0f);
+    touch_settings();
+}
+
+void Paint_tool::set_brush_blend(const Paint_brush_blend blend)
+{
+    m_config.blend = blend;
+    touch_settings();
+}
+
+void Paint_tool::set_brush_channel(const Paint_brush_channel channel)
+{
+    m_config.channel = channel;
+    touch_settings();
+}
+
+auto Paint_tool::is_brush_stroke_active() const -> bool
+{
+    return m_channel_stroke.is_active();
+}
+
+auto Paint_tool::get_brush_changed_vertex_count() const -> std::size_t
+{
+    return m_channel_stroke.get_changed_vertex_count();
+}
+
+auto Paint_tool::get_brush_center() const -> const std::optional<glm::vec3>&
+{
+    return m_brush_center;
+}
+
+auto Paint_tool::get_last_stroke() const -> const Paint_last_stroke&
+{
+    return m_last_stroke;
+}
+
+auto Paint_tool::get_last_hovered_mesh(std::size_t& out_primitive_index) const -> std::shared_ptr<erhe::scene::Mesh>
+{
+    out_primitive_index = m_last_hovered_primitive_index;
+    return m_last_hovered_mesh.lock();
+}
+
+auto Paint_tool::get_weight_channel(const erhe::scene::Mesh* const mesh, const std::size_t primitive_index) const -> Paint_channel_choice
+{
+    const unsigned int tool_channel = static_cast<unsigned int>(m_config.channel);
+    if (mesh == nullptr) {
+        return Paint_channel_choice{.channel = tool_channel, .source = Paint_channel_source::no_mesh};
+    }
+    const std::vector<erhe::scene::Mesh_primitive>& mesh_primitives = mesh->get_primitives();
+    if (primitive_index < mesh_primitives.size()) {
+        const std::shared_ptr<erhe::primitive::Material>& material = mesh_primitives[primitive_index].material;
+        if (material && material->get_detail_blend()) {
+            const erhe::primitive::Texture_channel channel = material->get_detail_blend_weight_channel();
+            if (channel != erhe::primitive::Texture_channel::none) {
+                return Paint_channel_choice{.channel = static_cast<unsigned int>(channel), .source = Paint_channel_source::material, .material = material};
+            }
+        }
+        return Paint_channel_choice{.channel = tool_channel, .source = Paint_channel_source::tool, .material = material};
+    }
+    return Paint_channel_choice{.channel = tool_channel, .source = Paint_channel_source::tool};
+}
+
+void Paint_tool::on_hover_mesh()
+{
+    update_brush();
+    dab_at_hover();
+}
+
+void Paint_tool::update_brush()
+{
+    if (!is_enabled() || (m_paint_mode != Paint_mode::Brush)) {
+        m_brush_center.reset();
+        return;
+    }
+    Scene_view* const scene_view = get_hover_scene_view();
+    if (scene_view == nullptr) {
+        m_brush_center.reset();
+        return;
+    }
+    const Hover_entry&                       content = scene_view->get_hover(Hover_entry::content_slot);
+    const std::shared_ptr<erhe::scene::Mesh> mesh    = content.scene_mesh_weak.lock();
+    if (!content.valid || !content.position.has_value() || !mesh) {
+        m_brush_center.reset();
+        return;
+    }
+    m_brush_center                 = content.position.value();
+    m_brush_scene                  = scene_view->get_scene_root();
+    m_last_hovered_mesh            = mesh;
+    m_last_hovered_primitive_index = content.scene_mesh_primitive_index;
+    update_brush_circles();
+}
+
+void Paint_tool::update_brush_circles()
+{
+    if (!m_brush_center.has_value()) {
+        return;
+    }
+    // Three great circles of the brush sphere, in the world axis planes.
+    const glm::vec3 axes[3][2] = {
+        {glm::vec3{1.0f, 0.0f, 0.0f}, glm::vec3{0.0f, 1.0f, 0.0f}},
+        {glm::vec3{0.0f, 1.0f, 0.0f}, glm::vec3{0.0f, 0.0f, 1.0f}},
+        {glm::vec3{0.0f, 0.0f, 1.0f}, glm::vec3{1.0f, 0.0f, 0.0f}}
+    };
+    const glm::vec3 center = m_brush_center.value();
+    const float     radius = m_config.radius;
+    for (std::size_t circle = 0; circle < 3; ++circle) {
+        for (std::size_t i = 0; i < c_paint_brush_circle_segments; ++i) {
+            const float angle = (glm::two_pi<float>() * static_cast<float>(i)) / static_cast<float>(c_paint_brush_circle_segments);
+            m_brush_circle_points[(circle * c_paint_brush_circle_segments) + i] =
+                center + (radius * ((std::cos(angle) * axes[circle][0]) + (std::sin(angle) * axes[circle][1])));
+        }
+    }
+}
+
+void Paint_tool::paint_brush()
+{
+    if (m_brush_press == Brush_press::stopped) {
+        return;
+    }
+    if (m_brush_press == Brush_press::idle) {
+        Scene_view* const scene_view = get_hover_scene_view();
+        if (scene_view == nullptr) {
+            return;
+        }
+        const Hover_entry&                       content = scene_view->get_hover(Hover_entry::content_slot);
+        const std::shared_ptr<erhe::scene::Mesh> mesh    = content.scene_mesh_weak.lock();
+        if (!content.valid || !content.position.has_value() || !mesh) {
+            return;
+        }
+        const std::size_t primitive_index = content.scene_mesh_primitive_index;
+        Channel_brush_settings settings{
+            .radius   = m_config.radius,
+            .strength = m_config.strength,
+            .blend    = static_cast<Channel_brush_blend>(static_cast<unsigned int>(m_config.blend))
+        };
+        if (m_config.target_kind == Paint_brush_target::color) {
+            settings.target       = m_palette.at(m_selected_palette_slot);
+            settings.channel_mask = c_channel_mask_all;
+        } else {
+            settings.target       = glm::vec4{m_config.target};
+            settings.channel_mask = 1u << get_weight_channel(mesh.get(), primitive_index).channel;
+        }
+        const std::optional<std::string> refusal = m_channel_stroke.begin(mesh, primitive_index, settings);
+        if (refusal.has_value()) {
+            m_last_stroke = Paint_last_stroke{
+                .outcome         = Paint_stroke_outcome::refused,
+                .mesh_name       = mesh->get_name(),
+                .primitive_index = primitive_index,
+                .channel_mask    = settings.channel_mask,
+                .refusal         = refusal.value()
+            };
+            m_brush_press = Brush_press::stopped;
+            log_tools->info("Paint brush: no stroke: {}", refusal.value());
+            return;
+        }
+        m_brush_press = Brush_press::painting;
+    }
+    dab_at_hover();
+}
+
+void Paint_tool::dab_at_hover()
+{
+    if (!m_channel_stroke.is_active()) {
+        return;
+    }
+    Scene_view* const scene_view = get_hover_scene_view();
+    if (scene_view == nullptr) {
+        return;
+    }
+    // A stroke stays on the primitive it started on: elsewhere the pointer paints nothing.
+    const Hover_entry& content = scene_view->get_hover(Hover_entry::content_slot);
+    if (
+        !content.valid || !content.position.has_value() ||
+        (content.scene_mesh_primitive_index != m_channel_stroke.get_primitive_index()) ||
+        (content.scene_mesh_weak.lock() != m_channel_stroke.get_mesh())
+    ) {
+        return;
+    }
+    m_channel_stroke.dab(content.position.value());
+}
+
+void Paint_tool::finish_brush_stroke(const Paint_stroke_outcome outcome)
+{
+    const std::shared_ptr<erhe::scene::Mesh> mesh = m_channel_stroke.get_mesh();
+    Paint_last_stroke last{
+        .outcome          = outcome,
+        .mesh_name        = mesh ? mesh->get_name() : std::string{},
+        .primitive_index  = m_channel_stroke.get_primitive_index(),
+        .channel_mask     = m_channel_stroke.get_settings().channel_mask,
+        .changed_vertices = m_channel_stroke.get_changed_vertex_count()
+    };
+    if (outcome == Paint_stroke_outcome::ended) {
+        const std::shared_ptr<Operation> operation = m_channel_stroke.end();
+        if (operation) {
+            m_context.operation_stack->queue(operation);
+            last.recorded = true;
+        }
+    } else {
+        m_channel_stroke.cancel();
+    }
+    log_tools->info(
+        "Paint brush: stroke {} on '{}' primitive {}: {} vertices{}",
+        c_str(outcome), last.mesh_name, last.primitive_index, last.changed_vertices, last.recorded ? ", one undo entry" : ""
+    );
+    m_last_stroke = std::move(last);
+}
+
+auto Paint_tool::cancel_brush_stroke() -> bool
+{
+    if (!m_channel_stroke.is_active()) {
+        return false;
+    }
+    finish_brush_stroke(Paint_stroke_outcome::cancelled);
+    // The rest of the drag paints nothing; the release ends it.
+    m_brush_press = Brush_press::stopped;
+    return true;
+}
+
+auto Paint_tool::adjust_brush_radius(const float wheel_steps) -> bool
+{
+    if (!is_enabled() || (m_paint_mode != Paint_mode::Brush) || (get_hover_scene_view() == nullptr) || (wheel_steps == 0.0f) || !std::isfinite(wheel_steps)) {
+        return false;
+    }
+    set_brush_radius(m_config.radius * std::pow(c_paint_brush_radius_wheel_step, wheel_steps));
+    return true;
+}
+
+void Paint_tool::on_close_scene(const erhe::Item_host* const closing_host)
+{
+    const std::shared_ptr<erhe::scene::Mesh>& stroke_mesh = m_channel_stroke.get_mesh();
+    if (stroke_mesh && (stroke_mesh->get_item_host() == closing_host)) {
+        finish_brush_stroke(Paint_stroke_outcome::cancelled);
+        m_brush_press = Brush_press::stopped;
+    }
+    const std::shared_ptr<erhe::scene::Mesh> hovered = m_last_hovered_mesh.lock();
+    if (!hovered || (hovered->get_item_host() == closing_host)) {
+        m_last_hovered_mesh.reset();
+    }
+    const std::shared_ptr<Scene_root> brush_scene = m_brush_scene.lock();
+    if (!brush_scene || (static_cast<const erhe::Item_host*>(brush_scene.get()) == closing_host)) {
+        m_brush_scene.reset();
+        m_brush_center.reset();
+    }
+}
+
+void Paint_tool::on_items_removed(const Removed_items& removed)
+{
+    const std::shared_ptr<erhe::scene::Mesh>& stroke_mesh = m_channel_stroke.get_mesh();
+    if (stroke_mesh && removed.lookup.contains(stroke_mesh.get())) {
+        finish_brush_stroke(Paint_stroke_outcome::cancelled);
+        m_brush_press = Brush_press::stopped;
+    }
+    const std::shared_ptr<erhe::scene::Mesh> hovered = m_last_hovered_mesh.lock();
+    if (hovered && removed.lookup.contains(hovered.get())) {
+        m_last_hovered_mesh.reset();
+    }
+}
+
+auto Paint_tool::get_debug_view() const -> std::shared_ptr<Viewport_scene_view>
+{
+    std::shared_ptr<Viewport_scene_view> view = m_debug_view.lock();
+    if (view && (view->get_shader_debug() == erhe::scene_renderer::Shader_debug::detail_blend_weight)) {
+        return view;
+    }
+    return {};
+}
+
+void Paint_tool::restore_debug_view()
+{
+    // Only a view that still shows what the switch set gets its mode back: a later change by other means is kept.
+    const std::shared_ptr<Viewport_scene_view> view = get_debug_view();
+    if (view) {
+        view->set_shader_debug(m_debug_view_previous);
+    }
+    m_debug_view.reset();
+}
+
+void Paint_tool::set_debug_view(const Paint_debug_view state)
+{
+    m_debug_view_message.clear();
+    restore_debug_view();
+    if (state == Paint_debug_view::off) {
+        return;
+    }
+    const Scene_view* const              hovered = get_last_hover_scene_view();
+    std::shared_ptr<Viewport_scene_view> view;
+    if ((hovered != nullptr) && (m_context.scene_views != nullptr)) {
+        for (const std::shared_ptr<Viewport_window>& viewport_window : m_context.scene_views->get_viewport_windows()) {
+            std::shared_ptr<Viewport_scene_view> candidate = viewport_window->viewport_scene_view();
+            if (candidate.get() == hovered) {
+                view = std::move(candidate);
+                break;
+            }
+        }
+    }
+    if (!view) {
+        m_debug_view_message = "hover a viewport first";
+        return;
+    }
+    const erhe::scene_renderer::Shader_debug current = view->get_shader_debug();
+    m_debug_view_previous =
+        (current == erhe::scene_renderer::Shader_debug::detail_blend_weight)
+            ? erhe::scene_renderer::Shader_debug::none
+            : current;
+    view->set_shader_debug(erhe::scene_renderer::Shader_debug::detail_blend_weight);
+    m_debug_view = view;
+}
+
+void Paint_tool::fill_selection(const Channel_fill_mode mode)
+{
+    // Grouped by the channel the Weight rule gives each mesh (its first primitive's material).
+    std::array<std::vector<std::shared_ptr<erhe::scene::Mesh>>, 4> meshes_by_channel;
+    std::size_t mesh_count = 0;
+    for (const std::shared_ptr<erhe::Item_base>& item : m_context.selection->get_selected_items()) {
+        std::shared_ptr<erhe::scene::Mesh> mesh = std::dynamic_pointer_cast<erhe::scene::Mesh>(item);
+        if (!mesh) {
+            const std::shared_ptr<erhe::scene::Node> node = std::dynamic_pointer_cast<erhe::scene::Node>(item);
+            if (node) {
+                mesh = erhe::scene::get_mesh(node.get());
+            }
+        }
+        if (!mesh) {
+            continue;
+        }
+        meshes_by_channel[get_weight_channel(mesh.get(), 0).channel & 3u].push_back(mesh);
+        ++mesh_count;
+    }
+    if (mesh_count == 0) {
+        m_fill_message = "select the meshes to fill first";
+        return;
+    }
+    std::vector<std::shared_ptr<Operation>> operations;
+    std::string error;
+    for (unsigned int channel = 0; channel < 4; ++channel) {
+        if (meshes_by_channel[channel].empty()) {
+            continue;
+        }
+        std::shared_ptr<Operation> operation = make_channel_fill_operation(m_context, meshes_by_channel[channel], 1u << channel, mode, m_config.target, error);
+        if (operation) {
+            operations.push_back(std::move(operation));
+        }
+    }
+    if (operations.empty()) {
+        m_fill_message = error;
+        return;
+    }
+    if (operations.size() == 1) {
+        m_context.operation_stack->queue(operations.front());
+    } else {
+        m_context.operation_stack->queue(std::make_shared<Compound_operation>(Compound_operation::Parameters{.operations = std::move(operations)}));
+    }
+    m_fill_message = fmt::format("{} {} mesh(es)", (mode == Channel_fill_mode::fill) ? "Filled" : "Inverted", mesh_count);
+}
+
+void Paint_tool::brush_properties()
+{
+    ImGui::SeparatorText("Brush");
+    int target_kind = static_cast<int>(m_config.target_kind);
+    if (ImGui::RadioButton("Weight", &target_kind, static_cast<int>(Paint_brush_target::weight))) {
+        set_brush_target(Paint_brush_target::weight);
+    }
+    ImGui::SameLine();
+    if (ImGui::RadioButton("Color", &target_kind, static_cast<int>(Paint_brush_target::color))) {
+        set_brush_target(Paint_brush_target::color);
+    }
+    float radius = m_config.radius;
+    if (ImGui::SliderFloat("Brush Radius", &radius, c_paint_brush_min_radius, c_paint_brush_max_radius, "%.3f m", ImGuiSliderFlags_Logarithmic)) {
+        set_brush_radius(radius);
+    }
+    float strength = m_config.strength;
+    if (ImGui::SliderFloat("Strength", &strength, 0.0f, 1.0f, "%.2f")) {
+        set_brush_strength(strength);
+    }
+    int blend = static_cast<int>(m_config.blend);
+    if (ImGui::Combo("Blend", &blend, c_channel_brush_blend_strings, IM_ARRAYSIZE(c_channel_brush_blend_strings))) {
+        set_brush_blend(static_cast<Paint_brush_blend>(blend));
+    }
+
+    std::size_t                              hovered_index = 0;
+    const std::shared_ptr<erhe::scene::Mesh> hovered       = get_last_hovered_mesh(hovered_index);
+    if (m_config.target_kind == Paint_brush_target::weight) {
+        float value = m_config.target;
+        if (ImGui::SliderFloat("Target", &value, 0.0f, 1.0f, "%.3f")) {
+            set_brush_value(value);
+        }
+        int channel = static_cast<int>(m_config.channel);
+        if (ImGui::Combo("Channel", &channel, c_paint_channel_names, IM_ARRAYSIZE(c_paint_channel_names))) {
+            set_brush_channel(static_cast<Paint_brush_channel>(channel));
+        }
+        const Paint_channel_choice choice = get_weight_channel(hovered.get(), hovered_index);
+        const char* const          name   = c_paint_channel_names[choice.channel & 3u];
+        switch (choice.source) {
+            case Paint_channel_source::material: {
+                ImGui::TextWrapped("Paints %s: the weight channel of material '%s' (detail blend on)", name, choice.material->get_name().c_str());
+                break;
+            }
+            case Paint_channel_source::tool: {
+                ImGui::TextWrapped("Paints %s: the Channel value (the hovered material has detail blend off)", name);
+                break;
+            }
+            case Paint_channel_source::no_mesh: {
+                ImGui::TextWrapped("Paints %s: the Channel value (no mesh hovered yet)", name);
+                break;
+            }
+        }
+    } else {
+        ImGui::TextUnformatted("Paints r, g, b, a toward the selected palette color");
+    }
+
+    if (m_last_stroke.outcome == Paint_stroke_outcome::refused) {
+        ImGui::TextWrapped("Cannot paint: %s", m_last_stroke.refusal.c_str());
+    } else if (m_last_stroke.outcome != Paint_stroke_outcome::none) {
+        ImGui::Text("Last stroke %s: %zu vertices", c_str(m_last_stroke.outcome), m_last_stroke.changed_vertices);
+    }
+
+    if (ImGui::Button("Fill")) {
+        fill_selection(Channel_fill_mode::fill);
+    }
+    if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip("%s", "Set the Weight channel of every vertex of the selected meshes to Target.");
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Invert")) {
+        fill_selection(Channel_fill_mode::invert);
+    }
+    if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip("%s", "Set the Weight channel of every vertex of the selected meshes to 1 - its value.");
+    }
+    if (!m_fill_message.empty()) {
+        ImGui::TextUnformatted(m_fill_message.c_str());
+    }
+
+    bool debug_view = static_cast<bool>(get_debug_view());
+    if (ImGui::Checkbox("Show Detail Weight", &debug_view)) {
+        set_debug_view(debug_view ? Paint_debug_view::on : Paint_debug_view::off);
+    }
+    if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip("%s", "Show the Detail Blend Weight debug mode in the viewport last hovered, and back.");
+    }
+    if (!m_debug_view_message.empty()) {
+        ImGui::TextUnformatted(m_debug_view_message.c_str());
+    }
+}
+#pragma endregion Brush
 
 }

@@ -24,6 +24,13 @@
 #include "scene/node_physics.hpp"
 #include "scene/node_physics_system.hpp"
 #include "scene/scene_root.hpp"
+#include "tools/channel_paint.hpp"
+#include "tools/paint_tool.hpp"
+#include "scene/viewport_scene_view.hpp"
+#include "config/generated/paint_brush_blend.hpp"
+#include "config/generated/paint_brush_channel.hpp"
+#include "config/generated/paint_brush_config.hpp"
+#include "config/generated/paint_brush_target.hpp"
 #include "tools/mesh_component_selection.hpp"
 #include "tools/mesh_component_selection_tool.hpp"
 #include "tools/selection_tool.hpp"
@@ -64,6 +71,7 @@
 #include <nlohmann/json.hpp>
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstddef>
 #include <cstring>
@@ -73,6 +81,7 @@
 #include <optional>
 #include <set>
 #include <span>
+#include <string_view>
 #include <string>
 #include <vector>
 
@@ -978,6 +987,182 @@ auto Mcp_server::action_set_mesh_attribute_values(const json& args) -> std::stri
         {"operation", description},
         {"elements",  elements.size()}
     }).dump();
+}
+
+namespace {
+
+// The channel mask of a channel argument "r", "g", "b" or "a"; 0 when it names none.
+[[nodiscard]] auto parse_channel_mask(const json& args) -> unsigned int
+{
+    const std::string channel = args.value("channel", "");
+    if (channel == "r") { return c_channel_mask_r; }
+    if (channel == "g") { return c_channel_mask_g; }
+    if (channel == "b") { return c_channel_mask_b; }
+    if (channel == "a") { return c_channel_mask_a; }
+    return 0u;
+}
+
+[[nodiscard]] auto read_unit_float(const json& args, const char* key, const float fallback, float& out_value) -> bool
+{
+    if (!args.contains(key)) {
+        out_value = fallback;
+        return true;
+    }
+    if (!args[key].is_number()) {
+        return false;
+    }
+    out_value = args[key].get<float>();
+    return (out_value >= 0.0f) && (out_value <= 1.0f);
+}
+
+} // anonymous namespace
+
+auto Mcp_server::action_paint_vertex_channel(const json& args) -> std::string
+{
+    if (m_context.operation_stack == nullptr) {
+        return make_error_content("Operation stack not available");
+    }
+    const std::string scene_name = args.value("scene_name", "");
+    Scene_root* sr = find_scene(scene_name);
+    if (sr == nullptr) {
+        return make_error_content("Scene not found: " + scene_name);
+    }
+    const std::shared_ptr<erhe::scene::Node> node = find_node_in_scene(*sr, args, "node_id", "node_name");
+    if (!node) {
+        return make_error_content("Node not found (give node_id or node_name)");
+    }
+    if (const std::optional<std::string> layout_refusal = locked_layout_refusal(*node); layout_refusal.has_value()) {
+        return make_error_content("paint_vertex_channel: " + layout_refusal.value() + "; nothing was changed");
+    }
+    const std::shared_ptr<erhe::scene::Mesh> mesh = erhe::scene::get_mesh(node.get());
+    if (!mesh) {
+        return make_error_content("Node has no mesh: " + node->get_name());
+    }
+
+    Channel_brush_settings settings;
+    settings.channel_mask = parse_channel_mask(args);
+    if (settings.channel_mask == 0u) {
+        return make_error_content("channel must be one of r, g, b, a");
+    }
+    if (!args.contains("radius") || !args["radius"].is_number() || (args["radius"].get<float>() <= 0.0f)) {
+        return make_error_content("radius (meters, > 0) is required");
+    }
+    settings.radius = args["radius"].get<float>();
+    float target = 1.0f;
+    if (!read_unit_float(args, "strength", 1.0f, settings.strength)) {
+        return make_error_content("strength must be a number in [0, 1]");
+    }
+    if (!read_unit_float(args, "target", 1.0f, target)) {
+        return make_error_content("target must be a number in [0, 1]");
+    }
+    settings.target = glm::vec4{target};
+    const std::string blend = args.value("blend", "mix");
+    if      (blend == "mix")      { settings.blend = Channel_brush_blend::mix; }
+    else if (blend == "add")      { settings.blend = Channel_brush_blend::add; }
+    else if (blend == "subtract") { settings.blend = Channel_brush_blend::subtract; }
+    else {
+        return make_error_content("blend must be one of mix, add, subtract: " + blend);
+    }
+    if (!args.contains("centers") || !args["centers"].is_array() || args["centers"].empty() || (args["centers"].size() > 4096)) {
+        return make_error_content("centers (1 - 4096 world-space [x, y, z] points) is required");
+    }
+    std::vector<glm::vec3> centers;
+    for (const json& center : args["centers"]) {
+        if (!center.is_array() || (center.size() != 3) || !center[0].is_number() || !center[1].is_number() || !center[2].is_number()) {
+            return make_error_content("centers: each entry must be an array of 3 numbers");
+        }
+        centers.emplace_back(center[0].get<float>(), center[1].get<float>(), center[2].get<float>());
+    }
+
+    const std::size_t    primitive_index = args.value("primitive_index", std::size_t{0});
+    Channel_paint_stroke stroke{m_context};
+    const std::optional<std::string> refusal = stroke.begin(mesh, primitive_index, settings);
+    if (refusal.has_value()) {
+        return make_error_content("paint_vertex_channel: " + refusal.value() + "; nothing was changed");
+    }
+    for (const glm::vec3& center : centers) {
+        stroke.dab(center);
+    }
+    const std::size_t                changed_vertices = stroke.get_changed_vertex_count();
+    const std::shared_ptr<Operation> operation        = stroke.end();
+    if (operation) {
+        m_context.operation_stack->queue(operation);
+    }
+    return make_json_content({
+        {"queued",           static_cast<bool>(operation)},
+        {"changed_vertices", changed_vertices},
+        {"dabs",             centers.size()}
+    }).dump();
+}
+
+auto Mcp_server::fill_or_invert_vertex_channel(const json& args, const Channel_fill_mode mode) -> std::string
+{
+    const std::string tool_name = (mode == Channel_fill_mode::fill) ? "fill_vertex_channel" : "invert_vertex_channel";
+    if (m_context.operation_stack == nullptr) {
+        return make_error_content("Operation stack not available");
+    }
+    const std::string scene_name = args.value("scene_name", "");
+    Scene_root* sr = find_scene(scene_name);
+    if (sr == nullptr) {
+        return make_error_content("Scene not found: " + scene_name);
+    }
+    const unsigned int channel_mask = parse_channel_mask(args);
+    if (channel_mask == 0u) {
+        return make_error_content("channel must be one of r, g, b, a");
+    }
+    float value = 0.0f;
+    if (mode == Channel_fill_mode::fill) {
+        if (!args.contains("value") || !read_unit_float(args, "value", 0.0f, value)) {
+            return make_error_content("value (a number in [0, 1]) is required");
+        }
+    }
+    std::vector<json> node_keys;
+    for (const json& id : args.value("node_ids", json::array())) {
+        node_keys.push_back(json{{"node_id", id}});
+    }
+    for (const json& name : args.value("node_names", json::array())) {
+        node_keys.push_back(json{{"node_name", name}});
+    }
+    if (node_keys.empty()) {
+        return make_error_content("give node_ids or node_names (at least one mesh node)");
+    }
+    std::vector<std::shared_ptr<erhe::scene::Mesh>> meshes;
+    for (const json& key : node_keys) {
+        const std::shared_ptr<erhe::scene::Node> node = find_node_in_scene(*sr, key, "node_id", "node_name");
+        if (!node) {
+            return make_error_content(tool_name + ": node not found: " + key.dump());
+        }
+        if (const std::optional<std::string> layout_refusal = locked_layout_refusal(*node); layout_refusal.has_value()) {
+            return make_error_content(tool_name + ": " + layout_refusal.value() + "; nothing was changed");
+        }
+        const std::shared_ptr<erhe::scene::Mesh> mesh = erhe::scene::get_mesh(node.get());
+        if (!mesh) {
+            return make_error_content(tool_name + ": node has no mesh: " + node->get_name());
+        }
+        meshes.push_back(mesh);
+    }
+    std::string error;
+    const std::shared_ptr<Operation> operation = make_channel_fill_operation(m_context, meshes, channel_mask, mode, value, error);
+    if (!operation) {
+        return make_error_content(tool_name + ": " + error + "; nothing was changed");
+    }
+    const std::string description = operation->describe();
+    m_context.operation_stack->queue(operation);
+    return make_json_content({
+        {"queued",    true},
+        {"operation", description},
+        {"meshes",    meshes.size()}
+    }).dump();
+}
+
+auto Mcp_server::action_fill_vertex_channel(const json& args) -> std::string
+{
+    return fill_or_invert_vertex_channel(args, Channel_fill_mode::fill);
+}
+
+auto Mcp_server::action_invert_vertex_channel(const json& args) -> std::string
+{
+    return fill_or_invert_vertex_channel(args, Channel_fill_mode::invert);
 }
 
 auto Mcp_server::action_set_edge_sharpness(const json& args) -> std::string
@@ -2873,6 +3058,194 @@ auto Mcp_server::action_separate_mesh_selection(const json& args) -> std::string
         result["node_name"] = nodes[0]["node_name"];
     }
     return make_json_content(result).dump();
+}
+
+namespace {
+
+constexpr std::array<std::string_view, 7> c_paint_brush_setting_keys{
+    "paint_mode", "paints", "radius", "strength", "target", "blend", "channel"
+};
+
+[[nodiscard]] auto paint_mode_name(const Paint_mode mode) -> const char*
+{
+    switch (mode) {
+        case Paint_mode::Point:   return "point";
+        case Paint_mode::Corner:  return "corner";
+        case Paint_mode::Polygon: return "polygon";
+        case Paint_mode::Brush:   return "brush";
+    }
+    return "";
+}
+
+[[nodiscard]] auto paint_channel_mask_json(const unsigned int mask) -> json
+{
+    json channels = json::array();
+    constexpr const char* names[] = { "r", "g", "b", "a" };
+    for (unsigned int channel = 0; channel < 4; ++channel) {
+        if ((mask & (1u << channel)) != 0u) {
+            channels.push_back(names[channel]);
+        }
+    }
+    return channels;
+}
+
+[[nodiscard]] auto paint_channel_source_name(const Paint_channel_source source) -> const char*
+{
+    switch (source) {
+        case Paint_channel_source::material: return "material";
+        case Paint_channel_source::tool:     return "tool";
+        case Paint_channel_source::no_mesh:  return "no_mesh";
+    }
+    return "";
+}
+
+} // anonymous namespace
+
+auto Mcp_server::query_paint_brush_settings(const json& args) -> std::string
+{
+    if (!args.is_object() || !args.empty()) {
+        return make_error_content("get_paint_brush_settings takes no arguments");
+    }
+    const Paint_tool* const tool = m_context.paint_tool;
+    if (tool == nullptr) {
+        return make_error_content("get_paint_brush_settings: the Paint tool is not available");
+    }
+    constexpr const char* channel_names[] = { "r", "g", "b", "a" };
+    const Paint_brush_config& config = tool->get_config();
+    json result{
+        {"tool_active",      tool->is_enabled()},
+        {"paint_mode",       paint_mode_name(tool->get_paint_mode())},
+        {"paints",           std::string{to_string(config.target_kind)}},
+        {"radius",           config.radius},
+        {"strength",         config.strength},
+        {"target",           config.target},
+        {"blend",            std::string{to_string(config.blend)}},
+        {"channel",          std::string{to_string(config.channel)}},
+        {"stroke_active",    tool->is_brush_stroke_active()},
+        {"changed_vertices", tool->get_brush_changed_vertex_count()}
+    };
+    const std::optional<glm::vec3>& center = tool->get_brush_center();
+    result["brush_center"] = center.has_value() ? json::array({center->x, center->y, center->z}) : json(nullptr);
+
+    std::size_t                              hovered_index = 0;
+    const std::shared_ptr<erhe::scene::Mesh> hovered       = tool->get_last_hovered_mesh(hovered_index);
+    const Paint_channel_choice               choice        = tool->get_weight_channel(hovered.get(), hovered_index);
+    result["weight_channel"] = json{
+        {"channel",         channel_names[choice.channel & 3u]},
+        {"source",          paint_channel_source_name(choice.source)},
+        {"mesh",            hovered ? json(hovered->get_name()) : json(nullptr)},
+        {"primitive_index", hovered_index}
+    };
+
+    const Paint_last_stroke& last = tool->get_last_stroke();
+    result["last_stroke"] = json{
+        {"outcome",          c_str(last.outcome)},
+        {"mesh",             last.mesh_name},
+        {"primitive_index",  last.primitive_index},
+        {"channels",         paint_channel_mask_json(last.channel_mask)},
+        {"changed_vertices", last.changed_vertices},
+        {"recorded",         last.recorded},
+        {"refusal",          last.refusal.empty() ? json(nullptr) : json(last.refusal)}
+    };
+
+    const std::shared_ptr<Viewport_scene_view> debug_view = tool->get_debug_view();
+    result["detail_weight_view"] = debug_view ? json(debug_view->get_name()) : json(nullptr);
+    return make_json_content(result).dump();
+}
+
+auto Mcp_server::action_set_paint_brush_settings(const json& args) -> std::string
+{
+    const std::string tool_name = "set_paint_brush_settings";
+    if (!args.is_object()) {
+        return make_error_content(tool_name + ": the arguments must be an object");
+    }
+    for (const auto& [key, value] : args.items()) {
+        static_cast<void>(value);
+        if (std::find(c_paint_brush_setting_keys.begin(), c_paint_brush_setting_keys.end(), std::string_view{key}) == c_paint_brush_setting_keys.end()) {
+            return make_error_content(tool_name + ": unrecognized argument '" + key + "' (accepted: paint_mode, paints, radius, strength, target, blend, channel); nothing changed");
+        }
+    }
+    Paint_tool* const tool = m_context.paint_tool;
+    if (tool == nullptr) {
+        return make_error_content(tool_name + ": the Paint tool is not available");
+    }
+
+    // Every argument is read and checked first: a refusal changes nothing.
+    std::optional<Paint_mode> paint_mode;
+    if (args.contains("paint_mode")) {
+        const std::string name = args["paint_mode"].is_string() ? args["paint_mode"].get<std::string>() : std::string{};
+        for (const Paint_mode mode : {Paint_mode::Point, Paint_mode::Corner, Paint_mode::Polygon, Paint_mode::Brush}) {
+            if (name == paint_mode_name(mode)) {
+                paint_mode = mode;
+            }
+        }
+        if (!paint_mode.has_value()) {
+            return make_error_content(tool_name + ": paint_mode must be one of point, corner, polygon, brush; nothing changed");
+        }
+    }
+    std::optional<Paint_brush_target> paints;
+    if (args.contains("paints")) {
+        Paint_brush_target value{};
+        if (!args["paints"].is_string() || !from_string(args["paints"].get<std::string>(), value)) {
+            return make_error_content(tool_name + ": paints must be weight or color; nothing changed");
+        }
+        paints = value;
+    }
+    std::optional<Paint_brush_blend> blend;
+    if (args.contains("blend")) {
+        Paint_brush_blend value{};
+        if (!args["blend"].is_string() || !from_string(args["blend"].get<std::string>(), value)) {
+            return make_error_content(tool_name + ": blend must be mix, add or subtract; nothing changed");
+        }
+        blend = value;
+    }
+    std::optional<Paint_brush_channel> channel;
+    if (args.contains("channel")) {
+        Paint_brush_channel value{};
+        if (!args["channel"].is_string() || !from_string(args["channel"].get<std::string>(), value)) {
+            return make_error_content(tool_name + ": channel must be one of r, g, b, a; nothing changed");
+        }
+        channel = value;
+    }
+    std::optional<float> radius;
+    if (args.contains("radius")) {
+        const float value = args["radius"].is_number() ? args["radius"].get<float>() : -1.0f;
+        if (!std::isfinite(value) || (value < c_paint_brush_min_radius) || (value > c_paint_brush_max_radius)) {
+            return make_error_content(fmt::format("{}: radius must be a number {} - {} (meters); nothing changed", tool_name, c_paint_brush_min_radius, c_paint_brush_max_radius));
+        }
+        radius = value;
+    }
+    float strength = 0.0f;
+    float target   = 0.0f;
+    if (!read_unit_float(args, "strength", 0.0f, strength)) {
+        return make_error_content(tool_name + ": strength must be a number in [0, 1]; nothing changed");
+    }
+    if (!read_unit_float(args, "target", 0.0f, target)) {
+        return make_error_content(tool_name + ": target must be a number in [0, 1]; nothing changed");
+    }
+
+    if (paint_mode.has_value()) {
+        tool->set_paint_mode(paint_mode.value());
+    }
+    if (paints.has_value()) {
+        tool->set_brush_target(paints.value());
+    }
+    if (blend.has_value()) {
+        tool->set_brush_blend(blend.value());
+    }
+    if (channel.has_value()) {
+        tool->set_brush_channel(channel.value());
+    }
+    if (radius.has_value()) {
+        tool->set_brush_radius(radius.value());
+    }
+    if (args.contains("strength")) {
+        tool->set_brush_strength(strength);
+    }
+    if (args.contains("target")) {
+        tool->set_brush_value(target);
+    }
+    return query_paint_brush_settings(json::object());
 }
 
 } // namespace editor

@@ -69,7 +69,8 @@ enum class Shader_debug : uint16_t
     joint_weight_ramp  = 34,
     vdotn_tinted       = 35,
     world_position     = 36,
-    base_color         = 37
+    base_color         = 37,
+    detail_blend_weight = 38
 };
 
 // User-visible display strings matching the Shader_debug enum, in
@@ -112,7 +113,8 @@ inline constexpr const char* c_shader_debug_strings[] = {
     "Joint Weight Ramp",
     "V.N (tinted)",
     "World Position",
-    "Base Color (resolved)"
+    "Base Color (resolved)",
+    "Detail Blend Weight"
 };
 
 #define ERHE_SHADER_BOOL(X) \
@@ -121,6 +123,9 @@ inline constexpr const char* c_shader_debug_strings[] = {
     X(USE_NORMAL_TEXTURE)               \
     X(USE_OCCLUSION_TEXTURE)            \
     X(USE_EMISSION_TEXTURE)             \
+    X(USE_DETAIL_BLEND)                 \
+    X(USE_DETAIL_BLEND_TEXTURE)         \
+    X(USE_DETAIL_BLEND_NOISE)           \
     X(USE_CIRCULAR_BRUSHED_METAL)       \
     X(IDENTITY_TEXTURE_TRANSFORM)       \
     X(USE_SKINNING)                     \
@@ -170,6 +175,8 @@ inline constexpr const char* c_shader_debug_strings[] = {
     X(OCCLUSION_TEXGEN_MODE)                    \
     X(EMISSIVE_TEXGEN_MODE)                     \
     X(CIRCULAR_BRUSHED_METAL_TEXGEN_MODE)       \
+    X(DETAIL_BLEND_TEXGEN_MODE)                 \
+    X(DETAIL_BLEND_NOISE_SPACE)                 \
     X(VERTEX_POSITION_ENCODING)                 \
     X(VERTEX_TEXCOORD_ENCODING)                 \
     X(VERTEX_TBN_ENCODING)                      \
@@ -193,9 +200,12 @@ enum class Shader_int : uint32_t {
     count
 };
 
-[[nodiscard]] inline auto make_shader_bool_mask(const Shader_bool param) -> uint32_t
+// A set of Shader_bool axes, one bit per axis.
+using Shader_bool_mask = uint64_t;
+
+[[nodiscard]] inline auto make_shader_bool_mask(const Shader_bool param) -> Shader_bool_mask
 {
-    return uint32_t{1} << static_cast<uint32_t>(param);
+    return Shader_bool_mask{1} << static_cast<uint32_t>(param);
 }
 
 // How the standard vertex shader reaches world space from a mesh's vertices
@@ -219,8 +229,8 @@ class Shader_key
 {
 public:
     static_assert(
-        static_cast<uint32_t>(Shader_bool::count) <= 32,
-        "Variant_key: boolean axes must fit in a uint32_t bit-mask"
+        static_cast<uint32_t>(Shader_bool::count) <= 64,
+        "Variant_key: boolean axes must fit in a Shader_bool_mask"
     );
 
     Shader_key();
@@ -236,12 +246,12 @@ public:
 
     [[nodiscard]] auto get(const Shader_bool param) const -> bool
     {
-        const uint32_t bit = make_shader_bool_mask(param);
+        const Shader_bool_mask bit = make_shader_bool_mask(param);
         return (bool_mask & bit) == bit;
     }
     void set(const Shader_bool param, const bool value)
     {
-        const uint32_t bit = make_shader_bool_mask(param);
+        const Shader_bool_mask bit = make_shader_bool_mask(param);
         if (value) {
             bool_mask |= bit;
         } else {
@@ -282,7 +292,7 @@ public:
         Vertex_space                           vertex_space
     ) const -> Shader_key;
 
-    uint32_t                                                     bool_mask{0};
+    Shader_bool_mask                                             bool_mask{0};
     std::array<uint32_t, static_cast<size_t>(Shader_int::count)> int_values;
     std::optional<erhe::primitive::Material_blending_mode>       blending_mode;
 };

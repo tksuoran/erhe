@@ -96,7 +96,7 @@ void collect_clipboard_pins(const std::shared_ptr<erhe::Item_base>& item, std::u
                 }
                 out_pinned.insert(material.get());
                 const erhe::primitive::Material_texture_samplers& samplers = material->get_data().texture_samplers;
-                for (const erhe::primitive::Material_texture_sampler* sampler : {&samplers.base_color, &samplers.metallic_roughness, &samplers.normal, &samplers.occlusion, &samplers.emissive}) {
+                for (const erhe::primitive::Material_texture_sampler* sampler : {&samplers.base_color, &samplers.metallic_roughness, &samplers.normal, &samplers.occlusion, &samplers.emissive, &samplers.detail_blend}) {
                     const erhe::Item_base* const texture_item = dynamic_cast<const erhe::Item_base*>(sampler->texture_reference.get());
                     if (texture_item != nullptr) {
                         out_pinned.insert(texture_item);

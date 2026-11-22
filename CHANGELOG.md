@@ -9,6 +9,27 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::primitive`: `material.hpp` - the detail blend values of `Material` and `Material_values`
+  (`detail_blend`, `detail_blend_weight_channel`, `detail_blend_height_channel`,
+  `detail_blend_height_influence`, `detail_blend_transition_width`, `detail_blend_noise_amount`,
+  `detail_blend_noise_scale`, `detail_blend_noise_space`, each with its `*_property`, getter and setter)
+  and the sixth texture slot `Material_texture_samplers::detail_blend` with `detail_blend_texture_property`,
+  its texgen, UV transform and sampler properties and `get_detail_blend_texture()` /
+  `set_detail_blend_texture()`; `enums.hpp` - `Detail_blend_noise_space` (`world`, `node`) with
+  `c_detail_blend_noise_space_enum_info`, `c_str()` and `to_uint32()` (`doc/erhe/primitive.md`).
+- `erhe::scene_renderer`: `material_buffer.hpp` - `Material_struct::detail_blend_channels`,
+  `detail_blend_rotation_scale`, `detail_blend_parameters`, `detail_blend_texture`, `detail_blend_offset`
+  and `Material_record_inputs::detail_blend_channels`, `detail_blend_parameters`, `detail_blend_texture`;
+  a record is 368 bytes, or 224 in the 16-bit layout (`doc/erhe/scene_renderer.md` "Material records").
+- `erhe::scene_renderer`: `shader_key.hpp` - the bool axes `USE_DETAIL_BLEND`, `USE_DETAIL_BLEND_TEXTURE`,
+  `USE_DETAIL_BLEND_NOISE`, the int axes `DETAIL_BLEND_TEXGEN_MODE`, `DETAIL_BLEND_NOISE_SPACE` and
+  `Shader_debug::detail_blend_weight` (38, "Detail Blend Weight"); `res/shaders/erhe_detail_blend.glsl`
+  (`doc/erhe/shader_variants.md` "Detail blend").
+- `erhe::math`: `detail_blend.hpp` - `detail_blend()`, the CPU twin of the shader's height blend
+  (`doc/erhe/math.md` "Detail blend").
+- `erhe::gltf`: `gltf_fastgltf.hpp` - `Gltf_material_texture_slot::detail_blend`; the `ERHE_material`
+  extension carries the detail blend values and `detail_blend_texture` (`doc/erhe/primitive.md`).
+
 - `erhe::item`: `item.hpp` - `Item_base::handle_name_change()`, the protected virtual hook `set_name()` calls
   before the name changes; `hierarchy.hpp` - `Hierarchy::is_child_name_index_consistent()` and the counts
   `c_child_name_index_build_count` / `c_child_name_index_drop_count` (`doc/erhe/item.md` "Sibling-unique names").
@@ -117,6 +138,8 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Removed
 
+- `erhe::scene_renderer`: `material_buffer.hpp` - `Material_struct::input_sources_padding`; the
+  detail blend channels take its place in the record (`doc/erhe/scene_renderer.md` "Material records").
 - `erhe::raytrace`: the `tinybvh` backend's `cache/tinybvh` disk cache (and
   the `ERHE_TINYBVH_GIT_COMMIT` definition it was keyed by). Its BVHs are
   exported and imported like the `bvh` backend's (`doc/erhe/raytrace.md`
@@ -201,6 +224,12 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Changed
 
+- `erhe::scene_renderer`: `shader_key.hpp` - `Shader_key::bool_mask` and `make_shader_bool_mask()` are
+  `Shader_bool_mask` (`uint64_t`, was `uint32_t`), as are the force enable / disable masks of
+  `Forward_renderer::Prepare_parameters`, `Forward_renderer::Prewarm_parameters`,
+  `Base_render_parameters`, `Shadow_renderer::draw_shadow_casters()`, `Render_bucket_snapshot` and
+  `bucket_primitives()`; a material with detail blend on no longer multiplies its base color and alpha
+  by the vertex color in `standard.frag` (`doc/erhe/shader_variants.md` "Detail blend").
 - `erhe::item`: `hierarchy.hpp` - a parent of more than 16 children keeps a child name index, so attaching,
   renaming and detaching a child and `Hierarchy::make_sibling_unique_name()` no longer scan the siblings
   (O(1) amortized per attach; a removal from a suffix series can cost one scan of that series at the next

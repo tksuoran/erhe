@@ -803,6 +803,7 @@ void add_gltf_editor_state(
             add_binding(*material, "normal",             samplers.normal);
             add_binding(*material, "occlusion",          samplers.occlusion);
             add_binding(*material, "emissive",           samplers.emissive);
+            add_binding(*material, "detail_blend",       samplers.detail_blend);
             if (data->material_bindings.size() != bindings_before) {
                 add_extra_material(material);
             }

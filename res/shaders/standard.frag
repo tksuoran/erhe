@@ -24,6 +24,9 @@
 #if defined(ERHE_USE_DDGI)
 #include "erhe_ddgi.glsl"
 #endif
+#if defined(ERHE_USE_DETAIL_BLEND) && (ERHE_SHADER_DEBUG == 38)
+#include "erhe_detail_blend.glsl"
+#endif
 #endif
 
 #if defined(ERHE_VARIANT_PVS)
@@ -561,7 +564,8 @@ void main()
         base_color = mat_vec3(v_color.rgb);
     } else {
         base_color = mat_vec3(vec3(material.base_color.rgb));
-#ifdef ERHE_USE_VERTEX_VARYING_COLOR
+        // A detail blend material's vertex color holds its weight: data, not a tint.
+#if defined(ERHE_USE_VERTEX_VARYING_COLOR) && !defined(ERHE_USE_DETAIL_BLEND)
         base_color *= mat_vec3(v_color.rgb);
 #endif
 #ifdef ERHE_USE_BASE_COLOR_TEXTURE
@@ -583,7 +587,7 @@ void main()
         sampled_alpha = v_color.a;
     } else {
         sampled_alpha = float(material.opacity);
-#ifdef ERHE_USE_VERTEX_VARYING_COLOR
+#if defined(ERHE_USE_VERTEX_VARYING_COLOR) && !defined(ERHE_USE_DETAIL_BLEND)
         sampled_alpha *= v_color.a;
 #endif
 #ifdef ERHE_USE_BASE_COLOR_TEXTURE
@@ -1485,6 +1489,38 @@ void main()
         // texture-fed value alone and black without a texture). Written in
         // linear space as-is, the unlit look of the surface.
         out_color.rgb = base_color;
+#  elif ERHE_SHADER_DEBUG == 38 // detail_blend_weight
+        // The detail weight as linear grayscale; black for a material with detail blend off.
+#    if defined(ERHE_USE_DETAIL_BLEND)
+        {
+            // parameters: height influence, transition width, noise amount, noise scale; channels: weight, height.
+            vec4  db_parameters = vec4(material.detail_blend_parameters);
+            uvec2 db_channels   = material.detail_blend_channels;
+#      if defined(ERHE_USE_VERTEX_VARYING_COLOR)
+            float db_weight     = texture_channel_value(v_color, db_channels.x);
+#      else
+            float db_weight     = 0.0;
+#      endif
+#      if defined(ERHE_USE_DETAIL_BLEND_TEXTURE)
+            vec4  db_texel      = ERHE_SAMPLE_MATERIAL_TEXTURE(material.detail_blend_texture, ERHE_SELECT_TEXCOORD(ERHE_DETAIL_BLEND_TEXGEN_MODE), vec4(material.detail_blend_rotation_scale), vec2(material.detail_blend_offset));
+            float db_height     = texture_channel_value(db_texel, db_channels.y);
+#      else
+            float db_height     = 0.5;
+#      endif
+#      if defined(ERHE_USE_DETAIL_BLEND_NOISE)
+#        if ERHE_DETAIL_BLEND_NOISE_SPACE == ERHE_DETAIL_BLEND_NOISE_SPACE_NODE
+            vec3  db_point      = v_node_position;
+#        else
+            vec3  db_point      = v_position.xyz;
+#        endif
+            db_height = mix(db_height, erhe_surface_noise(db_point * db_parameters.w), db_parameters.z);
+#      endif
+            float db_pixel_width = fwidth(db_height - 1.0 + db_weight);
+            out_color.rgb = vec3(erhe_detail_blend(db_weight, db_height, db_parameters.x, db_parameters.y, db_pixel_width));
+        }
+#    else
+        out_color.rgb = vec3(0.0);
+#    endif
 #  elif ERHE_SHADER_DEBUG == 34 // joint_weight_ramp
         // Blender-style single-joint weight ramp: hue sweeps 240deg (blue)
         // -> 0deg (red) with weight, brightness 0.5 -> 1.0 through a gamma

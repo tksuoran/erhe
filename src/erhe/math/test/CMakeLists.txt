@@ -4,6 +4,7 @@ add_executable(${_target}
     test_angle_of_rotation.cpp
     test_box_hull.cpp
     test_curve_path.cpp
+    test_detail_blend.cpp
     test_euler_angles.cpp
     test_hermite.cpp
     test_projection.cpp

@@ -183,6 +183,14 @@ enum class Material_input_source : uint16_t {
     vertex_color = 1
 };
 
+// The space the detail blend surface noise is evaluated in: world space stays
+// in the world, node space moves with the node. The enumerator values are the
+// shader's DETAIL_BLEND_NOISE_SPACE axis.
+enum class Detail_blend_noise_space : uint16_t {
+    world = 0,
+    node  = 1
+};
+
 enum class Normalmap_encoding : uint16_t {
     right_handed_three_channel  = ERHE_NORMALMAP_ENCODING_RIGHT_HANDED_THREE_CHANNEL,
     right_handed_two_channel_ga = ERHE_NORMALMAP_ENCODING_RIGHT_HANDED_TWO_CHANNEL_GA,
@@ -262,6 +270,7 @@ extern const erhe::property::Enum_info c_texgen_mode_enum_info;
 extern const erhe::property::Enum_info c_normalmap_encoding_enum_info;
 extern const erhe::property::Enum_info c_texture_channel_enum_info;
 extern const erhe::property::Enum_info c_material_input_source_enum_info;
+extern const erhe::property::Enum_info c_detail_blend_noise_space_enum_info;
 // The erhe::graphics sampler enums, for the Material slot sampler properties.
 extern const erhe::property::Enum_info c_sampler_address_mode_enum_info;
 extern const erhe::property::Enum_info c_filter_enum_info;
@@ -277,10 +286,12 @@ extern const erhe::property::Enum_info c_sampler_mipmap_mode_enum_info;
 [[nodiscard]] auto c_str(Normalmap_encoding normalmap_encoding) -> const char*;
 [[nodiscard]] auto c_str(Texture_channel texture_channel) -> const char*;
 [[nodiscard]] auto c_str(Material_input_source input_source) -> const char*;
+[[nodiscard]] auto c_str(Detail_blend_noise_space noise_space) -> const char*;
 [[nodiscard]] auto to_uint32(Texgen_mode texgen_mode) -> uint32_t;
 [[nodiscard]] auto to_uint32(Normalmap_encoding normalmap_encoding) -> uint32_t;
 [[nodiscard]] auto to_uint32(Texture_channel texture_channel) -> uint32_t;
 [[nodiscard]] auto to_uint32(Material_input_source input_source) -> uint32_t;
+[[nodiscard]] auto to_uint32(Detail_blend_noise_space noise_space) -> uint32_t;
 
 // Whether a load builds a prepared primitive's base vertex variant now or
 // leaves it to the first feature that needs it (doc/plans/gltf_fast_load.md

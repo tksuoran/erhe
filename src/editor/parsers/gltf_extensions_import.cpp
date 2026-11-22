@@ -601,6 +601,7 @@ void import_node_graphs(
             else if (slot == "normal")             sampler = &samplers.normal;
             else if (slot == "occlusion")          sampler = &samplers.occlusion;
             else if (slot == "emissive")           sampler = &samplers.emissive;
+            else if (slot == "detail_blend")       sampler = &samplers.detail_blend;
             if (sampler != nullptr) {
                 material->set_slot_texture(*sampler, graph_texture);
                 // Sampler state (wrap / filters): graph-texture slots export

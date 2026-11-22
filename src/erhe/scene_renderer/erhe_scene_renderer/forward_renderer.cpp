@@ -100,7 +100,7 @@ constexpr Shader_int c_render_environment_int_axes[] = {
     Shader_int::SHADER_MULTIVIEW_COUNT
 };
 
-void apply_render_environment(Shader_key& key, const Shader_key& environment, const uint32_t force_disable_mask)
+void apply_render_environment(Shader_key& key, const Shader_key& environment, const Shader_bool_mask force_disable_mask)
 {
     for (const Shader_int axis : c_render_environment_int_axes) {
         key.set(axis, environment.get(axis));

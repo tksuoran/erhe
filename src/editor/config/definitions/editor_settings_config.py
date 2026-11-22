@@ -1,7 +1,7 @@
 from erhe_codegen import *
 
 struct("Editor_settings_config",
-    version=22,
+    version=23,
     short_desc="Editor settings",
     long_desc="Runtime-editable settings saved to editor_settings.json.",
     developer=False,
@@ -65,6 +65,8 @@ struct("Editor_settings_config",
         field("surface_snap",         StructRef("Surface_snap_config"),    added_in=20),
         # The Foliage Paint tool's values and palette (doc/editor/level_tools.md "Foliage paint").
         field("foliage_paint",        StructRef("Foliage_paint_config"),   added_in=22),
+        # The Paint tool's Brush mode values (doc/editor/tools.md "Paint tool brush").
+        field("paint_brush",          StructRef("Paint_brush_config"),     added_in=23),
         # The default export settings that adding a scene's export settings
         # copies (doc/editor/prepared_assets.md "Export settings").
         field("export_settings",      StructRef("Scene_export_settings"),  added_in=16),

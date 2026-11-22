@@ -95,9 +95,16 @@ Material_interface::Material_interface(erhe::graphics::Device& graphics_device, 
 
         // Where the base color and the fragment alpha come from
         // (erhe::primitive::Material_input_source): (base_color, opacity).
-        // The padding after it keeps the struct size a multiple of 16 bytes.
         .input_sources               = material_struct.add_uvec2("input_sources"              )->get_offset_in_parent(),
-        .input_sources_padding       = material_struct.add_uvec2("input_sources_padding"      )->get_offset_in_parent(),
+
+        // Detail blend: the channels complete the 16 bytes of input_sources;
+        // the vec4s stay vec4-aligned, and the struct size rounds up to a
+        // multiple of 16 bytes after the offset.
+        .detail_blend_channels       = material_struct.add_uvec2("detail_blend_channels"      )->get_offset_in_parent(),
+        .detail_blend_rotation_scale = add_f4("detail_blend_rotation_scale")->get_offset_in_parent(),
+        .detail_blend_parameters     = add_f4("detail_blend_parameters"    )->get_offset_in_parent(),
+        .detail_blend_texture        = material_struct.add_uvec2("detail_blend_texture"       )->get_offset_in_parent(),
+        .detail_blend_offset         = add_f2("detail_blend_offset"        )->get_offset_in_parent(),
     };
     material_block.add_struct("materials", &material_struct, erhe::graphics::Shader_resource::unsized_array);
     log_startup->info(
@@ -178,6 +185,16 @@ auto gather_material_record_inputs(
         erhe::primitive::to_uint32(data.base_color_source),
         erhe::primitive::to_uint32(data.opacity_source)
     };
+    inputs.detail_blend_channels       = glm::uvec2{
+        erhe::primitive::to_uint32(data.detail_blend_weight_channel),
+        erhe::primitive::to_uint32(data.detail_blend_height_channel)
+    };
+    inputs.detail_blend_parameters     = glm::vec4{
+        data.detail_blend_height_influence,
+        data.detail_blend_transition_width,
+        data.detail_blend_noise_amount,
+        data.detail_blend_noise_scale
+    };
 
     const auto gather_texture = [&sampler_cache](
         const erhe::primitive::Material_texture_sampler& texture_sampler
@@ -210,6 +227,7 @@ auto gather_material_record_inputs(
     inputs.normal_texture             = gather_texture(texture_samplers.normal);
     inputs.occlusion_texture          = gather_texture(texture_samplers.occlusion);
     inputs.emissive_texture           = gather_texture(texture_samplers.emissive);
+    inputs.detail_blend_texture       = gather_texture(texture_samplers.detail_blend);
     return inputs;
 }
 
@@ -243,6 +261,16 @@ auto get_default_material_record_inputs() -> Material_record_inputs
     inputs.input_sources               = glm::uvec2{
         erhe::primitive::to_uint32(defaults.base_color_source),
         erhe::primitive::to_uint32(defaults.opacity_source)
+    };
+    inputs.detail_blend_channels       = glm::uvec2{
+        erhe::primitive::to_uint32(defaults.detail_blend_weight_channel),
+        erhe::primitive::to_uint32(defaults.detail_blend_height_channel)
+    };
+    inputs.detail_blend_parameters     = glm::vec4{
+        defaults.detail_blend_height_influence,
+        defaults.detail_blend_transition_width,
+        defaults.detail_blend_noise_amount,
+        defaults.detail_blend_noise_scale
     };
     // Every texture slot stays empty, so the handles resolve to
     // invalid_texture_handle and no heap allocation is made.
@@ -295,6 +323,7 @@ void Material_buffer::write_record(
     const uint64_t normal_handle             = shader_handle(inputs.normal_texture);
     const uint64_t occlusion_handle          = shader_handle(inputs.occlusion_texture);
     const uint64_t emissive_handle           = shader_handle(inputs.emissive_texture);
+    const uint64_t detail_blend_handle       = shader_handle(inputs.detail_blend_texture);
 
     // The float fields, as 32-bit floats or as 16-bit floats in the half
     // layout (Material_interface::half_records).
@@ -349,6 +378,11 @@ void Material_buffer::write_record(
     write_floats(offsets.normal_texture_decode_bias,  &inputs.normal_texture_decode_bias.x,  4);
     write(gpu_data, write_offset + offsets.texture_channels,                  as_span(inputs.texture_channels));
     write(gpu_data, write_offset + offsets.input_sources,                     as_span(inputs.input_sources));
+    write(gpu_data, write_offset + offsets.detail_blend_channels,             as_span(inputs.detail_blend_channels));
+    write_floats(offsets.detail_blend_rotation_scale, inputs.detail_blend_texture.rotation_scale, 4);
+    write_floats(offsets.detail_blend_parameters,     &inputs.detail_blend_parameters.x,          4);
+    write(gpu_data, write_offset + offsets.detail_blend_texture,              as_span(detail_blend_handle));
+    write_floats(offsets.detail_blend_offset,         inputs.detail_blend_texture.offset,         2);
 }
 
 void Material_buffer::write_records(

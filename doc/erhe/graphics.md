@@ -785,7 +785,7 @@ value, with the number in a comment:
     #define ERHE_FP16_PATHS (ERHE_FP16_PATH_MATERIAL | ERHE_FP16_PATH_BRDF) // 3
 
 A constant shared by several defines (the `ERHE_TEXGEN_MODE_*` family of the
-six texgen axes) is emitted once. `get_define_value_expression()` gives the
+seven texgen axes) is emitted once. `get_define_value_expression()` gives the
 expression; a value no constant names (and a non-numeric value) is emitted as
 it stands. `defines` keeps the numbers, so program identity, the shader
 variant browser key and every reader of the define list are unchanged.
@@ -793,7 +793,7 @@ variant browser key and every reader of the define list are unchanged.
 The shader key provides the constants: `Shader_key::get_define_constants()`
 (`erhe::scene_renderer`) builds them from the C++ enumerations behind the int
 axes (`Bxdf_model`, `Material_blending_mode`, `Shader_debug`, `Texgen_mode`,
-`Normalmap_encoding`, `Specular_anti_aliasing`, `Overdraw_count`, the
+`Normalmap_encoding`, `Detail_blend_noise_space`, `Specular_anti_aliasing`, `Overdraw_count`, the
 `Fp16_path` bits; the shadow filter kernel widths 0 / 2 / 4 / 6, bias and
 technique values), with the GLSL names the shaders compare against. The
 shader files keep their own definitions of those constants for the programs

@@ -306,7 +306,7 @@ void collect_export_textures(
     for (std::size_t m = 0, end = materials.size(); m < end; ++m) {
         const erhe::primitive::Material* const material = materials[m];
         const erhe::primitive::Material_texture_samplers& slots = material->get_data().texture_samplers;
-        for (const erhe::primitive::Material_texture_sampler* const slot : {&slots.base_color, &slots.metallic_roughness, &slots.normal, &slots.occlusion, &slots.emissive}) {
+        for (const erhe::primitive::Material_texture_sampler* const slot : {&slots.base_color, &slots.metallic_roughness, &slots.normal, &slots.occlusion, &slots.emissive, &slots.detail_blend}) {
             if (!slot->texture_reference) {
                 continue;
             }

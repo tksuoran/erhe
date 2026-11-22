@@ -2969,6 +2969,21 @@ auto Mcp_server::action_set_window_visibility(const json& args) -> std::string
     return r.dump();
 }
 
+namespace {
+
+[[nodiscard]] auto texture_channel_name(const erhe::primitive::Texture_channel channel) -> const char*
+{
+    switch (channel) {
+        case erhe::primitive::Texture_channel::r: return "r";
+        case erhe::primitive::Texture_channel::g: return "g";
+        case erhe::primitive::Texture_channel::b: return "b";
+        case erhe::primitive::Texture_channel::a: return "a";
+        default:                                  return "none";
+    }
+}
+
+} // anonymous namespace
+
 auto Mcp_server::query_material_details(const json& args) -> std::string
 {
     const std::string scene_name    = args.value("scene_name", "");
@@ -3051,12 +3066,21 @@ auto Mcp_server::query_material_details(const json& args) -> std::string
                     (d.blending_mode == erhe::primitive::Material_blending_mode::alpha_test)  ? "alpha_test" :
                                                                                                 "opaque"},
                 {"alpha_cutoff",               d.alpha_cutoff},
+                {"detail_blend",                  d.detail_blend},
+                {"detail_blend_weight_channel",   texture_channel_name(d.detail_blend_weight_channel)},
+                {"detail_blend_height_channel",   texture_channel_name(d.detail_blend_height_channel)},
+                {"detail_blend_height_influence", d.detail_blend_height_influence},
+                {"detail_blend_transition_width", d.detail_blend_transition_width},
+                {"detail_blend_noise_amount",     d.detail_blend_noise_amount},
+                {"detail_blend_noise_scale",      d.detail_blend_noise_scale},
+                {"detail_blend_noise_space",      (d.detail_blend_noise_space == erhe::primitive::Detail_blend_noise_space::world) ? "world" : "node"},
                 {"texture_samplers", {
                     {"base_color",         sampler_to_json(samplers_data.texture_samplers.base_color)},
                     {"metallic_roughness", sampler_to_json(samplers_data.texture_samplers.metallic_roughness)},
                     {"normal",             sampler_to_json(samplers_data.texture_samplers.normal)},
                     {"occlusion",          sampler_to_json(samplers_data.texture_samplers.occlusion)},
-                    {"emissive",           sampler_to_json(samplers_data.texture_samplers.emissive)}
+                    {"emissive",           sampler_to_json(samplers_data.texture_samplers.emissive)},
+                    {"detail_blend",       sampler_to_json(samplers_data.texture_samplers.detail_blend)}
                 }}
             };
             return make_json_content(result).dump();

@@ -890,6 +890,10 @@ erhe_target_sources_grouped(
     time.hpp
     tools/bone_visualization.cpp
     tools/bone_visualization.hpp
+    tools/channel_brush.cpp
+    tools/channel_brush.hpp
+    tools/channel_paint.cpp
+    tools/channel_paint.hpp
     tools/clipboard.cpp
     tools/clipboard.hpp
     tools/debug_visualizations.cpp
@@ -1333,6 +1337,15 @@ set(_config_sources
     ${_config_out}/foliage_paint_config.hpp
     ${_config_out}/foliage_paint_config_serialization.hpp
     ${_config_out}/foliage_paint_config.cpp
+    ${_config_out}/paint_brush_config.hpp
+    ${_config_out}/paint_brush_config_serialization.hpp
+    ${_config_out}/paint_brush_config.cpp
+    ${_config_out}/paint_brush_target.hpp
+    ${_config_out}/paint_brush_target.cpp
+    ${_config_out}/paint_brush_blend.hpp
+    ${_config_out}/paint_brush_blend.cpp
+    ${_config_out}/paint_brush_channel.hpp
+    ${_config_out}/paint_brush_channel.cpp
     ${_config_out}/lod_config.hpp
     ${_config_out}/lod_config_serialization.hpp
     ${_config_out}/lod_config.cpp

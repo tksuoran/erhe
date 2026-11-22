@@ -3961,6 +3961,7 @@ public:
                     *m_tools.get()
                 );
                 m_paint_tool = std::make_unique<Paint_tool>(
+                    m_editor_settings.paint_brush,
                     *m_commands.get(),
                     *m_imgui_renderer.get(),
                     *m_imgui_windows.get(),

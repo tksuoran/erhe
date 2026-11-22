@@ -99,8 +99,8 @@ public:
     erhe::Item_filter                                                      filter{};
     Composition_pass_output                                                output{Composition_pass_output::color};
     std::shared_ptr<Scene_root>                                            override_scene_root{};
-    uint32_t                                                               shader_key_force_enable_mask{0};
-    uint32_t                                                               shader_key_force_disable_mask{0};
+    erhe::scene_renderer::Shader_bool_mask                                 shader_key_force_enable_mask{0};
+    erhe::scene_renderer::Shader_bool_mask                                 shader_key_force_disable_mask{0};
     erhe::graphics::Shader_stages*                                         shader_stages{nullptr};
     // Force a SHADER_DEBUG variant for this pass's own meshes, instead of taking
     // the scene view's debug mode. The default path can only ever DROP the view's
@@ -240,7 +240,7 @@ public:
 // shader_key_force_enable_mask, plus VARIANT_DEPTH_ONLY for a
 // Composition_pass_output::depth_stencil pass (the draw-list path's
 // Color_sub_variant::depth_only).
-[[nodiscard]] auto get_bucket_force_enable_mask(const Composition_pass_data& data) -> uint32_t;
+[[nodiscard]] auto get_bucket_force_enable_mask(const Composition_pass_data& data) -> erhe::scene_renderer::Shader_bool_mask;
 
 // The draw-list path's blending selection of a pass's
 // Blending_mode_policy (Composition_pass::prepare() routes only the

@@ -272,3 +272,51 @@ TEST(Draw_mobility_vertex_space, follows_the_mesh_skin_and_world_space_flag)
     EXPECT_EQ(get_draw_mobility(*skinned, Draw_mobility::dynamic), Draw_mobility::skinned);
     EXPECT_EQ(get_vertex_space(Draw_mobility::skinned), Vertex_space::skinned);
 }
+
+TEST(Shader_key_detail_blend, axes_follow_the_switch_and_the_noise_amount)
+{
+    using erhe::primitive::Detail_blend_noise_space;
+    const Vertex_format             format   = make_format(false);
+    const std::shared_ptr<Material> plain    = make_material(Bxdf_model::isotropic_brdf);
+    const std::shared_ptr<Material> material = make_material(Bxdf_model::isotropic_brdf);
+
+    // Switch off: noise values change nothing, the key is the plain material's (B6.2).
+    material->set_detail_blend_noise_amount(0.5f);
+    material->set_detail_blend_noise_space(Detail_blend_noise_space::world);
+    const Shader_key off = Shader_key{}.derive(material.get(), &format, Vertex_space::node);
+    EXPECT_EQ(off, Shader_key{}.derive(plain.get(), &format, Vertex_space::node));
+
+    // Switch on, world space noise: no node position varying.
+    material->set_detail_blend(true);
+    const Shader_key world = Shader_key{}.derive(material.get(), &format, Vertex_space::node);
+    EXPECT_TRUE (world.get(Shader_bool::USE_DETAIL_BLEND));
+    EXPECT_FALSE(world.get(Shader_bool::USE_DETAIL_BLEND_TEXTURE));
+    EXPECT_TRUE (world.get(Shader_bool::USE_DETAIL_BLEND_NOISE));
+    EXPECT_EQ   (world.get(Shader_int::DETAIL_BLEND_NOISE_SPACE), 0u);
+    EXPECT_FALSE(world.get(Shader_bool::USE_VERTEX_VARYING_NODE_POSITION));
+
+    // Node space noise reads the node position varying.
+    material->set_detail_blend_noise_space(Detail_blend_noise_space::node);
+    const Shader_key node = Shader_key{}.derive(material.get(), &format, Vertex_space::node);
+    EXPECT_EQ  (node.get(Shader_int::DETAIL_BLEND_NOISE_SPACE), 1u);
+    EXPECT_TRUE(node.get(Shader_bool::USE_VERTEX_VARYING_NODE_POSITION));
+
+    // Noise amount 0: no noise axis, and the material identity (a null format) differs from amount 0.5.
+    const Shader_key identity_with_noise = Shader_key{}.derive(material.get(), nullptr, Vertex_space::node);
+    material->set_detail_blend_noise_amount(0.0f);
+    const Shader_key no_noise = Shader_key{}.derive(material.get(), &format, Vertex_space::node);
+    EXPECT_TRUE (no_noise.get(Shader_bool::USE_DETAIL_BLEND));
+    EXPECT_FALSE(no_noise.get(Shader_bool::USE_DETAIL_BLEND_NOISE));
+    EXPECT_EQ   (no_noise.get(Shader_int::DETAIL_BLEND_NOISE_SPACE), 0u);
+    EXPECT_FALSE(no_noise.get(Shader_bool::USE_VERTEX_VARYING_NODE_POSITION));
+    EXPECT_NE(identity_with_noise.get_hash(), Shader_key{}.derive(material.get(), nullptr, Vertex_space::node).get_hash());
+
+    // A shader debug environment keeps the material axes (BD3.7).
+    Shader_key debug_environment{};
+    debug_environment.set(Shader_int::SHADER_DEBUG, static_cast<uint32_t>(erhe::scene_renderer::Shader_debug::detail_blend_weight));
+    material->set_detail_blend_noise_amount(0.5f);
+    const Shader_key debug = debug_environment.derive(material.get(), &format, Vertex_space::node);
+    EXPECT_TRUE(debug.get(Shader_bool::USE_DETAIL_BLEND));
+    EXPECT_TRUE(debug.get(Shader_bool::USE_DETAIL_BLEND_NOISE));
+    EXPECT_TRUE(debug.get(Shader_bool::USE_VERTEX_VARYING_NODE_POSITION));
+}

@@ -21,6 +21,7 @@ vector/matrix helper functions used throughout erhe.
 - `coordinate_conventions.hpp`: `Coordinate_conventions` and its enums (`Depth_range`, `Framebuffer_origin`, `Texture_origin`, `Clip_space_y_flip`), the per-backend conventions a `Device_info` carries; a header with no glm or profile dependency, included by `math_util.hpp`.
 - `box_hull.hpp`: `calculate_bounding_convex_hull_of_boxes()` returns the 2D convex hull of the projected corners of many `Aabb`s plus extra points, bit-identical to hulling every projected corner but without sorting the corners of boxes that lie inside the hull of the others (a polygon from the extreme corners in 16 directions, then a center and extents test per box). `Box_hull_scratch` holds the persistent buffers. The shadow fit's rotation stage uses it; `test/test_box_hull.cpp` checks exact equality with the plain hull.
 - `curve_path.hpp`: the curve path (next section) and the general-degree Bezier and parallel-transport helpers the sweep shape (`doc/erhe/geometry.md`) evaluates through: `bezier_point()`, `bezier_unit_tangent()` (a finite difference where the derivative vanishes), `initial_transport_up()` (+Y taken off the tangent, +X when the tangent is vertical) and `transport_up()` (the previous up turned by the minimal rotation between the tangents, re-orthogonalized). Callers pass a scratch span of at least the control point count.
+- `detail_blend.hpp`: `detail_blend()`, the detail weight of the detail blend ("Detail blend" below).
 - `math_util.hpp`: `remap()`, `unproject<T>()`, `project_to_screen_space<T>()`, color conversion (`vec3_from_uint`, `uint_from_vector3`), axis helpers (`min_axis`, `max_axis`), predefined rotation/swap matrices
 
 ## Curve path
@@ -34,6 +35,21 @@ vector/matrix helper functions used throughout erhe.
 - Frames (`Curve_frame`: position, tangent, side, up, with side = cross(up, tangent), the sweep's convention). The up-keeping frame (`make_up_frame()`, `frame_at_distance()`) takes up as the reference up with the tangent's part removed; where the tangent is within 1e-6 of parallel to the reference up, it keeps the given side (the previous heading) made perpendicular to the tangent. `get_up_frames_at_distances()` fills one frame per distance, each vertical sample keeping the previous sample's side and leading vertical samples taking the side of the first non-vertical one. `get_transported_frames_at_distances()` fills parallel-transported frames (ascending distances) with the sweep's `initial_transport_up()` / `transport_up()`.
 - Point edits: `insert_curve_point()` splits a span at a location with de Casteljau's construction, so the shape is unchanged: a line span gets a corner (two line spans), a cubic span a smooth point whose handles are the split's inner points; an end that contributed no handle to the span (a corner or a zero handle) gets the split's handle and becomes free, a corner's other handle zeroed so its other span stays straight. `make_curve_end_point()` gives the point that extends an open path at a `Curve_end`: along the end tangent by the end span's chord, a corner beyond a corner end, else smooth with handles a third of that chord; `add_curve_point()` puts a point before the first or after the last. `Curve_path_table::get_nearest_location()` finds the location nearest to a point (64 samples per span, then a golden section search between the neighboring samples).
 - `test/test_curve_path.cpp` covers the lengths, the distance mapping, corners, wrapping, the helpers, the frames and the point edits (an insert keeps the shape within 1e-5 on line, cubic, corner-ended and closing spans).
+
+## Detail blend
+`detail_blend.hpp` holds `detail_blend(w, h, influence, width, pixel_width)`, a `constexpr` function and the CPU
+twin of `erhe_detail_blend()` in `res/shaders/erhe_detail_blend.glsl` (`doc/erhe/shader_variants.md` "Detail
+blend"), in the same arithmetic. It height-blends a weight `w` with a height `h`, both in [0, 1]: with the
+transition width `s = max(width, pixel_width, 1e-4)` the blend is `d = saturate((h - 1 + w) / s + w)` (the
+`(h - 1 + w * (1 + s)) / s` of `doc/plans/detail_blend_weight.md` B3.2, written so `w = 0` and `w = 1` give
+exactly 0 and 1), and the result is `w + (d - w) * influence`.
+
+- `w = 0` gives 0 and `w = 1` gives 1 for every height and parameter; the result rises with `w` and `h`.
+- At a width near 0 the result steps from 0 to 1 at `h = 1 - w`, within `s` of it; the pixel width (the
+  shader's `fwidth` of `h - 1 + w`) keeps that step a one pixel ramp. A width of 1 at `w = 1/2` gives `h`.
+- An influence of 0 gives `w`.
+- `test/test_detail_blend.cpp` (`Detail_blend.*`) holds these over a grid of weights, heights, influences,
+  widths and pixel widths.
 
 ## Dependencies
 - `erhe::profile` -- profiling macros (in math_util.hpp)

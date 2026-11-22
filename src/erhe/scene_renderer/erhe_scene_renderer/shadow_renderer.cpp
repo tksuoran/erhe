@@ -463,8 +463,8 @@ void Shadow_renderer::prepare(const Prepare_parameters& parameters, Render_bucke
     // The pass variant bits (depth-only / distance / cube) are ORed into the
     // prepared keys per pass by draw_shadow_casters(); ORing one mask into
     // every key does not change how bucket_primitives() partitions.
-    const uint32_t boolean_mask_force_enable  = 0;
-    const uint32_t boolean_mask_force_disable = 0; // TODO
+    const Shader_bool_mask boolean_mask_force_enable  = 0;
+    const Shader_bool_mask boolean_mask_force_disable = 0; // TODO
 
     // Leaf-function scratch (AGENTS.md): the entries hold raw Mesh pointers
     // only while this call runs.
@@ -518,7 +518,7 @@ void Shadow_renderer::draw_shadow_casters(
     const erhe::graphics::Render_pass&       render_pass,
     const erhe::graphics::Color_blend_state* color_blend,
     const Render_bucket_snapshot&            casters,
-    const uint32_t                           boolean_mask_force_enable
+    const Shader_bool_mask                   boolean_mask_force_enable
 )
 {
     using Ring_buffer_range          = erhe::graphics::Ring_buffer_range;
@@ -1228,7 +1228,7 @@ void Shadow_renderer::draw(const Render_parameters& parameters, const Cull_views
         // Directional / spot caster variant: depth-only, plus the distance
         // fragment shader (and its R32F color attachment) when the distance
         // technique is active.
-        uint32_t boolean_mask_force_enable = erhe::scene_renderer::make_shader_bool_mask(
+        erhe::scene_renderer::Shader_bool_mask boolean_mask_force_enable = erhe::scene_renderer::make_shader_bool_mask(
             erhe::scene_renderer::Shader_bool::VARIANT_DEPTH_ONLY
         );
         if (parameters.use_distance) {
@@ -1290,7 +1290,7 @@ void Shadow_renderer::draw(const Render_parameters& parameters, const Cull_views
         // The cube faces (c_cube_look / c_cube_up, make_cube_face_transform)
         // are world-axis aligned in the face order the culling views above
         // classify (Draw_list_scene::add_point_light_cull_views()).
-        const uint32_t cube_force_enable = erhe::scene_renderer::make_shader_bool_mask(
+        const erhe::scene_renderer::Shader_bool_mask cube_force_enable = erhe::scene_renderer::make_shader_bool_mask(
             erhe::scene_renderer::Shader_bool::VARIANT_SHADOW_CUBE
         );
         erhe::graphics::Base_render_pipeline& cube_base_pipeline =
@@ -1590,8 +1590,8 @@ void Shadow_renderer::prewarm_pipelines(
     // key, accept_all_variant_signatures policy (material -> nullptr),
     // VARIANT_DEPTH_ONLY forced on.
     const Shader_key environment_key{};
-    const uint32_t boolean_mask_force_enable  = make_shader_bool_mask(Shader_bool::VARIANT_DEPTH_ONLY);
-    const uint32_t boolean_mask_force_disable = 0;
+    const Shader_bool_mask boolean_mask_force_enable  = make_shader_bool_mask(Shader_bool::VARIANT_DEPTH_ONLY);
+    const Shader_bool_mask boolean_mask_force_disable = 0;
 
     const erhe::Item_filter& shadow_filter = shadow_caster_filter;
 
@@ -1629,7 +1629,7 @@ void Shadow_renderer::prewarm_pipelines(
         // {node, world-space, skinned} x {content, optimized}: neither the distance
         // technique, the first point light, nor the first optimized-variant
         // caster compiles on the draw-list path.
-        const uint32_t sub_variant_masks[] = {
+        const Shader_bool_mask sub_variant_masks[] = {
             make_shader_bool_mask(Shader_bool::VARIANT_DEPTH_ONLY),
             make_shader_bool_mask(Shader_bool::VARIANT_DEPTH_ONLY) | make_shader_bool_mask(Shader_bool::VARIANT_SHADOW_DISTANCE),
             make_shader_bool_mask(Shader_bool::VARIANT_SHADOW_CUBE)
@@ -1646,7 +1646,7 @@ void Shadow_renderer::prewarm_pipelines(
             );
             static_cast<void>(m_shader_variant_cache.get(key, &vertex_format));
         };
-        for (const uint32_t mask : sub_variant_masks) {
+        for (const Shader_bool_mask mask : sub_variant_masks) {
             Shader_key key{};
             key.bool_mask = mask;
             prewarm(key, m_mesh_memory.vertex_format_not_skinned);

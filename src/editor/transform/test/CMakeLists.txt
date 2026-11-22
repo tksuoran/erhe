@@ -7,11 +7,14 @@ add_executable(${_target}
     # ik_properties.cpp and rig_properties.cpp (Ik.rest_rotation defaults to
     # Rig.rest_rotation) need erhe::scene (their registered properties), and
     # rig_properties.cpp the Rig.tail default (rig/bone_tail.cpp).
+    # tools/channel_brush.cpp is pure (glm + std only).
     ${CMAKE_CURRENT_SOURCE_DIR}/../ik_solver.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../../rig/bone_tail.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../../scene/ik_properties.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../../scene/rig_properties.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../tools/channel_brush.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../../tools/joint_visualization.cpp
+    test_channel_brush.cpp
     test_ik_properties.cpp
     test_ik_solver.cpp
     test_ik_swing_boundary.cpp

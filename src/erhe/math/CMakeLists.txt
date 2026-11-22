@@ -10,6 +10,7 @@ erhe_target_sources_grouped(
     erhe_math/box_hull.hpp
     erhe_math/curve_path.cpp
     erhe_math/curve_path.hpp
+    erhe_math/detail_blend.hpp
     erhe_math/euler_angles.hpp
     erhe_math/hermite.hpp
     erhe_math/input_axis.cpp

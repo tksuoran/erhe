@@ -67,6 +67,8 @@ public:
     Material_texture_sampler normal;
     Material_texture_sampler occlusion;
     Material_texture_sampler emissive;
+    // The detail blend height texture (doc/plans/detail_blend_weight.md B2.2).
+    Material_texture_sampler detail_blend;
 };
 
 [[nodiscard]] auto operator==(const Material_texture_samplers& lhs, const Material_texture_samplers& rhs);
@@ -141,6 +143,17 @@ public:
     // default target of generate_mesh_facet_texture_coordinates().
     Texgen_mode               circular_brushed_metal_texgen_mode{Texgen_mode::uv1};
     bool                      use_aniso_control                 {false};
+    // Detail blend (doc/plans/detail_blend_weight.md B1, B2): the switch, the
+    // vertex color channel holding the weight, the height slot's channel and
+    // the blend parameters.
+    bool                      detail_blend                      {false};
+    Texture_channel           detail_blend_weight_channel       {Texture_channel::r};
+    Texture_channel           detail_blend_height_channel       {Texture_channel::r};
+    float                     detail_blend_height_influence     {1.0f};
+    float                     detail_blend_transition_width     {0.2f};
+    float                     detail_blend_noise_amount         {0.0f};
+    float                     detail_blend_noise_scale          {1.0f};
+    Detail_blend_noise_space  detail_blend_noise_space          {Detail_blend_noise_space::node};
 };
 
 [[nodiscard]] auto operator==(const Material_values& lhs, const Material_values& rhs) -> bool;
@@ -208,6 +221,14 @@ public:
     static const erhe::property::Property<bool>                   use_circular_brushed_metal_property;
     static const erhe::property::Property<Texgen_mode>            circular_brushed_metal_texgen_mode_property;
     static const erhe::property::Property<bool>                   use_aniso_control_property;
+    static const erhe::property::Property<bool>                     detail_blend_property;
+    static const erhe::property::Property<Texture_channel>          detail_blend_weight_channel_property;
+    static const erhe::property::Property<Texture_channel>          detail_blend_height_channel_property;
+    static const erhe::property::Property<float>                    detail_blend_height_influence_property;
+    static const erhe::property::Property<float>                    detail_blend_transition_width_property;
+    static const erhe::property::Property<float>                    detail_blend_noise_amount_property;
+    static const erhe::property::Property<float>                    detail_blend_noise_scale_property;
+    static const erhe::property::Property<Detail_blend_noise_space> detail_blend_noise_space_property;
     // The texture slots (entry-store references that inherit, mirrored
     // into data.texture_samplers by on_property_changed): an
     // Object_reference whose pointee is a Texture_reference (a Texture, a
@@ -217,6 +238,7 @@ public:
     static const erhe::property::Property<erhe::property::Object_reference> normal_texture_property;
     static const erhe::property::Property<erhe::property::Object_reference> occlusion_texture_property;
     static const erhe::property::Property<erhe::property::Object_reference> emissive_texture_property;
+    static const erhe::property::Property<erhe::property::Object_reference> detail_blend_texture_property;
     // The slot transforms (member-backed over the same slots): the texgen
     // source and the UV rotation, offset and scale the shader applies.
     static const erhe::property::Property<Texgen_mode> base_color_texture_texgen_mode_property;
@@ -239,6 +261,10 @@ public:
     static const erhe::property::Property<float>       emissive_texture_uv_rotation_property;
     static const erhe::property::Property<glm::vec2>   emissive_texture_uv_offset_property;
     static const erhe::property::Property<glm::vec2>   emissive_texture_uv_scale_property;
+    static const erhe::property::Property<Texgen_mode> detail_blend_texture_texgen_mode_property;
+    static const erhe::property::Property<float>       detail_blend_texture_uv_rotation_property;
+    static const erhe::property::Property<glm::vec2>   detail_blend_texture_uv_offset_property;
+    static const erhe::property::Property<glm::vec2>   detail_blend_texture_uv_scale_property;
     // The slot samplers (entry-store, inherit like the slot texture,
     // mirrored into the slot's Material_sampler_state): wrap, filters,
     // mipmap mode, anisotropy and the LOD bias.
@@ -277,6 +303,13 @@ public:
     static const erhe::property::Property<erhe::graphics::Sampler_mipmap_mode>  emissive_texture_mipmap_mode_property;
     static const erhe::property::Property<float>                                emissive_texture_max_anisotropy_property;
     static const erhe::property::Property<float>                                emissive_texture_lod_bias_property;
+    static const erhe::property::Property<erhe::graphics::Sampler_address_mode> detail_blend_texture_wrap_u_property;
+    static const erhe::property::Property<erhe::graphics::Sampler_address_mode> detail_blend_texture_wrap_v_property;
+    static const erhe::property::Property<erhe::graphics::Filter>               detail_blend_texture_min_filter_property;
+    static const erhe::property::Property<erhe::graphics::Filter>               detail_blend_texture_mag_filter_property;
+    static const erhe::property::Property<erhe::graphics::Sampler_mipmap_mode>  detail_blend_texture_mipmap_mode_property;
+    static const erhe::property::Property<float>                                detail_blend_texture_max_anisotropy_property;
+    static const erhe::property::Property<float>                                detail_blend_texture_lod_bias_property;
     // The sampler state of one of this material's own slots, written through
     // the slot's seven sampler properties in one change batch (a field at its
     // default clears the local value, as set_data does).
@@ -315,11 +348,20 @@ public:
     [[nodiscard]] auto get_use_circular_brushed_metal        () const -> bool                   { return get_value(use_circular_brushed_metal_property); }
     [[nodiscard]] auto get_circular_brushed_metal_texgen_mode() const -> Texgen_mode            { return get_value(circular_brushed_metal_texgen_mode_property); }
     [[nodiscard]] auto get_use_aniso_control                 () const -> bool                   { return get_value(use_aniso_control_property); }
+    [[nodiscard]] auto get_detail_blend                      () const -> bool                     { return get_value(detail_blend_property); }
+    [[nodiscard]] auto get_detail_blend_weight_channel       () const -> Texture_channel          { return get_value(detail_blend_weight_channel_property); }
+    [[nodiscard]] auto get_detail_blend_height_channel       () const -> Texture_channel          { return get_value(detail_blend_height_channel_property); }
+    [[nodiscard]] auto get_detail_blend_height_influence     () const -> float                    { return get_value(detail_blend_height_influence_property); }
+    [[nodiscard]] auto get_detail_blend_transition_width     () const -> float                    { return get_value(detail_blend_transition_width_property); }
+    [[nodiscard]] auto get_detail_blend_noise_amount         () const -> float                    { return get_value(detail_blend_noise_amount_property); }
+    [[nodiscard]] auto get_detail_blend_noise_scale          () const -> float                    { return get_value(detail_blend_noise_scale_property); }
+    [[nodiscard]] auto get_detail_blend_noise_space          () const -> Detail_blend_noise_space { return get_value(detail_blend_noise_space_property); }
     [[nodiscard]] auto get_base_color_texture                () const -> const std::shared_ptr<erhe::graphics::Texture_reference>& { return m_data.texture_samplers.base_color.texture_reference; }
     [[nodiscard]] auto get_metallic_roughness_texture        () const -> const std::shared_ptr<erhe::graphics::Texture_reference>& { return m_data.texture_samplers.metallic_roughness.texture_reference; }
     [[nodiscard]] auto get_normal_texture                    () const -> const std::shared_ptr<erhe::graphics::Texture_reference>& { return m_data.texture_samplers.normal.texture_reference; }
     [[nodiscard]] auto get_occlusion_texture                 () const -> const std::shared_ptr<erhe::graphics::Texture_reference>& { return m_data.texture_samplers.occlusion.texture_reference; }
     [[nodiscard]] auto get_emissive_texture                  () const -> const std::shared_ptr<erhe::graphics::Texture_reference>& { return m_data.texture_samplers.emissive.texture_reference; }
+    [[nodiscard]] auto get_detail_blend_texture              () const -> const std::shared_ptr<erhe::graphics::Texture_reference>& { return m_data.texture_samplers.detail_blend.texture_reference; }
 
     void set_base_color                        (const glm::vec3& value)      { set_value(base_color_property, value); }
     void set_opacity                           (float value)                 { set_value(opacity_property, value); }
@@ -341,11 +383,20 @@ public:
     void set_use_circular_brushed_metal        (bool value)                  { set_value(use_circular_brushed_metal_property, value); }
     void set_circular_brushed_metal_texgen_mode(Texgen_mode value)           { set_value(circular_brushed_metal_texgen_mode_property, value); }
     void set_use_aniso_control                 (bool value)                  { set_value(use_aniso_control_property, value); }
+    void set_detail_blend                      (bool value)                     { set_value(detail_blend_property, value); }
+    void set_detail_blend_weight_channel       (Texture_channel value)          { set_value(detail_blend_weight_channel_property, value); }
+    void set_detail_blend_height_channel       (Texture_channel value)          { set_value(detail_blend_height_channel_property, value); }
+    void set_detail_blend_height_influence     (float value)                    { set_value(detail_blend_height_influence_property, value); }
+    void set_detail_blend_transition_width     (float value)                    { set_value(detail_blend_transition_width_property, value); }
+    void set_detail_blend_noise_amount         (float value)                    { set_value(detail_blend_noise_amount_property, value); }
+    void set_detail_blend_noise_scale          (float value)                    { set_value(detail_blend_noise_scale_property, value); }
+    void set_detail_blend_noise_space          (Detail_blend_noise_space value) { set_value(detail_blend_noise_space_property, value); }
     void set_base_color_texture                (const std::shared_ptr<erhe::graphics::Texture_reference>& texture);
     void set_metallic_roughness_texture        (const std::shared_ptr<erhe::graphics::Texture_reference>& texture);
     void set_normal_texture                    (const std::shared_ptr<erhe::graphics::Texture_reference>& texture);
     void set_occlusion_texture                 (const std::shared_ptr<erhe::graphics::Texture_reference>& texture);
     void set_emissive_texture                  (const std::shared_ptr<erhe::graphics::Texture_reference>& texture);
+    void set_detail_blend_texture              (const std::shared_ptr<erhe::graphics::Texture_reference>& texture);
 
     // Whole Material_data in: every slot field goes through its property
     // (one change batch; a field at its default clears the local value).

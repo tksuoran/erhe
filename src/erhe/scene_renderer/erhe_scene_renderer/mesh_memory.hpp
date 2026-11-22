@@ -529,8 +529,8 @@ enum class Blending_mode_policy : uint32_t
 
 void bucket_primitives(
     Render_bucket_list&                                        buckets,
-    uint32_t                                                   boolean_mask_force_enable,
-    uint32_t                                                   boolean_mask_force_disable,
+    Shader_bool_mask                                           boolean_mask_force_enable,
+    Shader_bool_mask                                           boolean_mask_force_disable,
     const Mesh_memory&                                         mesh_memory,
     const Shader_key&                                          environment_shader_key,
     const std::span<const std::shared_ptr<erhe::scene::Mesh>>& meshes,

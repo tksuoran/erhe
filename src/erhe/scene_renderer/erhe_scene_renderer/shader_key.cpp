@@ -144,7 +144,8 @@ namespace {
                 {"ERHE_SHADER_DEBUG_JOINT_WEIGHT_RAMP", u(Shader_debug::joint_weight_ramp)},
                 {"ERHE_SHADER_DEBUG_VDOTN_TINTED", u(Shader_debug::vdotn_tinted)},
                 {"ERHE_SHADER_DEBUG_WORLD_POSITION", u(Shader_debug::world_position)},
-                {"ERHE_SHADER_DEBUG_BASE_COLOR", u(Shader_debug::base_color)}
+                {"ERHE_SHADER_DEBUG_BASE_COLOR", u(Shader_debug::base_color)},
+                {"ERHE_SHADER_DEBUG_DETAIL_BLEND_WEIGHT", u(Shader_debug::detail_blend_weight)}
             });
         }
         case Shader_int::SHADOW_FILTER: {
@@ -174,7 +175,8 @@ namespace {
         case Shader_int::NORMAL_TEXGEN_MODE:
         case Shader_int::OCCLUSION_TEXGEN_MODE:
         case Shader_int::EMISSIVE_TEXGEN_MODE:
-        case Shader_int::CIRCULAR_BRUSHED_METAL_TEXGEN_MODE: {
+        case Shader_int::CIRCULAR_BRUSHED_METAL_TEXGEN_MODE:
+        case Shader_int::DETAIL_BLEND_TEXGEN_MODE: {
             return make({
                 {"ERHE_TEXGEN_MODE_UV0",      to_uint32(Texgen_mode::uv0)},
                 {"ERHE_TEXGEN_MODE_UV1",      to_uint32(Texgen_mode::uv1)},
@@ -211,6 +213,12 @@ namespace {
                 {"ERHE_OVERDRAW_SHADED",     u(Overdraw_count::shaded)},
                 {"ERHE_OVERDRAW_RASTERIZED", u(Overdraw_count::rasterized)},
                 {"ERHE_OVERDRAW_COST",       u(Overdraw_count::cost)}
+            });
+        }
+        case Shader_int::DETAIL_BLEND_NOISE_SPACE: {
+            return make({
+                {"ERHE_DETAIL_BLEND_NOISE_SPACE_WORLD", to_uint32(erhe::primitive::Detail_blend_noise_space::world)},
+                {"ERHE_DETAIL_BLEND_NOISE_SPACE_NODE",  to_uint32(erhe::primitive::Detail_blend_noise_space::node)}
             });
         }
         case Shader_int::FP16_PATHS: {
@@ -410,10 +418,29 @@ auto Shader_key::derive(
             data.use_circular_brushed_metal         = material->get_use_circular_brushed_metal();
             data.circular_brushed_metal_texgen_mode = material->get_circular_brushed_metal_texgen_mode();
             data.use_aniso_control                  = material->get_use_aniso_control();
+            data.detail_blend                       = material->get_detail_blend();
+            data.detail_blend_noise_amount          = material->get_detail_blend_noise_amount();
+            data.detail_blend_noise_space           = material->get_detail_blend_noise_space();
         }
         const erhe::primitive::Material_texture_samplers& samplers = (material != nullptr) ? material->get_data().texture_samplers : s_no_samplers;
 
         key.blending_mode = data.blending_mode;
+
+        // Detail blend (doc/erhe/shader_variants.md "Detail blend"): with the
+        // switch off no axis of the feature is set and the slot is ignored.
+        const bool use_detail_blend_texture = data.detail_blend && sampler_is_bound(samplers.detail_blend);
+        const bool use_detail_blend_noise   = data.detail_blend && (data.detail_blend_noise_amount > 0.0f);
+        if (data.detail_blend) {
+            key.set(Shader_bool::USE_DETAIL_BLEND, true);
+        }
+        if (use_detail_blend_texture) {
+            key.set(Shader_bool::USE_DETAIL_BLEND_TEXTURE, true);
+            key.set(Shader_int::DETAIL_BLEND_TEXGEN_MODE, to_uint32(samplers.detail_blend.texgen_mode));
+        }
+        if (use_detail_blend_noise) {
+            key.set(Shader_bool::USE_DETAIL_BLEND_NOISE, true);
+            key.set(Shader_int::DETAIL_BLEND_NOISE_SPACE, to_uint32(data.detail_blend_noise_space));
+        }
 
         // Material booleans -- set per bound sampler.
         if (sampler_is_bound(samplers.base_color))        { key.set(Shader_bool::USE_BASE_COLOR_TEXTURE,         true); }
@@ -426,7 +453,8 @@ auto Shader_key::derive(
             sampler_has_identity_transform(samplers.metallic_roughness) &&
             sampler_has_identity_transform(samplers.normal)             &&
             sampler_has_identity_transform(samplers.occlusion)          &&
-            sampler_has_identity_transform(samplers.emissive)
+            sampler_has_identity_transform(samplers.emissive)           &&
+            (!use_detail_blend_texture || sampler_has_identity_transform(samplers.detail_blend))
         ) {
             key.set(Shader_bool::IDENTITY_TEXTURE_TRANSFORM, true);
         }
@@ -494,6 +522,7 @@ auto Shader_key::derive(
         auto needs_texgen = [&](const erhe::primitive::Texgen_mode texgen_mode) -> bool {
             return
                 any_sampler_uses_texgen(samplers, texgen_mode) ||
+                (use_detail_blend_texture && (samplers.detail_blend.texgen_mode == texgen_mode)) ||
                 (
                     data.use_circular_brushed_metal &&
                     (data.circular_brushed_metal_texgen_mode == texgen_mode)
@@ -532,9 +561,12 @@ auto Shader_key::derive(
         // node_* texgen modes read the untransformed node-space position,
         // which the vertex shader forwards as a dedicated varying (world_*
         // modes reuse v_position, which every lit variant already has).
+        // The node-space surface noise reads the same varying.
+        const bool node_space_noise = use_detail_blend_noise && (data.detail_blend_noise_space == erhe::primitive::Detail_blend_noise_space::node);
         if (needs_texgen(erhe::primitive::Texgen_mode::node_xy) ||
             needs_texgen(erhe::primitive::Texgen_mode::node_xz) ||
-            needs_texgen(erhe::primitive::Texgen_mode::node_yz))
+            needs_texgen(erhe::primitive::Texgen_mode::node_yz) ||
+            node_space_noise)
         {
             key.set(Shader_bool::USE_VERTEX_VARYING_NODE_POSITION, true);
         }

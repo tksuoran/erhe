@@ -537,7 +537,7 @@ private:
         const erhe::graphics::Render_pass&       render_pass,
         const erhe::graphics::Color_blend_state* color_blend,
         const Render_bucket_snapshot&            casters,
-        uint32_t                                 boolean_mask_force_enable
+        Shader_bool_mask                         boolean_mask_force_enable
     );
 
     erhe::graphics::Device&                       m_graphics_device;

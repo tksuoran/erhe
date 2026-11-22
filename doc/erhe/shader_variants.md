@@ -49,7 +49,14 @@ and flags:
 | `ERHE_USE_OCCLUSION_TEXTURE` | same for `occlusion` |
 | `ERHE_USE_EMISSION_TEXTURE` | same for `emissive` |
 | `ERHE_USE_CIRCULAR_BRUSHED_METAL` | `material.use_circular_brushed_metal` |
-| `ERHE_IDENTITY_TEXTURE_TRANSFORM` | every bound sampler has rotation 0, scale 1, offset 0; the fetches skip the UV transform and its record fields (`ERHE_SAMPLE_MATERIAL_TEXTURE`) |
+| `ERHE_IDENTITY_TEXTURE_TRANSFORM` | every bound sampler has rotation 0, scale 1, offset 0 (the `detail_blend` sampler counts only under `ERHE_USE_DETAIL_BLEND_TEXTURE`); the fetches skip the UV transform and its record fields (`ERHE_SAMPLE_MATERIAL_TEXTURE`) |
+| `ERHE_USE_DETAIL_BLEND` | `material.detail_blend` ("Detail blend" below) |
+| `ERHE_USE_DETAIL_BLEND_TEXTURE` | `ERHE_USE_DETAIL_BLEND` and a texture in the `detail_blend` slot |
+| `ERHE_USE_DETAIL_BLEND_NOISE` | `ERHE_USE_DETAIL_BLEND` and `material.detail_blend_noise_amount > 0` |
+
+The bool axes are bits of a `Shader_bool_mask` (`uint64_t`): the force
+enable / disable masks of the passes (`Forward_renderer`, `Shadow_renderer`,
+`bucket_primitives()`, the editor's composition passes) are of that type.
 
 `ERHE_BXDF_MODEL` (integer axis) is the cast of
 `erhe::primitive::Bxdf_model` (`unlit`, `isotropic_brdf`,
@@ -73,10 +80,10 @@ mesh lacks tangents, the normal-mapping path drops out.
 | `ERHE_USE_VERTEX_VARYING_NORMAL` | vertex format has `normal` AND the BxDF is not `unlit` |
 | `ERHE_USE_VERTEX_VARYING_TANGENT` | vertex format has `tangent` AND `normal` AND (any texgen source is `tangent` OR (BxDF not `unlit` AND (material has a `normal` sampler OR the BxDF is anisotropic OR `material.use_circular_brushed_metal`))) |
 | `ERHE_USE_VERTEX_VARYING_BITANGENT` | same condition as tangent |
-| `ERHE_USE_VERTEX_VARYING_TEXCOORD0` | vertex format has `tex_coord,0` AND (any bound material sampler's `texgen_mode` is `uv0` OR the circular-brushed-metal block sources `uv0`); `TEXCOORD1` / `TEXCOORD2` likewise for `uv1` / `uv2` |
+| `ERHE_USE_VERTEX_VARYING_TEXCOORD0` | vertex format has `tex_coord,0` AND (any bound material sampler's `texgen_mode` is `uv0` OR the circular-brushed-metal block sources `uv0`); `TEXCOORD1` / `TEXCOORD2` likewise for `uv1` / `uv2`. The `detail_blend` sampler counts under `ERHE_USE_DETAIL_BLEND_TEXTURE` only |
 | `ERHE_USE_LIGHTMAP` | scene-level environment axis: a lightmap atlas is bound (`Scene_pass_resources::get_lightmap_texture()` non-null). With the vertex format carrying `tex_coord,2` it derives `ERHE_USE_LIGHTMAP_SAMPLING` (`erhe_standard_variant.glsl`), which compiles in `v_texcoord_2`, `v_lightmap_scale_offset` and the atlas sampling; per-primitive `lightmap_scale_offset` then decides which draws sample. Without a bound atlas no variant carries the lightmap path, and binding the first atlas compiles the lightmap variants |
 | `ERHE_FLAT_DRAW_COLOR` | environment axis of the color passes, a fragment cost measurement mode (`Color_environment::flat_draw_color`, `Forward_renderer::Draw_parameters::flat_draw_color`; the editor's graphics preset `flat_draw_color`): `standard.vert` passes the draw's primitive record index (`ERHE_PRIMITIVE_INDEX`, location 19) and `standard.frag` writes one of 16 palette colors picked by it and returns before any material, texture, light or shadow map read (an alpha-tested material draws solid). On a color variant it derives `ERHE_VARIANT_FLAT_DRAW_COLOR`, a position pass (`erhe_standard_variant.glsl`): no lit or debug varying is declared or written, the draw index is the only one. Unlike `ERHE_SHADER_DEBUG` it keeps the draw-list path (reads no pass-dependent record field), so GPU culling and occlusion stay on |
-| `ERHE_USE_VERTEX_VARYING_NODE_POSITION` | any bound material sampler (or the circular-brushed-metal block) uses a `node_*` texgen mode; forwards the untransformed node-space position for `ERHE_SELECT_TEXCOORD` (`world_*` modes reuse `v_position`) |
+| `ERHE_USE_VERTEX_VARYING_NODE_POSITION` | any bound material sampler (or the circular-brushed-metal block) uses a `node_*` texgen mode, or `ERHE_USE_DETAIL_BLEND_NOISE` with `ERHE_DETAIL_BLEND_NOISE_SPACE` node; forwards the untransformed node-space position for `ERHE_SELECT_TEXCOORD` and the node space surface noise (`world_*` modes and the world space noise reuse `v_position`) |
 | `ERHE_USE_VERTEX_VARYING_COLOR` | vertex format has `color,0` (always pass through; gating left for later) |
 | `ERHE_USE_VERTEX_VARYING_ANISO_CONTROL` | vertex format has `custom,custom_attribute_aniso_control` AND `material.use_aniso_control` |
 
@@ -160,6 +167,58 @@ optimizer):
 | lit, float positions (16) | 7 -> 3 | 45.5 -> 16.5 | 106 -> 71 |
 | depth-only, quantized (2) | 9 -> 5 | - | 72 -> 51.5 |
 
+### Detail blend
+
+The detail blend of a material (`doc/plans/detail_blend_weight.md`;
+`doc/erhe/primitive.md`) is three bool axes of the material sub-key (table
+above) and two integer axes:
+
+- `ERHE_DETAIL_BLEND_TEXGEN_MODE`: the `detail_blend` slot's texgen mode
+  under `ERHE_USE_DETAIL_BLEND_TEXTURE` (0 otherwise), feeding the texcoord,
+  node position and tangent texgen varying rules as the other slots' texgen
+  axes do.
+- `ERHE_DETAIL_BLEND_NOISE_SPACE`: `Detail_blend_noise_space` (0 world, 1
+  node; the constants `ERHE_DETAIL_BLEND_NOISE_SPACE_WORLD` / `_NODE`) under
+  `ERHE_USE_DETAIL_BLEND_NOISE` (0 otherwise).
+
+A material with the switch off sets none of the five, whatever its other
+detail blend values and its slot hold, so its key and shader are those of the
+same material without the feature. The axes are material axes: a shader
+debug mode keeps them (the bucket path's `derive()` and the draw-list color
+resolution both apply `apply_shader_debug_varyings()` on top of the
+primitive key). The switch, the noise amount, the noise space, the slot
+texture and its texgen mode are `affects_shader_variant` properties, and the
+draw lists re-derive a material's identity hash (`derive(material, nullptr)`)
+when its change serial moves, so an edit that flips an axis - the noise
+amount crossing 0 included - re-registers the material's meshes.
+
+`res/shaders/erhe_detail_blend.glsl` holds `erhe_detail_blend()` (the height
+blend; its CPU twin is `erhe::math::detail_blend()`, `doc/erhe/math.md`
+"Detail blend") and `erhe_surface_noise()` (3D value noise: an integer hash
+at the eight lattice corners, blended with a smoothstep weight, in [0, 1)).
+In `standard.frag`:
+
+- Under `ERHE_USE_DETAIL_BLEND` the base color and the fragment alpha do not
+  multiply the vertex color: the attribute holds the weight. A material whose
+  base color or opacity source is `vertex_color` keeps that source.
+- The detail weight is computed only by the debug mode
+  `Shader_debug::detail_blend_weight` (38, "Detail Blend Weight"), which
+  writes it as linear grayscale and writes black for a material with detail
+  blend off. The weight `w` is the vertex color's channel
+  `detail_blend_channels.x` (0 without `ERHE_USE_VERTEX_VARYING_COLOR`); the
+  height is the slot's texel at `detail_blend_channels.y` under
+  `ERHE_USE_DETAIL_BLEND_TEXTURE`, else 0.5; under
+  `ERHE_USE_DETAIL_BLEND_NOISE` the height becomes
+  `mix(height, erhe_surface_noise(p * noise scale), noise amount)`, `p` the
+  world position or the node position by the noise space; the pixel width is
+  `fwidth(h - 1 + w)`. The record's `detail_blend_parameters` are (height
+  influence, transition width, noise amount, noise scale).
+- Every other variant of a detail blend material differs from the same
+  material with the switch off by the vertex color factor alone.
+
+The instruction counts of these variants are in
+`doc/plans/detail_blend_weight_implementation.md` "Built" (step 3).
+
 ### Scene sub-key (integer counts)
 
 | Macro | Source |
@@ -170,7 +229,7 @@ optimizer):
 | `ERHE_LIGHT_COUNT_SPOT_NOT_SHADOWMAPPED` | non-shadow tail size for spots |
 | `ERHE_LIGHT_COUNT_POINT_SHADOWMAPPED` | shadow-mapped prefix size for points |
 | `ERHE_LIGHT_COUNT_POINT_NOT_SHADOWMAPPED` | non-shadow tail size for points |
-| `ERHE_SHADER_DEBUG` | `Shader_debug` enum value selecting a debug-visualization override (0 = none) |
+| `ERHE_SHADER_DEBUG` | `Shader_debug` enum value selecting a debug-visualization override (0 = none; 38 `detail_blend_weight`, "Detail blend" above) |
 | `ERHE_SHADER_MULTIVIEW_COUNT` | view count passed to `Shader_stages_create_info`; 0 / 1 = single-view, >= 2 = multiview |
 
 Counts are **exact** (one variant per observed tuple). No tier
@@ -482,3 +541,5 @@ which made material edits appear to do nothing.
 - [plans/quest_fragment_shader.md](../plans/quest_fragment_shader.md): the
   mobile shading variant for the headset (mobile shadow bias axis value,
   identity texture transform axis, the mobile fp16 bit).
+- [plans/detail_blend_weight.md](../plans/detail_blend_weight.md): consumers
+  of the detail weight beyond its debug mode.

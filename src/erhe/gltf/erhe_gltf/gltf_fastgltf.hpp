@@ -212,7 +212,8 @@ namespace erhe::utility {
 }
 namespace erhe::gltf {
 
-// The five texture slots of erhe::primitive::Material_texture_samplers.
+// The texture slots of erhe::primitive::Material_texture_samplers. The
+// detail blend slot has no core glTF carrier: ERHE_material names its texture.
 // Material texture slots cannot be filled during the parse any more (the
 // Texture does not exist yet), so the parse records which image belongs in
 // which slot and residency assigns them.
@@ -221,7 +222,8 @@ enum class Gltf_material_texture_slot : unsigned int {
     metallic_roughness = 1,
     normal             = 2,
     occlusion          = 3,
-    emissive           = 4
+    emissive           = 4,
+    detail_blend       = 5
 };
 
 class Gltf_material_texture_binding

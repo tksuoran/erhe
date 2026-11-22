@@ -55,6 +55,22 @@ TEST(Material_style, style_supplies_traits_and_local_wins)
     EXPECT_EQ(material->get_value_source(Material::metallic_property.get()), Value_source::default_value);
 }
 
+TEST(Material_style, style_supplies_the_detail_blend_values)
+{
+    Property_set values;
+    values.set(Material::detail_blend_property.get(),                  Property_value{true});
+    values.set(Material::detail_blend_height_influence_property.get(), Property_value{0.5f});
+    const std::shared_ptr<const Property_style> style = std::make_shared<const Property_style>("Detail", std::move(values));
+
+    auto material = std::make_shared<Material>(std::string_view{"Ground"});
+    ASSERT_TRUE(material->set_style(style));
+    EXPECT_TRUE(material->get_detail_blend());
+    EXPECT_EQ(material->get_detail_blend_height_influence(), 0.5f);
+    EXPECT_EQ(material->get_value_source(Material::detail_blend_property.get()), Value_source::style);
+    material->set_detail_blend_height_influence(0.25f);
+    EXPECT_EQ(material->get_values().detail_blend_height_influence, 0.25f);
+}
+
 TEST(Material_style, equality_and_copy_see_the_style)
 {
     auto a = std::make_shared<Material>(std::string_view{"M"});

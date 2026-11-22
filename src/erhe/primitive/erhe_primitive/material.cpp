@@ -77,6 +77,27 @@ auto is_alpha_test(const erhe::property::Dependency_object& object) -> bool
     return static_cast<const Material&>(object).get_blending_mode() == Material_blending_mode::alpha_test;
 }
 
+// Detail blend rows (doc/plans/detail_blend_weight.md B2.5): the "Detail
+// Blend" group, the values shown while the switch is on.
+constexpr std::string_view c_detail_blend_group{"Detail Blend"};
+
+auto is_detail_blend(const erhe::property::Dependency_object& object) -> bool
+{
+    return static_cast<const Material&>(object).get_detail_blend();
+}
+
+// A weight or height channel is one of the four components; `none` reads nothing.
+auto is_rgba_channel(const Property_value& v) -> bool
+{
+    const int32_t value = std::get<erhe::property::Enum_value>(v).value;
+    return (value >= static_cast<int32_t>(Texture_channel::r)) && (value <= static_cast<int32_t>(Texture_channel::a));
+}
+
+auto is_positive(const Property_value& v) -> bool
+{
+    return std::get<float>(v) > 0.0f;
+}
+
 } // anonymous namespace
 
 const Property<glm::vec3> Material::base_color_property = Property<glm::vec3>::register_property(
@@ -190,6 +211,46 @@ const Property<Texgen_mode> Material::circular_brushed_metal_texgen_mode_propert
 const Property<bool> Material::use_aniso_control_property = Property<bool>::register_property(
     "use_aniso_control", c_owner, Property_metadata{.default_value = false, .inherits = true, .flags = c_partition_variant_native, .ui = Property_ui{.tooltip = "Anisotropic BxDF models only", .label = "Aniso Control", .visible_when = is_anisotropic}}
 );
+// Detail blend (doc/plans/detail_blend_weight.md B1, B2). The switch, the noise
+// amount (its crossing of 0 adds the noise evaluation) and the noise space
+// select shader variants; the rest are record values.
+const Property<bool> Material::detail_blend_property = Property<bool>::register_property(
+    "detail_blend", c_owner, Property_metadata{.default_value = false, .inherits = true, .flags = c_variant_native, .ui = Property_ui{.group = c_detail_blend_group, .tooltip = "Computes the detail weight from the painted vertex weight, the height texture and the surface noise", .label = "Detail Blend"}}
+);
+const Property<Texture_channel> Material::detail_blend_weight_channel_property = Property<Texture_channel>::register_property(
+    "detail_blend_weight_channel", c_owner, c_texture_channel_enum_info,
+    Property_metadata{.default_value = erhe::property::make_value(Texture_channel::r), .inherits = true, .flags = c_native, .ui = Property_ui{.group = c_detail_blend_group, .tooltip = "Channel of the mesh's vertex color 0 that holds the painted weight", .label = "Weight Channel", .visible_when = is_detail_blend}},
+    is_rgba_channel
+);
+const Property<Texture_channel> Material::detail_blend_height_channel_property = Property<Texture_channel>::register_property(
+    "detail_blend_height_channel", c_owner, c_texture_channel_enum_info,
+    Property_metadata{.default_value = erhe::property::make_value(Texture_channel::r), .inherits = true, .flags = c_native, .ui = Property_ui{.group = c_detail_blend_group, .tooltip = "Channel of the height texture read as the height", .label = "Height Channel", .visible_when = is_detail_blend}},
+    is_rgba_channel
+);
+const Property<float> Material::detail_blend_height_influence_property = Property<float>::register_property(
+    "detail_blend_height_influence", c_owner,
+    Property_metadata{.default_value = 1.0f, .inherits = true, .flags = c_native, .ui = Property_ui{.min = 0.0f, .max = 1.0f, .presentation = Property_ui::Presentation::slider, .group = c_detail_blend_group, .tooltip = "0 makes the detail weight equal to the painted weight", .label = "Height Influence", .visible_when = is_detail_blend}},
+    unit_range
+);
+const Property<float> Material::detail_blend_transition_width_property = Property<float>::register_property(
+    "detail_blend_transition_width", c_owner,
+    Property_metadata{.default_value = 0.2f, .inherits = true, .flags = c_native, .ui = Property_ui{.min = 0.0f, .max = 1.0f, .presentation = Property_ui::Presentation::slider, .group = c_detail_blend_group, .tooltip = "Share of the weight range over which one fragment goes from 0 to 1", .label = "Transition Width", .visible_when = is_detail_blend}},
+    unit_range
+);
+const Property<float> Material::detail_blend_noise_amount_property = Property<float>::register_property(
+    "detail_blend_noise_amount", c_owner,
+    Property_metadata{.default_value = 0.0f, .inherits = true, .flags = c_variant_native, .ui = Property_ui{.min = 0.0f, .max = 1.0f, .presentation = Property_ui::Presentation::slider, .group = c_detail_blend_group, .tooltip = "Share of the surface noise in the combined height", .label = "Noise Amount", .visible_when = is_detail_blend}},
+    unit_range
+);
+const Property<float> Material::detail_blend_noise_scale_property = Property<float>::register_property(
+    "detail_blend_noise_scale", c_owner,
+    Property_metadata{.default_value = 1.0f, .inherits = true, .flags = c_native, .ui = Property_ui{.min = 0.01f, .max = 100.0f, .presentation = Property_ui::Presentation::slider, .logarithmic = true, .group = c_detail_blend_group, .tooltip = "Surface noise frequency in cycles per meter", .label = "Noise Scale", .visible_when = is_detail_blend}},
+    is_positive
+);
+const Property<Detail_blend_noise_space> Material::detail_blend_noise_space_property = Property<Detail_blend_noise_space>::register_property(
+    "detail_blend_noise_space", c_owner, c_detail_blend_noise_space_enum_info,
+    Property_metadata{.default_value = erhe::property::make_value(Detail_blend_noise_space::node), .inherits = true, .flags = c_variant_native, .ui = Property_ui{.group = c_detail_blend_group, .tooltip = "Node space noise moves with the node, world space noise stays in the world", .label = "Noise Space", .visible_when = is_detail_blend}}
+);
 
 // Texture slots (D28): entry-store object references that inherit (a
 // content-library folder can hold them for the materials below it,
@@ -223,6 +284,13 @@ const Property<Object_reference> Material::occlusion_texture_property = Property
 );
 const Property<Object_reference> Material::emissive_texture_property = Property<Object_reference>::register_property(
     "emissive_texture", c_owner, Property_metadata{.inherits = true, .flags = c_variant_native, .ui = texture_ui("Emissive Texture")}, Slot_traits::validate
+);
+// The detail blend height texture: the slot row of the other slots, in the
+// "Detail Blend" group.
+const Property<Object_reference> Material::detail_blend_texture_property = Property<Object_reference>::register_property(
+    "detail_blend_texture", c_owner,
+    Property_metadata{.inherits = true, .flags = c_variant_native, .ui = Property_ui{.group = c_detail_blend_group, .label = "Height Texture", .visible_when = is_detail_blend, .reference_item_types = c_texture_types}},
+    Slot_traits::validate
 );
 
 namespace {
@@ -364,6 +432,10 @@ const Property<Texgen_mode> Material::emissive_texture_texgen_mode_property     
 const Property<float>       Material::emissive_texture_uv_rotation_property             = slot_rotation("emissive_texture_uv_rotation",                &Material_texture_samplers::emissive,               "Emissive Texture",            Slot_lighting::any);
 const Property<glm::vec2>   Material::emissive_texture_uv_offset_property               = slot_offset  ("emissive_texture_uv_offset",                  &Material_texture_samplers::emissive,               "Emissive Texture",            Slot_lighting::any);
 const Property<glm::vec2>   Material::emissive_texture_uv_scale_property                = slot_scale   ("emissive_texture_uv_scale",                   &Material_texture_samplers::emissive,               "Emissive Texture",            Slot_lighting::any);
+const Property<Texgen_mode> Material::detail_blend_texture_texgen_mode_property      = slot_texgen  ("detail_blend_texture_texgen_mode",         &Material_texture_samplers::detail_blend,           "Detail Blend Texture",        Slot_lighting::any);
+const Property<float>       Material::detail_blend_texture_uv_rotation_property         = slot_rotation("detail_blend_texture_uv_rotation",            &Material_texture_samplers::detail_blend,           "Detail Blend Texture",        Slot_lighting::any);
+const Property<glm::vec2>   Material::detail_blend_texture_uv_offset_property           = slot_offset  ("detail_blend_texture_uv_offset",              &Material_texture_samplers::detail_blend,           "Detail Blend Texture",        Slot_lighting::any);
+const Property<glm::vec2>   Material::detail_blend_texture_uv_scale_property            = slot_scale   ("detail_blend_texture_uv_scale",               &Material_texture_samplers::detail_blend,           "Detail Blend Texture",        Slot_lighting::any);
 const Property<erhe::graphics::Sampler_address_mode> Material::base_color_texture_wrap_u_property         = slot_sampler_enum ("base_color_texture_wrap_u",         &Material_texture_samplers::base_color, "Base Color Sampler", Slot_lighting::any, c_sampler_address_mode_enum_info, Material_sampler_state{}.wrap_u,      "Wrap U");
 const Property<erhe::graphics::Sampler_address_mode> Material::base_color_texture_wrap_v_property         = slot_sampler_enum ("base_color_texture_wrap_v",         &Material_texture_samplers::base_color, "Base Color Sampler", Slot_lighting::any, c_sampler_address_mode_enum_info, Material_sampler_state{}.wrap_v,      "Wrap V");
 const Property<erhe::graphics::Filter>               Material::base_color_texture_min_filter_property     = slot_sampler_enum ("base_color_texture_min_filter",     &Material_texture_samplers::base_color, "Base Color Sampler", Slot_lighting::any, c_filter_enum_info,               Material_sampler_state{}.min_filter,  "Min Filter");
@@ -399,6 +471,13 @@ const Property<erhe::graphics::Filter>               Material::emissive_texture_
 const Property<erhe::graphics::Sampler_mipmap_mode>  Material::emissive_texture_mipmap_mode_property    = slot_sampler_enum ("emissive_texture_mipmap_mode",    &Material_texture_samplers::emissive, "Emissive Sampler", Slot_lighting::any, c_sampler_mipmap_mode_enum_info,  Material_sampler_state{}.mipmap_mode, "Mipmap Mode");
 const Property<float>                                Material::emissive_texture_max_anisotropy_property = slot_sampler_float("emissive_texture_max_anisotropy", &Material_texture_samplers::emissive, "Emissive Sampler", Slot_lighting::any, Material_sampler_state{}.max_anisotropy, 1.0f, 16.0f, "Max Anisotropy", false);
 const Property<float>                                Material::emissive_texture_lod_bias_property       = slot_sampler_float("emissive_texture_lod_bias",       &Material_texture_samplers::emissive, "Emissive Sampler", Slot_lighting::any, Material_sampler_state{}.lod_bias, -4.0f, 4.0f, "LOD Bias", true);
+const Property<erhe::graphics::Sampler_address_mode> Material::detail_blend_texture_wrap_u_property         = slot_sampler_enum ("detail_blend_texture_wrap_u",         &Material_texture_samplers::detail_blend, "Detail Blend Sampler", Slot_lighting::any, c_sampler_address_mode_enum_info, Material_sampler_state{}.wrap_u,      "Wrap U");
+const Property<erhe::graphics::Sampler_address_mode> Material::detail_blend_texture_wrap_v_property         = slot_sampler_enum ("detail_blend_texture_wrap_v",         &Material_texture_samplers::detail_blend, "Detail Blend Sampler", Slot_lighting::any, c_sampler_address_mode_enum_info, Material_sampler_state{}.wrap_v,      "Wrap V");
+const Property<erhe::graphics::Filter>               Material::detail_blend_texture_min_filter_property     = slot_sampler_enum ("detail_blend_texture_min_filter",     &Material_texture_samplers::detail_blend, "Detail Blend Sampler", Slot_lighting::any, c_filter_enum_info,               Material_sampler_state{}.min_filter,  "Min Filter");
+const Property<erhe::graphics::Filter>               Material::detail_blend_texture_mag_filter_property     = slot_sampler_enum ("detail_blend_texture_mag_filter",     &Material_texture_samplers::detail_blend, "Detail Blend Sampler", Slot_lighting::any, c_filter_enum_info,               Material_sampler_state{}.mag_filter,  "Mag Filter");
+const Property<erhe::graphics::Sampler_mipmap_mode>  Material::detail_blend_texture_mipmap_mode_property    = slot_sampler_enum ("detail_blend_texture_mipmap_mode",    &Material_texture_samplers::detail_blend, "Detail Blend Sampler", Slot_lighting::any, c_sampler_mipmap_mode_enum_info,  Material_sampler_state{}.mipmap_mode, "Mipmap Mode");
+const Property<float>                                Material::detail_blend_texture_max_anisotropy_property = slot_sampler_float("detail_blend_texture_max_anisotropy", &Material_texture_samplers::detail_blend, "Detail Blend Sampler", Slot_lighting::any, Material_sampler_state{}.max_anisotropy, 1.0f, 16.0f, "Max Anisotropy", false);
+const Property<float>                                Material::detail_blend_texture_lod_bias_property       = slot_sampler_float("detail_blend_texture_lod_bias",       &Material_texture_samplers::detail_blend, "Detail Blend Sampler", Slot_lighting::any, Material_sampler_state{}.lod_bias, -4.0f, 4.0f, "LOD Bias", true);
 
 namespace {
 
@@ -423,11 +502,13 @@ auto sampler_properties_of(const Material_texture_samplers& samplers, const Mate
     static const Slot_sampler_properties c_normal            {Material::normal_texture_wrap_u_property,             Material::normal_texture_wrap_v_property,             Material::normal_texture_min_filter_property,             Material::normal_texture_mag_filter_property,             Material::normal_texture_mipmap_mode_property,             Material::normal_texture_max_anisotropy_property,             Material::normal_texture_lod_bias_property};
     static const Slot_sampler_properties c_occlusion         {Material::occlusion_texture_wrap_u_property,          Material::occlusion_texture_wrap_v_property,          Material::occlusion_texture_min_filter_property,          Material::occlusion_texture_mag_filter_property,          Material::occlusion_texture_mipmap_mode_property,          Material::occlusion_texture_max_anisotropy_property,          Material::occlusion_texture_lod_bias_property};
     static const Slot_sampler_properties c_emissive          {Material::emissive_texture_wrap_u_property,           Material::emissive_texture_wrap_v_property,           Material::emissive_texture_min_filter_property,           Material::emissive_texture_mag_filter_property,           Material::emissive_texture_mipmap_mode_property,           Material::emissive_texture_max_anisotropy_property,           Material::emissive_texture_lod_bias_property};
+    static const Slot_sampler_properties c_detail_blend      {Material::detail_blend_texture_wrap_u_property,       Material::detail_blend_texture_wrap_v_property,       Material::detail_blend_texture_min_filter_property,       Material::detail_blend_texture_mag_filter_property,       Material::detail_blend_texture_mipmap_mode_property,       Material::detail_blend_texture_max_anisotropy_property,       Material::detail_blend_texture_lod_bias_property};
     if (&slot == &samplers.base_color)         { return &c_base_color; }
     if (&slot == &samplers.metallic_roughness) { return &c_metallic_roughness; }
     if (&slot == &samplers.normal)             { return &c_normal; }
     if (&slot == &samplers.occlusion)          { return &c_occlusion; }
     if (&slot == &samplers.emissive)           { return &c_emissive; }
+    if (&slot == &samplers.detail_blend)       { return &c_detail_blend; }
     return nullptr;
 }
 
@@ -525,11 +606,13 @@ auto uv_transform_properties_of(const Material_texture_samplers& samplers, const
     static const Slot_uv_transform_properties c_normal            {Material::normal_texture_texgen_mode_property,             Material::normal_texture_uv_rotation_property,             Material::normal_texture_uv_offset_property,             Material::normal_texture_uv_scale_property};
     static const Slot_uv_transform_properties c_occlusion         {Material::occlusion_texture_texgen_mode_property,          Material::occlusion_texture_uv_rotation_property,          Material::occlusion_texture_uv_offset_property,          Material::occlusion_texture_uv_scale_property};
     static const Slot_uv_transform_properties c_emissive          {Material::emissive_texture_texgen_mode_property,           Material::emissive_texture_uv_rotation_property,           Material::emissive_texture_uv_offset_property,           Material::emissive_texture_uv_scale_property};
+    static const Slot_uv_transform_properties c_detail_blend      {Material::detail_blend_texture_texgen_mode_property,       Material::detail_blend_texture_uv_rotation_property,       Material::detail_blend_texture_uv_offset_property,       Material::detail_blend_texture_uv_scale_property};
     if (&slot == &samplers.base_color)         { return &c_base_color; }
     if (&slot == &samplers.metallic_roughness) { return &c_metallic_roughness; }
     if (&slot == &samplers.normal)             { return &c_normal; }
     if (&slot == &samplers.occlusion)          { return &c_occlusion; }
     if (&slot == &samplers.emissive)           { return &c_emissive; }
+    if (&slot == &samplers.detail_blend)       { return &c_detail_blend; }
     return nullptr;
 }
 
@@ -570,7 +653,7 @@ void Material::set_slot_texgen_mode(const Material_texture_sampler& slot, const 
 void Material::register_slot_texture_users()
 {
     const Material_texture_samplers& slots = m_data.texture_samplers;
-    for (const Material_texture_sampler* slot : {&slots.base_color, &slots.metallic_roughness, &slots.normal, &slots.occlusion, &slots.emissive}) {
+    for (const Material_texture_sampler* slot : {&slots.base_color, &slots.metallic_roughness, &slots.normal, &slots.occlusion, &slots.emissive, &slots.detail_blend}) {
         if (slot->texture_reference) {
             slot->texture_reference->add_user(*this);
         }
@@ -580,7 +663,7 @@ void Material::register_slot_texture_users()
 void Material::unregister_slot_texture_users()
 {
     const Material_texture_samplers& slots = m_data.texture_samplers;
-    for (const Material_texture_sampler* slot : {&slots.base_color, &slots.metallic_roughness, &slots.normal, &slots.occlusion, &slots.emissive}) {
+    for (const Material_texture_sampler* slot : {&slots.base_color, &slots.metallic_roughness, &slots.normal, &slots.occlusion, &slots.emissive, &slots.detail_blend}) {
         if (slot->texture_reference) {
             slot->texture_reference->remove_user(*this);
         }
@@ -678,6 +761,7 @@ void Material::on_property_changed(const erhe::property::Property_changed_args& 
     if (mirror_slot(m_data.texture_samplers.normal,             normal_texture_property,             normal_texture_texgen_mode_property,             normal_texture_uv_rotation_property,             normal_texture_uv_offset_property,             normal_texture_uv_scale_property)) { return; }
     if (mirror_slot(m_data.texture_samplers.occlusion,          occlusion_texture_property,          occlusion_texture_texgen_mode_property,          occlusion_texture_uv_rotation_property,          occlusion_texture_uv_offset_property,          occlusion_texture_uv_scale_property)) { return; }
     if (mirror_slot(m_data.texture_samplers.emissive,           emissive_texture_property,           emissive_texture_texgen_mode_property,           emissive_texture_uv_rotation_property,           emissive_texture_uv_offset_property,           emissive_texture_uv_scale_property)) { return; }
+    if (mirror_slot(m_data.texture_samplers.detail_blend,       detail_blend_texture_property,       detail_blend_texture_texgen_mode_property,       detail_blend_texture_uv_rotation_property,       detail_blend_texture_uv_offset_property,       detail_blend_texture_uv_scale_property)) { return; }
 }
 
 Material::Material(const std::string_view name)
@@ -700,6 +784,7 @@ void Material::set_metallic_roughness_texture(const std::shared_ptr<erhe::graphi
 void Material::set_normal_texture            (const std::shared_ptr<erhe::graphics::Texture_reference>& texture) { set_value(normal_texture_property,             to_reference(texture)); }
 void Material::set_occlusion_texture         (const std::shared_ptr<erhe::graphics::Texture_reference>& texture) { set_value(occlusion_texture_property,          to_reference(texture)); }
 void Material::set_emissive_texture          (const std::shared_ptr<erhe::graphics::Texture_reference>& texture) { set_value(emissive_texture_property,           to_reference(texture)); }
+void Material::set_detail_blend_texture      (const std::shared_ptr<erhe::graphics::Texture_reference>& texture) { set_value(detail_blend_texture_property,       to_reference(texture)); }
 
 auto Material::get_slot_texture_property(const Material_texture_sampler& slot) const -> const Property<Object_reference>*
 {
@@ -709,6 +794,7 @@ auto Material::get_slot_texture_property(const Material_texture_sampler& slot) c
     if (&slot == &s.normal)             { return &normal_texture_property;             }
     if (&slot == &s.occlusion)          { return &occlusion_texture_property;          }
     if (&slot == &s.emissive)           { return &emissive_texture_property;           }
+    if (&slot == &s.detail_blend)       { return &detail_blend_texture_property;       }
     return nullptr;
 }
 
@@ -754,6 +840,7 @@ void Material::set_data(const Material_data& new_data)
     apply_slot(m_data.texture_samplers.normal,               new_data.texture_samplers.normal,                   normal_texture_property,                normal_texture_texgen_mode_property,                normal_texture_uv_rotation_property,               normal_texture_uv_offset_property,               normal_texture_uv_scale_property);
     apply_slot(m_data.texture_samplers.occlusion,            new_data.texture_samplers.occlusion,                occlusion_texture_property,             occlusion_texture_texgen_mode_property,             occlusion_texture_uv_rotation_property,            occlusion_texture_uv_offset_property,            occlusion_texture_uv_scale_property);
     apply_slot(m_data.texture_samplers.emissive,             new_data.texture_samplers.emissive,                 emissive_texture_property,              emissive_texture_texgen_mode_property,              emissive_texture_uv_rotation_property,             emissive_texture_uv_offset_property,             emissive_texture_uv_scale_property);
+    apply_slot(m_data.texture_samplers.detail_blend,         new_data.texture_samplers.detail_blend,             detail_blend_texture_property,          detail_blend_texture_texgen_mode_property,          detail_blend_texture_uv_rotation_property,         detail_blend_texture_uv_offset_property,         detail_blend_texture_uv_scale_property);
 }
 
 auto Material::get_values() const -> Material_values
@@ -784,7 +871,15 @@ auto Material::get_values() const -> Material_values
         .alpha_cutoff                       = get_alpha_cutoff(),
         .use_circular_brushed_metal         = get_use_circular_brushed_metal(),
         .circular_brushed_metal_texgen_mode = get_circular_brushed_metal_texgen_mode(),
-        .use_aniso_control                  = get_use_aniso_control()
+        .use_aniso_control                  = get_use_aniso_control(),
+        .detail_blend                       = get_detail_blend(),
+        .detail_blend_weight_channel        = get_detail_blend_weight_channel(),
+        .detail_blend_height_channel        = get_detail_blend_height_channel(),
+        .detail_blend_height_influence      = get_detail_blend_height_influence(),
+        .detail_blend_transition_width      = get_detail_blend_transition_width(),
+        .detail_blend_noise_amount          = get_detail_blend_noise_amount(),
+        .detail_blend_noise_scale           = get_detail_blend_noise_scale(),
+        .detail_blend_noise_space           = get_detail_blend_noise_space()
     };
 }
 
@@ -837,6 +932,14 @@ void Material::set_values(const Material_values& values)
     set_or_clear(*this, use_circular_brushed_metal_property,         values.use_circular_brushed_metal);
     set_or_clear(*this, circular_brushed_metal_texgen_mode_property, values.circular_brushed_metal_texgen_mode);
     set_or_clear(*this, use_aniso_control_property,                  values.use_aniso_control);
+    set_or_clear(*this, detail_blend_property,                       values.detail_blend);
+    set_or_clear(*this, detail_blend_weight_channel_property,        values.detail_blend_weight_channel);
+    set_or_clear(*this, detail_blend_height_channel_property,        values.detail_blend_height_channel);
+    set_or_clear(*this, detail_blend_height_influence_property,      values.detail_blend_height_influence);
+    set_or_clear(*this, detail_blend_transition_width_property,      values.detail_blend_transition_width);
+    set_or_clear(*this, detail_blend_noise_amount_property,          values.detail_blend_noise_amount);
+    set_or_clear(*this, detail_blend_noise_scale_property,           values.detail_blend_noise_scale);
+    set_or_clear(*this, detail_blend_noise_space_property,           values.detail_blend_noise_space);
 }
 
 auto Material::to_property_set(const Material_values& values) -> erhe::property::Property_set
@@ -869,6 +972,14 @@ auto Material::to_property_set(const Material_values& values) -> erhe::property:
     result.set(use_circular_brushed_metal_property,         make_value(values.use_circular_brushed_metal));
     result.set(circular_brushed_metal_texgen_mode_property, make_value(values.circular_brushed_metal_texgen_mode));
     result.set(use_aniso_control_property,                  make_value(values.use_aniso_control));
+    result.set(detail_blend_property,                       make_value(values.detail_blend));
+    result.set(detail_blend_weight_channel_property,        make_value(values.detail_blend_weight_channel));
+    result.set(detail_blend_height_channel_property,        make_value(values.detail_blend_height_channel));
+    result.set(detail_blend_height_influence_property,      make_value(values.detail_blend_height_influence));
+    result.set(detail_blend_transition_width_property,      make_value(values.detail_blend_transition_width));
+    result.set(detail_blend_noise_amount_property,          make_value(values.detail_blend_noise_amount));
+    result.set(detail_blend_noise_scale_property,           make_value(values.detail_blend_noise_scale));
+    result.set(detail_blend_noise_space_property,           make_value(values.detail_blend_noise_space));
     return result;
 }
 
@@ -895,7 +1006,8 @@ auto Material::to_property_set(const Material_values& values) -> erhe::property:
         (lhs.metallic_roughness == rhs.metallic_roughness) &&
         (lhs.normal             == rhs.normal            ) &&
         (lhs.occlusion          == rhs.occlusion         ) &&
-        (lhs.emissive           == rhs.emissive          );
+        (lhs.emissive           == rhs.emissive          ) &&
+        (lhs.detail_blend       == rhs.detail_blend      );
 }
 
 [[nodiscard]] auto operator!=(const Material_texture_samplers& lhs, const Material_texture_samplers& rhs)
@@ -931,7 +1043,15 @@ auto Material::to_property_set(const Material_values& values) -> erhe::property:
         (lhs.alpha_cutoff                       == rhs.alpha_cutoff                      ) &&
         (lhs.use_circular_brushed_metal         == rhs.use_circular_brushed_metal        ) &&
         (lhs.circular_brushed_metal_texgen_mode == rhs.circular_brushed_metal_texgen_mode) &&
-        (lhs.use_aniso_control                  == rhs.use_aniso_control                 );
+        (lhs.use_aniso_control                  == rhs.use_aniso_control                 ) &&
+        (lhs.detail_blend                       == rhs.detail_blend                      ) &&
+        (lhs.detail_blend_weight_channel        == rhs.detail_blend_weight_channel       ) &&
+        (lhs.detail_blend_height_channel        == rhs.detail_blend_height_channel       ) &&
+        (lhs.detail_blend_height_influence      == rhs.detail_blend_height_influence     ) &&
+        (lhs.detail_blend_transition_width      == rhs.detail_blend_transition_width     ) &&
+        (lhs.detail_blend_noise_amount          == rhs.detail_blend_noise_amount         ) &&
+        (lhs.detail_blend_noise_scale           == rhs.detail_blend_noise_scale          ) &&
+        (lhs.detail_blend_noise_space           == rhs.detail_blend_noise_space          );
 }
 
 [[nodiscard]] auto operator!=(const Material_values& lhs, const Material_values& rhs) -> bool

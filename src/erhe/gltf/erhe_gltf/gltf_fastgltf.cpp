@@ -193,6 +193,44 @@ public:
     return std::nullopt;
 }
 
+[[nodiscard]] auto texture_channel_to_c_str(const erhe::primitive::Texture_channel channel) -> const char*
+{
+    switch (channel) {
+        case erhe::primitive::Texture_channel::r   : return "r";
+        case erhe::primitive::Texture_channel::g   : return "g";
+        case erhe::primitive::Texture_channel::b   : return "b";
+        case erhe::primitive::Texture_channel::a   : return "a";
+        case erhe::primitive::Texture_channel::none: return "none";
+    }
+    return "r";
+}
+
+[[nodiscard]] auto texture_channel_from_string(const std::string_view s) -> std::optional<erhe::primitive::Texture_channel>
+{
+    if (s == "r")    return erhe::primitive::Texture_channel::r;
+    if (s == "g")    return erhe::primitive::Texture_channel::g;
+    if (s == "b")    return erhe::primitive::Texture_channel::b;
+    if (s == "a")    return erhe::primitive::Texture_channel::a;
+    if (s == "none") return erhe::primitive::Texture_channel::none;
+    return std::nullopt;
+}
+
+[[nodiscard]] auto detail_blend_noise_space_to_c_str(const erhe::primitive::Detail_blend_noise_space space) -> const char*
+{
+    switch (space) {
+        case erhe::primitive::Detail_blend_noise_space::world: return "world";
+        case erhe::primitive::Detail_blend_noise_space::node : return "node";
+    }
+    return "node";
+}
+
+[[nodiscard]] auto detail_blend_noise_space_from_string(const std::string_view s) -> std::optional<erhe::primitive::Detail_blend_noise_space>
+{
+    if (s == "world") return erhe::primitive::Detail_blend_noise_space::world;
+    if (s == "node")  return erhe::primitive::Detail_blend_noise_space::node;
+    return std::nullopt;
+}
+
 [[nodiscard]] auto normalmap_encoding_to_c_str(erhe::primitive::Normalmap_encoding encoding) -> const char*
 {
     switch (encoding) {
@@ -3838,6 +3876,18 @@ public:
     return true;
 }
 
+// The detail blend slot of one material as ERHE_material names it: the glTF
+// texture, the texgen source and the UV transform.
+class Gltf_detail_blend_texture
+{
+public:
+    std::size_t                  texture_index{0};
+    erhe::primitive::Texgen_mode texgen_mode  {erhe::primitive::Texgen_mode::uv0};
+    float                        rotation     {0.0f};
+    glm::vec2                    offset       {0.0f, 0.0f};
+    glm::vec2                    scale        {1.0f, 1.0f};
+};
+
 class Gltf_parser
 {
 private:
@@ -4535,6 +4585,11 @@ private:
                 mark_texture(material.specularGlossiness->diffuseTexture.value(), Slot::other_color);
             }
         }
+        for (const auto& [material_index, detail_blend_texture] : m_material_detail_blend_textures) {
+            fastgltf::TextureInfo texture_info{};
+            texture_info.textureIndex = detail_blend_texture.texture_index;
+            mark_texture(texture_info, Slot::other_data);
+        }
 
         std::vector<erhe::graphics::Texture_properties> image_properties(image_count);
         std::vector<std::uint8_t>                       image_stored    (image_count, std::uint8_t{0});
@@ -4848,6 +4903,17 @@ private:
             );
             log_gltf->trace("Material PBR metallic roughness metallic factor = {}", pbr_data.metallicFactor);
             log_gltf->trace("Material PBR metallic roughness roughness factor = {}", pbr_data.roughnessFactor);
+            const auto detail_blend_texture = m_material_detail_blend_textures.find(material_index);
+            if ((detail_blend_texture != m_material_detail_blend_textures.end()) && (detail_blend_texture->second.texture_index < m_asset->textures.size())) {
+                const Gltf_detail_blend_texture& source = detail_blend_texture->second;
+                fastgltf::TextureInfo texture_info{};
+                texture_info.textureIndex = source.texture_index;
+                apply_texture(texture_info, create_samplers.detail_blend, Gltf_material_texture_slot::detail_blend, true);
+                create_samplers.detail_blend.texgen_mode = source.texgen_mode;
+                create_samplers.detail_blend.rotation    = source.rotation;
+                create_samplers.detail_blend.offset      = source.offset;
+                create_samplers.detail_blend.scale       = source.scale;
+            }
             auto new_material = std::make_shared<erhe::primitive::Material>(create_info);
             new_material->set_source_path(m_arguments.path);
             apply_uid(m_object_uids.materials, material_index, *new_material);
@@ -5185,10 +5251,19 @@ private:
     std::map<std::size_t, Gltf_node_prim_class>               m_node_prim_classes;
     // The path of each glTF node carrying ERHE_curve: the node is a Curve prim.
     std::map<std::size_t, erhe::math::Curve_path>             m_node_curves;
+    // The detail blend slot texture of each material whose ERHE_material
+    // names one, by material index.
+    std::map<std::size_t, Gltf_detail_blend_texture>          m_material_detail_blend_textures;
 public:
     void set_node_curves(std::map<std::size_t, erhe::math::Curve_path>&& node_curves)
     {
         m_node_curves = std::move(node_curves);
+    }
+    // Read out of the captured ERHE_material payloads before the parse, so
+    // parse_images() and parse_material() see the slot as a core one.
+    void set_material_detail_blend_textures(std::map<std::size_t, Gltf_detail_blend_texture>&& textures)
+    {
+        m_material_detail_blend_textures = std::move(textures);
     }
     // The prim class of each glTF node whose ERHE_node extension names one,
     // read out of the captured extension payloads before the parse (see
@@ -7193,6 +7268,7 @@ void finish_resident_image(
         case Gltf_material_texture_slot::normal:             return samplers.normal;
         case Gltf_material_texture_slot::occlusion:          return samplers.occlusion;
         case Gltf_material_texture_slot::emissive:           return samplers.emissive;
+        case Gltf_material_texture_slot::detail_blend:       return samplers.detail_blend;
         case Gltf_material_texture_slot::base_color:
         default:                                            return samplers.base_color;
     }
@@ -8383,6 +8459,61 @@ auto parse_gltf(const Gltf_parse_arguments& arguments) -> Gltf_data
         erhe_parser.set_node_curves(std::move(node_curves));
     }
 
+    // The detail blend slot textures ERHE_material names (record_material_extensions).
+    {
+        std::map<std::size_t, Gltf_detail_blend_texture> detail_blend_textures;
+        simdjson::dom::parser material_parser;
+        for (const auto& [index, captured] : parse_extras_context.material_extensions) {
+            for (const auto& [extension_name, extension_value] : captured.entries) {
+                if (extension_name != "ERHE_material") {
+                    continue;
+                }
+                simdjson::dom::element root;
+                if (material_parser.parse(simdjson::padded_string{extension_value}).get(root) != simdjson::SUCCESS) {
+                    continue;
+                }
+                simdjson::dom::object texture_object;
+                if (root.at_key("detail_blend_texture").get_object().get(texture_object) != simdjson::SUCCESS) {
+                    continue;
+                }
+                std::uint64_t texture_index{0};
+                if (texture_object.at_key("index").get_uint64().get(texture_index) != simdjson::SUCCESS) {
+                    log_gltf->warn("glTF load '{}': material {}: detail_blend_texture names no texture index", arguments.path.filename().string(), index);
+                    continue;
+                }
+                Gltf_detail_blend_texture entry{.texture_index = static_cast<std::size_t>(texture_index)};
+                std::string_view texgen_name;
+                if (texture_object.at_key("texgen_mode").get_string().get(texgen_name) == simdjson::SUCCESS) {
+                    if (const std::optional<erhe::primitive::Texgen_mode> parsed = texgen_mode_from_string(texgen_name); parsed.has_value()) {
+                        entry.texgen_mode = parsed.value();
+                    }
+                }
+                const auto read_number = [&texture_object](const char* key, float& out_value) {
+                    double value{0.0};
+                    if (texture_object.at_key(key).get_double().get(value) == simdjson::SUCCESS) {
+                        out_value = static_cast<float>(value);
+                    }
+                };
+                const auto read_vec2 = [&texture_object](const char* key, glm::vec2& out_value) {
+                    simdjson::dom::array array;
+                    if ((texture_object.at_key(key).get_array().get(array) != simdjson::SUCCESS) || (array.size() != 2)) {
+                        return;
+                    }
+                    double x{0.0};
+                    double y{0.0};
+                    if ((array.at(0).get_double().get(x) == simdjson::SUCCESS) && (array.at(1).get_double().get(y) == simdjson::SUCCESS)) {
+                        out_value = glm::vec2{static_cast<float>(x), static_cast<float>(y)};
+                    }
+                };
+                read_number("rotation", entry.rotation);
+                read_vec2  ("offset",   entry.offset);
+                read_vec2  ("scale",    entry.scale);
+                detail_blend_textures.emplace(index, entry);
+            }
+        }
+        erhe_parser.set_material_detail_blend_textures(std::move(detail_blend_textures));
+    }
+
     erhe_parser.parse_and_build();
 
     // ERHE_pvs resolves its column node indices to the parsed nodes' uids.
@@ -8755,6 +8886,38 @@ auto parse_gltf(const Gltf_parse_arguments& arguments) -> Gltf_data
                 read_sampler_texgen("normal_texgen_mode",             material->get_data().texture_samplers.normal);
                 read_sampler_texgen("occlusion_texgen_mode",          material->get_data().texture_samplers.occlusion);
                 read_sampler_texgen("emissive_texgen_mode",           material->get_data().texture_samplers.emissive);
+
+                // Detail blend values (the slot texture was read before the parse).
+                if (extension_object.at_key("detail_blend").get_bool().get(bool_value) == simdjson::SUCCESS) {
+                    material->set_detail_blend(bool_value);
+                }
+                if (extension_object.at_key("detail_blend_weight_channel").get_string().get(string_value) == simdjson::SUCCESS) {
+                    if (const auto parsed = texture_channel_from_string(string_value); parsed.has_value()) {
+                        material->set_detail_blend_weight_channel(parsed.value());
+                    }
+                }
+                if (extension_object.at_key("detail_blend_height_channel").get_string().get(string_value) == simdjson::SUCCESS) {
+                    if (const auto parsed = texture_channel_from_string(string_value); parsed.has_value()) {
+                        material->set_detail_blend_height_channel(parsed.value());
+                    }
+                }
+                if (read_float(extension_object, "detail_blend_height_influence", float_value)) {
+                    material->set_detail_blend_height_influence(float_value);
+                }
+                if (read_float(extension_object, "detail_blend_transition_width", float_value)) {
+                    material->set_detail_blend_transition_width(float_value);
+                }
+                if (read_float(extension_object, "detail_blend_noise_amount", float_value)) {
+                    material->set_detail_blend_noise_amount(float_value);
+                }
+                if (read_float(extension_object, "detail_blend_noise_scale", float_value)) {
+                    material->set_detail_blend_noise_scale(float_value);
+                }
+                if (extension_object.at_key("detail_blend_noise_space").get_string().get(string_value) == simdjson::SUCCESS) {
+                    if (const auto parsed = detail_blend_noise_space_from_string(string_value); parsed.has_value()) {
+                        material->set_detail_blend_noise_space(parsed.value());
+                    }
+                }
             }
         }
 
@@ -11475,6 +11638,28 @@ private:
 
         const bool emit_style = static_cast<bool>(material.get_style());
 
+        // Detail blend: every value that differs from its default, and the
+        // slot texture when it has an exportable source.
+        const erhe::primitive::Material_values detail_defaults{};
+        const erhe::primitive::Material_texture_sampler& detail_slot = material.get_data().texture_samplers.detail_blend;
+        std::optional<std::size_t> detail_texture_index{};
+        if (detail_slot.texture_reference) {
+            const erhe::graphics::Texture* detail_texture = detail_slot.texture_reference->get_referenced_texture();
+            if (detail_texture != nullptr) {
+                detail_texture_index = process_texture(detail_texture, detail_slot.sampler);
+            }
+        }
+        const bool emit_detail_blend =
+            (data.detail_blend                  != detail_defaults.detail_blend                 ) ||
+            (data.detail_blend_weight_channel   != detail_defaults.detail_blend_weight_channel  ) ||
+            (data.detail_blend_height_channel   != detail_defaults.detail_blend_height_channel  ) ||
+            (data.detail_blend_height_influence != detail_defaults.detail_blend_height_influence) ||
+            (data.detail_blend_transition_width != detail_defaults.detail_blend_transition_width) ||
+            (data.detail_blend_noise_amount     != detail_defaults.detail_blend_noise_amount    ) ||
+            (data.detail_blend_noise_scale      != detail_defaults.detail_blend_noise_scale     ) ||
+            (data.detail_blend_noise_space      != detail_defaults.detail_blend_noise_space     ) ||
+            detail_texture_index.has_value();
+
         if (!emit_roughness_y &&
             !emit_bxdf_model &&
             !emit_blending_mode &&
@@ -11482,7 +11667,8 @@ private:
             !emit_normalmap_encoding &&
             !data.use_circular_brushed_metal &&
             !data.use_aniso_control &&
-            !emit_style)
+            !emit_style &&
+            !emit_detail_blend)
         {
             return;
         }
@@ -11534,6 +11720,33 @@ private:
         if (data.use_aniso_control) {
             fields += fmt::format("{}\"use_aniso_control\":true", separator);
             separator = ",";
+        }
+        if (emit_detail_blend) {
+            fields += fmt::format(
+                "{}\"detail_blend\":{},\"detail_blend_weight_channel\":\"{}\",\"detail_blend_height_channel\":\"{}\","
+                "\"detail_blend_height_influence\":{},\"detail_blend_transition_width\":{},"
+                "\"detail_blend_noise_amount\":{},\"detail_blend_noise_scale\":{},\"detail_blend_noise_space\":\"{}\"",
+                separator,
+                data.detail_blend ? "true" : "false",
+                texture_channel_to_c_str(data.detail_blend_weight_channel),
+                texture_channel_to_c_str(data.detail_blend_height_channel),
+                data.detail_blend_height_influence,
+                data.detail_blend_transition_width,
+                data.detail_blend_noise_amount,
+                data.detail_blend_noise_scale,
+                detail_blend_noise_space_to_c_str(data.detail_blend_noise_space)
+            );
+            separator = ",";
+            if (detail_texture_index.has_value()) {
+                fields += fmt::format(
+                    ",\"detail_blend_texture\":{{\"index\":{},\"texgen_mode\":\"{}\",\"rotation\":{},\"offset\":[{},{}],\"scale\":[{},{}]}}",
+                    detail_texture_index.value(),
+                    texgen_mode_to_c_str(detail_slot.texgen_mode),
+                    detail_slot.rotation,
+                    detail_slot.offset.x, detail_slot.offset.y,
+                    detail_slot.scale.x,  detail_slot.scale.y
+                );
+            }
         }
         if (emit_style) {
             // The style item's name (doc/editor/style_library.md D4); quotes and

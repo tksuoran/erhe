@@ -183,8 +183,8 @@ public:
         // The set the records' material slots are resolved in; the draw binds
         // the same set (Base_render_parameters::material_source).
         const Material_set*                      material_source{nullptr};
-        uint32_t                                 shader_key_boolean_mask_force_enable {0};
-        uint32_t                                 shader_key_boolean_mask_force_disable{0};
+        Shader_bool_mask                         shader_key_boolean_mask_force_enable {0};
+        Shader_bool_mask                         shader_key_boolean_mask_force_disable{0};
         Blending_mode_policy                     blending_mode_policy{Blending_mode_policy::not_set};
         erhe::primitive::Primitive_mode          primitive_mode{erhe::primitive::Primitive_mode::polygon_fill};
         Primitive_interface_settings             primitive_settings{};
@@ -267,8 +267,8 @@ public:
         std::span<const Warmup_target>                              warmup_targets{};
 
         Light_layer_partition                                       light_partition{};
-        uint32_t                                                    shader_key_force_enable_mask {0};
-        uint32_t                                                    shader_key_force_disable_mask{0};
+        Shader_bool_mask                                            shader_key_force_enable_mask {0};
+        Shader_bool_mask                                            shader_key_force_disable_mask{0};
         Shader_debug                                                shader_debug{Shader_debug::none};
         // Shadow filtering method to prewarm (ERHE_SHADOW_FILTER axis).
         // Single-valued like shader_debug: warm the active mode so there is
