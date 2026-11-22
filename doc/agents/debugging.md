@@ -262,6 +262,13 @@ that does not own it (the list of asserting functions is in
 
 Startup and frame profiling with Tracy (`ERHE_TRACY_ON_DEMAND`,
 `scripts/tracy_startup_profile.py`) is described in `doc/building.md`.
+`tracy-csvexport -u` exports every zone event (timeline, gaps, self times)
+rather than the per-zone summary. Locate time with `ERHE_PROFILE` scopes;
+a debugger stack sample is only for time spent inside a dependency.
+
+Compare timings only within one session: the same commit measured in a
+later session differed by more than the change under test (machine drift),
+so a before / after pair is measured back to back, baseline included.
 
 ## Future work
 

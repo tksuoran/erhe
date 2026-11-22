@@ -22,7 +22,7 @@ py -3 scripts/usd_wg_asset_survey.py --root <usd-wg-assets> --usd-root <usd_root
 `--failing-first` then the recorded failures and gaps, shortest run first,
 and the passing entries last, so a run reaches the next open gap in one
 or two entries. MaterialX is excluded because it is scoped future work
-(`doc/erhe/usd_compatibility_design.md` section 6). Set `ERHE_AI_DRIVER=1` in the
+(`doc/plans/usd_compatibility.md` "MaterialX"). Set `ERHE_AI_DRIVER=1` in the
 environment. The `<usd_root>` and `<usd-wg-assets>` paths are per machine
 (`memory-bank/local/context.md`).
 
@@ -33,8 +33,7 @@ The state the loop keeps between runs, all committed except the first:
 - `doc/agents/usd_wg_assets_expected.json`: the issues an entry reports by
   design (`diagnostics`, `gaps`, `appearance` patterns with a `reason`).
 - `doc/agents/usd_wg_assets_eye.json`: the by-eye verdicts.
-- `doc/erhe/usd_compatibility_design.md` section 6: the gaps deferred as future
-  work.
+- `doc/plans/usd_compatibility.md`: the gaps deferred as future work.
 
 ## Triage of a stopped entry
 
@@ -61,13 +60,19 @@ outcomes the entry is. Each outcome ends in a commit.
    `doc/agents/usd_wg_assets_expected.json` naming the exact diagnostic or gap
    pattern and quoting the README statement and the Storm match in
    `reason`. An expectation is evidence-backed or it is not written.
-4. Scoped future work: the gap is one the plan's section 6 already lists
-   (MaterialX, 16-bit and CMYK images, Radiance `.hdr`, load performance)
-   or one the worker cannot close in one commit. Add the plan bullet when
+4. Scoped future work: the gap is one `doc/plans/usd_compatibility.md`
+   already lists (MaterialX, image formats, asynchronous load) or one the
+   worker cannot close in one commit. Add the plan bullet when
    it is missing, and either `--exclude` the entry from the loop command
    (a whole family, like MaterialX) or record the diagnostic in the
    expected sidecar with a reason that names the plan bullet and says it
    is a known limitation, not a by-design result.
+
+An entry's diagnostic lines depend on the order the run visits entries:
+Tydra warns about a file shared by several entries only on its first load
+in an editor launch. An expectation therefore names its pattern on every
+entry the file affects, so the verdicts hold whatever the order; the line
+counts vary between runs.
 
 Measure before deciding: a bounds row is compared against the pxr stage
 script's numbers (`scripts/usd_wg_pxr_stage.py`, run under
@@ -123,8 +128,8 @@ worker is running, what the last report said, what the queue says. It:
    of the one commit that changed the most outside `doc/` and `scripts/`,
    and checks each new expected-results item against its reason (a
    README quote or a Storm match, or it is reverted to a plan bullet).
-   Records the state in `memory-bank/topics/usd.md` and, when the loop
-   is handed to a later session, in `doc/plans/open_items.md` "Work order".
+   When the loop is handed to a later session, records its state in
+   `doc/plans/open_items.md` "Work order".
 4. Launches the next worker with the same brief while a stop remains and
    the user has not said to stop. The brief does not change between
    workers: the test database and the sidecars carry the state, so a fresh
@@ -134,6 +139,9 @@ When `test_assets` runs clean, the scope widens to `full_assets`
 (`--only full_assets`, same command otherwise) and then to `intent-vfx`,
 and the full run without `--stop-on-gap` regenerates `doc/agents/usd_wg_assets.md`
 once every identified gap is closed (`feedback-survey-rerun-policy`).
+A full run writes fresh records without the camera fields
+`--refresh-cameras` recorded (`authored_cameras`, `imported_cameras`), so
+`--refresh-cameras` runs again after it.
 
 ## The brief
 

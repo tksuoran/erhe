@@ -30,6 +30,27 @@ and `doc/erhe/multiview.md`.
   RGBA today; transcoding straight to ASTC or BC7 would keep the controller
   textures compressed on the GPU.
 
+## Small defects to check and fix
+
+Found in passing on the Quest (2026-10-24); confirm each on the current
+code before fixing it.
+
+- MCP `request_renderdoc_capture` (`doc/agents/quest_renderdoc_capture.md`)
+  is built but has never been exercised on the device: take one capture
+  through it.
+- The "ID Render color" texture (`id_renderer.cpp`) is transitioned to
+  `TRANSFER_SRC_OPTIMAL` with a write access mask; a transfer source needs
+  the read mask.
+- The right trigger's right-click mapping uses a threshold above 0 with no
+  hysteresis: give it press and release thresholds as
+  `headset_travel_tool.cpp` has.
+- `Hover_entry::mask` is filled with `Raytrace_node_mask` bits while its
+  consumers test the `Hover_entry::*_bit` constants: use one vocabulary.
+- `Headset_view::is_head_attached_ray_mode()` has no callers: use it or
+  remove it.
+- The controller render model's `laser_begin` joint could replace the
+  hand-authored ray origin.
+
 ## Prewarm
 
 - **Pipeline-count reporting in the shadow log line.** It reports the node

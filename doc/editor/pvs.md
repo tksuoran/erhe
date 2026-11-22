@@ -282,7 +282,10 @@ the defaults below are the ones the PVS window bakes with.
 Editor-driven runs use the headless editor (on macOS
 `build_xcode_metal_headless` and `build_xcode_metal4_headless`,
 `doc/erhe/metal_headless.md`; macOS has no headless Vulkan tree, so
-MoltenVK runs the windowed `build_xcode_vulkan`).
+MoltenVK runs the windowed `build_xcode_vulkan`). An MCP raycast once timed
+out in the Bistro miss check on the windowed Metal 3 editor (cause not
+found; the headless re-run passed): rerun such a timeout headless before
+reading it as a failure.
 
 - Unit tests (deviceless): `erhe_scene_tests` `Pvs_database.*` (indexing,
   lookup, hash, validation, staleness, release and read back through a

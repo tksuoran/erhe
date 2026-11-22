@@ -78,3 +78,38 @@ and no undo operations at all, so migrating it starts by adopting the
 Item tree expansion and sheet-window formulas, registered by the editor. The
 naming, lookup and listing side exists (D3, D12, section 4.14); each needs its
 own `visible_when` and a registering owner type on the editor side.
+
+## Interactive checks not yet made
+
+The property work of 2026-09-04 to 2026-09-22 was verified headless only.
+The user's hands-on checks in the windowed editor, with the fixes they find:
+
+- Add / Remove Property: Add Property on an empty node (Light and Camera
+  values), Create Style > Light, a style holding Camera values, Remove
+  Property and its undo.
+- Content library folders: Create Folder, rename, drag and drop onto a
+  folder, Ctrl+Z; a category property on the Materials folder inherited by
+  its materials; texture slots inherited from a folder.
+- Physics materials: friction, restitution, damping and density on a
+  physics material reaching the bodies that name it; Node_physics values
+  held by a node or style and inherited.
+- Properties window: per-owner-type sections of a multi-selection, the
+  Locks checkboxes, the Individual / Combined modes (dragging one
+  component of a mixed value changes only that component on every item,
+  as one undo entry), the material sampler rows, the brush material row
+  and the graph mesh row.
+- Light flux slider and its undo; the Layout, Grid and Brush_placement
+  holders; Add Property `Layout.type`; the Draw_mode rows.
+- Layout track extent array rows and the "Custom track sizes" actions; the
+  collision filter lists (add, remove, text edit); the joint axis groups
+  (`visible_when`, degrees, a live edit that does not rebuild the joint).
+
+## Defects found in passing
+
+- The editor logs "property 'mass': value rejected by validate callback"
+  at startup (`Dependency_property` validate path); find which write is
+  rejected and fix the writer or the validator.
+- `config/editor/mcp_tools.json` still says "attachment" for the prims below
+  a node in `set_item_flags` ("Mesh attachment") and
+  `get_item_properties` ("node attachments"); node attachments are child
+  prims now: reword both.

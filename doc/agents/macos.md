@@ -40,9 +40,32 @@ undefined symbols, on every repeat of the build. Run `cmake <build tree>`
 build. Each tree is regenerated on its own: a file added while working in the
 headless tree is missing from the windowed tree until that tree is configured.
 
+On a new Mac, `xcode-select` may point at the Command Line Tools rather
+than Xcode, and the `configure_xcode_*.sh` wrappers then find no compiler;
+`sudo xcode-select -s /Applications/Xcode.app` fixes it. Apple clang 21
+(Xcode 27) makes `-Wreturn-type` an error by default, so a non-void
+function whose per-backend `#if` branches leave a path without a return
+fails the build on every toolchain setting. `cmake --build <tree> --config
+Debug -- -IDEBuildingContinueBuildingAfterErrors=YES` reports all errors in
+one pass instead of stopping at the first failing target.
+
 Executables land in `<build>/bin/<Config>/`. The headless Metal build is
 described in `doc/erhe/metal_headless.md`; the Metal 4 backend (in progress,
 built beside Metal 3) in `doc/erhe/metal4_backend.md`.
+
+After pulling commits made on Windows or Linux, configure each tree again
+(a new dependency or source file leaves a stale tree failing on a missing
+include or symbol), build the Metal trees (code under a non-Vulkan `#if`
+branch is compiled nowhere else) and run the GPU tests there (tests added
+elsewhere have never run on Metal).
+
+In zsh an unquoted `$VAR` is not word-split: `--env $E` passes one
+argument however many words `E` holds.
+
+ImGui's `ConfigMacOSXBehaviors` swaps Cmd and Ctrl, so an ImGui shortcut
+written with `ImGuiMod_Ctrl` is Cmd on macOS, while erhe's command bindings
+see the physical Ctrl key. Tests that press ImGui shortcuts over MCP use
+`super` on Apple (`c_imgui_shortcut_modifier` in `mcp_server_tests.cpp`).
 
 ## Android and Quest builds
 

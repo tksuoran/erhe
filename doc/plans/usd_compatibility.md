@@ -12,13 +12,13 @@ than restating an item.
 ## Ranking
 
 1. Load and save on a worker, and `.usdc` / `.usdz` output ("Asynchronous
-   load" and "Binary and packaged output"). The load moves onto the asset
+   load", "One parse per file across prefab templates" and "Binary and
+   packaged output"). The load moves onto the asset
    manager's request path once the manager learns a second format; the output
    formats are what LightUSD's writer already offers.
 2. The round-trip residue ("Node-held secondary values", "Camera
-   infinite_z_far", "A writer finding of usdchecker", and the glTF finding of
-   "Physics residue"). Small, each one a value that leaves through a save and
-   does not come back, or a physics fixture case the import still drops.
+   infinite_z_far", "A writer finding of usdchecker"). Small, each one a
+   value that leaves through a save and does not come back.
 3. Shading and imaging the survey names ("A material slot that a texture graph
    feeds and that carries an authored factor", "Image formats", "An
    environment map from a DomeLight texture", "MaterialX"). The slot factor is
@@ -65,6 +65,18 @@ trips the stall watchdog there: of `simpleAssetScene.usd`'s 202 s (the design
 record, "A load of a stage holding thousands of prims"), the composition, the
 prefab templates and the attach of 6686 prims to the scene run inside one
 tick, which the watchdog reports as `usd: attach to scene`.
+
+### One parse per file across prefab templates
+
+Each prefab template a reference or payload arc names is loaded by its own
+`load_usd_prefab_template` call (`src/editor/parsers/usd.cpp`), which runs
+`erhe::usd::load_usd` and so parses and composes the target file again, once
+per template key of `Prefab_library` (`src/editor/prefabs/prefab_library.hpp`).
+`full_assets/Teapot/DrawModes.usd` loads 25 templates (the design record's
+C7), so `Teapot.usd` and `Teapot_Payload.usd` are parsed seven times each; before the load-performance fixes the template
+loads were 16 s of a 30.5 s import tick (35 calls). Closing it means a stage
+cache keyed by file for the duration of one import, so each file is parsed
+once and every template of it reads the cached stage.
 
 ### Binary and packaged output
 
@@ -157,3 +169,44 @@ provenance, which `CompositeSublayers` does not keep (the design record's X5).
 `configure_xcode_*.sh` and `configure_ninja_linux_*.sh` leave
 `ERHE_USD_LIBRARY` at `none`; turning it on there is the step that first needs
 USD on those platforms (`doc/erhe/usd.md` "Configurations").
+
+## User checks (windowed, pending)
+
+These USD features are verified headless only (unit tests, the round-trip
+script, MCP queries); each needs one hand-run in the windowed editor. The
+fixtures are under `src/erhe/usd/test/data/`, the usd-wg files under the
+usd-wg assets clone.
+
+- Asset Browser Import and Load Scene of a USD file; Save Scene of a scene
+  opened from USD; the Properties `purpose` row.
+- `references.usda`: the Hierarchy shows the instance below its carrier;
+  values inside a USD instance are editable, a structural drag and drop into
+  one is refused; reference-sourced rows show their hue and the rows of an
+  inactive prim are dimmed; dragging a USD-imported prim; the Properties
+  translation / rotation / scale rows on a prim with an `xformOp` stack
+  (`xform_ops.usda`).
+- `class_prototypes.usda`: the Style items made from class prims appear in
+  the Hierarchy, and the style picker row assigns one.
+- Properties tooltips name a value's composition origin (X5); the Scene
+  Variants combo switches a variant set, nested sets included
+  (`nested_variants.usda`).
+- `skinning.usda`: the Hierarchy shows the Skeleton, its joint prims and the
+  Skins scope; the selected and hovered bone proxy colors.
+- `texture_graph.usda` and `geometry_graph.usda`: the Hierarchy shows the
+  graph below its holding prim, and the Texture Graph / Geometry Graph window
+  opens the loaded graph; baking a texture graph updates the material that
+  uses it.
+- `folders.usda`: an empty folder survives a save, and the Materials scope
+  is not duplicated after a reopen.
+- `physics.usda`: the rigid body and joint Properties rows, save and reopen,
+  and a simulation run of the fixture.
+- `time_samples.usda`: play, edit a transform while playing, stop restores
+  the pose, save writes the edit; the animated row shows in Properties.
+  `attribute_splines.usda`: playback, and the Animation window lists the
+  property-named channels.
+- `full_assets/Teapot/DrawModes.usd`: the import, the rows match the usdview
+  reference, the Hierarchy shows the Materials scope under its carrier, the
+  Draw mode rows in Properties, picking a card selects its model prim, the
+  `Z-` card stands upright, a material edit shows live, and a save writes
+  the arc inside its variant block.
+- The Asset Browser populates after startup (its scan runs on a worker).

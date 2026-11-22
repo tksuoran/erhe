@@ -26,8 +26,8 @@ ones that match your session before starting work.
 | Writing or moving documentation under `doc/` | `doc/README.md` |
 | Delegating to sub-agents | `doc/agents/orchestration_harness.md` |
 
-The memory bank has the matching per-topic state under `memory-bank/topics/`
-(see "Memory Bank" below).
+Project skills live in `.claude/skills/<name>/SKILL.md`; Claude Code discovers
+skills only there (`.gitignore` keeps `.claude/*` out except `.claude/skills/`).
 
 ## Session handoff: `doc/plans/open_items.md`
 
@@ -232,40 +232,19 @@ tells the history of the code (that is the commit message).
 
 ## Memory Bank
 
-The Memory Bank (`memory-bank/`) holds what the repository's documents do not: traps, decisions and measured results from earlier sessions, per topic, and per-machine facts. These files are loaded automatically each session:
+The Memory Bank (`memory-bank/`) holds only what no document under `doc/` has a place for: working notes about a subject (the user's preferences for that kind of work, debugging and agent-workflow traps, measurement baselines) and per-machine facts. These files are loaded automatically each session:
 
 @memory-bank/README.md
 @memory-bank/local/context.md
 
-Outstanding work is not kept there: the tasks and their order are in `doc/plans/open_items.md` "Work order", and the state of a task is in its own document under `doc/` ("Session handoff" above).
+Everything else lives in the documents, and is never repeated in the memory bank: the tasks and their order in `doc/plans/open_items.md` "Work order", the state of a task in its own document under `doc/` ("Session handoff" above), how the code behaves in the subsystem's document, rules in this file and `doc/agents/`.
 
-Per-topic entries live in `memory-bank/topics/<topic>.md`; per-machine per-topic facts live in `memory-bank/local/<topic>.md`, indexed from `local/context.md`. Neither is loaded automatically: read the topic files that match the session's work before starting it, and write what a later session needs to know about a subject into its topic file, in plain English bullets (`memory-bank/README.md` "Writing an entry").
+Working notes live in `memory-bank/topics/<topic>.md`; per-machine per-topic facts live in `memory-bank/local/<topic>.md`, indexed from `local/context.md`. Neither is loaded automatically: read the topic file that matches the session's work before starting it. Before adding a note, look for the document that owns the fact and put it there; a note goes into a topic file only when no document does (`memory-bank/README.md` "Writing an entry").
 
 | Topic file | Holds |
 |---|---|
-| `usd` | USD compatibility: LightUSD fork, import/export, composition arcs, DrawModes, USD physics/animation, WG asset survey |
-| `property_system` | erhe::property dependency properties: node values, styles, folders, migrations, Properties window |
-| `rigging` | IK / skinning / rigging tools (paused; resume from [PAUSED_FOCUS_2026-09-27]) |
-| `physics` | Jolt/Box3D physics, jointed-body drags, convex hulls |
-| `viewport_ui` | Viewports, cameras, gizmos, grids, four view, ImGui docking, active item, asset browser, MCP UI driving |
-| `performance` | Startup profiling (Tracy), deferred brush geometry, frame-time work |
-| `tooling` | Agent tooling: orchestration harness, doc layout, CI tests, skills location, Metal headless, MCP server policy |
-| `scenes_and_assets` | Scene persistence (glTF), glTF uids, asset manager, inventory slots |
-| `editor` | Editor object lifetimes: part construction, scene-close + undo-removal reference rules, retention traps |
-| `geometry` | Geometry / geogram threading, geometry graph payload and pin rules |
-| `graphics_tests` | erhe_graphics_gpu_tests goldens (FLIP), agfx port state, per-backend results, traps |
-| `build` | CMake conventions and dependency gotchas (all platforms) |
-| `windows` | Windows-only build/clangd/VS-MCP/minidump facts |
-| `mesh_modeling` | Blender-style mesh modeling tools and operations (DONE 2026-10-01; traps; remaining work pointer) |
-| `input_bindings` | User-editable persistent input bindings: Commands overrides, Input Bindings window, input_bindings.json, MCP tools (DONE 2026-09-26) |
-| `quest` | Quest 3 / Android: open items in priority order (baseline+headset verification, unculled headset passes, GPU profile items, headset prepare phase, warts), landed fixes, traps |
-| `metal` | Metal backend on macOS: autorelease pools, render-thread threading, frame retirement, GPU fault diagnosis, macOS test status |
-| `pvs` | Potentially visible sets (complete on desktop 2026-10-31): verify recipe + reference hashes, traps, step 8 headset + open items |
-| `lod` | LOD: GPU LOD selection, LOD chains (ERHE_mesh_lod), Quest LOD results |
-| `culling` | Draw-list culling phases 1-7, GPU classification/commands, raster occlusion culling, shadow draw-list culling |
-| `render_thread` | Render thread + frame pipelining (M1/M2/M3/R phases), step history, gates, open user hand-offs |
-| `rendering` | Radiance cascades / DDGI, shadow robustness, debug line anti-aliasing, detail blend weight (height blended vertex weight) |
-| `level_tools` | Level kit shapes and pieces, Level Kit window, Brush tool kit mode, surface snap / orient, walkable area reads, next step 8 |
+| `level_tools` | Level kit work: shape-work verification preferences, UI and verify-script debugging traps, coder and review workflow traps |
+| `performance` | How the user wants optimization sessions run (one measured improvement at a time; skip work rather than add machinery) |
+| `usd` | USD work: verify-script and GPU-test traps, the DrawModes import frame-time baseline |
 
 - **User triggers**: `mb`, `update memory bank`, or `check memory bank` - read `memory-bank/README.md` and follow its instructions.
-- Follow `memory-bank/README.md`; it defines what goes where and how an entry is written.

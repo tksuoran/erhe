@@ -5,16 +5,15 @@ results a later session needs about a subject, and facts about one machine.
 
 ## What goes where
 
-- `topics/<topic>.md`: one subject each (USD, physics, level tools, ...).
-  Read the topic files that match the session's work before starting it;
-  they are not loaded automatically. The index is in `AGENTS.md` "Memory
-  Bank". A new topic file gets a row there.
+- `topics/<topic>.md`: working notes about one subject that no document
+  under `doc/` has a place for. Read the topic file that matches the
+  session's work before starting it; they are not loaded automatically.
+  The index is in `AGENTS.md` "Memory Bank". A new topic file gets a row
+  there; a topic file with no entry left is deleted.
 - `local/context.md` and `local/<topic>.md`: facts about this machine (clone
   locations, tool install paths, per-machine baselines). The directory is
   gitignored. `local/context.md` is loaded automatically and indexes the
   other local files.
-- `history.md`: a frozen archive of older entries. Nothing reads it and
-  nothing is added to it.
 
 Kept elsewhere, and never duplicated here:
 
@@ -27,6 +26,12 @@ Kept elsewhere, and never duplicated here:
 
 ## Writing an entry
 
+- First look for the document that owns the fact (the subsystem's
+  document, its plan, `doc/agents/`, `doc/testing.md`,
+  `doc/plans/open_items.md`) and write it there. An entry goes into a
+  topic file only when no document does: the user's preferences for a
+  kind of work, a debugging or agent-workflow trap, a measurement
+  baseline.
 - Plain English in short bullets, ASCII only, under a heading that names
   the subject; the writing rules of `doc/README.md` apply (present tense,
   each fact once, state what to do).
@@ -49,24 +54,10 @@ capabilities ("needs clangd >= 22"), use placeholders for paths
 machine facts go under `local/`. Secrets, tokens and keys are never written
 anywhere, and neither is their location.
 
-## Reading the older entries
+## Reading the older local entries
 
-Entries written before 2026-11-22 use a compressed notation (MBEL):
-hyphen-joined words with these operators. Read them with the legend; rewrite
-an entry in plain English when the session works on its subject.
-
-```
->  past / did / was            @  present / is              ?  future / todo
-~  approximately / range (also ≈)
-✓  done / working              ✗  failed / bug              !  important
-⚡ in progress
-:: is / defines                →  leads to / then           ←  comes from
-↔  mutual                      +  and / with                -  without
-[] section                     {} details                   () note
-|  or                          <> placeholder
-#  count                       %  percentage
-&  and / requires              || or                        ¬  not
-©  source / who said it        §  version
-```
-
-A later line overrides an earlier one on the same subject.
+The `local/` files written before 2026-11-22 use a compressed notation
+(MBEL): hyphen-joined words with operators. `>` past, `@` present, `?`
+todo, `!` important, `::` is, `{}` details, `()` note, `|` or, `+` and,
+`#` count; a later line overrides an earlier one on the same subject.
+Rewrite an entry in plain English when the session works on its subject.

@@ -176,7 +176,8 @@ these rather than clicking at a guessed offset. See
   ids, which is what a caller about to click wants.
 - **A clipped item cannot be clicked.** `visible_only` keeps the items Dear
   ImGui did not clip; `imgui_scroll` the window until the target reports
-  `visible`.
+  `visible`. A count of items depends on the scroll position unless it is
+  taken with `visible_only: false`.
 - **Choose a rotate ring by `ring_axis`, not by name.** In Euler gimbal mode
   (the Transform window shows Rotation as Euler Angles with Orthogonal Gizmo
   off) the three ring handles are the rings of the Euler order: the handle
@@ -187,6 +188,12 @@ these rather than clicking at a guessed offset. See
 - **A property row with a local value is labelled `* <name>`.** The
   asterisk marks a value set on the item itself; match both spellings when a
   checkbox click gives the property a local value.
+- **Rigs read differently from plain nodes.** Bone proxy meshes carry their
+  bone's name, so a lookup of a bone by name filters to content nodes;
+  `set_node_transform` applies the node's IK channel locks; the Move tool
+  options are session state that every launch resets; and the Transform
+  window in Local mode greys out locked translation and scale fields only
+  (rotation fields stay editable by design).
 - **Drive the gesture through the tool when the gesture is not the point.**
   `drag_selection` runs the Transform tool's drag with exact world deltas -
   as the active Move / Rotate / Scale subtool, so a translate drag of a bone

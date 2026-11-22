@@ -380,3 +380,11 @@ is started from this list alone.
     offset near zero and reports snapped, shadowing a farther pair along the
     axis that would co-locate. The alternative picks by the distance left
     after the constrained offset.
+88. The Level Kit window's Selection section (for the user to rule on): it
+    draws the same editor as the Properties window's "Kit Piece" group, so
+    a selected piece shows its rows twice; decide whether the window keeps
+    its copy.
+89. Level Check and accepted overlaps (for the user to rule on): U20
+    accepts overlapping pieces in kit-bashing, and Level Check still lists
+    every overlap as a finding; decide whether Level Check leaves overlaps
+    out by default (the overlap report stays a read the author asks for).

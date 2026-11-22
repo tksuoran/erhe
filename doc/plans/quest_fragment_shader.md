@@ -368,6 +368,8 @@ ALU-bound.
 
 ## Open
 
+- The user's worn check of the `normal_offset` shadows in the headset (the
+  last part of G-device for M1 and M2) is still to be made.
 - Where the normal offset and the light-space projection run: in the
   fragment shader (this plan's default: no varyings added to the binning
   pass) or in the vertex shader as Filament does (one vec4 varying per

@@ -43,6 +43,11 @@ Space inside a ring buffer is reclaimed by `Ring_buffer::frame_completed()`:
 sync entries are stamped with the frame index at `make_sync_entry`, so
 reclamation is at frame-fence granularity.
 
+A range that was written and closed is given back with `release()`, which
+makes its sync entry. `cancel()` on such a range makes none, so its space
+stays allocated for good (this leaked the Metal texture heap's and the
+ImGui renderer's ring space until both switched to `release()`).
+
 ## Idle reclaim
 
 Ring buffers are erased again, not just reused. After the per-buffer

@@ -77,6 +77,9 @@ opened from the Window menu or the Settings window's User Interface group
   back unchanged; entries whose bindings do not match the command's input
   kind are dropped with a warning in `logs/log.txt`, as are unparseable
   binding strings.
+- Command names are the file's keys: renaming a command orphans every user
+  override of it (the old entry is kept, the renamed command follows its
+  defaults).
 - An AI-driven run (`ERHE_AI_DRIVER=1`) neither reads nor writes the file, so
   scripted runs always see the default bindings.
 

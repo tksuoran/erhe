@@ -18,6 +18,13 @@ gap and complement each other:
 Rule of thumb for the operating agent: **LSAI for the project's own code, xmp4
 for its dependencies.**
 
+Both servers are opt-in per machine (user policy, 2026-07-07); whether a
+machine has them is recorded in `memory-bank/local/`. Without them, navigate
+with Grep / Glob (erhe's naming is consistent), `goto_definition` /
+`find_references` of the Visual Studio MCP server from an open document, and
+`clangd --check=<file>` for one file's diagnostics. A client reads its MCP
+server list at session start, so a change takes effect after a restart.
+
 This guide was written from a field test on `erhe` (Windows, ~1700 translation
 units, Ninja build). The non-obvious gotchas below are the ones that actually
 blocked it.

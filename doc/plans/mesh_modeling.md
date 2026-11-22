@@ -24,7 +24,10 @@ inherit and the Blender files each rule was read from.
   MIT-licensed and Blender is GPL. Each remaining item states its rules as
   Blender's editor exposes them; erhe code is written against erhe's own
   structures and no Blender source is transcribed. Section 5 lists the
-  Blender files for re-checking a rule.
+  Blender files for re-checking a rule. A rule an implementation adds
+  beyond what Blender exposes is checked against those files before it
+  ships: a coder-invented single-facet rule for loops on a cube was wrong,
+  while the hub rule of the walkers is Blender's own.
 - **D2. Discrete operations compose `Edit_mesh` primitives** and emit
   through `Edit_mesh_operation` (`doc/erhe/geometry.md`), so attributes
   interpolate, `edge_sharpness` propagates and the selection remaps.
@@ -131,6 +134,9 @@ correctly.
   and selection, undo and check the counts return.
 - `scripts/geometry_edit_node_order_verify.py`: one case per primitive
   swap and per node insertion, so the hierarchy order stays put.
+- Not yet checked by hand in the windowed editor: the look of the loop and
+  ring select previews, the loop cut preview, the knife gesture with a real
+  mouse and the slide rail drawing.
 - Steady-state allocation: the preview paths use persistent scratch; a
   hover frame allocates nothing (`AGENTS.md` "Run-time Memory Allocation
   Discipline"). `Edit_mesh` runs on the operation's worker and may allocate.

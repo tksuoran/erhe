@@ -25,6 +25,10 @@ set up the MSVC environment themselves, so they work from any shell. The VS
 wrappers are meant for an x64 Native Tools Command Prompt. Other VS variants:
 `configure_vs2026_vulkan_asan.bat`, `configure_vs2026_opengl.bat`,
 `configure_vs2026_opengl_asan.bat`, `configure_vs2026_opengl_no_tracy.bat`.
+A ninja tree's `CMAKE_MAKE_PROGRAM` names the bundled ninja of the Visual
+Studio install it was configured with; when that path no longer exists (a
+Visual Studio update), re-run the tree's configure wrapper rather than
+editing `CMakeCache.txt` by hand.
 
 Every executable and shared library of a build tree is written to
 `<build>/bin/` (`<build>/bin/<Config>/` under the Visual Studio generator),
@@ -61,6 +65,26 @@ refresh the database instead. (Precedent: a database predating
 `erhe_frame_pacing/frame_time_recorder.hpp` include path.) To verify a refresh
 worked without an IDE: `clangd --check=<file>` -- only `tweak:` probe failures
 in its output means the file is clean.
+
+The database needs clangd 22 or newer (`winget install LLVM.LLVM`; the
+installer does not add LLVM's `bin` directory to `PATH`). Run
+`clangd --check` inside the MSVC environment (`VsDevCmd`): without
+`INCLUDE` it guesses Visual Studio include paths that do not exist and
+standard headers fail (`std::mutex` not found), the same cascade as a stale
+database.
+
+## Minidump without a debugger
+
+When neither Visual Studio nor WinDbg is available (`doc/agents/debugging.md`
+"Missing tooling: ask, don't settle" comes first), a dump can still be read:
+write one of a live process with `MiniDumpWriteDump` through `ctypes`, parse
+it with the `minidump` Python package (exception record, modules, thread
+contexts, stack bytes) and symbolize addresses with `llvm-symbolizer
+--obj=editor.exe` (address = 0x140000000 + module offset), in its default
+output style: `--output-style=GNU` drops the blank lines that separate the
+results. Stack scanning is conservative (stale frames, bleed from other
+stacks), so it yields a hypothesis; a live debugger callstack is the
+diagnosis.
 
 ## Shell process hygiene (find.exe)
 

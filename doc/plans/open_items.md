@@ -60,7 +60,6 @@ for the user's test.
 16. Level tools and curves: the "On hold" steps of
     `doc/plans/level_tools_implementation.md` "Next steps" and the "Steps" of
     `doc/plans/curves.md` wait for the user to make them active.
-    State: `memory-bank/topics/level_tools.md`.
 17. Level kit connections: every step is built. The user's windowed test
     ("User test (windowed, pending)") and rulings ("For the user to rule
     on") of `doc/plans/level_kit_connections_implementation.md`, and the
@@ -182,6 +181,22 @@ Plans: `doc/plans/prepared_assets_design.md` (D8 per-step "Open" notes),
 
 ## Editor defects found in passing
 
+- Box3D: `ICollision_shape::get_penetration_depth()`
+  (`box3d_collision_shape.cpp`, used by `find_overlaps()`) has not been
+  compiled or run (no Box3D build tree on the machines used).
+- Curves: the USD save's warning for a Curve node (`doc/editor/curves.md`
+  "USD") has not been compiled; the build trees use
+  `ERHE_USD_LIBRARY=none`.
+- A rigid body on an animated node rewrites the node's base transform
+  each physics step, conflicting with the animated layer (seen
+  2026-09-12; not checked since).
+- Material Design icons `ICON_MDI_LINK` (U+F0337) and `ICON_MDI_BRUSH`
+  (U+F00E3) were seen rendering blank in the item tree (feature icons);
+  check the glyph range built in `imgui_renderer.cpp`
+  (`ICON_MIN_MDI`..`ICON_MAX_MDI`, `ImWchar` width).
+- Four viewports exhaust the Vulkan GPU timer pool (`s_max_gpu_timers` =
+  128, `vulkan_device.hpp`): "GPU timer slot pool exhausted" warnings
+  follow and the extra timers are inert.
 - A mouse drag that is active when its tool loses priority keeps the mouse:
   `Commands::on_mouse_button_event()` skips bindings whose host is disabled,
   so the release never reaches the command, it stays Active and
@@ -334,6 +349,26 @@ Plans: `doc/plans/prepared_assets_design.md` (D8 per-step "Open" notes),
 
 ## Interactive checks for the user
 
+- USD features verified headless only (Asset Browser import / save,
+  references and instances, styles from class prims, variants, skinning,
+  graphs, folders, physics, animation, DrawModes):
+  `doc/plans/usd_compatibility.md` "User checks (windowed, pending)".
+- Property system: the windowed checks of the 2026-09 property work
+  (`doc/plans/property_system.md` "Interactive checks not yet made").
+- Input Bindings window in the windowed build: the feel of the capture
+  modal, real keyboard chords, and the Edit Input Bindings button under
+  Settings > User Interface (`doc/editor/input_bindings.md`).
+- Cross splitter of the four view: mouse feel, the ResizeAll cursor, and
+  the "Cross splitter" dock menu toggle (`doc/erhe/imgui.md`).
+- Ctrl+A select-all in the Scene Hierarchy and the Asset Browser,
+  windowed.
+- Physics: a gizmo mouse drag of a jointed body in the windowed build (the
+  right-drag is verified; `doc/editor/physics.md`).
+- Viewport context menu (`doc/editor/windows.md` "Viewport context
+  menu"): the Level Kit entries placing at the hovered point, and a
+  windowed run. For the user's review, the orchestrator's choices: Create
+  and Paste parent under the target item; the viewport menu has no
+  Rename; a Bone is not placed.
 - Kit item drag and kit slots (`doc/editor/level_tools.md` "Dragging a kit
   item", "Kit slots"): checked headless only (`level_tools_verify.py
   --only-kit-drag`, `--only-kit-slots`); the windowed drag from the Level Kit
@@ -515,6 +550,10 @@ carrying 1,000 items.
 
 ## Verify scripts
 
+- `Mcp_test.property_row_is_addressable_by_its_label` fails in the
+  Windows headless Debug `ctest -L editor` when the working tree has the
+  user's own edits of `config/editor/desktop_windows.json` /
+  `editor_settings.json`, and passes with the committed config.
 - `scripts/viewport_input_focus_verify.py` fails check 6.1 (a brush dragged
   from the Hierarchy and dropped on a box adds one node): the drag never
   starts. `erhe::imgui::begin_drag_drop_source()` (`imgui_helpers.cpp`)

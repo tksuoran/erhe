@@ -321,6 +321,13 @@ is at Metal 3's (1.46 - 1.54 ms against 1.54 - 1.64 ms), the mean is not
 (2.0 - 2.4 ms against 1.6 - 1.8 ms: a tail of one-refresh drawable waits,
 open in that document's "Future work").
 
+Input to the Metal 3 keep or remove decision: Metal 3 still creates a
+pipeline state object on every bind of a pipeline that has none
+(`set_render_pipeline_state` in `metal_render_command_encoder.cpp`; the
+debug lines and wide lines bind every frame), 215879 creations in 3 minutes
+where Metal 4's `Pipeline_state_cache` made 75. Keeping Metal 3 means giving
+it that cache.
+
 ## 8. Heavy-scene crash in Texture_heap_impl::encode_argument_buffer
 
 Found 2026-10-31 (LOD selection step 1 gates, also with the unchanged

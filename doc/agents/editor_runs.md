@@ -145,6 +145,10 @@ py -3 scripts/mcp_call.py get_scene_lights        # call with no arguments
 py -3 scripts/mcp_call.py create_shape b64:eyJzaGFwZSI6ICJib3gifQ==   # args as base64 JSON
 ```
 
+The default scene's floor is locked (`lock_edit` plus locked viewport
+selection and transform), so a check that edits, attaches to or moves an item
+of the default scene uses the Cube.
+
 **Drive it with `scripts/mcp_call.py`** -- it handles the JSON-RPC envelope,
 the bearer token, and (via the `b64:` argument form or `-` for stdin)
 sidesteps PowerShell 5.1's quote mangling of inline JSON.
@@ -246,7 +250,9 @@ Before any testing - a verify script, a headless run, launching the windowed
 editor for the user - put the config files in a known good state, for example
 `git checkout -- config/` (the latest commit). A commit includes a config
 change only when that change is the point of the commit. The gitignored ImGui
-ini is the user's own layout state and stays as it is (above).
+ini is the user's own layout state and stays as it is (above). So are the
+untracked scenes under `res/editor/scenes/` (`Default Scene.glb` and its
+`.erhe_editor` store): an agent run may open them but never saves over them.
 
 When a test gives unexpected results, look at `git diff config/` first.
 Prefer `render_scene_image` for scene checks: it renders through an explicit

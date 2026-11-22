@@ -118,3 +118,12 @@ budget.
 - [XR](../plans/xr.md) - pipeline-count reporting, foveated / quad-view view
   counts, disabled composition passes, and the startup cost of the prewarm
   itself.
+- Desktop startup, as last profiled (2026-09-21, Windows Debug, 1.68 s to
+  frame 12): `prewarm_all` takes about 330 ms (`process_includes` 75 ms,
+  `struct_and_block_source` 50 ms generated alike for each
+  `Program_interface`, `final_source` through a stringstream 40 ms); the
+  280 ms before `run_editor()` carry no profile zone; the Release build and
+  a cold SPIR-V cache are unprofiled; and
+  `generate_facet_texture_coordinates` became slower with the flat
+  connectivity tables (560 -> 830 ms CPU in total, longest call 30 -> 110
+  ms), not yet investigated.

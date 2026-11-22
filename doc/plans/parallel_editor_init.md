@@ -19,6 +19,12 @@ the steps whose cost is large enough to matter; the rest stay serial on the
 main thread before or after the parallel section. The measured table goes in
 this plan.
 
+The last parallel build, before it was removed (2026-09-21, Windows Debug),
+ran 27 tasks for 579 ms with `Scene_builder` (456 ms) on the critical path,
+which bounds the gain at about 100 ms. Two blockers stood in the way then:
+the one init command buffer every GPU step shares, and the `.succeed()`
+edges nothing verified.
+
 ## 2. The dependency graph
 
 The steps below carry the dependency edges the former taskflow annotations

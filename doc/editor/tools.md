@@ -263,7 +263,10 @@ primitive: `begin()` takes the mesh, the primitive index and the settings and
 refuses, with the reason, a primitive without a `Geometry` or one whose base
 vertex buffer is not built yet. The vertex positions are taken through the
 node's world transform, and the value of a vertex is that of its first
-corner. Each `dab()` writes every corner of each changed vertex alike in the
+corner. A `Geometry` loaded from a scene file has no vertex-to-corner table,
+so the paint tools build it before their first write
+(`ensure_vertex_corners()`; user ruling 2026-11-22: build the table, never
+scan the corners). Each `dab()` writes every corner of each changed vertex alike in the
 masked channels (the other channels of each corner keep their values),
 patches the GPU vertex buffer, and on its first write takes the primitive's
 optimization hold. `end()` returns one `Paint_colors_operation` for the

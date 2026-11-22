@@ -142,6 +142,11 @@ conditional no-ops per frame, noted below):
 | 28 | Rendertarget | polygon_fill | rendertarget-mesh UI (hotbar quad); overlay pass that ignores camera exposure and runs after post-processing (issue #230) |
 | 29 | Rendertarget view anchored | polygon_fill | as above, for the view-anchored hotbar of the hovered view only |
 
+Content shown in some views only is scoped by a pass's filter or
+`is_enabled`, never by toggling item flags between the views of a frame:
+the draw lists mirror the flags once per frame, so the last toggle would win
+for every view (the view-anchored hotbar of pass 29 is the precedent).
+
 The order serves the GPU's early depth test (on Apple GPUs, hidden surface
 removal; doc/erhe/primitive.md "Blending classes"): a draw that writes depth
 and may discard turns it off for the draws that follow it. Every pass that

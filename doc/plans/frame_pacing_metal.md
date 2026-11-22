@@ -301,7 +301,8 @@ fullscreen counts as hidden; an agent-launched editor has no focus.
   N=2 predicts N=1: next is upshift probing with backoff (Iteration step
   3 candidate (a)), judged by C24's cadence-scoped tests.
 - 2026-10-21, iteration 2 (user decision: measure the GPU clock rather than
-  probe blind; a probe broke C2/C3/C4/C10 - stage times cannot tell a
+  probe blind, the private IOReport API is acceptable for it; a probe
+  broke C2/C3/C4/C10 - stage times cannot tell a
   clocked-down GPU from heavy load). IOReport ("GPU Stats" / "GPU
   Performance States", channel GPUPH: OFF + P1-P15, residency per state;
   DVFS table `voltage-states9` of the `pmgr` IORegistry entry, 338-1578 MHz
@@ -395,7 +396,9 @@ fullscreen counts as hidden; an agent-launched editor has no focus.
   4.6-18.7 ms).
 - 2026-10-21, Vulkan on macOS (Dell at 120 Hz, `build_xcode_vulkan`).
   KosmicKrisp exposes neither `VK_EXT_present_timing` nor
-  `VK_GOOGLE_display_timing` and stays on tier S. MoltenVK exposes
+  `VK_GOOGLE_display_timing` and stays on tier S. Its FIFO present is not
+  locked to the vsync (present interval 13.7 ms, standard deviation 3.8 ms,
+  Bistro). MoltenVK exposes
   `VK_GOOGLE_display_timing`: its `desiredPresentTime` is
   `presentDrawable:atTime:` and `actualPresentTime` the drawable's
   `presentedTime`, both `mach_absolute_time` nanoseconds (the recorder's

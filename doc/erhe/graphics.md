@@ -743,6 +743,12 @@ CPM dependencies pinned to the commits glslang's `known_good.json` names
 (`shader_variant_report.hpp`) runs the same optimizer on any module, on any
 thread.
 
+Measured when it was added (2026-10-27, RTX 5070 laptop): the default scene's
+157 programs went from 638k to 496k SPIR-V instructions, while the ray query,
+DDGI and radiance cascades trace compute shaders grew 1.5 - 1.8x (their GPU
+cost is unmeasured); the Bistro GPU frame span went from 7.84 ms to 7.70 /
+7.45 ms.
+
 ## SPIR-V cache records
 
 With `Graphics_config::spirv_cache_records` on (`auto`: on except on

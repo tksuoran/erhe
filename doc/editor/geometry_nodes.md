@@ -71,6 +71,16 @@ payloads, previews and products back, nothing else. So a warning an
 (`make_input_pin(..., true)`). A single-link pin replaces on connect and never
 accumulates.
 
+**Every geometry on a pin carries connectivity and edges.** Each node that
+produces a geometry, merges included, runs `process_for_graph()` on it; a
+consumer that meets a geometry without them fails fast on the evaluation
+worker, which no handler can catch.
+
+**External-item sources capture their geometry on the main thread.** The
+brush and scene mesh source nodes read the item's geometry before the run is
+handed to the worker, since the item's lazy geometry getters are not safe on
+the evaluation worker.
+
 **No popups inside the node canvas.** ImGui `Combo` cannot be used inside
 ax::NodeEditor, so enum parameters use arrow-stepper widgets
 (`imgui_index_stepper` / `imgui_enum_stepper`).

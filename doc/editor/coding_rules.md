@@ -105,6 +105,14 @@ out of the scene. So a cached reference must handle BOTH.
   "last selected" entry is still lockable and a part that re-resolves it
   every frame will resurrect the reference (`Selection::on_items_removed()`
   forgets those entries for exactly this reason).
+- A part that re-resolves a weak reference (`get_last_selected`) into a
+  strong member of its own every frame pins the item itself: the member is
+  what keeps the weak reference lockable, so it never expires. Keep the
+  resolved `shared_ptr` local to the use.
+- A persistent scratch that holds item `shared_ptr`s is cleared after each
+  use as well as at the point of use (capacity kept); cleared only at the
+  next use, its contents keep the items alive between uses and a closed
+  scene leaks.
 - Verify with `scripts/undo_reference_clearing_smoke_test.py` (drives a
   running editor over MCP) and the `get_editor_references` MCP query, which
   reports every such cached reference. See

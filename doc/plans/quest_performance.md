@@ -230,12 +230,17 @@ Rules of the sweep:
   measured window at an unchanged GPU clock (seen as run 0 of both GPU
   culling configurations: XR multiview +10 ms and +9 ms). Before trusting a
   single run, launch the configuration once untimed first, or rerun a
-  surprising result. The cause is not known.
+  surprising result. The cause is not known. The first run after an APK
+  install can be far slower still (11 fps against 33 - 34 fps on the
+  repeats, Bistro street path, 2026-11-08): never take it as a result.
 - Take every run with `--perfetto` and compare the eye surface's binning
   plus bin rendering (the app's own GPU work). The `XR multiview` timer
   also contains the compositor's preemptions of the eye pass, which grow
   faster than the frame (4.8 ms of a 72 ms frame, 68 ms of a 165 ms
-  frame); the XR counter's app GPU frame time leaves them out.
+  frame); the XR counter's app GPU frame time leaves them out. On the
+  Bistro street runs of 2026-11-08 the Perfetto render stages came back
+  empty (`surfaces` []): find out why from the metavr capture before
+  relying on `--perfetto` there.
 - The Bench sun's shadow map is cached in the measured window (static
   scene and light), so these runs measure shading, not shadow drawing.
 - The runs up to 09:16 used the 2026-10-27 build (stamped

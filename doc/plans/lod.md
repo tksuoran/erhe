@@ -414,7 +414,7 @@ chains render as before. Bistro numbers: `doc/erhe/meshoptimizer_integration.md`
 "Stored chains".
 
 - Measure on Bistro: Release desktop (GPU-bound viewport) and Quest, where
-  Bistro is geometry-bound (memory-bank/topics/quest.md). The Quest sweep in
+  Bistro is geometry-bound (`doc/plans/quest_performance.md`). The Quest sweep in
   `doc/reference/quest_bench_runs.md` measures 10.6 ms of binning in every
   Bistro configuration; binning scales with the submitted triangles, so it
   is the first number LOD should move. Run `scripts/quest_bench.py

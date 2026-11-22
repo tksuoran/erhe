@@ -56,6 +56,11 @@ shared by every `Mcp_test.*` case, and `mcp_editor_auth` (port 3774) is a
 dedicated editor started with a configure-time test token
 (`ERHE_MCP_TOKEN_FILE`) for `Mcp_auth_test.*`.
 
+After a shader source change the SPIR-V cache is cold, and the first
+`ctest -L editor` run of a Debug tree can fail
+`Mcp_test.get_async_status_reports_background_work` on its 60 s wait while
+the editor compiles; a second run passes. Judge that case on the second run.
+
 - Each fixture's start test runs `mcp_server_tests --start-editor`, which
   spawns `editor` detached from the repo root with its standard streams on the
   null device (a fixture setup test must exit before its dependents run, CMake
@@ -332,6 +337,16 @@ self-contained `report.html`, and `ERHE_GPU_TEST_UPDATE_GOLDENS=1` rewrites
 the goldens instead of comparing. The details are in
 [`erhe/graphics_test_coverage.md`](erhe/graphics_test_coverage.md) "Golden
 assertions".
+
+Run the OpenGL GPU tests in a Tracy tree (`build_vs2026_opengl`) as well as
+in a tree without Tracy, and once one process per case: the Tracy-only code
+paths and a fresh device per case exposed OpenGL backend defects a single
+process in a plain tree hid. The GPU tests do not log the driver line
+(`erhe.graphics.startup`, "GL Renderer") unless that logger's level is
+raised, so read the driver from there before assuming one. After a
+reconfigure, a Visual Studio incremental link can produce an
+`erhe_graphics_gpu_tests` that faults silently calling address 0 at
+`--gtest_list_tests`; delete the executable and its `.ilk` and link again.
 
 ## Shadow verification
 

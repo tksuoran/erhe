@@ -14,7 +14,7 @@ depending on the selected backend.
 
 ## Public API (Macros)
 - `ERHE_PROFILE_FUNCTION()` -- instrument current function scope
-- `ERHE_PROFILE_SCOPE(name)` -- named profiling scope
+- `ERHE_PROFILE_SCOPE(name)` -- named profiling scope; two in one block redefine the same local (MSVC C2374), so brace each one
 - `ERHE_PROFILE_COLOR(name, color)` -- colored profiling scope
 - `ERHE_PROFILE_GPU_SCOPE(name)` -- GPU profiling zone
 - `ERHE_PROFILE_GPU_CONTEXT` / `ERHE_PROFILE_FRAME_END` -- GPU context and frame markers

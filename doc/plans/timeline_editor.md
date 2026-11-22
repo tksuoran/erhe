@@ -118,6 +118,17 @@ reload the scene and re-check, and capture a screenshot of the window.
 Gesture ergonomics (dragging keys and handles, box select, snapping) are
 checked interactively by the user on the windowed build.
 
+### 9. Paused pose edits
+
+- A fly camera move, a gizmo drag or MCP `set_node_transform` on a node
+  under a paused playback adopts the paused pose first
+  (`adopt_playback_pose()`); a transform edit in the Properties window does
+  not yet, so it writes under the paused pose. Route it through the same
+  adoption.
+- Keying the injected default camera clears its `session_only` flag; an
+  undo of that keying leaves the flag cleared. Restore the flag with the
+  undo.
+
 ## Out of scope
 
 - Morph-target `WEIGHTS` channels (no morph-target rendering in erhe; the UI

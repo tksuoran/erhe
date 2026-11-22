@@ -72,6 +72,11 @@ dependencies. The configure options themselves are tabulated in
   `CPMAddPackage` `GIT_TAG` only after the commit is on GitHub.
 - Reading third-party sources: CPM fetches every dependency's sources into
   `.cpm_cache/` at configure time; read them there.
+- Geogram's submodules in the CPM cache (`OpenNL`, `amgcl`, `libMeshb`,
+  `rply` under `src/lib/geogram/third_party/`) can be left holding only
+  `.git`; the build then fails with C1083 on `nl.h` or with unresolved
+  `nl*` symbols. Run `git -C <cache dir> submodule update --init --force
+  <paths>` and configure again (the sources are needed before configure).
 
 ## Code generation
 

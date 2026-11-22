@@ -123,6 +123,15 @@ too.
   (e.g. `Viewport window`), not the summary. The script sets editor settings
   only, not `erhe_graphics.json` (`frame_pacing_tier`, `force_disable_vsync`).
 
+## Open
+
+- Find the cause of the idle gaps of tens of milliseconds between traced
+  frames under the default frame pacing (the pacer or the trace's
+  collection); `nsight_graphics.py` cannot set `frame_pacing_tier` or
+  `force_disable_vsync` to rule the pacer out.
+- Confirm that the "Trace Analysis" view works for a trace started and
+  stopped through the SDK (`start_nsight_gpu_trace`).
+
 ## Requirements
 
 - The NVIDIA driver must allow GPU performance counters for the user (GPU

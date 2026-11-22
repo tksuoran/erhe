@@ -806,6 +806,38 @@ the CPU's lead over a GPU-bound frame when no drawable is presented
 (headless): a headless Bistro load without it grew the ring buffer pool to
 138 buffers (579 MB), with it to 15 (63 MB).
 
+### Autorelease pools and object lifetime
+
+- An autorelease pool is a per-thread stack: it drains on the thread that
+  opened it, in reverse order. A pool therefore never spans a device frame
+  (acquired in M2 on the main thread, ended in R on the render thread);
+  `Scoped_transient_object_pool` opens one per call or loop iteration.
+- A command buffer still in an autorelease pool keeps its queue slot (64 by
+  default) until it deallocates: command buffers are created inside a local
+  pool and retained explicitly, as are encoders and drawables.
+- Resources reached through an argument buffer are not retained by the
+  command buffer. A stale or freed entry faults the GPU's page tables; no
+  validation message names it.
+
+### Diagnosing GPU faults
+
+- A failed command buffer logs "Metal command buffer '<label>' of frame N
+  failed: ..." (`metal_command_buffer.cpp`).
+- After two GPU faults Metal ignores every later submission
+  (`kIOGPUCommandBufferCallbackErrorSubmissionsIgnored`): rendering is dead
+  without further errors, `capture_screenshot` times out and
+  `render_scene_image` returns an empty image. Restart the editor; read
+  the first fault, not the later symptoms.
+- To find the faulting encoder, create the command buffers temporarily from
+  an `MTL::CommandBufferDescriptor` with
+  `setErrorOptions(MTL::CommandBufferErrorOptionEncoderExecutionStatus)`
+  and log the error's `description()`: it lists each encoder as Faulted,
+  Affected or Completed.
+- `MTL_DEBUG_LAYER` and `MTL_SHADER_VALIDATION` change the timing and can
+  hide a timing-dependent fault (a fault in 10 of 15 runs did not occur in
+  10 runs with them on). Reproduce with a fresh editor per run (`ctest -R`
+  on the failing tests, run again); `ctest --repeat` breaks the fixtures.
+
 ## Future work
 
 - [plans/metal_backend.md](../plans/metal_backend.md): swapchain resize, a display-time pacing tier, GPU-read draw count

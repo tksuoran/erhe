@@ -66,7 +66,8 @@ slot, that is, white.
   offers them, so a material slot set from the UI holds the `Graph_texture`,
   which a scene save persists (the `material_bindings` table). The Material
   output node still binds its own bakes into its material's slots and binds
-  them again after a load.
+  them again after a load. Scenes saved before this rule are not migrated
+  (user ruling, 2026-11-22).
 - It is `not_clonable`, like `erhe::graphics::Texture`: a deep copy would need
   the node factory's `App_context`. Duplicating a graph goes through
   serialization instead.
