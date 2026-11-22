@@ -256,7 +256,7 @@ Usage: python3 scripts/level_tools_verify.py [--editor <binary>] [--image <png p
        [--layout-image <png path>] [--group-image <png path>] [--path-image <png path>] [--only-walkable] [--only-transform] [--only-layouts]
        [--only-path-layouts] [--only-window-layout] [--only-replace] [--only-layout-selection] [--only-scatter] [--only-connectors] [--only-attachments] [--only-connector-types] [--only-polygon-floor] [--only-connection-records] [--only-property-flow] [--only-riders] [--only-surface-attachment] [--only-flow-preview] [--only-connector-snap]
        [--only-layout-indicators] [--only-region-handles] [--only-layout-handles] [--only-segment-handles] [--only-more-shapes] [--only-former-ids] [--only-layout-connectors] [--only-stairs-layout] [--only-stairs-drag-uploads]
-       [--only-piece-lights] [--piece-lights-shape <shape id>] [--only-wrap-with-path] [--only-create-menu] [--only-foliage-flag] [--only-foliage-index] [--only-foliage-paint] [--only-foliage-remove] [--only-foliage-tool]
+       [--only-piece-lights] [--piece-lights-shape <shape id>] [--only-wrap-with-path] [--only-create-menu] [--only-kit-drag] [--only-foliage-flag] [--only-foliage-index] [--only-foliage-paint] [--only-foliage-remove] [--only-foliage-tool]
        [--only-thumbnails] [--thumbnails-image <png path>] [--only-machine-kit]
 (default editor: build_ninja_linux_vulkan_headless/bin/editor when built, else build/Ninja_Vulkan_Debug/bin/editor)
 """
@@ -22619,6 +22619,206 @@ def foliage_tool_checks(editor, directory, made):
           f"closed {closed_own}, last {json.dumps(last)}, brush scene {state.get('scene_name')}")
 
 
+def check_kit_drag(editor):
+    """Dragging a kit item from the Level Kit window into a viewport (doc/editor/level_tools.md "Dragging a kit item"):
+    a hover preview at the kit mode pose, one piece and one undo entry at the release, no change to the tool's state."""
+    import curve_verify as cv  # noqa: E402 - frames the camera from the viewport's real size
+    saved = Saved_tool_settings(editor)
+    windows = shown_windows(editor, editor.scene_names())
+    scene = create_scene(editor)
+    fixtures = editor.call("level_place_pieces", {"scene_name": scene, "pieces": [
+        {"shape": "basic.floor_slab", "position": [0.0, 0.0, 0.0], "name": "kd slab", "parameters": {"width": 8.0, "depth": 8.0}},
+        {"shape": "architecture.wall", "position": [0.0, 0.0, -14.0], "name": "kd wall"}]})["pieces"]
+    editor.wait_idle()
+    slab, wall = fixtures
+    slab_top = slab["world_aabb"]["max"][1]
+    known = {p["id"] for p in fixtures}
+    viewport = cv.frame_camera(editor, scene, [0.0, 9.0, 12.0], [0.0, 0.0, 0.0],
+                               [[x, slab_top, z] for x in (-4.0, 4.0) for z in (-4.0, 4.0)])
+    hover(editor, viewport, [0.0, slab_top, 0.0])  # the window acts on the last hovered viewport
+    check("kit drag setup: the Level Kit window is open", open_window(editor, WINDOW), "")
+    saved_checks = {label: is_checked(editor, label)
+                    for label in ("Snap To Module", "Snap To Surface", "Orient To Surface", "New Seed Per Piece", "Place As Layout")}
+    settings_ok = (set_checkbox(editor, "Snap To Module", True) and set_checkbox(editor, "Snap To Surface", True)
+                   and set_checkbox(editor, "Orient To Surface", False) and set_checkbox(editor, "New Seed Per Piece", True)
+                   and set_checkbox(editor, "Place As Layout", False))
+    saved_distance = editor.call("get_surface_snap_settings", {}).get("connector_snap_distance", 0.0)
+    editor.call("set_surface_snap_settings", {"connector_snap_distance": 0.0})
+    # Kit mode with the Block, turned one rotation step: the drags must leave all of it as it is.
+    click(editor, "Block")
+    entered = wait_preview(editor, lambda r: r.get("active") and (r.get("shape") == "basic.block"))
+    hover(editor, viewport, [0.0, slab_top, 0.0])
+    editor.call("key_press", {"key": binding_input(editor, "Brush_tool.rotate_cw", "key")})
+    turned = wait_preview(editor, lambda r: (r.get("yaw_steps") or 0) != 0)
+    editor.call("select_items", {"scene_name": scene, "ids": [slab["id"]]})
+    editor.wait_idle()
+    check("kit drag setup: kit mode with the Block turned one step, the slab selected, module and surface snap, New Seed Per Piece on",
+          settings_ok and entered.get("active") and ((turned.get("yaw_steps") or 0) != 0), json.dumps(turned)[:300])
+
+    def tool_state():
+        p = preview(editor)
+        return {"tool": active_tool(editor), "kit mode": p.get("active"), "shape": p.get("shape"), "parameters": p.get("parameters"),
+                "materials": p.get("materials"), "yaw_steps": p.get("yaw_steps"),
+                "selection": sorted(i["id"] for i in editor.call("get_selection")["items"])}
+
+    def press_row(label, to):
+        rect = item_rect(editor, WINDOW, label)
+        editor.call("mouse_drag", {"from": [rect["center_x"], rect["center_y"]], "to": list(to), "frames": 12, "hold": True})
+
+    def drag_state(aim, predicate):
+        """The preview reply once the hover has reached the aimed point and the drag's preview satisfies the predicate."""
+        return wait_preview(editor, lambda r: close(r.get("hover_position") or [99, 99, 99], aim, 0.15) and predicate(r.get("kit_item_drag") or {}))
+
+    def release():
+        editor.call("mouse_release", {})
+        editor.wait_idle()
+
+    def viewport_point(point):
+        x, y = window_point(viewport, point)
+        return [float(round(x)), float(round(y))]
+
+    # A row the Brush tool does not place: the shape's defaults.
+    before = tool_state()
+    depth = undo_depth(editor)
+    first_depth = depth
+    aim = [-2.1, slab_top, 0.9]
+    press_row("Wall", viewport_point(aim))
+    held = drag_state(aim, lambda d: d.get("visible") and (d.get("shape") == "architecture.wall"))
+    drag = held.get("kit_item_drag") or {}
+    check("dragging the Wall row over the slab shows the wall's preview at a module-rounded point on the slab top, nothing placed yet",
+          drag.get("visible") and drag.get("surface_found") and (abs(drag.get("position", [9, 9, 9])[1] - slab_top) < 1.0e-4)
+          and (abs(drag["position"][0] - round(drag["position"][0])) < 1.0e-4) and (not held.get("visible"))
+          and (not new_pieces(editor, scene, known)) and (undo_depth(editor) == depth),
+          json.dumps(held)[:600])
+    release()
+    added = new_pieces(editor, scene, known)
+    placed = added[0] if len(added) == 1 else {}
+    check("releasing over the viewport places one wall at the shown pose with the shape's defaults, one undo entry; the preview ends",
+          (len(added) == 1) and (placed.get("shape") == "architecture.wall")
+          and close(placed.get("position", [9, 9, 9]), drag.get("position", [8, 8, 8]), 1.0e-5)
+          and same_rotation(placed.get("rotation_xyzw", [9, 9, 9, 9]), drag.get("rotation_xyzw", [8, 8, 8, 8]))
+          and (undo_depth(editor) == depth + 1) and (preview(editor).get("kit_item_drag") is None),
+          f"added {[(p.get('shape'), p.get('position')) for p in added]}, depth {depth} -> {undo_depth(editor)}")
+    after = tool_state()
+    check("after the drop the active tool, kit mode (shape, values, rotation steps, materials) and the selection are as before (no new seed)",
+          after == before, state_differences(before, after))
+    editor.call("undo")
+    editor.wait_idle()
+    undone = new_pieces(editor, scene, known)
+    editor.call("redo")
+    editor.wait_idle()
+    redone = new_pieces(editor, scene, known)
+    check("one undo removes the dropped wall and redo restores it",
+          (not undone) and (len(redone) == 1) and close(redone[0]["position"], placed.get("position", [9, 9, 9]), 1.0e-5),
+          f"{undone} / {redone}")
+    known |= {p["id"] for p in redone}
+
+    # The chosen row carries the window's edited values and slot materials.
+    type_into(editor, "width", "1.5")
+    material_rows = sorted(i.get("display_label") for i in imgui_items(editor, " material") if (i.get("display_label") or "").endswith(" material"))
+    chosen_material = None
+    if material_rows:
+        slot = material_rows[0][:-len(" material")]
+        current = (preview(editor).get("materials") or {}).get(slot)
+        chosen_material = "Kit Brass" if current == "Kit Stone" else "Kit Stone"
+        click(editor, material_rows[0])
+        editor.call("imgui_click", {"label": chosen_material})
+    edited = wait_preview(editor, lambda r: (abs(((r.get("parameters") or {}).get("width") or 0.0) - 1.5) < 1.0e-5)
+                          and (chosen_material in (r.get("materials") or {}).values()))
+    before = tool_state()
+    depth = undo_depth(editor)
+    aim = [2.2, slab_top, -1.8]
+    press_row("Block", viewport_point(aim))
+    held = drag_state(aim, lambda d: d.get("visible") and (d.get("shape") == "basic.block"))
+    drag = held.get("kit_item_drag") or {}
+    release()
+    added = new_pieces(editor, scene, known)
+    block = added[0] if len(added) == 1 else {}
+    check("dragging the chosen Block row after editing width 1.5 and a slot material places a block with those, at the shown pose "
+          "(the drag's rotation steps are 0: the tool's turn stays the tool's)",
+          (len(added) == 1) and (abs((block.get("parameters") or {}).get("width", 0.0) - 1.5) < 1.0e-5)
+          and (chosen_material in (block.get("materials") or {}).values())
+          and close(block.get("position", [9, 9, 9]), drag.get("position", [8, 8, 8]), 1.0e-5)
+          and same_rotation(block.get("rotation_xyzw", [9, 9, 9, 9]), [0.0, 0.0, 0.0, 1.0]) and (undo_depth(editor) == depth + 1),
+          f"edited {json.dumps(edited.get('parameters'))} {edited.get('materials')}, shown {drag.get('position')} {drag.get('rotation_xyzw')}, "
+          f"added {[(p.get('parameters'), p.get('materials'), p.get('position')) for p in added]}")
+    after = tool_state()
+    check("after the second drop the tool's kit mode keeps the edited values and its rotation steps, the selection as before",
+          after == before, state_differences(before, after))
+    known |= {p["id"] for p in added}
+
+    # Released outside every viewport: nothing placed, no preview left.
+    before = tool_state()
+    depth = undo_depth(editor)
+    aim = [-2.1, slab_top, -2.2]
+    press_row("Wall", viewport_point(aim))
+    shown = drag_state(aim, lambda d: d.get("visible"))
+    back = item_rect(editor, WINDOW, "Block")
+    editor.call("mouse_wheel", {"x": back["center_x"], "y": back["center_y"], "dy": 0.0})
+    left = wait_preview(editor, lambda r: r.get("kit_item_drag") is None)
+    release()
+    after = tool_state()
+    check("a drag over the viewport and back to the Level Kit window: the preview ends on leaving, the release places nothing, "
+          "the undo stack and the tool's state are unchanged",
+          bool((shown.get("kit_item_drag") or {}).get("visible")) and (left.get("kit_item_drag") is None)
+          and (not new_pieces(editor, scene, known)) and (undo_depth(editor) == depth)
+          and (preview(editor).get("kit_item_drag") is None) and (after == before),
+          f"shown {json.dumps(shown.get('kit_item_drag'))[:200]}, left {left.get('kit_item_drag')}, {state_differences(before, after)}")
+
+    # Onto a placed wall's free end connector within Connector Snap: placed joined.
+    aabb = wall["world_aabb"]
+    end_x, length, height = aabb["max"][0], aabb["max"][0] - aabb["min"][0], aabb["max"][1]
+    wall_z, half_t = 0.5 * (aabb["min"][2] + aabb["max"][2]), 0.5 * (aabb["max"][2] - aabb["min"][2])
+    editor.call("set_surface_snap_settings", {"connector_snap_distance": 0.5})
+    viewport = cv.frame_camera(editor, scene, [end_x + 4.0, 2.0, wall_z + 4.0], [end_x, 0.5, wall_z],
+                               [[x, y, wall_z + z] for x in (end_x - 1.0, end_x + length) for y in (0.0, height) for z in (-half_t, half_t)])
+    before = tool_state()
+    depth = undo_depth(editor)
+    end_aim = [end_x, 0.2, wall_z]
+    hover(editor, viewport, end_aim)
+    press_row("Wall", viewport_point(end_aim))
+    held = drag_state(end_aim, lambda d: d.get("visible"))
+    join = held.get("connector_join") or {}
+    drag = held.get("kit_item_drag") or {}
+    release()
+    added = new_pieces(editor, scene, known)
+    joined = added[0] if len(added) == 1 else {"id": -1}
+    records = editor.call("level_get_connections", {"scene_name": scene, "node_id": wall["id"]})["connections"]
+    check("dragging the Wall row onto a wall's end face near its free 'end' connector previews the join and places the wall joined: "
+          "the target records the connection",
+          (join.get("target_piece_id") == wall["id"]) and (join.get("target_connector") == "end") and (len(added) == 1)
+          and close(joined.get("position", [9, 9, 9]), drag.get("position", [8, 8, 8]), 1.0e-5) and (undo_depth(editor) == depth + 1)
+          and any((r.get("other_id") == joined["id"]) and r.get("joined") for r in records),
+          f"join {join}, added {[p.get('position') for p in added]}, records {json.dumps(records)[:300]}")
+    after = tool_state()
+    check("after the joined drop the tool's state is as before", after == before, state_differences(before, after))
+
+    # The pose of a kit mode click at the first drag's pointer position, with the dropped pieces undone.
+    editor.call("set_surface_snap_settings", {"connector_snap_distance": 0.0})
+    while undo_depth(editor) > first_depth:
+        editor.call("undo")
+        editor.wait_idle()
+    viewport = cv.frame_camera(editor, scene, [0.0, 9.0, 12.0], [0.0, 0.0, 0.0],
+                               [[x, slab_top, z] for x in (-4.0, 4.0) for z in (-4.0, 4.0)])
+    click(editor, "Wall")
+    wait_preview(editor, lambda r: r.get("active") and (r.get("shape") == "architecture.wall"))
+    aim = [-2.1, slab_top, 0.9]
+    hover(editor, viewport, aim)
+    kit_mode = wait_preview(editor, lambda r: r.get("visible") and close(r.get("hover_position") or [99, 99, 99], aim, 0.15))
+    check("a kit mode Wall at the first drag's pointer position previews the pose the dropped wall was placed at, at the same values",
+          close(kit_mode.get("position", [9, 9, 9]), placed.get("position", [8, 8, 8]), 1.0e-5)
+          and same_rotation(kit_mode.get("rotation_xyzw", [9, 9, 9, 9]), placed.get("rotation_xyzw", [8, 8, 8, 8]))
+          and (kit_mode.get("mesh_key") == placed.get("mesh_key")),
+          f"kit mode {kit_mode.get('position')} {kit_mode.get('mesh_key')}, dropped {placed.get('position')} {placed.get('mesh_key')}")
+
+    editor.call("set_surface_snap_settings", {"connector_snap_distance": saved_distance})
+    for label, value in saved_checks.items():
+        set_checkbox(editor, label, value)
+    saved.restore()
+    editor.close(scene)
+    hide_windows_shown_since(editor, windows)
+
+
 def check_foliage_tool_exit(editor):
     """Plan check 11: request_exit with a stroke held open ends the editor cleanly - the shutdown abandons the stroke.
     The run's last act on its own editor, after the end-of-run state check."""
@@ -22730,6 +22930,7 @@ def main():
     parser.add_argument("--only-foliage-paint", action="store_true", help="run the foliage paint stroke checks alone: level_foliage_paint (FD6, FD9)")
     parser.add_argument("--only-foliage-remove", action="store_true", help="run the foliage remove stroke checks alone: level_foliage_remove (FD10)")
     parser.add_argument("--only-foliage-tool", action="store_true", help="run the Foliage Paint tool checks alone: the drags, the wheel, Escape, the context menu and the live edit rules of a held stroke (FD11, FD13.2)")
+    parser.add_argument("--only-kit-drag", action="store_true", help="run the checks of dragging a kit item from the Level Kit window into a viewport alone")
     parser.add_argument("--only-create-menu", action="store_true", help="run the checks of path stairs from the UI and the Create menu's Level Kit submenu alone (U46, U47)")
     parser.add_argument("--only-wrap-with-path", action="store_true", help="run the Wrap with Path checks alone (MCP and the Scene Hierarchy context menu, U45)")
     parser.add_argument("--only-former-ids", action="store_true", help="run the checks of the former shape ids alone (U55)")
@@ -22948,6 +23149,8 @@ def main():
             groups = [("foliage tool", check_foliage_tool, work)]
         elif args.only_create_menu:
             groups = [("create menu", check_create_menu)]
+        elif args.only_kit_drag:
+            groups = [("kit drag", check_kit_drag)]
         elif args.only_piece_lights:
             groups = [("piece lights", check_piece_lights, work, args.piece_lights_shape)]
         elif args.only_region_handles:
@@ -23021,6 +23224,7 @@ def main():
                 ("piece lights", check_piece_lights, work, args.piece_lights_shape),
                 ("wrap with path", check_wrap_with_path, work),
                 ("create menu", check_create_menu),
+                ("kit drag", check_kit_drag),
                 ("foliage flag", check_foliage_flag, work),
                 ("Level Kit window foliage brush", level_kit_window(lambda e, s, _: check_foliage_brush(e, s))),
                 ("foliage index", check_foliage_index, work),

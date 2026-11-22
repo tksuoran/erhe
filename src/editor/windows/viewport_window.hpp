@@ -7,6 +7,7 @@
 
 #include <glm/glm.hpp>
 
+#include <cstdint>
 #include <memory>
 
 namespace erhe::imgui {
@@ -82,6 +83,10 @@ private:
     void update_title_from_scene   ();
     void drag_and_drop_target      (float min_x, float min_y, float max_x, float max_y);
     void cancel_brush_drag_and_drop();
+    // A kit item dragged from the Level Kit window: the Brush tool previews it here and a release places it
+    // (doc/editor/level_tools.md "Dragging a kit item"). Returns whether the drag is over this viewport.
+    [[nodiscard]] auto kit_item_drag_and_drop(const ImGuiPayload& payload) -> bool;
+    void end_kit_item_drag_and_drop();
     // glTF dragged from the Asset browser: while hovering (preview) draw the
     // asset's cached AABB as a wireframe box at the drop position; on drop
     // (delivery) instantiate the file as a prefab there. The position is the
@@ -96,6 +101,7 @@ private:
     int                                                m_active_scene_tint_count{0};
     bool                                               m_was_focused{false};
     bool                                               m_brush_drag_and_drop_active{false};
+    std::uint64_t                                      m_kit_item_token{0}; // of the kit item drag previewed here; 0: none
     bool                                               m_viewport_child_window_focused{false};
     bool                                               m_drawn_last_frame{false};
     // Pointer over the viewport image for the scene view hover (picking, hover

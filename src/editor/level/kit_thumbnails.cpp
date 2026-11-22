@@ -518,6 +518,32 @@ auto Kit_thumbnails::draw(const Kit_shape_definition& shape, const float size) -
     return clicked;
 }
 
+void Kit_thumbnails::draw_image(const Kit_shape_definition& shape, const float size)
+{
+    const std::size_t    shape_index = get_shape_index(shape);
+    const Kit_thumbnail& thumbnail   = m_thumbnails[shape_index];
+    const float          side        = std::floor(size);
+    if (!thumbnail.has_image || !m_texture) {
+        ImGui::Dummy(ImVec2{side, side});
+        return;
+    }
+    const bool                   layer_views    = !m_layer_views.empty();
+    erhe::imgui::Imgui_renderer& imgui_renderer = *m_context.imgui_renderer;
+    static_cast<void>(imgui_renderer.image(
+        erhe::imgui::Draw_texture_parameters{
+            .texture_reference = layer_views ? m_layer_views[shape_index] : m_texture,
+            .width             = static_cast<int>(side),
+            .height            = static_cast<int>(side),
+            .uv0               = imgui_renderer.get_rtt_uv0(),
+            .uv1               = imgui_renderer.get_rtt_uv1(),
+            .filter            = erhe::graphics::Filter::linear,
+            .mipmap_mode       = erhe::graphics::Sampler_mipmap_mode::linear,
+            .array_layer       = layer_views ? -1 : static_cast<int>(shape_index),
+            .debug_label       = "Kit_thumbnails::draw_image()"
+        }
+    ));
+}
+
 void Kit_thumbnails::make_texture(erhe::graphics::Command_buffer& command_buffer)
 {
     erhe::graphics::Device& device      = *m_context.graphics_device;

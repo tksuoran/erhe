@@ -3,6 +3,8 @@
 #include "level/kit_connection_flow.hpp"
 #include "level/kit_connector.hpp"
 #include "level/kit_connector_indicators.hpp"
+#include "level/kit_item.hpp"
+#include "level/kit_item_payload.hpp"
 #include "level/kit_layout_indicators.hpp"
 #include "level/kit_layout.hpp"
 #include "level/kit_piece.hpp"
@@ -746,6 +748,13 @@ public:
 
     // The Level Kit window's shape thumbnails (doc/editor/level_tools.md "Shape thumbnails").
     [[nodiscard]] auto get_thumbnails() -> Kit_thumbnails&;
+
+    // The kit item of the drag in flight (doc/editor/level_tools.md "Dragging a kit item"): a new drag replaces the
+    // item, and the payload's token names it until the drag ends.
+    [[nodiscard]] auto begin_kit_item_drag(const Kit_item& item) -> Kit_item_payload;
+    // The dragged item the payload names; null when its drag ended or another drag began.
+    [[nodiscard]] auto find_dragged_kit_item(const Kit_item_payload& payload) const -> const Kit_item*;
+    void end_kit_item_drag();
 
     // Validates every placement, then places all of them as one Compound_operation (one undo entry).
     [[nodiscard]] auto place(Scene_root& scene_root, std::span<const Kit_placement> placements, Kit_snap snap) -> Kit_place_result;
@@ -1523,6 +1532,9 @@ private:
     // By palette material name.
     std::map<std::string, std::shared_ptr<erhe::primitive::Material>> m_preview_materials;
     std::unique_ptr<Kit_thumbnails>                                   m_thumbnails;
+    Kit_item                                                          m_dragged_kit_item;
+    std::uint64_t                                                     m_dragged_kit_item_token{0}; // 0: no drag
+    std::uint64_t                                                     m_last_kit_item_token   {0};
 
     // The live parameter drag (D3.6): the piece, its state from before the drag and the brush shown.
     class Parameter_preview

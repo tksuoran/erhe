@@ -170,6 +170,15 @@ drag-and-drop preview or selecting a brush in a content library - or another
 tool leaves kit mode (`leave_kit_mode()`). `level_get_placement_preview` reads
 the kit mode state over MCP.
 
+The tool holds two `Kit_brush_source`s: its own kit mode state and the kit item
+of a drag from the Level Kit window over a viewport (`begin_kit_item_preview()`,
+`end_kit_item_preview()`, `drop_kit_item()`; `doc/editor/level_tools.md`
+"Dragging a kit item"). While a drag is over a viewport, the preview, the pose,
+the connector join and the insert read the drag's source, whether or not the
+tool is active or in kit mode; `get_kit_shape()`, `get_kit_values()`,
+`get_kit_slot_materials()` and `get_kit_yaw_steps()` keep reporting the tool's
+own state, which the drag leaves as it was.
+
 ## Copies
 
 A brush instance's collision shape is runtime state of its scene's

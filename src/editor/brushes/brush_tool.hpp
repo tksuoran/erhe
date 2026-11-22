@@ -3,6 +3,7 @@
 #include "tools/tool.hpp"
 #include "assets/asset_reference.hpp"
 #include "brushes/reference_frame.hpp"
+#include "level/kit_item_payload.hpp"
 #include "level/kit_shape.hpp"
 #include "level/level_kits.hpp"
 #include "scene/scene_view.hpp"
@@ -98,6 +99,20 @@ public:
     float                            distance        {0.0f}; // from the hover point to the target connector
 };
 
+// What kit mode places: the tool's own (the Level Kit window's choice) or a dragged kit item's.
+class Kit_brush_source
+{
+public:
+    void clear();
+
+    Kit_parameter_values                                    values;
+    std::shared_ptr<Brush>                                  brush;             // set while the source is in use
+    std::vector<std::string>                                slot_materials;    // palette names, one per slot
+    std::vector<std::shared_ptr<erhe::primitive::Material>> preview_materials; // their preview materials
+    std::vector<Kit_connector>                              connectors;        // the shape's at the values
+    int                                                     yaw_steps{0};
+};
+
 class Brush_tool : public Tool
 {
 public:
@@ -148,6 +163,17 @@ public:
     [[nodiscard]] auto get_kit_brush       () const -> const std::shared_ptr<Brush>&;
     [[nodiscard]] auto get_kit_slot_materials() const -> const std::vector<std::string>&;
     [[nodiscard]] auto get_kit_yaw_steps   () const -> int;
+
+    // A kit item dragged over a viewport (doc/editor/level_tools.md "Dragging a kit item"): its preview takes the place
+    // of kit mode's until the drag leaves that viewport; the tool's own kit state stays as it was. Prepare phase calls.
+    void begin_kit_item_preview(const Kit_item_payload& payload, const void* viewport);
+    void end_kit_item_preview  (const void* viewport);
+    // Places the dragged item at its preview's pose as a kit mode click would, then ends the preview.
+    void drop_kit_item         (const void* viewport);
+    [[nodiscard]] auto is_kit_item_preview        () const -> bool;
+    [[nodiscard]] auto get_kit_item_values        () const -> const Kit_parameter_values&;
+    [[nodiscard]] auto get_kit_item_slot_materials() const -> const std::vector<std::string>&;
+    [[nodiscard]] auto get_kit_item_brush         () const -> const std::shared_ptr<Brush>&;
     // The pose the preview shows and a click places; none while there is no preview.
     [[nodiscard]] auto get_kit_pose        () const -> std::optional<Kit_placement_pose>;
     // The connector join the preview shows and a click places; none while there is no joined preview.
@@ -184,6 +210,10 @@ private:
     // Choosing a palette brush in a content library leaves kit mode.
     void on_selection(const Selection_message& message);
     [[nodiscard]] auto try_insert_kit_piece() -> bool;
+    // The source the preview shows and a click places: the dragged kit item over its viewport, else the tool's own.
+    [[nodiscard]] auto kit() -> Kit_brush_source&;
+    [[nodiscard]] auto kit() const -> const Kit_brush_source&;
+    void fill_kit_source(Kit_brush_source& source, const Kit_parameter_values& values, const std::shared_ptr<Brush>& brush, std::span<const std::string> slot_materials);
     void take_next_kit_seed(const Scene_root& scene_root);
     void update_kit_preview_transform(Brush& brush, const std::optional<Hover_placement_hit>* motion_placement);
     void update_kit_join(Scene_root& scene_root, const Hover_placement_hit& placement);
@@ -285,14 +315,11 @@ private:
     std::optional<glm::vec3>           m_hover_world_position;
     std::optional<glm::vec3>           m_hover_world_normal;
 
-    // Kit mode: active while m_kit_brush is set.
-    Kit_parameter_values                       m_kit_values;
-    std::shared_ptr<Brush>                     m_kit_brush;
-    std::vector<std::string>                   m_kit_slot_materials;    // palette names, one per slot
-    std::vector<std::shared_ptr<erhe::primitive::Material>> m_kit_preview_materials; // their preview materials
-    int                                        m_kit_yaw_steps{0};
+    // Kit mode: active while m_kit.brush is set.
+    Kit_brush_source                           m_kit;
+    Kit_brush_source                           m_kit_item;                    // the dragged kit item's, while previewed
+    const void*                                m_kit_item_viewport{nullptr};  // the viewport window the drag is over
     std::optional<Kit_placement_pose>          m_kit_pose;
-    std::vector<Kit_connector>                 m_kit_connectors;          // the kit shape's at the values
     std::vector<Kit_connector>                 m_kit_target_connectors;   // hover scratch: the hovered piece's in world space
     std::optional<Kit_brush_join>              m_kit_join;
     // K9.2: the supplied values of the last join pair, kept until the pair, the target or the kit values change.

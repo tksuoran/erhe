@@ -390,6 +390,9 @@ erhe_target_sources_grouped(
     level/kit_connector_indicators.hpp
     level/kit_connector_snap.cpp
     level/kit_connector_snap.hpp
+    level/kit_item.cpp
+    level/kit_item.hpp
+    level/kit_item_payload.hpp
     level/kit_layout.cpp
     level/kit_layout_connectors.cpp
     level/kit_layout_connectors.hpp

@@ -452,6 +452,27 @@ auto Level_kits::get_thumbnails() -> Kit_thumbnails&
     return *m_thumbnails;
 }
 
+auto Level_kits::begin_kit_item_drag(const Kit_item& item) -> Kit_item_payload
+{
+    m_dragged_kit_item       = item;
+    m_dragged_kit_item_token = ++m_last_kit_item_token;
+    return Kit_item_payload{.token = m_dragged_kit_item_token};
+}
+
+auto Level_kits::find_dragged_kit_item(const Kit_item_payload& payload) const -> const Kit_item*
+{
+    return ((m_dragged_kit_item_token != 0) && (payload.token == m_dragged_kit_item_token)) ? &m_dragged_kit_item : nullptr;
+}
+
+void Level_kits::end_kit_item_drag()
+{
+    if (m_dragged_kit_item_token == 0) {
+        return;
+    }
+    m_dragged_kit_item_token = 0;
+    m_dragged_kit_item       = Kit_item{};
+}
+
 void Level_kits::on_kit_piece_record_changed(const erhe::scene::Node& node)
 {
     m_connector_indicators.forget_piece(node);

@@ -283,6 +283,32 @@ void Brush_tool::set_active_brush(const std::shared_ptr<Brush>& brush)
     m_active_brush.adopt(*m_context.asset_manager, brush);
 }
 
+void Kit_brush_source::clear()
+{
+    brush.reset();
+    slot_materials.clear();
+    preview_materials.clear();
+    connectors.clear();
+    yaw_steps = 0;
+}
+
+void Brush_tool::fill_kit_source(Kit_brush_source& source, const Kit_parameter_values& values, const std::shared_ptr<Brush>& brush, const std::span<const std::string> slot_materials)
+{
+    const Kit_shape_definition* const shape = values.get_shape();
+    source.values = values;
+    source.brush  = brush;
+    get_shape_connectors(source.values, source.connectors);
+    Level_kits& level_kits = *m_context.level_kits;
+    level_kits.get_default_slot_materials(*shape, source.slot_materials);
+    source.preview_materials.clear();
+    for (std::size_t slot = 0, end = source.slot_materials.size(); slot < end; ++slot) {
+        if ((slot < slot_materials.size()) && !slot_materials[slot].empty()) {
+            source.slot_materials[slot] = slot_materials[slot];
+        }
+        source.preview_materials.push_back(level_kits.get_preview_material(source.slot_materials[slot]));
+    }
+}
+
 void Brush_tool::set_kit_brush(const Kit_parameter_values& values, const std::shared_ptr<Brush>& brush, const std::span<const std::string> slot_materials)
 {
     const Kit_shape_definition* const shape = values.get_shape();
@@ -290,21 +316,10 @@ void Brush_tool::set_kit_brush(const Kit_parameter_values& values, const std::sh
         return;
     }
     if (get_kit_shape() != shape) {
-        m_kit_yaw_steps = 0;
+        m_kit.yaw_steps = 0;
     }
-    m_kit_values = values;
-    m_kit_brush  = brush;
     m_kit_join_flow.valid = false;
-    get_shape_connectors(m_kit_values, m_kit_connectors);
-    Level_kits& level_kits = *m_context.level_kits;
-    level_kits.get_default_slot_materials(*shape, m_kit_slot_materials);
-    m_kit_preview_materials.clear();
-    for (std::size_t slot = 0, end = m_kit_slot_materials.size(); slot < end; ++slot) {
-        if ((slot < slot_materials.size()) && !slot_materials[slot].empty()) {
-            m_kit_slot_materials[slot] = slot_materials[slot];
-        }
-        m_kit_preview_materials.push_back(level_kits.get_preview_material(m_kit_slot_materials[slot]));
-    }
+    fill_kit_source(m_kit, values, brush, slot_materials);
     // The preview takes the new brush's primitive and material when it is made again.
     remove_preview_mesh();
     on_motion();
@@ -312,56 +327,130 @@ void Brush_tool::set_kit_brush(const Kit_parameter_values& values, const std::sh
 
 void Brush_tool::leave_kit_mode()
 {
-    if (!m_kit_brush) {
+    if (!m_kit.brush) {
         return;
     }
-    m_kit_brush.reset();
-    m_kit_slot_materials.clear();
-    m_kit_preview_materials.clear();
-    m_kit_connectors.clear();
+    m_kit.clear();
+    if (m_kit_item_viewport != nullptr) {
+        return; // the drag's preview stays
+    }
     m_kit_pose.reset();
     m_kit_join_flow = Kit_join_flow{};
     remove_preview_mesh();
 }
 
+auto Brush_tool::kit() -> Kit_brush_source&
+{
+    return (m_kit_item_viewport != nullptr) ? m_kit_item : m_kit;
+}
+
+auto Brush_tool::kit() const -> const Kit_brush_source&
+{
+    return (m_kit_item_viewport != nullptr) ? m_kit_item : m_kit;
+}
+
+void Brush_tool::begin_kit_item_preview(const Kit_item_payload& payload, const void* const viewport)
+{
+    const Kit_item* const item = m_context.level_kits->find_dragged_kit_item(payload);
+    if (item == nullptr) {
+        return; // the drag ended before the queued call ran
+    }
+    const std::shared_ptr<Brush> brush = m_context.level_kits->get_brush(item->get_values());
+    if (!brush) {
+        log_scene->warn("Brush tool: the kit item made no geometry for {}", item->get_values().to_canonical_text());
+        return;
+    }
+    m_kit_item_viewport = viewport;
+    m_kit_item.yaw_steps = 0;
+    fill_kit_source(m_kit_item, item->get_values(), brush, item->get_slot_materials());
+    m_kit_pose.reset();
+    m_kit_join_flow.valid = false;
+    remove_preview_mesh();
+    on_motion();
+}
+
+void Brush_tool::end_kit_item_preview(const void* const viewport)
+{
+    if (m_kit_item_viewport != viewport) {
+        return;
+    }
+    m_kit_item_viewport = nullptr;
+    m_kit_item.clear();
+    m_kit_pose.reset();
+    m_kit_join_flow.valid = false;
+    remove_preview_mesh();
+    on_motion();
+}
+
+void Brush_tool::drop_kit_item(const void* const viewport)
+{
+    if (m_kit_item_viewport != viewport) {
+        return;
+    }
+    if (!try_insert_kit_piece()) {
+        log_scene->info("Brush tool: the dropped kit item placed nothing (no preview under the pointer)");
+    }
+    end_kit_item_preview(viewport);
+}
+
+auto Brush_tool::is_kit_item_preview() const -> bool
+{
+    return m_kit_item_viewport != nullptr;
+}
+
+auto Brush_tool::get_kit_item_values() const -> const Kit_parameter_values&
+{
+    return m_kit_item.values;
+}
+
+auto Brush_tool::get_kit_item_slot_materials() const -> const std::vector<std::string>&
+{
+    return m_kit_item.slot_materials;
+}
+
+auto Brush_tool::get_kit_item_brush() const -> const std::shared_ptr<Brush>&
+{
+    return m_kit_item.brush;
+}
+
 auto Brush_tool::is_kit_mode() const -> bool
 {
-    return static_cast<bool>(m_kit_brush);
+    return static_cast<bool>(m_kit.brush);
 }
 
 auto Brush_tool::get_kit_shape() const -> const Kit_shape_definition*
 {
-    return m_kit_brush ? m_kit_values.get_shape() : nullptr;
+    return m_kit.brush ? m_kit.values.get_shape() : nullptr;
 }
 
 auto Brush_tool::get_kit_values() const -> const Kit_parameter_values&
 {
-    return m_kit_values;
+    return m_kit.values;
 }
 
 auto Brush_tool::get_kit_brush() const -> const std::shared_ptr<Brush>&
 {
-    return m_kit_brush;
+    return m_kit.brush;
 }
 
 auto Brush_tool::get_kit_slot_materials() const -> const std::vector<std::string>&
 {
-    return m_kit_slot_materials;
+    return m_kit.slot_materials;
 }
 
 auto Brush_tool::get_kit_yaw_steps() const -> int
 {
-    return m_kit_yaw_steps;
+    return m_kit.yaw_steps;
 }
 
 auto Brush_tool::get_kit_pose() const -> std::optional<Kit_placement_pose>
 {
-    return (m_kit_brush && m_preview_node) ? m_kit_pose : std::optional<Kit_placement_pose>{};
+    return (kit().brush && m_preview_node) ? m_kit_pose : std::optional<Kit_placement_pose>{};
 }
 
 auto Brush_tool::get_kit_join() const -> std::optional<Kit_brush_join>
 {
-    return (m_kit_brush && m_preview_node) ? m_kit_join : std::optional<Kit_brush_join>{};
+    return (kit().brush && m_preview_node) ? m_kit_join : std::optional<Kit_brush_join>{};
 }
 
 auto Brush_tool::is_kit_join_suspended() const -> bool
@@ -372,7 +461,7 @@ auto Brush_tool::is_kit_join_suspended() const -> bool
 void Brush_tool::on_connector_snap_suspend_key_edge()
 {
     // A key repeat or a key outside kit mode changes nothing.
-    if (!m_kit_brush || !m_preview_node || (m_context.transform_tool == nullptr)) {
+    if (!kit().brush || !m_preview_node || (m_context.transform_tool == nullptr)) {
         return;
     }
     if (m_context.transform_tool->is_connector_snap_suspend_held() != m_kit_join_suspended) {
@@ -392,7 +481,7 @@ auto Brush_tool::get_hover_world_normal() const -> std::optional<glm::vec3>
 
 void Brush_tool::on_selection(const Selection_message& message)
 {
-    if (!m_kit_brush) {
+    if (!m_kit.brush) {
         return;
     }
     for (const std::shared_ptr<erhe::Item_base>& item : message.selection_change.newly_selected) {
@@ -421,8 +510,8 @@ auto Brush_tool::get_effective_brush() const -> std::shared_ptr<Brush>
     if (m_drag_and_drop_brush) {
         return m_drag_and_drop_brush;
     }
-    if (m_kit_brush) {
-        return m_kit_brush;
+    if (kit().brush) {
+        return kit().brush;
     }
     const std::shared_ptr<Brush> active_brush = m_active_brush.get_as<Brush>();
     if (active_brush) {
@@ -540,12 +629,12 @@ void Brush_tool::remove_preview_mesh()
 
 auto Brush_tool::try_rotate(int direction) -> bool
 {
-    if (m_kit_brush) {
+    if (kit().brush) {
         // Kit mode turns the next piece about its up axis (the surface normal with orient); seen from above, rotate_cw turns clockwise.
         // A connector join takes the steps as quarter twists about the target connector's outward axis.
         const Kit_placement_settings settings  = m_context.level_kits->get_placement_settings();
         const int                    per_turn  = std::max(1, static_cast<int>(std::lround(360.0f / std::max(1.0f, settings.rotation_step_degrees))));
-        m_kit_yaw_steps = (((m_kit_yaw_steps - direction) % per_turn) + per_turn) % per_turn;
+        kit().yaw_steps = (((kit().yaw_steps - direction) % per_turn) + per_turn) % per_turn;
         update_preview_mesh();
         return true;
     }
@@ -666,7 +755,7 @@ auto Brush_tool::try_pick() -> bool
 
 auto Brush_tool::try_insert(Brush* brush) -> bool
 {
-    if ((brush == nullptr) && m_kit_brush) {
+    if ((brush == nullptr) && kit().brush) {
         return try_insert_kit_piece();
     }
     const std::shared_ptr<Brush> active_brush = m_active_brush.get_as<Brush>();
@@ -714,8 +803,8 @@ auto Brush_tool::try_insert_kit_piece() -> bool
     }
     // The pose is final: the preview already applied the module snap and the surface options.
     Kit_placement placement;
-    placement.shape    = m_kit_values.get_shape();
-    placement.values   = m_kit_values;
+    placement.shape    = kit().values.get_shape();
+    placement.values   = kit().values;
     placement.position = m_kit_pose.value().position;
     placement.rotation = m_kit_pose.value().rotation;
     // S2.1: the snap runs again from the rested pose (it stays bit for bit) so the insert finds its support itself.
@@ -734,7 +823,7 @@ auto Brush_tool::try_insert_kit_piece() -> bool
             .gap              = 0.0f
         };
     }
-    for (const std::string& name : m_kit_slot_materials) {
+    for (const std::string& name : kit().slot_materials) {
         placement.materials.push_back(Kit_slot_material{.material = {}, .palette_name = name});
     }
     Level_kits& level_kits = *m_context.level_kits;
@@ -742,8 +831,8 @@ auto Brush_tool::try_insert_kit_piece() -> bool
     if (level_kits.get_layout_initial_values().place_as == Kit_place_as::layout) {
         Kit_layout_item item;
         item.shape      = placement.shape->id;
-        item.parameters = m_kit_values.to_canonical_text();
-        item.materials.assign(m_kit_slot_materials.begin(), m_kit_slot_materials.end());
+        item.parameters = kit().values.to_canonical_text();
+        item.materials.assign(kit().slot_materials.begin(), kit().slot_materials.end());
         // A joined pose has no surface: the layout searches down, the default (step 40).
         const glm::vec3 surface_direction = m_kit_join.has_value() ? c_default_surface_direction : m_kit_pose.value().surface_direction;
         const Kit_layout_result layout = level_kits.add_layout_initial(
@@ -761,7 +850,8 @@ auto Brush_tool::try_insert_kit_piece() -> bool
             return false;
         }
     }
-    if (level_kits.get_placement_settings().seed_per_piece == Kit_seed_per_piece::next) {
+    // A dropped kit item advances no seed: the tool's own values stay as they were.
+    if ((m_kit_item_viewport == nullptr) && (level_kits.get_placement_settings().seed_per_piece == Kit_seed_per_piece::next)) {
         take_next_kit_seed(*scene_root);
     }
     return true;
@@ -771,7 +861,7 @@ void Brush_tool::take_next_kit_seed(const Scene_root& scene_root)
 {
     // The next piece derives its masked values from the next seed at the scene's lengths (D4.5).
     Level_kits&          level_kits  = *m_context.level_kits;
-    Kit_parameter_values next_values = m_kit_values;
+    Kit_parameter_values next_values = m_kit.values;
     static_cast<void>(next_values.set_int("seed", kit_next_seed(next_values.get_seed())));
     const Kit_lengths lengths = level_kits.get_lengths(scene_root);
     next_values.resolve_derived(lengths.module, lengths.wall_height);
@@ -781,7 +871,7 @@ void Brush_tool::take_next_kit_seed(const Scene_root& scene_root)
         return;
     }
     // A copy: set_kit_brush() rewrites the member it would read.
-    const std::vector<std::string> slot_materials = m_kit_slot_materials;
+    const std::vector<std::string> slot_materials = m_kit.slot_materials;
     set_kit_brush(next_values, brush, slot_materials);
     m_context.app_message_bus->kit_values_changed.send_message(Kit_values_changed_message{});
 }
@@ -1036,7 +1126,7 @@ void Brush_tool::update_preview_mesh_node_transform(const std::optional<Hover_pl
     }
 
     Brush& brush = *shared_brush.get();
-    if (m_kit_brush && (shared_brush == m_kit_brush)) {
+    if (kit().brush && (shared_brush == kit().brush)) {
         update_kit_preview_transform(brush, motion_placement);
         return;
     }
@@ -1098,7 +1188,7 @@ void Brush_tool::update_kit_preview_transform(Brush& brush, const std::optional<
         : placement.value().position;
     // U51: placed along the normal of the surface under the pointer (the grid's normal on the grid).
     m_kit_pose = level_kits.make_placement_pose(
-        *scene_root, brush.get_bounding_box(), point, placement.value().normal, m_kit_yaw_steps, level_kits.get_placement_settings()
+        *scene_root, brush.get_bounding_box(), point, placement.value().normal, kit().yaw_steps, level_kits.get_placement_settings()
     );
     update_kit_join(*scene_root, placement.value());
     // add_preview_mesh() gave the preview the kit brush's primitive at scale 1 under the scene root;
@@ -1136,7 +1226,7 @@ void Brush_tool::update_kit_join(Scene_root& scene_root, const Hover_placement_h
     Level_kits& level_kits = *m_context.level_kits;
     const float reach      = level_kits.get_connector_snap_distance();
     if (
-        m_kit_join_suspended || !(reach > 0.0f) || m_kit_connectors.empty() || !m_kit_pose.has_value() ||
+        m_kit_join_suspended || !(reach > 0.0f) || kit().connectors.empty() || !m_kit_pose.has_value() ||
         (placement.source != Hover_placement_source::surface)
     ) {
         return;
@@ -1169,7 +1259,7 @@ void Brush_tool::update_kit_join(Scene_root& scene_root, const Hover_placement_h
     for (std::size_t i = 0, end = m_kit_target_connectors.size(); i < end; ++i) {
         // C1.9: a target no connector of the new piece is compatible with is skipped silently.
         const bool compatible = std::any_of(
-            m_kit_connectors.begin(), m_kit_connectors.end(),
+            kit().connectors.begin(), kit().connectors.end(),
             [&](const Kit_connector& connector) -> bool { return is_compatible(connector, m_kit_target_connectors[i]); }
         );
         if (!compatible) {
@@ -1191,7 +1281,7 @@ void Brush_tool::update_kit_join(Scene_root& scene_root, const Hover_placement_h
     const Kit_connector& target_local = local[nearest.value()];
     const Kit_connector* moved        = nullptr;
     float                moved_dot    = 2.0f;
-    for (const Kit_connector& connector : m_kit_connectors) {
+    for (const Kit_connector& connector : kit().connectors) {
         if (!is_compatible(connector, target_local)) {
             continue;
         }
@@ -1202,7 +1292,7 @@ void Brush_tool::update_kit_join(Scene_root& scene_root, const Hover_placement_h
         }
     }
     // The quarter twist nearest the rotation steps' yaw angle.
-    const float yaw_degrees = static_cast<float>(m_kit_yaw_steps) * level_kits.get_placement_settings().rotation_step_degrees;
+    const float yaw_degrees = static_cast<float>(kit().yaw_steps) * level_kits.get_placement_settings().rotation_step_degrees;
     // K13: a rider runs along its host, so a host and rider pair takes the half turn nearest the yaw.
     const bool  rail_pair   = is_rail_host_of(target_local, *moved) || is_rail_host_of(*moved, target_local);
     const int   twist_steps = rail_pair
@@ -1228,8 +1318,8 @@ auto Brush_tool::get_kit_join_moved_connector(const erhe::scene::Node& target, c
         flow.target_id        = target_id;
         flow.target_connector = target_connector;
         flow.connector        = moved.name;
-        flow.values           = m_kit_values;
-        flow.slot_materials   = m_kit_slot_materials;
+        flow.values           = kit().values;
+        flow.slot_materials   = kit().slot_materials;
         flow.brush.reset();
         flow.connectors.clear();
         flow.materials.clear();
@@ -1240,7 +1330,7 @@ auto Brush_tool::get_kit_join_moved_connector(const erhe::scene::Node& target, c
                 flow.brush->late_initialize();
             }
             const Brush::Scaled* const scaled = flow.brush ? flow.brush->get_scaled(1.0f) : nullptr;
-            if ((scaled == nullptr) || (scaled->part_primitives.size() != m_kit_preview_materials.size())) {
+            if ((scaled == nullptr) || (scaled->part_primitives.size() != kit().preview_materials.size())) {
                 flow.flowed = false;
                 flow.brush.reset();
             } else {
@@ -1251,7 +1341,7 @@ auto Brush_tool::get_kit_join_moved_connector(const erhe::scene::Node& target, c
                     if (!material && scene_root) {
                         material = Level_kits::find_scene_material(*scene_root, flow.slot_materials[slot]);
                     }
-                    flow.materials.push_back(material ? material : m_kit_preview_materials[slot]);
+                    flow.materials.push_back(material ? material : kit().preview_materials[slot]);
                 }
             }
         }
@@ -1267,11 +1357,11 @@ auto Brush_tool::get_kit_join_moved_connector(const erhe::scene::Node& target, c
 
 void Brush_tool::sync_kit_preview_primitives()
 {
-    if (!m_kit_brush || !m_preview_mesh || !m_preview_node) {
+    if (!kit().brush || !m_preview_mesh || !m_preview_node) {
         return;
     }
     const bool flowed = m_kit_join.has_value() && m_kit_join_flow.valid && m_kit_join_flow.flowed && m_kit_join_flow.brush;
-    const std::shared_ptr<Brush>& shown = flowed ? m_kit_join_flow.brush : m_kit_brush;
+    const std::shared_ptr<Brush>& shown = flowed ? m_kit_join_flow.brush : kit().brush;
     // Owner identity: a brush made later at a reused address is another brush.
     if (!m_kit_preview_shown.owner_before(shown) && !shown.owner_before(m_kit_preview_shown) && !m_kit_preview_shown.expired()) {
         return;
@@ -1288,7 +1378,7 @@ void Brush_tool::sync_kit_preview_primitives()
     m_preview_node->set_parent({});
     m_preview_mesh->clear_primitives();
     for (std::size_t part = 0, end = scaled->part_primitives.size(); part < end; ++part) {
-        const std::vector<std::shared_ptr<erhe::primitive::Material>>& materials = flowed ? m_kit_join_flow.materials : m_kit_preview_materials;
+        const std::vector<std::shared_ptr<erhe::primitive::Material>>& materials = flowed ? m_kit_join_flow.materials : kit().preview_materials;
         const bool has_own = (part < materials.size()) && materials[part];
         m_preview_mesh->add_primitive(scaled->part_primitives[part], has_own ? materials[part] : fallback);
     }
@@ -1303,7 +1393,7 @@ auto Brush_tool::get_kit_join_values() const -> const Kit_parameter_values*
 
 auto Brush_tool::get_kit_join_slot_materials() const -> const std::vector<std::string>&
 {
-    return (get_kit_join_values() != nullptr) ? m_kit_join_flow.slot_materials : m_kit_slot_materials;
+    return (get_kit_join_values() != nullptr) ? m_kit_join_flow.slot_materials : kit().slot_materials;
 }
 
 auto Brush_tool::apply_kit_join(
@@ -1349,7 +1439,7 @@ void Brush_tool::refresh_kit_join()
     if (target && scene_root && m_preview_node && (target->get_item_host() == scene_root.get())) {
         const std::vector<Kit_connector>& local        = m_context.level_kits->get_connector_indicators().get_local_connectors(*target);
         const Kit_connector* const        target_local = find_connector(local, join.target_connector);
-        const Kit_connector* const        moved        = find_connector(m_kit_connectors, join.connector);
+        const Kit_connector* const        moved        = find_connector(kit().connectors, join.connector);
         if ((target_local != nullptr) && (moved != nullptr)) {
             const std::optional<Kit_connector> target_world = transform_connector(*target_local, target->world_from_node());
             // K9.2: the changed target may supply other values (a floor edge's new length).
@@ -1414,7 +1504,7 @@ auto Brush_tool::is_kit_connector_joined(const Scene_root& scene_root, const erh
 
 void Brush_tool::on_kit_join_target_changed(const erhe::scene::Node* const node)
 {
-    if (!m_kit_join.has_value() || !m_kit_brush || !m_preview_node) {
+    if (!m_kit_join.has_value() || !kit().brush || !m_preview_node) {
         return;
     }
     if (node != nullptr) {
@@ -1496,9 +1586,9 @@ void Brush_tool::do_insert_operation(Brush& brush)
 void Brush_tool::add_preview_mesh(Brush& brush, const std::optional<Hover_placement_hit>* const motion_placement)
 {
     const std::shared_ptr<Brush> active_brush = m_active_brush.get_as<Brush>();
-    const bool kit_preview = m_kit_brush && (&brush == m_kit_brush.get());
+    const bool kit_preview = kit().brush && (&brush == kit().brush.get());
     const std::shared_ptr<erhe::primitive::Material> material =
-        (kit_preview && !m_kit_preview_materials.empty() && m_kit_preview_materials.front()) ? m_kit_preview_materials.front() :
+        (kit_preview && !kit().preview_materials.empty() && kit().preview_materials.front()) ? kit().preview_materials.front() :
         (active_brush && active_brush->get_material())     ? active_brush->get_material() :
                                                              get_material();
     auto* scene_view = get_hover_scene_view();
@@ -1526,10 +1616,10 @@ void Brush_tool::add_preview_mesh(Brush& brush, const std::optional<Hover_placem
     if (kit_preview) {
         // One primitive per slot with that slot's material, as the placed piece gets them.
         for (std::size_t part = 0, end = brush_scaled.part_primitives.size(); part < end; ++part) {
-            const bool has_own = (part < m_kit_preview_materials.size()) && m_kit_preview_materials[part];
-            m_preview_mesh->add_primitive(brush_scaled.part_primitives[part], has_own ? m_kit_preview_materials[part] : material);
+            const bool has_own = (part < kit().preview_materials.size()) && kit().preview_materials[part];
+            m_preview_mesh->add_primitive(brush_scaled.part_primitives[part], has_own ? kit().preview_materials[part] : material);
         }
-        m_kit_preview_shown = m_kit_brush;
+        m_kit_preview_shown = kit().brush;
     } else {
         m_preview_mesh->add_primitive(brush_scaled.primitive, material);
     }
@@ -1559,7 +1649,10 @@ void Brush_tool::update_preview_mesh(const std::optional<Hover_placement_hit>* c
     std::shared_ptr<erhe::scene::Mesh> hover_scene_mesh = m_hover.scene_mesh_weak.lock();
     std::shared_ptr<const Grid>        hover_grid       = m_hover.grid_weak.lock();
 
-    if (!m_preview_mesh && (is_enabled() || m_drag_and_drop_brush) && m_show_preview) {
+    // A drag shows its preview whether or not the tool is active (or its preview is toggled off).
+    const bool dragged = static_cast<bool>(m_drag_and_drop_brush) || (m_kit_item_viewport != nullptr);
+    const bool shown   = m_show_preview || (m_kit_item_viewport != nullptr);
+    if (!m_preview_mesh && (is_enabled() || dragged) && shown) {
         if (!brush || !m_hover.position.has_value() || (!hover_scene_mesh && !hover_grid)) {
             return;
         }
@@ -1569,10 +1662,10 @@ void Brush_tool::update_preview_mesh(const std::optional<Hover_placement_hit>* c
     }
 
     if (
-        (!m_drag_and_drop_brush && !is_enabled()) ||
+        (!dragged && !is_enabled()) ||
         !brush ||
         !m_hover.position.has_value() ||
-        !m_show_preview ||
+        !shown ||
         (!hover_scene_mesh && !hover_grid)
     ) {
         remove_preview_mesh();

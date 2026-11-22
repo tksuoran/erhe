@@ -96,6 +96,8 @@ public:
     // ImGui time: the shape's square, its image or an empty square; queues its render when none was requested. Returns
     // whether the square was clicked.
     [[nodiscard]] auto draw(const Kit_shape_definition& shape, float size) -> bool;
+    // ImGui time: the shape's image without a button (a drag tooltip), or an empty square until it exists.
+    void draw_image(const Kit_shape_definition& shape, float size);
     // Queues every shape not requested yet, as if each row were drawn (MCP request_all); needs the lengths of
     // follow_scene(). Returns the number queued.
     auto request_all() -> std::size_t;

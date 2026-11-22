@@ -10,6 +10,7 @@
 #include "brushes/brush.hpp"
 #include "brushes/brush_tool.hpp"
 #include "level/foliage_paint_tool.hpp"
+#include "level/kit_item_payload.hpp"
 #include "content_library/content_library.hpp"
 #include "editor_log.hpp"
 #include "prefabs/prefab_library.hpp"
@@ -48,6 +49,7 @@
 
 #include <array>
 #include <cstdio>
+#include <cstring>
 #include <imgui/imgui_internal.h>
 
 namespace editor {
@@ -425,12 +427,56 @@ void Viewport_window::gltf_drag_preview_and_drop(Asset_file_gltf& gltf, const bo
     }
 }
 
+auto Viewport_window::kit_item_drag_and_drop(const ImGuiPayload& payload) -> bool
+{
+    Kit_item_payload kit_item{};
+    std::memcpy(&kit_item, payload.Data, sizeof(kit_item)); // ImGui's payload buffer has no alignment guarantee
+    Brush_tool* const      brush_tool = m_app_context.brush_tool;
+    const void* const      viewport   = static_cast<const void*>(this);
+    if (payload.Delivery) {
+        // The queued drop runs before the next ImGui frame, so the preview still holds the pose shown at the release.
+        m_kit_item_token = 0;
+        m_app_context.imgui_windows->queue([brush_tool, viewport]() { brush_tool->drop_kit_item(viewport); });
+        return true;
+    }
+    if (kit_item.token != m_kit_item_token) {
+        m_kit_item_token = kit_item.token;
+        m_app_context.imgui_windows->queue([brush_tool, viewport, kit_item]() { brush_tool->begin_kit_item_preview(kit_item, viewport); });
+    }
+    return true;
+}
+
+void Viewport_window::end_kit_item_drag_and_drop()
+{
+    if (m_kit_item_token == 0) {
+        return;
+    }
+    m_kit_item_token = 0;
+    Brush_tool* const brush_tool = m_app_context.brush_tool;
+    const void* const viewport   = static_cast<const void*>(this);
+    m_app_context.imgui_windows->queue([brush_tool, viewport]() { brush_tool->end_kit_item_preview(viewport); });
+}
+
 void Viewport_window::drag_and_drop_target(float min_x, float min_y, float max_x, float max_y)
 {
     const ImGuiID drag_target_id = ImGui::GetID(static_cast<const void*>(this));
     ImRect rect{min_x, min_y, max_x, max_y};
+    bool kit_item_over = false;
+    ERHE_DEFER(
+        if (!kit_item_over) {
+            end_kit_item_drag_and_drop();
+        }
+    );
     if (ImGui::BeginDragDropTargetCustom(rect, drag_target_id)) {
         ERHE_DEFER( ImGui::EndDragDropTarget(); );
+
+        const ImGuiPayload* kit_item_payload = ImGui::AcceptDragDropPayload(
+            c_kit_item_payload_type, ImGuiDragDropFlags_AcceptBeforeDelivery | ImGuiDragDropFlags_AcceptNoDrawDefaultRect
+        );
+        if (kit_item_payload != nullptr) {
+            kit_item_over = kit_item_drag_and_drop(*kit_item_payload);
+            return;
+        }
 
         // Brush and material resource prims dragged out of the Hierarchy
         // window carry a payload named for their own class.

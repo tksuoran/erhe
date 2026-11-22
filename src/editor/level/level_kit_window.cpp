@@ -1,5 +1,6 @@
 #include "level/level_kit_window.hpp"
 
+#include "level/kit_item_payload.hpp"
 #include "level/kit_parameter_rows.hpp"
 #include "level/kit_piece.hpp"
 #include "level/kit_shape_library.hpp"
@@ -149,6 +150,12 @@ void Level_kit_window::imgui()
 {
     ERHE_PROFILE_FUNCTION();
 
+    // The dragged kit item lives while a drag payload of its type does.
+    const ImGuiPayload* const drag_payload = ImGui::GetDragDropPayload();
+    if ((drag_payload == nullptr) || !drag_payload->IsDataType(c_kit_item_payload_type)) {
+        m_context.level_kits->end_kit_item_drag();
+    }
+
     const std::shared_ptr<Viewport_scene_view> scene_view =
         (m_context.scene_views != nullptr) ? m_context.scene_views->last_scene_view() : std::shared_ptr<Viewport_scene_view>{};
     const std::shared_ptr<Scene_root> scene_root = scene_view ? scene_view->get_scene_root() : std::shared_ptr<Scene_root>{};
@@ -278,12 +285,14 @@ void Level_kit_window::shapes_imgui(const std::shared_ptr<Scene_root>& scene_roo
             if (ImGui::IsItemHovered()) {
                 ImGui::SetTooltip("%s\n%s", shape.id.c_str(), shape.description.c_str());
             }
+            kit_item_drag_source(shape, *scene_root, thumbnail_size);
             ImGui::SameLine();
             // Shown chosen while the Brush tool places this shape.
             const bool row_clicked = ImGui::Selectable(shape.display_name.c_str(), kit_shape == &shape, ImGuiSelectableFlags_None, ImVec2{0.0f, thumbnail_size});
             if (ImGui::IsItemHovered()) {
                 ImGui::SetTooltip("%s\n%s", shape.id.c_str(), shape.description.c_str());
             }
+            kit_item_drag_source(shape, *scene_root, thumbnail_size);
             if (thumbnail_clicked || row_clicked) {
                 select_shape(shape, *scene_root);
             }
@@ -295,6 +304,37 @@ void Level_kit_window::shapes_imgui(const std::shared_ptr<Scene_root>& scene_roo
         update_place_hint();
     }
     ImGui::TextWrapped("%s", m_place_hint.c_str());
+}
+
+auto Level_kit_window::make_kit_item(const Kit_shape_definition& shape, const Scene_root& scene_root) const -> Kit_item
+{
+    const Brush_tool* const brush_tool = m_context.brush_tool;
+    if ((m_shape == &shape) && (brush_tool != nullptr) && (brush_tool->get_kit_shape() == &shape)) {
+        return Kit_item{m_place_values, m_place_slot_materials};
+    }
+    std::vector<std::string> slot_materials;
+    m_context.level_kits->get_default_slot_materials(shape, slot_materials);
+    return Kit_item{m_context.level_kits->make_default_values(scene_root, shape), slot_materials};
+}
+
+void Level_kit_window::kit_item_drag_source(const Kit_shape_definition& shape, const Scene_root& scene_root, const float thumbnail_size)
+{
+    if (!ImGui::BeginDragDropSource(ImGuiDragDropFlags_None)) {
+        return;
+    }
+    // The first frame of the drag makes the item; a refused item sets no payload, so ImGui drops the drag.
+    const ImGuiPayload* const active = ImGui::GetDragDropPayload();
+    if ((active == nullptr) || !active->IsDataType(c_kit_item_payload_type)) {
+        const Kit_item item = make_kit_item(shape, scene_root);
+        if (item.is_valid()) {
+            const Kit_item_payload payload = m_context.level_kits->begin_kit_item_drag(item);
+            ImGui::SetDragDropPayload(c_kit_item_payload_type, &payload, sizeof(payload), ImGuiCond_Once);
+        }
+    }
+    m_context.level_kits->get_thumbnails().draw_image(shape, thumbnail_size);
+    ImGui::SameLine();
+    ImGui::TextUnformatted(shape.display_name.c_str());
+    ImGui::EndDragDropSource();
 }
 
 void Level_kit_window::place_parameters_imgui(const Scene_root& scene_root)

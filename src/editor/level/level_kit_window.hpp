@@ -2,6 +2,7 @@
 
 #include "app_message.hpp"
 #include "level/kit_connector.hpp"
+#include "level/kit_item.hpp"
 #include "level/kit_layout_editor.hpp"
 #include "level/kit_parameter_rows.hpp"
 #include "level/kit_shape.hpp"
@@ -91,6 +92,9 @@ private:
     void placement_settings_imgui();
     void selection_imgui        (const std::shared_ptr<Scene_root>& scene_root);
     void select_shape           (const Kit_shape_definition& shape, const Scene_root& scene_root);
+    // The row's drag source (doc/editor/level_tools.md "Dragging a kit item"): the kit item a click on the row would choose.
+    void kit_item_drag_source   (const Kit_shape_definition& shape, const Scene_root& scene_root, float thumbnail_size);
+    [[nodiscard]] auto make_kit_item(const Kit_shape_definition& shape, const Scene_root& scene_root) const -> Kit_item;
     // D3.4: the selected piece's slot takes the palette material in the queued call, one undo entry.
     void queue_slot_material    (const std::shared_ptr<Scene_root>& scene_root, const std::shared_ptr<erhe::scene::Mesh>& piece, std::size_t slot, const std::string& palette_name);
     void on_kit_values_changed  ();

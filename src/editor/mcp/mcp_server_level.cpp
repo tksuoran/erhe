@@ -2565,29 +2565,26 @@ auto Mcp_server::query_level_placement_preview(const json& args) -> std::string
             result["connector_join"]["materials"] = join_materials;
         }
     }
-    const Kit_shape_definition* const shape = brush_tool->get_kit_shape();
-    if (shape == nullptr) {
-        result["visible"] = false;
-        return make_json_content(result).dump();
-    }
-    const Kit_parameter_values&   values = brush_tool->get_kit_values();
-    const std::shared_ptr<Brush>& brush  = brush_tool->get_kit_brush();
-    const erhe::math::Aabb        bounds = brush->get_bounding_box();
-    result["shape"]      = shape->id;
-    result["parameters"] = values_json(values);
-    result["mesh_key"]   = Level_kits::get_mesh_key(values);
-    result["brush_id"]   = brush->get_id();
-    result["bounds"]     = aabb_json(bounds);
-    json materials = json::object();
-    const std::vector<std::string>& slot_materials = brush_tool->get_kit_slot_materials();
-    for (std::size_t i = 0, end = std::min(slot_materials.size(), shape->material_slots.size()); i < end; ++i) {
-        materials[shape->material_slots[i]] = slot_materials[i];
-    }
-    result["materials"]  = materials;
-
+    // The pose of the shown preview: the dragged kit item's while one is over a viewport, else kit mode's.
     const std::optional<Kit_placement_pose> pose = brush_tool->get_kit_pose();
-    result["visible"] = pose.has_value();
-    if (pose.has_value()) {
+    const bool                              kit_item_preview = brush_tool->is_kit_item_preview();
+    const auto pose_json = [&pose](const Kit_shape_definition& shape, const Kit_parameter_values& values, const std::vector<std::string>& slot_materials, Brush& brush, json& out)
+    {
+        const erhe::math::Aabb bounds = brush.get_bounding_box();
+        out["shape"]      = shape.id;
+        out["parameters"] = values_json(values);
+        out["mesh_key"]   = Level_kits::get_mesh_key(values);
+        out["brush_id"]   = brush.get_id();
+        out["bounds"]     = aabb_json(bounds);
+        json materials = json::object();
+        for (std::size_t i = 0, end = std::min(slot_materials.size(), shape.material_slots.size()); i < end; ++i) {
+            materials[shape.material_slots[i]] = slot_materials[i];
+        }
+        out["materials"] = materials;
+        out["visible"]   = pose.has_value();
+        if (!pose.has_value()) {
+            return;
+        }
         const glm::vec3 position = pose.value().position;
         const glm::quat rotation = pose.value().rotation;
         erhe::math::Aabb world_bounds{};
@@ -2599,10 +2596,32 @@ auto Mcp_server::query_level_placement_preview(const json& args) -> std::string
             };
             world_bounds.include(position + (rotation * local));
         }
-        result["position"]      = vec3_json(position);
-        result["rotation_xyzw"] = quat_json(rotation);
-        result["surface_found"] = pose.value().surface_found;
-        result["world_aabb"]    = aabb_json(world_bounds);
+        out["position"]      = vec3_json(position);
+        out["rotation_xyzw"] = quat_json(rotation);
+        out["surface_found"] = pose.value().surface_found;
+        out["world_aabb"]    = aabb_json(world_bounds);
+    };
+    if (kit_item_preview) {
+        // The item dragged from the Level Kit window (doc/editor/level_tools.md "Dragging a kit item").
+        const Kit_parameter_values& item_values = brush_tool->get_kit_item_values();
+        json drag = json{{"active", true}};
+        pose_json(*item_values.get_shape(), item_values, brush_tool->get_kit_item_slot_materials(), *brush_tool->get_kit_item_brush(), drag);
+        result["kit_item_drag"] = drag;
+    } else {
+        result["kit_item_drag"] = json(nullptr);
+    }
+    const Kit_shape_definition* const shape = brush_tool->get_kit_shape();
+    if (shape == nullptr) {
+        result["visible"] = false;
+        return make_json_content(result).dump();
+    }
+    pose_json(*shape, brush_tool->get_kit_values(), brush_tool->get_kit_slot_materials(), *brush_tool->get_kit_brush(), result);
+    if (kit_item_preview) {
+        // Kit mode's own preview is not shown while the drag's is.
+        result["visible"] = false;
+        for (const char* key : {"position", "rotation_xyzw", "surface_found", "world_aabb"}) {
+            result.erase(key);
+        }
     }
     return make_json_content(result).dump();
 }

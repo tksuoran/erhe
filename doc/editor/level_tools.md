@@ -4254,7 +4254,8 @@ Top to bottom:
   as the Properties window and `set_scene_settings` write scene settings.
 - One collapsing section per kit, one row per shape: the shape's thumbnail
   ("Shape thumbnails") and its display name (the tooltip of both is its id and
-  description); a click on either chooses the shape.
+  description); a click on either chooses the shape, and a drag from either
+  places a piece in a viewport without choosing it ("Dragging a kit item").
   Choosing a shape fills the parameter rows with its defaults at
   the scene's lengths, makes the Brush tool the active tool and hands it the kit
   brush of those values: the Brush tool is then in kit mode. The row of the
@@ -4592,6 +4593,44 @@ surface placement.
   scene's kit pieces and reads the connectors of those whose world bounds
   hold the candidate.
 
+### Dragging a kit item
+
+A shape row of the Level Kit window - its thumbnail or its name - is an ImGui
+drag source of a kit item (`Kit_item`, `kit_item.hpp`): a shape's parameter
+values (with their derive mask and seed) and one palette material name per
+slot, what a kit mode click places. The row of the shape the Brush tool places
+carries the window's parameter rows and slot material choices; any other row
+carries what a click on it would choose, the shape's defaults at the scene's
+lengths and its slots' default materials. A row whose values `validate()`
+refuses starts no drag. The drag's tooltip shows the thumbnail and the display
+name. Starting a drag chooses nothing and leaves the Brush tool as it is.
+
+The payload (type `c_kit_item_payload_type`, `kit_item_payload.hpp`) is a
+`Kit_item_payload` holding a token; `Level_kits` holds the item itself
+(`begin_kit_item_drag()` when the drag starts), a target reads it with
+`Level_kits::find_dragged_kit_item(payload)`, and the window releases it
+(`end_kit_item_drag()`) on the first frame without a payload of the type.
+
+Over a viewport the Brush tool previews the item exactly as kit mode would
+place it ("Placing in the viewport": the pose, module snap, the surface
+options, the connector join with its supplied values, the suspend key), with
+rotation steps 0, whether or not the tool is active or in kit mode. The
+viewport window queues the tool's calls (`Imgui_windows::queue()`): the
+preview begins when the drag enters the viewport and ends when it leaves it or
+the drag ends elsewhere, without placing anything. A release over the viewport
+places one piece at the shown pose in that viewport's scene, as a kit mode
+click does with the item's values and slot materials: one undo entry, the
+join included when the preview is joined (with Place As Layout, a kit layout
+node, as the click makes). After the drag - dropped or not - the active tool,
+the tool's own kit mode shape, values, rotation steps and materials, the
+window's rows and the selection are as before it; New Seed Per Piece advances
+no seed on a drop.
+
+`level_get_placement_preview` reports the dragged item's preview under
+`kit_item_drag` ("MCP"); the verify script drives a real drag
+(`mouse_drag` with `hold` from the row into the viewport, then
+`mouse_release`; `level_tools_verify.py --only-kit-drag`).
+
 ## MCP
 
 - `level_get_kits {scene_name}`: the kits and, per shape, its id, `former_ids`
@@ -4890,6 +4929,13 @@ surface placement.
   `flowed`, and with it the supplied `parameters` and `materials` the
   preview shows, "Placing in the viewport");
   `level_place_pieces` with that `connect` places the same pose.
+  `kit_item_drag`: null, or while a kit item dragged from the Level Kit window
+  is over a viewport ("Dragging a kit item") `active`, the item's `shape`,
+  `parameters`, `mesh_key`, `brush_id`, `bounds`, `materials` and `visible`,
+  with a visible preview its `position`, `rotation_xyzw`, `surface_found` and
+  `world_aabb`; the top-level pose fields are then absent and `visible` false
+  (kit mode's own preview is not shown), while `connector_join` and
+  `hover_position` are the drag's.
 - `get_surface_snap_settings {}` and `set_surface_snap_settings {snap, orient, attach, ...}`:
   the shared settings ("Surface settings").
 - `level_get_pieces {scene_name}`: every node carrying `Kit_piece`, in node id
