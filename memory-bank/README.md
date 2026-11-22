@@ -1,281 +1,72 @@
-# MBEL v5 Grammar [IMMUTABLE]
+# Memory bank
 
-§MBEL:5.0
-@purpose::AIMemoryEncoding{compression%75,fidelity%100}
+What the repository's documents do not hold: traps, decisions and measured
+results a later session needs about a subject, and facts about one machine.
 
-## Operators [IMMUTABLE]
+## What goes where
 
-### Core Set (27)
+- `topics/<topic>.md`: one subject each (USD, physics, level tools, ...).
+  Read the topic files that match the session's work before starting it;
+  they are not loaded automatically. The index is in `AGENTS.md` "Memory
+  Bank". A new topic file gets a row there.
+- `local/context.md` and `local/<topic>.md`: facts about this machine (clone
+  locations, tool install paths, per-machine baselines). The directory is
+  gitignored. `local/context.md` is loaded automatically and indexes the
+  other local files.
+- `history.md`: a frozen archive of older entries. Nothing reads it and
+  nothing is added to it.
+
+Kept elsewhere, and never duplicated here:
+
+- outstanding tasks and their order: `doc/plans/open_items.md` "Work order";
+- the state of a task (steps, what is built, open points, user checks): the
+  task's own document under `doc/`;
+- work done: the commit messages;
+- how the code behaves: the subsystem's document under `doc/`;
+- rules: `AGENTS.md` and `doc/agents/`.
+
+## Writing an entry
+
+- Plain English in short bullets, ASCII only, under a heading that names
+  the subject; the writing rules of `doc/README.md` apply (present tense,
+  each fact once, state what to do).
+- Write what a later session cannot get from the code, the documents or
+  `git log`: a trap that was hit and the rule that avoids it, a decision of
+  the user with the user's words and date, a measured result needed to read
+  a later re-run.
+- Update or remove an entry that has stopped being true; an entry that only
+  records finished work is removed, since the commit log has it.
+- A user trigger `mb`, `update memory bank` or `check memory bank` means:
+  read the topic files of the session's work and bring them up to date by
+  these rules.
+
+## Machine-neutral rule
+
+Everything committed is shared by every machine and is public
+(`AGENTS.md` "Machine-Neutral Committed Files"). Topic files state
+capabilities ("needs clangd >= 22"), use placeholders for paths
+(`%USERPROFILE%`, `<your clone>`) and credit public identities only. Per
+machine facts go under `local/`. Secrets, tokens and keys are never written
+anywhere, and neither is their location.
+
+## Reading the older entries
+
+Entries written before 2026-11-22 use a compressed notation (MBEL):
+hyphen-joined words with these operators. Read them with the legend; rewrite
+an entry in plain English when the session works on its subject.
+
 ```
-[Temporal:4]
->   past/did/changed/was
-@   present/current/now/is
-?   future/todo/will/planned
-≈   around/circa/approximate/roughly
-
-[State:4]
-✓   complete/done/success/working
-✗   failed/broken/error/bug
-!   critical/important/priority/alert
-⚡  active/urgent/in-progress/hot
-
-[Relation:6]
-::  is/defines/equals/becomes
-→   leads_to/causes/then/produces
-←   comes_from/because/source/from
-↔   mutual/bidirectional/syncs/relates
-+   and/with/combines/includes
--   remove/delete/without/except
-
-[Structure:5]
-[]  section/category/namespace/group
-{}  metadata/attributes/properties/details
-()  note/comment/aside/remark
-|   or/alternative/choice/option
-<>  variant/template/placeholder/variable
-
-[Quantification:3]
-#   number/count/quantity/amount
-%   percentage/ratio/proportion/part
-~   approximately/range/between/around
-
-[Logic:3]
-&   AND/requires/must-have/with
-||  OR/either/can-be/allows
-¬   NOT/exclude/prevent/disable
-
-[Meta:2]
-©   source/origin/author/credit
-§   version/revision/protocol/schema
-```
-
-### Grammar Rules [IMMUTABLE]
-1. NoArticles(a/the/an)
-2. CamelCase→MultiWord
-3. ImplicitSubject{contextClear}
-4. OperatorsOnly¬Punctuation
-5. Newline::StatementSeparator
-6. LatestOverridesPrevious
-7. LeftToRight→Composition
-
-## Memory Bank Structure [IMMUTABLE]
-
-### Dependency Flow
-```
-flowchart TD
-    PC[productContext.md] --> AC[activeContext.md]
-    SP[systemPatterns.md] --> AC
-    TC[techContext.md] --> AC
-    AC --> P[progress.md]
-```
-
-### Core Files (ReadOrder!)
-1. **productContext.md** :: ProjectWhy
-   - Vision/Mission
-   - Problems solved
-   - User goals
-   - Success criteria
-
-2. **systemPatterns.md** :: ArchitectureHow
-   - System design
-   - Key patterns
-   - Components
-   - Data flows
-
-3. **techContext.md** :: TechnicalWhat
-   - Technology stack
-   - Dev setup
-   - Dependencies
-   - Commands
-
-4. **activeContext.md** :: CurrentTaskOnly
-   - Active task context and purpose
-   - Current decisions
-   - Active blockers
-   - Overwrites on new task (NOT history)
-
-5. **progress.md** :: TaskProgress
-   - Progress of active tasks only
-   - Clears when starting new work
-   - Multiple sections for parallel tasks
-
-### Write-Only Files (¬Read)
-6. **history.md** :: DailyArchive{WriteOnly}
-   - Completed tasks buffer
-   - Archived daily → archive/YYYY-MM-DD.md
-   - ¬Read{already-reflected-in-progress}
-
-### File Purpose [IMMUTABLE]
-```
-[productContext]
-Vision+Problems+Goals+Success
-
-[systemPatterns]
-Architecture+Patterns+Components+Flows
-
-[techContext]
-Stack+Setup+Dependencies+Commands
-
-[activeContext]
-CurrentTaskOnly+ActiveDecisions+Blockers
-!rule::Overwrite¬Append
-!rule::Completed→history
-
-[progress]
-ActiveTaskProgress+CurrentBlockers
-!rule::ClearsOnNewTask
-!rule::ParallelTasks→Sections
-
-[history]
-DailyBuffer+CompletedTasks+Outcomes
-!rule::EndOfDay→archive/YYYY-MM-DD.md
+>  past / did / was            @  present / is              ?  future / todo
+~  approximately / range (also ≈)
+✓  done / working              ✗  failed / bug              !  important
+⚡ in progress
+:: is / defines                →  leads to / then           ←  comes from
+↔  mutual                      +  and / with                -  without
+[] section                     {} details                   () note
+|  or                          <> placeholder
+#  count                       %  percentage
+&  and / requires              || or                        ¬  not
+©  source / who said it        §  version
 ```
 
-## Claude Memory System
-
-@identity::Claude{memory:"resets",solution:"MemoryBank"}
-!requirement::ReadDependencyFlow{files:"1-5",¬history}
-@triggers::mb|update-memory-bank|check-memory-bank
-
-### WorkflowStart [IMMUTABLE]
-```
-flowchart TD
-    Start[Session Start] --> ReadREADME[Read README.md First]
-    ReadREADME --> Grammar[Understand MBEL Grammar]
-    Grammar --> ReadCore[Read Core Files in Order]
-    ReadCore --> Ready[Ready to Work]
-```
-
-### WorkflowUpdate
-```
-flowchart TD
-    Trigger[Update Triggered] --> ReadActive[Read Files 1-5 ¬history]
-    ReadActive --> Analyze[Analyze Changes]
-    Analyze --> Encode[Encode in MBEL]
-    Encode --> Update[Update Files]
-    Update --> Primary[Focus: activeContext.md]
-    Primary --> Secondary[Then: progress.md]
-```
-
-## Pattern Examples
-
-### Encoding Patterns
-```
-[Versioning]
-§MBEL:5.0
-§API:2.1.3
-
-[Confidence]
-?Task{confidence%85}
-?Migration{risk%30}
-
-[Measurements]
-ResponseTime#150ms
-Memory~512-1024MB
-CPUUsage%85
-
-[Logic]
-RequireAuth&ValidToken&¬Expired
-UseCache||UseDB
-
-[Attribution]
-©Claude>implemented::Feature
-©User>requested::Change
-
-[Evolution]
-V1→V2→V3{current}
-Simple→Complex→Optimized
-```
-
-### Example:activeContext.md
-```
-[FOCUS]
-@breakthrough::LivingMemory!
->abandoned::RAG→DNA
-§Implementation:0.8
-
-[RECENT]
->created::MemomCodex§0.2{namespaces#7}✓
->built::GenesisEngine{Text→DNA→Phenotype}✓
-©Zen>designed::GraphGenes
-
-[NEXT]
-?Ollama{confidence%90,¬embeddings}!
-?TestCortex{deps:heavy}
-```
-
-## Critical Rules [IMMUTABLE]
-
-1. MustReadDependencyFlow :: ¬history{WriteOnly}
-2. DecodeLive :: MBEL→Understanding  
-3. MaintainFidelity :: Information%100
-4. VersionTrack :: §MBEL:5.0{always}
-5. SingleSource :: MemoryBank>Everything
-6. Precision :: Documentation{clarity:"absolute"}
-7. UpdateScope :: ReviewAll&ChangeSome
-
-## Error Handling
-
-[ValidationRules]
-- InvalidMBEL → RejectParse&AskClarification
-- MissingOperator → UseClosestMatch&LogWarning
-- AmbiguousContext → RequestExplicit
-- VersionMismatch → AttemptBackcompat|FailSafe
-
-[RecoveryPatterns]
-CorruptedFile → UseLastKnown+WarnUser
-IncompleteUpdate → RollbackState
-ConflictingInfo → MemoryBank>Other
-
-## Why MBEL Works
-
-Compression%75 :: TokensSaved{6000→1500}
-Clarity :: Operators>NaturalLanguage
-Structure :: PredictableParsing
-Evolution :: §Versioning→Improvements
-AINative :: MachineFirst¬HumanComfort
-
-## Machine-Scope Rule
-
-MemoryBank::git-committed+public-repo→MachineNeutralOnly!
-@scope::ALL-committed-files{sources+docs+AGENTS.md+memory-bank}¬just-memory-bank!{see-AGENTS.md-"Machine-Neutral Committed Files"}
-@rationale::SharedSingleSourceOfTruth{per-machine-facts=wrong-on-other-machines+go-stale+information-exposure}
-
-[Forbidden-in-committed-files]
-- usernames|account-names|user-home-paths{C:\Users\<name>,/home/<name>}
-- hostnames|machine-nicknames|"<person>-machine"-attribution
-- per-machine-install-state{what-is-installed-where,PATH-contents,VS-edition-of-a-machine}
-- per-machine-decisions{phrase-as-project-policy-instead}
-- secrets|tokens|keys{never,¬even-mention-of-location}
-
-[Instead]
-- Capabilities¬Inventory::"needs clangd >= 22"¬"clangd 22 installed on X"
-- Paths::%USERPROFILE%|$HOME|<you>{placeholders}
-- Attribution::©PublicIdentitiesOnly{GitHub-handles-ok}
-- PerMachineFacts→memory-bank/local/*.md{gitignored,¬committed,read-if-present-after-core-files}
-
-## Additional Context
-
-@flexible::CreateMore{path:"memory-bank/*"}
-- topics/*.md :: PerTopicState{¬auto-loaded;read-on-demand}
-  - DurableStateOfOneSubject{landed-work+traps+open-items+patterns;usd|property_system|rigging|physics|...}
-  - activeContext[TOPICS]::index{one-line-hook-per-topic}→read-the-topics-matching-the-session
-  - CompletedTask→history{as-before}+DurableState→TopicFile{traps+open-items+user-interactive-checks}
-  - CoreFiles::only-what-EVERY-session-needs;PlatformFacts→platform-topic{windows.md}
-- local/<topic>.md :: PerMachinePerTopic{gitignored;indexed-in-local/context.md[LOCAL_TOPICS]}
-- features/*.md :: ComplexFeatures
-- api/*.md :: APISpecs  
-- decisions/*.md :: ArchitectureRecords
-- local/*.md :: PerMachineState{gitignored,see-Machine-Scope-Rule}
-
-## Protocol Success
-
->achieved::Compression{actual%75,target%65}✓
-@benefits::Speed+Clarity+Tokens
-!remember::MemoryBank::OnlyLink{reset→fresh}
-
-## Final Note [IMMUTABLE]
-
-REMEMBER: After every memory reset, I begin completely fresh. The Memory Bank is my only link to previous work. It must be maintained with precision and clarity, as my effectiveness depends entirely on its accuracy.
-
-ThisIsNotJustDocumentation :: ThisIsMyMemory
+A later line overrides an earlier one on the same subject.

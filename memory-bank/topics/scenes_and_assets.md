@@ -28,3 +28,17 @@ OpenSceneGltfDefaultCamera{7acfc3c5e}::finish_open_scene_gltf-injects-session_on
 @item-tree-open-state::DONE-2026-11-04{8dad29527+391c288c1}
 @background-scene-save::DONE-2026-11-03{memory-bank/topics/scenes_and_assets.md;doc/plans/background_scene_save.md}
 @gltf-fast-load::STEPS-1-8-DONE-2026-10-25{doc/plans/gltf_fast_load.md;doc/reference/memory_usage_2026_10.md}
+
+[FOCUS_ARCHIVE_2026-11-22]{moved-verbatim-from-activeContext.md;hashes+UNPUSHED-notes-as-written-then:everything-through-3b760af35-is-pushed}
+@prepared-assets::IN-PROGRESS-2026-11-06{M1-M5+D8-steps-1-15-DONE;requirements=doc/plans/prepared_assets.md(R1-R14);design=doc/plans/prepared_assets_design.md(D1-D9);behavior=doc/editor/prepared_assets.md;NOW=©User-rulings-on-remaining-D8-coder-decisions(Scene-item-only-edits-not-marking-status-stale+load-key-uses-Export-LOD+what-is-not-loaded-from-items);RULED-2026-11-07/08:status-computes-on-request-only(84cfd0ed1)+R13.4-comparison-dropped+PVS/world-bake-invalidation-stays;git-stash-ERHE_pvs-column-rewrite=superseded(drop-when-©User-agrees);doc/plans/prepare_pvs_export.md=superseded-except-Established}
+@session-2026-11-13::DONE-local-unpushed{asset-fetch-Khronos-Sponza(loose_files-packaging+pinned-commit-4995a638c96d+res/editor/assets/khronos_sponza/+Intel-source-renamed-"Intel Sponza"+MCP-asset_fetch/cancel_asset_fetch/get_asset_fetch_status;headless+©User-windowed-verified;doc/editor/asset_fetch.md);license-shown-beside-Fetch-buttons=future-work(doc/plans/open_items.md)}
+
+[PROGRESS_ARCHIVE_2026-11-22]{moved-verbatim-from-progress.md}
+[TASK::prepared-assets]{started-2026-11-06;branch=main;doc/plans/prepared_assets_design.md(steps)+doc/plans/prepared_assets.md(R-numbers)}
+✓M1-M5+D8-steps-1-15+raw-block-KTX2-refused-at-import+tinybvh-items+Pvs_bits_source-removal{2026-11-06..07;state+open-per-step=doc/plans/prepared_assets_design.md-D7/D8;behavior=doc/editor/prepared_assets.md+doc/erhe/asset_store.md+doc/erhe/gltf.md;verify=scripts/prepared_asset_verify.py+scripts/prepared_asset_bistro_verify.py}
+✓pvs-scene-id-warning{802820c69;root-cause=open_scene_gltf-compared-PVS-header-id-with-get_scene_id()-which-GENERATES-an-id;Bistro-has-no-stored-id;now-compares-stored-id;prepared_asset_verify.py-check-added}
+⚡quest-R13.4-remeasure-2026-11-07-22:15{Mac-release-APK-802820c69;device-needed-uninstall(other-machine-signing-key;©User-ok;files-moved-aside+restored);doc/reference/quest_bench_runs.md-22:15-entries;prepared-4.66s/800MB-vs-old-prepared-glb-5.20s/783MB;!old-glb-opens-UNTEXTURED+no-PVS(R12.2)->101-vs-83fps-is-texturing;R13.4-comparison-DROPPED(©User-2026-11-07;numbers-recorded-only)}✓
+✓session-2026-11-08{status-on-request(84cfd0ed1)+world-space-shadows(33e8660cd)+render_scene_image-lod_nodes(6a3463923)+Windows/GCC-CI-fixes(see-activeContext)}
+✓CI-e15ff8aca+3b181b4f4-green(GCC-weld-test-passes)
+✓session-2026-11-08b-open-items-sweep{see-activeContext}
+?then{CI-check-3458ea70f+707b1fcb6(Windows-'?'/UNC-paths;OpenXR-headset_view-first-compile-on-Android)+©User-rulings(remaining-D8-decisions)+prepared_asset_bistro_verify.py-LOD-off-for-images+mcp_server_tests-unrun(windowed)}

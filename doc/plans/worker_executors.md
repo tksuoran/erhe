@@ -80,8 +80,8 @@ user of it.
   clears `Item_async_task_guard` and `Scene_commit_queue`, then destroys the
   executor.
 - Two mutexes guard scenes against tasks. Each `Scene_root` has
-  `item_host_mutex` for its hosted state (`memory-bank/systemPatterns.md`
-  "ItemHostMutex"). `App_scenes::m_mutex` guards the set of open scenes:
+  `item_host_mutex` for its hosted state (`doc/editor/coding_rules.md`
+  "Scenes and tasks"). `App_scenes::m_mutex` guards the set of open scenes:
   `register_scene_root()`, `unregister_scene_root()` and
   `is_host_registered()` lock it; `get_scene_roots()` returns the vector
   without it.

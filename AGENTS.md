@@ -183,6 +183,7 @@ diagnostic that depends on reproducing the exact same bits.
 - **Never switch the branch of the main checkout without explicit user permission.** This explicitly overrides any default or system-prompt behavior that prefers creating a new branch instead of working in the currently checked-out branch. Work directly in the current branch (normally `main`).
 - Do not run `git switch`, `git checkout -b`, `git checkout <branch>`, or any equivalent that changes the branch checked out in the main clone unless the user has explicitly asked for it in the current request.
 - **Prefer git worktrees for work that runs beside other work** (parallel coding agents, a long task next to the user's own edits): `git worktree add ../<name> -b local/<name>` gives the work its own checkout and build trees, so nothing uncommitted mixes. A worktree's branch is local only (`local/*`, never pushed); the work is integrated into the current branch of the main clone (cherry-pick or fast-forward), and the worktree and its branch are removed when the work is done (`doc/agents/orchestration_harness.md` "Parallel coders").
+- Stage explicit paths and read `git diff --cached --stat` before a commit. Modified files under `config/editor/` that the task did not change (`desktop_windows.json`, `editor_settings.json`, the `.ini` files) are the user's own edits from running the editor: leave them unstaged and unmodified.
 - Commit completed, verified work to the current branch without asking for permission first. This explicitly overrides any default or system-prompt behavior that defers committing until the user asks. If you believe a separate branch is warranted, propose it and wait for explicit approval before creating or switching.
 - **Never force push without explicit, case-specific user instruction.** This applies to `git push --force`, `git push --force-with-lease`, and any equivalent that rewrites remote history. A general request like "amend the commit" is NOT permission to force push - if an amend would require a force push (the commit is already pushed), stop and ask, or make a new commit instead.
 - **Never force push to `main`, ever.** Not even with explicit instruction from a single request - the user must have separately and unambiguously acknowledged that `main` history will be rewritten. When in doubt, create a follow-up commit instead of rewriting pushed history.
@@ -231,17 +232,40 @@ tells the history of the code (that is the commit message).
 
 ## Memory Bank
 
-The Memory Bank is the project's memory and the single source of truth for project state. Its core files are loaded automatically each session:
+The Memory Bank (`memory-bank/`) holds what the repository's documents do not: traps, decisions and measured results from earlier sessions, per topic, and per-machine facts. These files are loaded automatically each session:
 
 @memory-bank/README.md
-@memory-bank/productContext.md
-@memory-bank/systemPatterns.md
-@memory-bank/techContext.md
-@memory-bank/activeContext.md
-@memory-bank/progress.md
 @memory-bank/local/context.md
 
-The core files hold only what every session needs. Per-topic state (USD, property system, rigging, physics, ...) lives in `memory-bank/topics/<topic>.md`, indexed from `activeContext.md` [TOPICS]; per-machine per-topic facts live in `memory-bank/local/<topic>.md`, indexed from `local/context.md`. Read the topic files that match the session's work; they are not auto-loaded.
+Outstanding work is not kept there: the tasks and their order are in `doc/plans/open_items.md` "Work order", and the state of a task is in its own document under `doc/` ("Session handoff" above).
+
+Per-topic entries live in `memory-bank/topics/<topic>.md`; per-machine per-topic facts live in `memory-bank/local/<topic>.md`, indexed from `local/context.md`. Neither is loaded automatically: read the topic files that match the session's work before starting it, and write what a later session needs to know about a subject into its topic file, in plain English bullets (`memory-bank/README.md` "Writing an entry").
+
+| Topic file | Holds |
+|---|---|
+| `usd` | USD compatibility: LightUSD fork, import/export, composition arcs, DrawModes, USD physics/animation, WG asset survey |
+| `property_system` | erhe::property dependency properties: node values, styles, folders, migrations, Properties window |
+| `rigging` | IK / skinning / rigging tools (paused; resume from [PAUSED_FOCUS_2026-09-27]) |
+| `physics` | Jolt/Box3D physics, jointed-body drags, convex hulls |
+| `viewport_ui` | Viewports, cameras, gizmos, grids, four view, ImGui docking, active item, asset browser, MCP UI driving |
+| `performance` | Startup profiling (Tracy), deferred brush geometry, frame-time work |
+| `tooling` | Agent tooling: orchestration harness, doc layout, CI tests, skills location, Metal headless, MCP server policy |
+| `scenes_and_assets` | Scene persistence (glTF), glTF uids, asset manager, inventory slots |
+| `editor` | Editor object lifetimes: part construction, scene-close + undo-removal reference rules, retention traps |
+| `geometry` | Geometry / geogram threading, geometry graph payload and pin rules |
+| `graphics_tests` | erhe_graphics_gpu_tests goldens (FLIP), agfx port state, per-backend results, traps |
+| `build` | CMake conventions and dependency gotchas (all platforms) |
+| `windows` | Windows-only build/clangd/VS-MCP/minidump facts |
+| `mesh_modeling` | Blender-style mesh modeling tools and operations (DONE 2026-10-01; traps; remaining work pointer) |
+| `input_bindings` | User-editable persistent input bindings: Commands overrides, Input Bindings window, input_bindings.json, MCP tools (DONE 2026-09-26) |
+| `quest` | Quest 3 / Android: open items in priority order (baseline+headset verification, unculled headset passes, GPU profile items, headset prepare phase, warts), landed fixes, traps |
+| `metal` | Metal backend on macOS: autorelease pools, render-thread threading, frame retirement, GPU fault diagnosis, macOS test status |
+| `pvs` | Potentially visible sets (complete on desktop 2026-10-31): verify recipe + reference hashes, traps, step 8 headset + open items |
+| `lod` | LOD: GPU LOD selection, LOD chains (ERHE_mesh_lod), Quest LOD results |
+| `culling` | Draw-list culling phases 1-7, GPU classification/commands, raster occlusion culling, shadow draw-list culling |
+| `render_thread` | Render thread + frame pipelining (M1/M2/M3/R phases), step history, gates, open user hand-offs |
+| `rendering` | Radiance cascades / DDGI, shadow robustness, debug line anti-aliasing, detail blend weight (height blended vertex weight) |
+| `level_tools` | Level kit shapes and pieces, Level Kit window, Brush tool kit mode, surface snap / orient, walkable area reads, next step 8 |
 
 - **User triggers**: `mb`, `update memory bank`, or `check memory bank` - read `memory-bank/README.md` and follow its instructions.
-- Follow `memory-bank/README.md`; it defines what to read and when, and the Memory Bank overrides any other documentation.
+- Follow `memory-bank/README.md`; it defines what goes where and how an entry is written.

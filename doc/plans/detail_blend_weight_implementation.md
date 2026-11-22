@@ -97,6 +97,19 @@ stores open).
   leaves the slot's texture out.
 - A Graph Texture in a material slot loses the slot's UV transform on save
   and load (every slot; the binding table has no transform field).
+- `edit_material` and `set_item_property` can bind a texture graph's
+  hidden bake to a slot by name; that binding is not saved. The UI offers
+  the Graph Texture only (`doc/editor/graph_texture.md`).
+- Fixes made after the user's first windowed test that have been built in
+  the headless tree but not run: the Open Properties crash
+  (`Imgui_windows::flush_queue()` runs operations outside its lock), the
+  Paint tool's Point mode and the Weight Paint tool on a Geometry loaded
+  from a scene file (`ensure_vertex_corners()`), and the Graph Texture
+  icon. The user checks them in the rebuilt windowed editor.
+- The verify script does not cover the Fill and Invert buttons, the
+  refusal on a primitive without a Geometry, or painting on a loaded
+  scene.
+- The push of the series, on the user's instruction.
 
 - The rulings of `doc/plans/detail_blend_weight.md` "For the user to rule
   on": the build follows the proposed choice of each (user, 2026-11-22:

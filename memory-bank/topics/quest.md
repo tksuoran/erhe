@@ -53,3 +53,28 @@ heavy::line-compute-39.3ms(!)+XR-multiview-21.3+shadow-1.41=61.7(app_gpu-52.7;ti
 
 [PROGRESS_2026-11-07]{compacted-pointers;moved-from-progress.md}
 [TASK::quest-performance]::archived{doc/plans/quest_performance.md;memory-bank/local/quest.md;open=?NEXT-heavy-line-compute-39ms+default-color-pass(grid-2ms;shadow-math);detail=git-log}
+
+[FOCUS_ARCHIVE_2026-11-22]{moved-verbatim-from-activeContext.md;hashes+UNPUSHED-notes-as-written-then:everything-through-3b760af35-is-pushed}
+@world-space-pieces::MEASURED-2026-11-08{735bfac9e;Quest-street-90Hz:whole-33.6fps|8m-25.7|5m-21.2->pieces-slower-on-Adreno;settle-fail-fixed(003316476-keying-scene_name);benchmark-views-head-locked(4ca6ec37b;©User-verified;runs-before-21:18-invalid);NEXT=why-more-draws-cost-more-on-Adreno;state=progress.md[TASK::world-space-pieces]}
+@bistro-quest-benchmark::IN-PROGRESS-2026-11-08{bench=config/editor/benchmark_bistro_street_90.json(camera_path.type=animation:"Animation"/node"Camera";90Hz,720-frames)+benchmark_bistro_street.json(72Hz);configs=scripts/quest_bench_configs/bistro_headlamp_gpu_occlusion(_opaque_only).json;device-has-APK-17:11(animation-path-driver)+prepared-asset-with-camera-animation(/sdcard/.../files/bistro/bistro_src.quest.erhe_prepared,md5-3c3aa5b1);results:headlamp-36.6fps(eye-22.4ms-median),opaque-only-43.6fps(18.4ms);heaviest-second=t2-3s(bistro-corner,overdraw-8.3-rasterized/2.7-shaded-per-pixel,ALU-30%,vertex-fetch-stall-45%);NEXT=split-large-meshes(prepare-step)|path-edit;run-cmd=doc/agents/quest.md+progress.md}
+@quest-fragment-shader::IN-PROGRESS-2026-11-08{plan=doc/plans/quest_fragment_shader.md;DONE=M1/M2-normal_offset-shadow-bias(aaab0b1e2;Adreno-740-637->367-instr,17->12-regs,100%-occupancy;desktop-gates-G1/G3/G4/G5-pass)+M5-identity-texture-transform(4be47d3c5)+OpenXR-preset-shadow_bias=normal_offset;step-0:fp16-paths-31-slower-on-device->M3-reduced-to-fp16-mask-1-in-OpenXR-preset-after-bench;device-bench-DONE(Bistro-street-58.7->108fps;OpenXR-preset-shader_fp16_paths=1);M4-DONE(23a32cc1d);NEXT=worn-visual-check-of-normal_offset-shadows+M6-BRDF-only-if-ALU-bound}
+
+[PROGRESS_ARCHIVE_2026-11-22]{moved-verbatim-from-progress.md}
+[TASK::quest-fragment-shader]{started-2026-11-08;branch=main;doc/plans/quest_fragment_shader.md}
+✓plan{faf8033cc;shadow-lookup=60%-of-headset-lit-shader}
+✓M1/M2-normal_offset{aaab0b1e2;offsets-1.0/1.0;shadow_verify-core-16bit:G1-0-acne,G3<=1.25t,G4-pass,G5<=1t(spot-2.5);G2=hardware-filter-softening}
+✓M5-identity-texture-transform+OpenXR-preset{4be47d3c5}
+✓device-bench{2026-11-08-12:04..12:08;Bistro-street-58.7->108fps,app-GPU-11.6->6.35ms;default-app-GPU-5.45->4.69ms;fp16-mask-1-level-on-Bistro,-8%-multiview-default->OpenXR-preset-shader_fp16_paths=1}
+✓M4-16bit-material-record{23a32cc1d;material_record_half=auto(on-Android);320->192B;Adreno-13->12-regs,100%-occupancy;device-level(Bistro-105.8fps)}
+[TASK::world-space-pieces]{started-2026-11-08;branch=main;commit-735bfac9e;doc/erhe/primitive.md"Pieces";scripts(scratchpad,not-committed):pieces_bench.py/pieces_lists.py/quest_export.py/quest_pieces.sh}
+✓split+lod-border-locks+gltf-member+buffer-mesh-pieces+entries-per-piece+setting+key+unit-test+docs
+✓desktop-measured{corner-pose,world-space-form:tris-267k->71k(8m)/65k(5m);raster-6.75->6.16/5.89;shaded-2.4-level;0-mismatches;screenshots-differ<0.1%}
+✓settle-failure-root-cause{003316476;animation_create_key-resolved-"Camera"-in-empty-startup-"Scene 1"(--no-scene)->exports-lacked-Animation+camera;tools-take-scene_name+ambiguous-name=error;assets-re-exported+pushed}
+✓benchmark-views-head-locked{4ca6ec37b;eye-views-latched-once(view-space)+projection-layer-in-VIEW-space;©User-verified-worn:path-followed+image-fixed;!all-Quest-bench-runs-before-2026-11-08-21:18-INVALID(©User)}
+✓quest-measured{2026-11-08-21:22..21:27;one-input-hash;0m=33.6fps(multiview-25.0ms,457-entries)|8m=25.7fps(31.3ms,1388)|5m=21.2fps(37.4ms,2294);pieces-SLOWER-on-Adreno}
+?next{find-why(per-draw-cost|binning-of-more-smaller-draws|split-vertices)-before-splitting-further}
+[TASK::bistro-quest-benchmark]{started-2026-11-08;branch=main;doc/reference/quest_bench_runs.md(17:12..17:37-entries)+doc/plans/open_items.md"Quest session follow-ups"}
+✓run-cmd{python3 scripts/quest_bench.py run --bench config/editor/benchmark_bistro_street_90.json --bench-to-device --editor-args=--no-scene --config scripts/quest_bench_configs/bistro_headlamp_gpu_occlusion.json --mcp 'set_graphics_preset={"shadow_bias":"normal_offset","shader_fp16_paths":1}' --load-scene /sdcard/Android/data/org.libsdl.app.quest/files/bistro/bistro_src.quest.erhe_prepared --mcp-measure get_lod_stats --record;off-head;add---perfetto|--gpu-metrics-for-counters(exclusive)}
+✓findings{first-run-after-APK-install-11fps=one-off(repeat-33-34fps);LOD-threshold-64-active(levels-0-5-in-use);eye-pass-fragment-bound-by-overdraw-at-bistro-corner(t2-3s);alpha-tested+translucent=4ms/frame-of-22;opaque-alone-18.4ms(458k-tris,613-entries)}
+!traps{MCP-set_node_transform-arg=translation(¬position:silently-"Nothing to set");device-migrated-config-stale-after-install(fp16-preset-via---mcp);desktop-editor-has-no-headlamp(headset-only)->desktop-renders-show-scene-lights;a-second-editor-takes-port-3744;disk-nearly-full(1.7GB-free;Debug-trees=next-cleanup)}
+?next{opaque-draw-order-front-to-back/early-Z-check|shorten-or-re-pose-path-away-from-corner|Perfetto-render-stages-empty(surfaces-[])->investigate-metavr-capture}

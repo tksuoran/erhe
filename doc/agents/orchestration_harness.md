@@ -163,7 +163,9 @@ attribution trailer.
 
 ## After each commit
 
-The orchestrator updates `memory-bank/activeContext.md` and
-`memory-bank/progress.md` for the step, and rewrites the affected plan
-statements (status line, the step's verification result) in the present
-tense. The queue entry stays a pointer to the plan.
+The orchestrator rewrites the affected plan statements (status line,
+the step's verification result) in the present tense; the plan is where
+the state of the work lives. The `doc/plans/open_items.md` "Work order"
+entry stays a pointer to the plan. A trap or a decision that later
+sessions need and that no document holds goes into the subject's
+`memory-bank/topics/<topic>.md`.

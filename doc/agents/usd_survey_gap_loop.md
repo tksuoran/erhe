@@ -123,7 +123,7 @@ worker is running, what the last report said, what the queue says. It:
    of the one commit that changed the most outside `doc/` and `scripts/`,
    and checks each new expected-results item against its reason (a
    README quote or a Storm match, or it is reverted to a plan bullet).
-   Records the state in `memory-bank/activeContext.md` and, when the loop
+   Records the state in `memory-bank/topics/usd.md` and, when the loop
    is handed to a later session, in `doc/plans/open_items.md` "Work order".
 4. Launches the next worker with the same brief while a stop remains and
    the user has not said to stop. The brief does not change between
