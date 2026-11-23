@@ -10,6 +10,7 @@
 
 #include <glm/glm.hpp>
 
+#include <array>
 #include <memory>
 
 namespace erhe { class Item_host; }
@@ -96,6 +97,9 @@ public:
         int                                height
     );
 
+    // Premultiplied; rebuilds the render pass. Call before the first frame that renders into it.
+    void set_clear_color(const std::array<double, 4>& clear_color);
+
     static void set_mesh_lod_bias(float lod_bias);
     [[nodiscard]] static auto get_mesh_lod_bias() -> float;
 
@@ -109,10 +113,13 @@ private:
     std::weak_ptr<Content_library>               m_material_home;
 
     [[nodiscard]] static auto sampler_state() -> erhe::primitive::Material_sampler_state;
+    void make_render_pass();
 
     std::shared_ptr<erhe::graphics::Texture>     m_texture;
     std::shared_ptr<erhe::primitive::Material>   m_material;
     std::shared_ptr<erhe::graphics::Render_pass> m_render_pass;
+    erhe::graphics::Device*                      m_graphics_device{nullptr};
+    std::array<double, 4>                        m_clear_color{0.0, 0.0, 0.0, 0.66};
     std::optional<glm::vec2>                     m_pointer;
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)

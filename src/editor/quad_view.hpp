@@ -4,6 +4,7 @@
 
 #include <glm/glm.hpp>
 
+#include <array>
 #include <memory>
 #include <optional>
 #include <string_view>
@@ -135,6 +136,9 @@ public:
     // keep this quad in front of others (e.g. the Hud over the Hotbar).
     void set_composition_order(int order);
 
+    // Premultiplied background behind the ImGui content (both paths); call before the first frame.
+    void set_clear_color(const std::array<double, 4>& clear_color);
+
     // --- Rendertarget_view (render target + input sources for the ImGui host) ---
     [[nodiscard]] auto get_width () const -> float override; // content width in pixels
     [[nodiscard]] auto get_height() const -> float override; // content height in pixels
@@ -190,6 +194,7 @@ private:
     // Render passes for the quad swapchain images, keyed by the wrapped texture
     // (stable for the swapchain's lifetime), built lazily on first use.
     std::unordered_map<erhe::graphics::Texture*, std::shared_ptr<erhe::graphics::Render_pass>> m_quad_render_passes;
+    std::array<double, 4> m_quad_layer_clear_color{0.0, 0.0, 0.0, 0.0};
 #endif
 };
 

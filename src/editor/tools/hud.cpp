@@ -237,6 +237,9 @@ void Hud::attach_to_scene(const std::shared_ptr<Scene_root>& scene_root)
     m_quad_view->set_depth_tested(true);
     m_quad_view->set_composition_order(1);
 
+    // Translucent black behind the ImGui windows (premultiplied).
+    m_quad_view->set_clear_color({0.0, 0.0, 0.0, 0.3});
+
     // The Hud parents its node once to the scene root and only updates the
     // world transform thereafter (see update_node_transform).
     if (erhe::scene::Node* node = m_quad_view->get_node()) {

@@ -326,6 +326,15 @@ void Quad_view::set_composition_order(int order)
 #endif
 }
 
+void Quad_view::set_clear_color(const std::array<double, 4>& clear_color)
+{
+    m_quad_layer_clear_color = clear_color;
+    m_quad_render_passes.clear();
+    if (m_rendertarget_mesh) {
+        m_rendertarget_mesh->set_clear_color(clear_color);
+    }
+}
+
 auto Quad_view::get_width() const -> float
 {
     return static_cast<float>(m_pixel_width);
@@ -352,17 +361,14 @@ auto Quad_view::acquire_render_pass(erhe::graphics::Command_buffer&) -> erhe::gr
             return it->second.get();
         }
         // Build a render pass over this swapchain image. ImGui is composited
-        // over passthrough / the projection layer, so clear to transparent and
-        // rely on per-element ImGui alpha. OpenXR Vulkan2 runtimes hand the
+        // over passthrough / the projection layer, so clear to the (by default
+        // transparent) clear color and rely on per-element ImGui alpha. OpenXR Vulkan2 runtimes hand the
         // color image to the application in COLOR_ATTACHMENT_OPTIMAL and expect
         // it back in the same layout.
         erhe::graphics::Render_pass_descriptor render_pass_descriptor{};
         render_pass_descriptor.color_attachments[0].texture       = texture;
         render_pass_descriptor.color_attachments[0].load_action   = erhe::graphics::Load_action::Clear;
-        render_pass_descriptor.color_attachments[0].clear_value[0] = 0.0f;
-        render_pass_descriptor.color_attachments[0].clear_value[1] = 0.0f;
-        render_pass_descriptor.color_attachments[0].clear_value[2] = 0.0f;
-        render_pass_descriptor.color_attachments[0].clear_value[3] = 0.0f;
+        render_pass_descriptor.color_attachments[0].clear_value   = m_quad_layer_clear_color;
         render_pass_descriptor.color_attachments[0].store_action  = erhe::graphics::Store_action::Store;
         render_pass_descriptor.color_attachments[0].usage_before  = erhe::graphics::Image_usage_flag_bit_mask::color_attachment;
         render_pass_descriptor.color_attachments[0].layout_before = erhe::graphics::Image_layout::color_attachment_optimal;

@@ -504,9 +504,6 @@ Plans: `doc/plans/culling.md`, `doc/plans/occlusion_culling.md`.
 - NVIDIA OpenGL: `#pragma optionNV(unroll none)` disables loop unrolling in
   every shader (`doc/erhe/shader_workarounds.md`); its frame-time cost is
   unmeasured.
-- Quest HUD: the HUD's ImGui style has an opaque `WindowBg`; a
-  semi-transparent HUD background needs a HUD style with alpha below 1
-  (the quad layer now composites premultiplied alpha).
 
 ## Rendering features
 
