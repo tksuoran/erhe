@@ -495,6 +495,18 @@ Plans: `doc/plans/culling.md`, `doc/plans/occlusion_culling.md`.
   (`CMakeLists.txt`); built and tested on macOS only. Check the Windows,
   Linux and Android CI builds, and move back to glslang's pair once glslang
   includes the fix.
+- Window transparency: ImGui draws the viewport image with straight-alpha
+  blending over premultiplied content, so partly transparent viewport pixels
+  (a Clear Color alpha between 0 and 1, anti-aliased edges against it) come
+  out darker than intended; the sky colors' alpha channel carries the falloff
+  powers, so the sky itself cannot be transparent
+  (`doc/erhe/window.md` "Window transparency").
+- NVIDIA OpenGL: `#pragma optionNV(unroll none)` disables loop unrolling in
+  every shader (`doc/erhe/shader_workarounds.md`); its frame-time cost is
+  unmeasured.
+- Quest HUD: the HUD's ImGui style has an opaque `WindowBg`; a
+  semi-transparent HUD background needs a HUD style with alpha below 1
+  (the quad layer now composites premultiplied alpha).
 
 ## Rendering features
 
