@@ -18,10 +18,10 @@ cmake \
     -DERHE_GLTF_LIBRARY=fastgltf \
     -DERHE_GUI_LIBRARY=imgui \
     -DERHE_GRAPHICS_API=vulkan \
-    -DERHE_PHYSICS_LIBRARY=jolt \
+    -DERHE_PHYSICS_LIBRARY=box3d \
     -DERHE_PROFILE_LIBRARY=none \
     -DERHE_RAYTRACE_LIBRARY=bvh \
     -DERHE_SVG_LIBRARY=plutosvg \
     -DERHE_TEXT_LAYOUT_LIBRARY=harfbuzz \
     -DERHE_WINDOW_LIBRARY=sdl \
-    -DERHE_XR_LIBRARY=none
+    -DERHE_XR_LIBRARY=openxr
