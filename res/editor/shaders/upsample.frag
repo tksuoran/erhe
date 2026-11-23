@@ -32,9 +32,11 @@ void main()
 #if defined(LAST_PASS)
     vec3 color = mix(curr, down, post_processing.mix_weight);
     out_color.rgb = PBRNeutralToneMapping(color);
+    // The final output keeps the input's alpha (transparent background where the sky is off).
+    out_color.a = textureLod(s_input, v_texcoord, 0.0).a;
 #else
     vec3 color = mix(curr, down, post_processing.mix_weight);
     out_color.rgb = color;
-#endif
     out_color.a = 1.0;
+#endif
 }

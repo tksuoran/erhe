@@ -30,7 +30,7 @@ struct("Editor_settings_config",
         # Editor-global viewport clear color, shared by all scene views (moved
         # out of the per-view Visual Style popup). gizmo_scale moved on to
         # Transform_tool_config in v17.
-        field("clear_color",                      Vec4,  added_in=1, default="0.0f, 0.0f, 0.0f, 0.4f", short_desc="Clear Color", long_desc="Viewport background clear color."),
+        field("clear_color",                      Vec4,  added_in=1, default="0.0f, 0.0f, 0.0f, 0.4f", short_desc="Clear Color", long_desc="Viewport background where the Sky is off (alpha shows the desktop through a transparent window)."),
         # Editor-global content edge-line (wide-line) method and bias tuning.
         # Edge-line overlay for the preview thumbnails: geometry graph node
         # previews (on by default) and brush previews (off by default; the

@@ -37,6 +37,10 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
   `Binding_desc::drag_modifier_match`, the last argument of `Commands::bind_command_to_mouse_drag()`
   and of the `Mouse_drag_binding` constructor (`mouse_drag_binding.hpp`, default `subset`)
   (`doc/erhe/commands.md` "Binding model").
+- `erhe::rendergraph`: `render_target.hpp` - `Render_target::set_clear_color()`: the color attachment's
+  clear value; a change rebuilds the target on the next `update()`.
+- `erhe::window`: `glfw_window.hpp` - `Context_window::get_window_configuration()` (the SDL and null
+  windows already had it).
 - `erhe::graphics`: `color_blend_state.hpp` - `Color_blend_state::color_blend_alpha_over`: straight-alpha
   color, destination alpha accumulates coverage (the Dear ImGui backends' blend; `doc/erhe/imgui.md` "Blending").
 - `erhe::graphics`: `device.hpp` - `Device_info::workaround_unrolled_runtime_array_index_out_of_bounds`
@@ -242,6 +246,8 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
   attach of the freed suffix); the sibling-unique rename logs at trace instead of info (`doc/erhe/item.md`
   "Sibling-unique names").
 
+- `erhe::imgui`: `Window_imgui_host` with a transparent window (`framebuffer_transparency`) draws no
+  root window background and no dockspace `WindowBg` fill (`doc/erhe/window.md` "Window transparency").
 - `erhe::imgui`: `Imgui_renderer` blends with `color_blend_alpha_over` (was `color_blend_alpha`), so
   translucent items no longer lower the destination alpha of an opaque window.
 - `erhe::xr`: `Quad_layer` content is composited as premultiplied color (dropped

@@ -29,6 +29,7 @@ Platform windowing abstraction over SDL and GLFW. Provides window creation, Open
 - OpenGL: SDL picks a depth-32 GLX visual itself.
 - Vulkan on X11: SDL picks a depth-32 visual only for OpenGL windows, so `request_x11_alpha_visual()` (`sdl_window_x11.cpp`, Linux + Vulkan builds, links Xlib) picks a depth-32 TrueColor visual and passes it through `SDL_HINT_VIDEO_X11_WINDOW_VISUALID`. A visual already set through that hint or the `SDL_VIDEO_X11_WINDOW_VISUALID` environment variable is kept.
 - The Vulkan swapchain's composite alpha follows the setting (`doc/erhe/graphics.md` "Swapchain composite alpha").
+- `erhe::imgui::Window_imgui_host` draws its root window without a background (`ImGuiWindowFlags_NoBackground`) and pushes a transparent `WindowBg` around `ImGui::DockSpace()`, whose `PassthruCentralNode` mode otherwise fills the dockspace under docked windows with `WindowBg`; windows keep their own backgrounds.
 
 ## Dependencies
 - SDL3 (when `ERHE_WINDOW_LIBRARY_SDL`)

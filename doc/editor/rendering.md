@@ -59,7 +59,7 @@ Multiple viewports can exist simultaneously, each with their own shadow node, sc
 
 2. **Tool pre-rendering** -- recorded before the node runs, on the main thread in M2 (`Viewport_scene_view::prepare_render`, into the frame slot named by the view's `Viewport_render_state` of the frame): `Debug_renderer::begin_frame()` opens the view's frame slot in the debug renderer's copy of the frame being prepared (one copy per frame in flight, so the render phase of the previous frame keeps drawing its own), `Tools::render_viewport_tools()` submits tool geometry (gizmos, manipulators) using the 6-pass stencil protocol described below, and `Renderable::render()` is called without an encoder for first-pass setup. The node then runs `Debug_renderer::compute()`, which expands the lines recorded for the frame it renders.
 
-3. **Render pass begins** -- A `Render_command_encoder` is created and an MSAA render pass starts, clearing color, depth, and stencil.
+3. **Render pass begins** -- A `Render_command_encoder` is created and an MSAA render pass starts, clearing color, depth, and stencil. The color clears to the effective Clear Color (the scene's override, else Settings > Viewport > Clear Color), premultiplied; it shows where the sky is off, and its alpha lets the desktop show through a transparent window (`doc/erhe/window.md` "Window transparency"). The prepare phase copies it into `Viewport_render_state::clear_color`, and `Render_target::set_clear_color()` rebuilds the target only when it changes.
 
 4. **Main scene rendering** -- `render_viewport_main()` calls `render_composer()` which executes the Composer's composition passes in order (see below).
 
@@ -420,7 +420,7 @@ Starting from the smallest mip level, each level is upsampled back to the next l
 
 - First (smallest): `upsample_first` -- reads from `downsample_texture`
 - Middle levels: `upsample` -- reads from `upsample_texture` at `source_lod`, blends with downsample data
-- Last (level 0): `upsample_last` -- applies final tonemapping
+- Last (level 0): `upsample_last` -- applies final tonemapping and writes the input texture's alpha, so a transparent background stays transparent
 
 Configurable parameters: `upsample_radius`, `tonemap_luminance_max`, `tonemap_alpha`, `lowpass_count`.
 

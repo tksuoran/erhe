@@ -49,6 +49,16 @@ void Render_target::reconfigure(int sample_count)
     m_render_pass.reset();
 }
 
+void Render_target::set_clear_color(const std::array<double, 4>& clear_color)
+{
+    if (clear_color == m_clear_color) {
+        return;
+    }
+    m_clear_color = clear_color;
+    m_color_texture.reset();
+    m_render_pass.reset();
+}
+
 void Render_target::update(int width, int height, erhe::graphics::Swapchain* swapchain)
 {
     ERHE_PROFILE_FUNCTION();
@@ -176,6 +186,7 @@ void Render_target::update(int width, int height, erhe::graphics::Swapchain* swa
                 render_pass_descriptor.color_attachments[0].texture         = m_multisampled_color_texture.get();
                 render_pass_descriptor.color_attachments[0].resolve_texture = m_color_texture.get();
                 render_pass_descriptor.color_attachments[0].load_action     = erhe::graphics::Load_action::Clear;
+                render_pass_descriptor.color_attachments[0].clear_value     = m_clear_color;
                 render_pass_descriptor.color_attachments[0].store_action    = erhe::graphics::Store_action::Multisample_resolve;
                 render_pass_descriptor.color_attachments[0].usage_before    = erhe::graphics::Image_usage_flag_bit_mask::color_attachment;
                 render_pass_descriptor.color_attachments[0].layout_before  = erhe::graphics::Image_layout::color_attachment_optimal;
@@ -184,6 +195,7 @@ void Render_target::update(int width, int height, erhe::graphics::Swapchain* swa
             } else {
                 render_pass_descriptor.color_attachments[0].texture         = m_color_texture.get();
                 render_pass_descriptor.color_attachments[0].load_action     = erhe::graphics::Load_action::Clear;
+                render_pass_descriptor.color_attachments[0].clear_value     = m_clear_color;
                 render_pass_descriptor.color_attachments[0].store_action    = erhe::graphics::Store_action::Store;
                 render_pass_descriptor.color_attachments[0].usage_before    = erhe::graphics::Image_usage_flag_bit_mask::sampled | erhe::graphics::Image_usage_flag_bit_mask::fragment_shader;
                 render_pass_descriptor.color_attachments[0].layout_before  = erhe::graphics::Image_layout::shader_read_only_optimal;

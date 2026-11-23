@@ -3,6 +3,7 @@
 #include "erhe_dataformat/dataformat.hpp"
 #include "erhe_utility/debug_label.hpp"
 
+#include <array>
 #include <memory>
 #include <string>
 
@@ -42,6 +43,8 @@ public:
 
     void update          (int width, int height, erhe::graphics::Swapchain* swapchain);
     void reconfigure     (int sample_count);
+    // The color attachment's clear value; a change rebuilds the target on the next update().
+    void set_clear_color (const std::array<double, 4>& clear_color);
 
     [[nodiscard]] auto get_sample_count         () const -> int;
     [[nodiscard]] auto get_color_texture        () const -> const std::shared_ptr<erhe::graphics::Texture>&;
@@ -55,6 +58,7 @@ private:
     erhe::dataformat::Format                     m_depth_stencil_format;
     int                                          m_sample_count;
     bool                                         m_store_depth_stencil{false};
+    std::array<double, 4>                        m_clear_color{0.0, 0.0, 0.0, 0.0};
     std::shared_ptr<erhe::graphics::Texture>     m_color_texture;
     std::shared_ptr<erhe::graphics::Texture>     m_multisampled_color_texture;
     std::unique_ptr<erhe::graphics::Texture>     m_depth_stencil_texture;

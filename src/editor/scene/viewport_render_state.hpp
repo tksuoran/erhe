@@ -10,6 +10,7 @@
 
 #include <cstdint>
 #include <limits>
+#include <array>
 #include <memory>
 #include <optional>
 #include <vector>
@@ -89,6 +90,8 @@ public:
     // frame; the render phase applies them to the render target.
     erhe::math::Viewport                 projection_viewport  {0, 0, 0, 0};
     int                                  msaa_sample_count    {0};
+    // The content render target's clear color, premultiplied (shows where the sky is off).
+    std::array<double, 4>                clear_color          {0.0, 0.0, 0.0, 0.0};
     erhe::scene_renderer::Shader_debug   shader_debug         {erhe::scene_renderer::Shader_debug::none};
     Overdraw_mode                        overdraw             {Overdraw_mode::off};
     Mesh_form                            mesh_form            {Mesh_form::source}; // what the view draws (Viewport_scene_view::get_mesh_form() when available)

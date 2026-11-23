@@ -64,6 +64,7 @@ public:
     [[nodiscard]] auto get_height              () const -> int;
     [[nodiscard]] auto get_cursor_relative_hold() const -> bool;
     [[nodiscard]] auto get_glfw_window         () const -> GLFWwindow*;
+    [[nodiscard]] auto get_window_configuration() const -> const Window_configuration&;
     [[nodiscard]] auto get_input_events        () -> std::vector<Input_event>&;
 
     // Window activity queries (see sdl_window.hpp). Deprecated backend: stubs.

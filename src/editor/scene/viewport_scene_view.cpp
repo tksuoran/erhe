@@ -192,6 +192,10 @@ void Viewport_scene_view::prepare_render(erhe::graphics::Command_buffer& upload_
     state.camera                = m_camera.lock();
     state.projection_viewport   = m_projection_viewport;
     state.msaa_sample_count     = m_msaa_sample_count;
+    if (state.scene_root && (m_context.editor_settings != nullptr)) {
+        const glm::vec4& clear_color = get_effective_clear_color(*m_context.editor_settings, *state.scene_root);
+        state.clear_color = {clear_color.r * clear_color.a, clear_color.g * clear_color.a, clear_color.b * clear_color.a, clear_color.a};
+    }
     state.shader_debug          = m_shader_debug;
     state.overdraw              = is_overdraw_supported() ? m_overdraw_mode : Overdraw_mode::off;
     state.mesh_form             = get_drawn_mesh_form();
@@ -461,6 +465,7 @@ void Viewport_scene_view::execute_rendergraph_node(erhe::graphics::Command_buffe
     if (m_render_target.get_sample_count() != state.msaa_sample_count) {
         m_render_target.reconfigure(state.msaa_sample_count);
     }
+    m_render_target.set_clear_color(state.clear_color);
     m_render_target.update(projection_viewport.width, projection_viewport.height, nullptr);
     update_overlay_render_target(projection_viewport.width, projection_viewport.height);
 

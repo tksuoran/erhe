@@ -312,6 +312,11 @@ void window_cursor_enter_callback(GLFWwindow* glfw_window, int entered)
 
 } // namespace
 
+auto Context_window::get_window_configuration() const -> const Window_configuration&
+{
+    return m_configuration;
+}
+
 auto Context_window::get_glfw_window() const -> GLFWwindow*
 {
     return m_glfw_window;

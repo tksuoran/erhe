@@ -876,7 +876,16 @@ void Settings_window::imgui()
         // Visual Style popup). Gizmo Scale lives in the Transform Tool
         // section (Transform_tool_config).
         push_group(Property_row_id::settings_viewport, "Viewport", ImGuiTreeNodeFlags_Framed);
-        add_entry(Property_row_id::settings_clear_color, "Clear Color", [&settings](){ ImGui::ColorEdit4("##", &settings.clear_color.x, ImGuiColorEditFlags_Float); }, "Viewport background clear color.");
+        add_entry(
+            Property_row_id::settings_clear_color,
+            "Clear Color",
+            [&settings](){
+                ImGui::BeginDisabled(settings.sky.enabled);
+                ImGui::ColorEdit4("##", &settings.clear_color.x, ImGuiColorEditFlags_Float | ImGuiColorEditFlags_AlphaBar);
+                ImGui::EndDisabled();
+            },
+            "Viewport background where the Sky is off. With alpha below 1 and window transparency on, the desktop shows through."
+        );
         pop_group();
         // Edge-line overlay for the preview thumbnails (same struct shown
         // twice; the label override gives each a distinct group header).

@@ -199,6 +199,11 @@ void Window_imgui_host::begin_imgui_frame()
         ImGuiWindowFlags_NoBringToFrontOnFocus | 
         ImGuiWindowFlags_NoNavFocus            |
         ImGuiWindowFlags_MenuBar;
+    // With a transparent window the desktop shows wherever no window or viewport covers it.
+    const bool transparent_window = m_context_window.get_window_configuration().framebuffer_transparency;
+    if (transparent_window) {
+        window_flags |= ImGuiWindowFlags_NoBackground;
+    }
     ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
     // Zero padding so content (dockspace + status bar) fits the window exactly;
@@ -227,7 +232,14 @@ void Window_imgui_host::begin_imgui_frame()
         }
         m_running_dock_operations.clear();
     }
+    // PassthruCentralNode fills the dockspace under docked windows with WindowBg; transparent when the window is.
+    if (transparent_window) {
+        ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4{0.0f, 0.0f, 0.0f, 0.0f});
+    }
     ImGui::DockSpace(m_root_dock_id, ImVec2{0.0f, -status_bar_height}, ImGuiDockNodeFlags_PassthruCentralNode);
+    if (transparent_window) {
+        ImGui::PopStyleColor();
+    }
 
     // Status bar
     ImGui::SetCursorPos(ImVec2{0.0f, viewport->Size.y - status_bar_height});
