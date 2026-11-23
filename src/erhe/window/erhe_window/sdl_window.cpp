@@ -21,6 +21,9 @@
 #if defined(ERHE_OS_LINUX)
 # include <wayland-client.h>
 #endif
+#if defined(ERHE_OS_LINUX) && defined(ERHE_GRAPHICS_API_VULKAN)
+# include "erhe_window/sdl_window_x11.hpp"
+#endif
 #if defined(ERHE_OS_WINDOWS)
 # include <wtsapi32.h> // WTSQuerySessionInformationW (is_session_locked)
 #endif
@@ -790,6 +793,9 @@ auto Context_window::open(const Window_configuration& configuration) -> bool
 #endif
     if (configuration.framebuffer_transparency) {
         window_flags |= SDL_WINDOW_TRANSPARENT;
+#if defined(ERHE_OS_LINUX) && defined(ERHE_GRAPHICS_API_VULKAN)
+        request_x11_alpha_visual();
+#endif
     }
     if (configuration.high_pixel_density) {
         window_flags |= SDL_WINDOW_HIGH_PIXEL_DENSITY;

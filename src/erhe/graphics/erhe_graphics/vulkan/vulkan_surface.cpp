@@ -12,6 +12,7 @@
 #include "volk.h"
 #include "vk_mem_alloc.h"
 
+#include <array>
 #include <sstream>
 #include <vector>
 
@@ -842,6 +843,52 @@ auto Surface_impl::get_surface_transform() const -> Surface_transform
     return to_erhe_surface_transform(m_swapchain_transform);
 }
 
+auto Surface_impl::choose_composite_alpha(const VkCompositeAlphaFlagsKHR supported) -> VkCompositeAlphaFlagBitsKHR
+{
+    const bool transparency_requested =
+        (m_surface_create_info.context_window != nullptr) &&
+        m_surface_create_info.context_window->get_window_configuration().framebuffer_transparency;
+
+    VkCompositeAlphaFlagBitsKHR composite_alpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+    if (transparency_requested) {
+        // Premultiplied first: erhe blends premultiplied colour into the swapchain.
+        constexpr std::array<VkCompositeAlphaFlagBitsKHR, 3> c_transparent_modes{
+            VK_COMPOSITE_ALPHA_PRE_MULTIPLIED_BIT_KHR,
+            VK_COMPOSITE_ALPHA_POST_MULTIPLIED_BIT_KHR,
+            VK_COMPOSITE_ALPHA_INHERIT_BIT_KHR
+        };
+        bool found = false;
+        for (const VkCompositeAlphaFlagBitsKHR mode : c_transparent_modes) {
+            if ((supported & mode) != 0) {
+                composite_alpha = mode;
+                found = true;
+                break;
+            }
+        }
+        if (!found && ((supported & VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR) == 0)) {
+            composite_alpha = VK_COMPOSITE_ALPHA_INHERIT_BIT_KHR;
+        }
+    } else if ((supported & VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR) == 0) {
+        composite_alpha = VK_COMPOSITE_ALPHA_INHERIT_BIT_KHR;
+    }
+
+    if (composite_alpha != m_composite_alpha) {
+        m_composite_alpha_logged = false;
+    }
+    if (!m_composite_alpha_logged) {
+        const std::string supported_text = to_string_VkCompositeAlphaFlagsKHR(supported);
+        const std::string chosen_text    = to_string_VkCompositeAlphaFlagsKHR(static_cast<VkCompositeAlphaFlagsKHR>(composite_alpha));
+        if (transparency_requested && (composite_alpha == VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR)) {
+            log_context->info("Window transparency requested; the surface reports only composite alpha {}, so whether the window shows through is up to the driver", supported_text);
+        } else {
+            log_context->info("Swapchain composite alpha {} (surface supports {}; window transparency {})", chosen_text, supported_text, transparency_requested ? "requested" : "off");
+        }
+        m_composite_alpha_logged = true;
+    }
+    m_composite_alpha = composite_alpha;
+    return composite_alpha;
+}
+
 auto Surface_impl::update_swapchain(Vulkan_swapchain_create_info& out_swapchain_create_info) -> bool
 {
     log_context->debug("Surface_impl::configure_swapchain()");
@@ -1131,6 +1178,8 @@ auto Surface_impl::update_swapchain(Vulkan_swapchain_create_info& out_swapchain_
         image_usage |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
     }
 
+    const VkCompositeAlphaFlagBitsKHR composite_alpha = choose_composite_alpha(surface_capabilities.supportedCompositeAlpha);
+
     out_swapchain_create_info.swapchain_create_info = VkSwapchainCreateInfoKHR{
         .sType                 = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,   // VkStructureType
         .pNext                 = pNext,                                         // const void*
@@ -1146,7 +1195,7 @@ auto Surface_impl::update_swapchain(Vulkan_swapchain_create_info& out_swapchain_
         .queueFamilyIndexCount = 1,                                             // uint32_t
         .pQueueFamilyIndices   = &graphics_queue_family_index,                  // const uint32_t*
         .preTransform          = surface_capabilities.currentTransform,         // VkSurfaceTransformFlagBitsKHR
-        .compositeAlpha        = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,             // VkCompositeAlphaFlagBitsKHR
+        .compositeAlpha        = composite_alpha,                               // VkCompositeAlphaFlagBitsKHR
         .presentMode           = m_present_mode,                                // VkPresentModeKHR
         .clipped               = VK_TRUE,                                       // VkBool32
         .oldSwapchain          = nullptr                                        // VkSwapchainKHR

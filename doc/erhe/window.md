@@ -24,8 +24,15 @@ Platform windowing abstraction over SDL and GLFW. Provides window creation, Open
 - `get_display_refresh_rate()` / `get_display_refresh_period_seconds()` / `get_display_name()` -- the current mode of the display the window is on (SDL: `SDL_GetDisplayForWindow`; the period uses the mode's refresh rate numerator / denominator when reported), and `register_display_changed_callback(callback)` -- called from `poll_events()` on `SDL_EVENT_WINDOW_DISPLAY_CHANGED` and the display mode change events. The frame pacer's window-side refresh period source (`erhe::graphics::Display_refresh_resolver`). `enumerate_displays()` (`display_info.hpp`) lists every display with its current mode, the primary flag and which one hosts the window; the SDL window logs the list when it opens. GLFW and the null window report 0 / empty / no displays and never call the callback.
 - `copy_to_clipboard(string_view)` (`clipboard.hpp`) -- clipboard helper for diagnostic dumps. Calls `SDL_SetClipboardText` with the SDL backend; on Android emits the message to logcat under tag `erhe.clipboard` (Android app processes have no SDL-accessible system clipboard, and the dumps callers pass here can exceed the binder parcel limit); a no-op with GLFW or no window library.
 
+## Window transparency
+`Window_configuration::framebuffer_transparency` (the editor's `config/editor/window.json` `use_transparency`) creates the SDL window with `SDL_WINDOW_TRANSPARENT`. Where the compositor supports it, the desktop then shows through wherever the rendered frame's alpha is below 1.
+- OpenGL: SDL picks a depth-32 GLX visual itself.
+- Vulkan on X11: SDL picks a depth-32 visual only for OpenGL windows, so `request_x11_alpha_visual()` (`sdl_window_x11.cpp`, Linux + Vulkan builds, links Xlib) picks a depth-32 TrueColor visual and passes it through `SDL_HINT_VIDEO_X11_WINDOW_VISUALID`. A visual already set through that hint or the `SDL_VIDEO_X11_WINDOW_VISUALID` environment variable is kept.
+- The Vulkan swapchain's composite alpha follows the setting (`doc/erhe/graphics.md` "Swapchain composite alpha").
+
 ## Dependencies
 - SDL3 (when `ERHE_WINDOW_LIBRARY_SDL`)
+- Xlib (Linux Vulkan builds with SDL, for the transparent window visual)
 - GLFW (when `ERHE_WINDOW_LIBRARY_GLFW`)
 - erhe::time
 - glm

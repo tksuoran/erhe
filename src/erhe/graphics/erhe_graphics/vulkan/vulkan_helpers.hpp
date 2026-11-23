@@ -27,6 +27,7 @@ namespace erhe::graphics {
 [[nodiscard]] auto to_string_VkDebugUtilsMessageSeverityFlagsEXT(const VkDebugUtilsMessageSeverityFlagsEXT severity) -> std::string;
 [[nodiscard]] auto to_string_VkDebugUtilsMessageTypeFlagsEXT(const VkDebugUtilsMessageTypeFlagsEXT message_type) -> std::string;
 [[nodiscard]] auto to_string_VkPresentScalingFlagsKHR(const VkPresentScalingFlagsKHR present_scaling) -> std::string;
+[[nodiscard]] auto to_string_VkCompositeAlphaFlagsKHR(const VkCompositeAlphaFlagsKHR composite_alpha) -> std::string;
 [[nodiscard]] auto to_string_VkPresentGravityFlagsKHR(const VkPresentGravityFlagsKHR present_gravity) -> std::string;
 [[nodiscard]] auto pipeline_stage_flags_str(VkPipelineStageFlags2 flags) -> std::string;
 [[nodiscard]] auto access_flags_str        (VkAccessFlags2 flags) -> std::string;

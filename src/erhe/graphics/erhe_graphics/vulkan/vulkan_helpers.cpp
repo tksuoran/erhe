@@ -10,6 +10,7 @@
 #include <fmt/format.h>
 
 #include <cstdint>
+#include <array>
 #include <sstream>
 
 namespace erhe::graphics {
@@ -687,6 +688,26 @@ auto to_string_VkDebugUtilsMessageTypeFlagsEXT(const VkDebugUtilsMessageTypeFlag
     }
     return ss.str();
 }
+auto to_string_VkCompositeAlphaFlagsKHR(const VkCompositeAlphaFlagsKHR composite_alpha) -> std::string
+{
+    constexpr std::array<std::pair<VkCompositeAlphaFlagBitsKHR, const char*>, 4> c_names{{
+        {VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,          "OPAQUE"},
+        {VK_COMPOSITE_ALPHA_PRE_MULTIPLIED_BIT_KHR,  "PRE_MULTIPLIED"},
+        {VK_COMPOSITE_ALPHA_POST_MULTIPLIED_BIT_KHR, "POST_MULTIPLIED"},
+        {VK_COMPOSITE_ALPHA_INHERIT_BIT_KHR,         "INHERIT"}
+    }};
+    std::string result;
+    for (const std::pair<VkCompositeAlphaFlagBitsKHR, const char*>& entry : c_names) {
+        if ((composite_alpha & entry.first) != 0) {
+            if (!result.empty()) {
+                result += "|";
+            }
+            result += entry.second;
+        }
+    }
+    return result.empty() ? std::string{"0"} : result;
+}
+
 auto to_string_VkPresentScalingFlagsKHR(const VkPresentScalingFlagsKHR present_scaling) -> std::string
 {
     std::stringstream ss;

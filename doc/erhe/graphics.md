@@ -1026,6 +1026,9 @@ modules; GM9445 (Rogue) also rejects the 1862 modules that declare
 (GE8320 compiles a trivial shader and rejects the texture heap `standard`
 fragment shader too; not swept).
 
+## Swapchain composite alpha
+The Vulkan swapchain uses `VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR` unless the window was created with `framebuffer_transparency` (`doc/erhe/window.md` "Window transparency"). Then it uses the first mode the surface supports out of `PRE_MULTIPLIED`, `POST_MULTIPLIED` and `INHERIT`. If the surface reports only `OPAQUE`, it keeps that, and whether the window shows through is up to the driver: the NVIDIA X11 driver reports only `OPAQUE` but still passes through the alpha of a depth-32 window. The choice and the supported set are logged once per change (`Surface_impl::choose_composite_alpha()`).
+
 ## Present calibration cache
 
 The present calibration (`present_calibration.hpp`; the probes are described

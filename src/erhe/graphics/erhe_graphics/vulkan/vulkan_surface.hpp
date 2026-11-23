@@ -81,6 +81,8 @@ public:
     [[nodiscard]] auto get_surface_transform() const -> Surface_transform;
 
 private:
+    [[nodiscard]] auto choose_composite_alpha(VkCompositeAlphaFlagsKHR supported) -> VkCompositeAlphaFlagBitsKHR;
+
     void fail();
     void choose_surface_format();
     void choose_present_mode  ();
@@ -103,6 +105,8 @@ private:
     // native extent but flips the transform) and to report the pre-rotation the
     // renderer must apply.
     VkSurfaceTransformFlagBitsKHR   m_swapchain_transform{VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR};
+    VkCompositeAlphaFlagBitsKHR     m_composite_alpha{VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR};
+    bool                            m_composite_alpha_logged{false};
     VkSwapchainKHR                  m_vulkan_swapchain{VK_NULL_HANDLE};
     std::unique_ptr<Swapchain>               m_swapchain;
     std::unique_ptr<Emulated_swapchain_impl> m_emulated_swapchain;

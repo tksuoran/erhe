@@ -31,6 +31,13 @@ if (${ERHE_WINDOW_LIBRARY} STREQUAL "sdl")
         erhe_window/sdl_window.cpp
         erhe_window/sdl_window.hpp
     )
+    if (ERHE_TARGET_OS_LINUX AND ERHE_GRAPHICS_API_VULKAN)
+        erhe_target_sources_grouped(
+            ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
+            erhe_window/sdl_window_x11.cpp
+            erhe_window/sdl_window_x11.hpp
+        )
+    endif()
 endif()
 
 if (${ERHE_WINDOW_LIBRARY} STREQUAL "none")
@@ -48,6 +55,11 @@ if (ERHE_GRAPHICS_API_OPENGL)
 endif ()
 if (ERHE_GRAPHICS_API_VULKAN)
     target_link_libraries(${_target} PRIVATE volk::volk)
+    if (ERHE_TARGET_OS_LINUX AND (${ERHE_WINDOW_LIBRARY} STREQUAL "sdl"))
+        # Xlib: the depth-32 visual for a transparent Vulkan window (sdl_window_x11.cpp)
+        find_package(X11 REQUIRED)
+        target_link_libraries(${_target} PRIVATE X11::X11)
+    endif ()
 endif ()
 
 target_link_libraries(
