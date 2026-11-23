@@ -18,12 +18,12 @@ layout(local_size_x = 64) in;
 // rgba8-unorm pixel in memory is bytes [R, G, B, A]; copy_from_texture packs
 // them little-endian, so R is the low byte of the 32-bit word. Recombine to the
 // 32-bit id (r the top byte) the same way Id_renderer::get() does on the CPU.
-uint id_from_pixel(uint packed)
+uint id_from_pixel(uint packed_pixel)
 {
-    uint r = (packed >>  0u) & 0xffu;
-    uint g = (packed >>  8u) & 0xffu;
-    uint b = (packed >> 16u) & 0xffu;
-    uint a = (packed >> 24u) & 0xffu;
+    uint r = (packed_pixel >>  0u) & 0xffu;
+    uint g = (packed_pixel >>  8u) & 0xffu;
+    uint b = (packed_pixel >> 16u) & 0xffu;
+    uint a = (packed_pixel >> 24u) & 0xffu;
     return (r << 24u) | (g << 16u) | (b << 8u) | a;
 }
 
@@ -49,8 +49,8 @@ void main()
 
     // row_stride_uints accounts for the 256-byte row alignment of the blit;
     // padding uints past width are never read.
-    uint packed = id_scan_input.pixels[ry * id_scan_params.row_stride_uints + rx];
-    uint id     = id_from_pixel(packed);
+    uint packed_pixel = id_scan_input.pixels[ry * id_scan_params.row_stride_uints + rx];
+    uint id     = id_from_pixel(packed_pixel);
 
     // id 0 is the background clear value; ids >= max_id cannot index a real range.
     if ((id == 0u) || (id >= id_scan_params.max_id)) {

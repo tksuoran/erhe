@@ -41,8 +41,8 @@ uint erhe_light_cluster_header(uint cluster)
 // Entry list_index of the light list at list_offset: a light array slot.
 uint erhe_light_cluster_slot(uint list_offset, uint list_index)
 {
-    uint packed = light_cluster.data[list_offset + (list_index >> 1u)];
-    return ((list_index & 1u) == 0u) ? (packed & 0xffffu) : (packed >> 16u);
+    uint packed_slots = light_cluster.data[list_offset + (list_index >> 1u)];
+    return ((list_index & 1u) == 0u) ? (packed_slots & 0xffffu) : (packed_slots >> 16u);
 }
 
 #endif // ERHE_LIGHT_CLUSTER_GLSL
