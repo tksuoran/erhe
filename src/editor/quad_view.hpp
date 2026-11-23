@@ -107,6 +107,9 @@ public:
     // pose is recomputed from the unchanged world transform.
     void on_world_from_stage_changed();
 
+    // Hotbar is submitted in view space.
+    void set_head_locked(bool head_locked);
+
     // Uniform scale applied about the quad center on top of the world transform
     // (default 1 = the natural width/height/pixels_per_meter size). Path A
     // scales the rendertarget node transform; Path B scales the composition
@@ -181,6 +184,7 @@ private:
     glm::mat4                                m_base_world_from_quad{1.0f};
     glm::mat4                                m_world_from_quad{1.0f};
     float                                    m_scale{1.0f};
+    bool                                     m_head_locked{false};
 #if defined(ERHE_XR_LIBRARY_OPENXR)
     std::unique_ptr<erhe::xr::Quad_layer>    m_quad_layer;
     // Render passes for the quad swapchain images, keyed by the wrapped texture

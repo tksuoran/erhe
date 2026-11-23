@@ -480,6 +480,7 @@ void Hotbar::init_hotbar()
         "Hotbar imgui host",
         false
     );
+    m_quad_view->set_head_locked(m_context.OpenXR && !m_use_radial);
 
     // The quad follows the hovered view's camera and is drawn only in that
     // view: the "Rendertarget view anchored" composition pass selects it by

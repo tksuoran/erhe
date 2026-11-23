@@ -2549,15 +2549,16 @@ auto Xr_session::end_frame(const bool rendered) -> bool
         std::vector<bool> quad_is_depth_tested;
         quad_is_depth_tested.reserve(ordered_quad_layers.size() * 2);
         for (Quad_layer* quad_layer : ordered_quad_layers) {
-            const bool depth_tested = quad_layer->is_depth_tested();
+            const bool    depth_tested = quad_layer->is_depth_tested();
+            const XrSpace quad_space   = quad_layer->is_head_locked() ? m_xr_reference_space_view : m_xr_reference_space_stage;
             XrCompositionLayerQuad quad{};
-            if (quad_layer->build_layer(m_xr_reference_space_stage, quad)) {
+            if (quad_layer->build_layer(quad_space, quad)) {
                 quad_layers.push_back(quad);
                 quad_is_depth_tested.push_back(depth_tested);
             }
             if (quad_layer->is_double_sided()) {
                 XrCompositionLayerQuad back_quad{};
-                if (quad_layer->build_back_layer(m_xr_reference_space_stage, back_quad)) {
+                if (quad_layer->build_back_layer(quad_space, back_quad)) {
                     quad_layers.push_back(back_quad);
                     quad_is_depth_tested.push_back(depth_tested);
                 }

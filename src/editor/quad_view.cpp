@@ -12,6 +12,7 @@
 #include "erhe_graphics/texture.hpp"
 #include "erhe_item/item.hpp"
 #include "erhe_math/math_util.hpp"
+#include "erhe_scene/camera.hpp"
 #include "erhe_scene/node.hpp"
 #include "erhe_scene/scene.hpp"
 #include "erhe_scene/xform.hpp"
@@ -229,9 +230,12 @@ void Quad_view::apply_transform()
 #if defined(ERHE_XR_LIBRARY_OPENXR)
     if (m_quad_layer) {
         const glm::mat4 stage_from_world = (m_headset_view != nullptr) ? m_headset_view->get_stage_from_world() : glm::mat4{1.0f};
-        // The quad layer takes an (unscaled) pose plus an explicit size, so the
-        // scale goes into the size rather than the pose matrix.
-        m_quad_layer->set_pose(stage_pose_from_world(m_base_world_from_quad, stage_from_world));
+        const std::shared_ptr<erhe::scene::Camera> head_camera = (m_head_locked && (m_headset_view != nullptr)) ? m_headset_view->get_camera() : std::shared_ptr<erhe::scene::Camera>{};
+        if (head_camera) {
+            m_quad_layer->set_pose_in_view(erhe::xr::from_glm(glm::inverse(head_camera->world_from_node()) * m_base_world_from_quad));
+        } else {
+            m_quad_layer->set_pose(stage_pose_from_world(m_base_world_from_quad, stage_from_world));
+        }
         m_quad_layer->set_size(XrExtent2Df{m_local_width * m_scale, m_local_height * m_scale});
     }
 #endif
@@ -256,6 +260,12 @@ void Quad_view::set_world_from_node(const glm::mat4& world_from_quad)
 
 void Quad_view::on_world_from_stage_changed()
 {
+    apply_transform();
+}
+
+void Quad_view::set_head_locked(const bool head_locked)
+{
+    m_head_locked = head_locked;
     apply_transform();
 }
 

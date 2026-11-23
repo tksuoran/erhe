@@ -112,7 +112,14 @@ void Quad_layer::set_visible(bool visible)
 
 void Quad_layer::set_pose(const XrPosef& pose_in_stage)
 {
-    m_pose = pose_in_stage;
+    m_pose        = pose_in_stage;
+    m_head_locked = false;
+}
+
+void Quad_layer::set_pose_in_view(const XrPosef& pose_in_view)
+{
+    m_pose        = pose_in_view;
+    m_head_locked = true;
 }
 
 void Quad_layer::set_size(const XrExtent2Df& size_meters)
@@ -155,12 +162,17 @@ auto Quad_layer::is_depth_tested() const -> bool
     return m_depth_tested;
 }
 
+auto Quad_layer::is_head_locked() const -> bool
+{
+    return m_head_locked;
+}
+
 auto Quad_layer::get_composition_order() const -> int
 {
     return m_composition_order;
 }
 
-auto Quad_layer::build_layer(XrSpace stage_space, XrCompositionLayerQuad& out) const -> bool
+auto Quad_layer::build_layer(XrSpace space, XrCompositionLayerQuad& out) const -> bool
 {
     if (!is_valid() || !m_visible || !m_rendered_this_frame) {
         return false;
@@ -171,7 +183,7 @@ auto Quad_layer::build_layer(XrSpace stage_space, XrCompositionLayerQuad& out) c
         .next          = nullptr,
         .layerFlags    = XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT |
                          XR_COMPOSITION_LAYER_UNPREMULTIPLIED_ALPHA_BIT,
-        .space         = stage_space,
+        .space         = space,
         .eyeVisibility = m_eye_visibility,
         .subImage      = XrSwapchainSubImage{
             .swapchain = m_swapchain.get_xr_swapchain(),
@@ -188,7 +200,7 @@ auto Quad_layer::build_layer(XrSpace stage_space, XrCompositionLayerQuad& out) c
     return true;
 }
 
-auto Quad_layer::build_back_layer(XrSpace stage_space, XrCompositionLayerQuad& out) const -> bool
+auto Quad_layer::build_back_layer(XrSpace space, XrCompositionLayerQuad& out) const -> bool
 {
     // Start from the front-facing quad (shares the same swapchain image), then
     // rotate the pose 180 degrees about the quad's local up (Y) axis so it faces
@@ -198,7 +210,7 @@ auto Quad_layer::build_back_layer(XrSpace stage_space, XrCompositionLayerQuad& o
     // space, so the back face is readable but its pixels are horizontally
     // flipped in world space relative to the front (a rigid pose cannot reflect,
     // so a true same-world-pixel mirror would need a flipped image copy).
-    if (!build_layer(stage_space, out)) {
+    if (!build_layer(space, out)) {
         return false;
     }
     const glm::quat front_orientation = to_glm(out.pose.orientation);

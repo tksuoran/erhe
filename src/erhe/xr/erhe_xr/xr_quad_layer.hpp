@@ -76,6 +76,7 @@ public:
 
     void set_visible       (bool visible);
     void set_pose          (const XrPosef& pose_in_stage);
+    void set_pose_in_view  (const XrPosef& pose_in_view);
     void set_size          (const XrExtent2Df& size_meters);
     void set_eye_visibility(XrEyeVisibility eye_visibility);
     // When double-sided, Xr_session::end_frame() submits a second, back-facing
@@ -92,12 +93,13 @@ public:
     [[nodiscard]] auto is_visible        () const -> bool;
     [[nodiscard]] auto is_double_sided   () const -> bool;
     [[nodiscard]] auto is_depth_tested   () const -> bool;
+    [[nodiscard]] auto is_head_locked    () const -> bool;
     [[nodiscard]] auto get_composition_order() const -> int;
 
     // Fill a caller-owned XrCompositionLayerQuad for submission in
     // Xr_session::end_frame(). Returns false (leaving out untouched) when the
     // layer is not submittable this frame (invalid, hidden, or not rendered).
-    [[nodiscard]] auto build_layer(XrSpace stage_space, XrCompositionLayerQuad& out) const -> bool;
+    [[nodiscard]] auto build_layer(XrSpace space, XrCompositionLayerQuad& out) const -> bool;
 
     // Like build_layer(), but for the back face of a double-sided quad: the pose
     // is rotated 180 degrees about the quad's local up (Y) axis so the quad
@@ -108,7 +110,7 @@ public:
     // true two-sided surface -- same pixels at the same world position, mirrored
     // when viewed from behind -- would need a horizontally-flipped image copy,
     // which is not done here. Returns false when not submittable this frame.
-    [[nodiscard]] auto build_back_layer(XrSpace stage_space, XrCompositionLayerQuad& out) const -> bool;
+    [[nodiscard]] auto build_back_layer(XrSpace space, XrCompositionLayerQuad& out) const -> bool;
 
     // Clear the per-frame "rendered" flag. Xr_session::end_frame() calls this
     // for every registered layer once per frame (regardless of whether the
@@ -128,6 +130,7 @@ private:
     bool                           m_rendered_this_frame {false};
     XrEyeVisibility                m_eye_visibility      {XR_EYE_VISIBILITY_BOTH};
     XrPosef                        m_pose                {{0.0f, 0.0f, 0.0f, 1.0f}, {0.0f, 0.0f, -1.0f}};
+    bool                           m_head_locked         {false};
     XrExtent2Df                    m_size                {1.0f, 1.0f};
     bool                           m_double_sided        {false};
     bool                           m_depth_tested        {false};
