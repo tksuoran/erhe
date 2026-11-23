@@ -70,6 +70,22 @@ no define.
 
 ## Current workarounds
 
+### `Device_info::workaround_unrolled_runtime_array_index_out_of_bounds` (pragma, no define)
+
+- **Limitation**: the NVIDIA OpenGL driver (595.x on Linux, RTX 5070 Laptop)
+  fails to link a one-iteration loop that indexes a runtime-sized SSBO array at
+  an index that folds to a nonzero constant, with `C1068: array index out of
+  bounds` (reported at an unrelated line). Minimal form:
+  `for (uint i = 0u; i < 1u; ++i) { c += light_array.lights[1u + i].a; }`.
+  `standard.frag` hits it in the light loops when a light category has one light
+  after a non-empty one.
+- **Device flag**: set in `gl_device.cpp` for `Vendor::Nvidia` (GL_VENDOR
+  "NVIDIA Corporation"; Mesa drivers report another vendor string).
+- **Shader side**: `Shader_stages_create_info::final_source()` emits
+  `#pragma optionNV(unroll none)` after `#version`, so the driver does not
+  unroll loops in any shader; there is no `WORKAROUND_*` define because no
+  shader code branches on it.
+
 ### `Device_info::workaround_view_mipmap_generation_ignores_view_min_level` (C++ only)
 
 - **Limitation**: the AMD OpenGL driver on Windows (Radeon 890M, driver

@@ -15,8 +15,33 @@
 #include "erhe_verify/verify.hpp"
 
 #include <algorithm>
+#include <filesystem>
+#include <fstream>
 
 namespace erhe::graphics {
+
+namespace {
+
+// Writes the exact source handed to the driver to logs/shader_failures/, for compiling it outside the editor.
+void write_failed_source(const std::string& program_name, const std::string& stage, const unsigned int gl_name, const std::string& source)
+{
+    std::error_code error_code;
+    const std::filesystem::path directory{"logs/shader_failures"};
+    std::filesystem::create_directories(directory, error_code);
+    std::string file_name = fmt::format("{}_{}_{}.glsl", program_name, gl_name, stage);
+    std::replace_if(file_name.begin(), file_name.end(), [](const char c) { return (c == '/') || (c == '\\') || (c == ' ') || (c == ':'); }, '_');
+    const std::filesystem::path path = directory / file_name;
+    std::ofstream file{path, std::ios::binary};
+    file << source;
+    if (file.good()) {
+        log_program->error("Wrote the failed {} source to {}", stage, path.string());
+    } else {
+        log_program->error("Could not write the failed {} source to {}", stage, path.string());
+    }
+}
+
+} // anonymous namespace
+
 
 namespace {
 
@@ -422,6 +447,8 @@ auto Shader_stages_prototype_impl::post_compile(const Shader_stage& shader, Gl_s
         log_glsl->error("\n{}", f_source);
         log_program->error("Shader_stage compilation failed:");
         log_program->error("{}", log);
+        log_program->error("{}", format_info_log_locations(source, log, 8));
+        write_failed_source(m_create_info.name, gl::c_str(to_gl(shader.type)), gl_name, source);
         m_device.shader_error(log, f_source);
         return false;
     }
@@ -581,9 +608,17 @@ void Shader_stages_prototype_impl::post_link()
             log_glsl->error("\n{}", f_source);
             all_sources += f_source;
             all_sources += "\n\n";
+            write_failed_source(m_create_info.name, gl::c_str(to_gl(m_create_info.shaders[i].type)), m_prelink_shaders[i].gl_name(), source);
         }
         log_program->error("Shader_stages linking failed:");
         log_program->error("{}", log);
+        for (size_t i = 0, end = m_prelink_shaders.size(); i < end; ++i) {
+            const std::string source  = get_final_source(m_create_info.shaders[i], m_prelink_shaders[i].gl_name());
+            const std::string located = format_info_log_locations(source, log, 8);
+            if (!located.empty()) {
+                log_program->error("In {} {}:\n{}", gl::c_str(to_gl(m_create_info.shaders[i].type)), m_prelink_shaders[i].gl_name(), located);
+            }
+        }
         m_device.shader_error(log, all_sources);
         return;
     } else {

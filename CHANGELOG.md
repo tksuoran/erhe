@@ -37,6 +37,10 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
   `Binding_desc::drag_modifier_match`, the last argument of `Commands::bind_command_to_mouse_drag()`
   and of the `Mouse_drag_binding` constructor (`mouse_drag_binding.hpp`, default `subset`)
   (`doc/erhe/commands.md` "Binding model").
+- `erhe::graphics`: `device.hpp` - `Device_info::workaround_unrolled_runtime_array_index_out_of_bounds`
+  (NVIDIA OpenGL; shaders get `#pragma optionNV(unroll none)`; `doc/erhe/shader_workarounds.md`).
+- `erhe::graphics`: `glsl_format_source.hpp` - `format_info_log_locations()`: the source lines around
+  each location a shader info log reports.
 - `erhe::scene_renderer`: `pvs_page_streamer.hpp` - `Pvs_page_streamer::get_counts()`
   (`Pvs_page_streamer_counts`: requests queued, the read running, finished reads not taken)
   and `Draw_list_scene::get_pvs_page_streamer_counts()` (`doc/erhe/draw_list_renderer.md` Q6).

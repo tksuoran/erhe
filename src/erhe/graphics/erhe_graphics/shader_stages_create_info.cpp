@@ -256,6 +256,9 @@ auto Shader_stages_create_info::final_source(
 
     std::stringstream sb;
     sb << "#version " << graphics_device.get_info().glsl_version << " core\n\n";
+    if (graphics_device.get_info().workaround_unrolled_runtime_array_index_out_of_bounds) {
+        sb << "#pragma optionNV(unroll none)\n";
+    }
     sb << "// " << c_str(shader.type);
     if (gl_name.has_value()) {
         sb << " " << gl_name.value();

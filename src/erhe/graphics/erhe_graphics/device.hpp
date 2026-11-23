@@ -432,6 +432,12 @@ public:
     // chain with one blit per level and layer instead.
     bool workaround_view_mipmap_generation_ignores_view_min_level{false};
 
+    // NVIDIA OpenGL driver (595.x, Linux): a one-iteration loop that indexes a
+    // runtime-sized SSBO array at an index folding to a nonzero constant fails
+    // to link with "C1068: array index out of bounds". Shaders get
+    // "#pragma optionNV(unroll none)" (doc/erhe/shader_workarounds.md).
+    bool workaround_unrolled_runtime_array_index_out_of_bounds{false};
+
     // limits
     int max_compute_workgroup_count[3] = { 1, 1, 1 };
     int max_compute_workgroup_size [3] = { 1, 1, 1 };

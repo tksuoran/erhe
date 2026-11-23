@@ -188,6 +188,10 @@ Device_impl::Device_impl(Device& device, const Surface_create_info& surface_crea
     if (m_info.workaround_view_mipmap_generation_ignores_view_min_level) {
         log_startup->info("Workaround: texture view mipmaps are built with per-level blits (view mipmap generation ignores TEXTURE_VIEW_MIN_LEVEL)");
     }
+    m_info.workaround_unrolled_runtime_array_index_out_of_bounds = (m_info.vendor == Vendor::Nvidia);
+    if (m_info.workaround_unrolled_runtime_array_index_out_of_bounds) {
+        log_startup->info("Workaround: shaders disable loop unrolling (unrolled runtime-sized array index fails to link)");
+    }
 
     auto versions = split(gl_version_str, '.');
 
