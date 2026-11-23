@@ -17,10 +17,6 @@ ask the user which to pick. Item 14 starts with writing its plan. Items 15,
 17, 18 and 20 wait for the user's review. Item 21 continues at its final pass. Item 22 waits
 for the user's test.
 
-Before the next push: `CMakeLists.txt` pins fastgltf to a local checkout of
-the rebased fork (`SOURCE_DIR`, marked TEMP). Push and tag the fork's
-`erhe-rebase` branch, then restore `GIT_TAG` + `GITHUB_REPOSITORY`.
-
 0. The user rulings on the D8 coder decisions ("Prepared assets" below,
    `doc/plans/prepared_assets_design.md` D8).
 1. Quest session follow-ups: "Quest session follow-ups" below

@@ -1210,10 +1210,10 @@ if (${ERHE_GLTF_LIBRARY} STREQUAL "fastgltf")
         # passthrough callbacks (ExtensionsParseCallback / ExtensionsWriteCallback,
         # the enabler for erhe's ERHE_* vendor extensions) and (d) glTF 2.1 unique
         # IDs (uid property on top-level objects; KhronosGroup/glTF#2597).
-        # TEMP: pinned to a local checkout of the rebased fork (branch erhe-rebase,
-        # not pushed yet); restore GIT_TAG + GITHUB_REPOSITORY tksuoran/fastgltf
-        # once the branch is pushed and tagged.
-        SOURCE_DIR        /home/timo/git/tksuoran/fastgltf-rebase
+        # Branch erhe-rebase of the fork.
+        VERSION           1.0.1
+        GIT_TAG           erhe-2026-11-23
+        GITHUB_REPOSITORY tksuoran/fastgltf
         OPTIONS
             "FASTGLTF_ENABLE_INSTALL OFF"
     )
