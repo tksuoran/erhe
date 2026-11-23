@@ -1903,7 +1903,7 @@ void cmd_pipeline_image_barriers2(
     vkCmdPipelineBarrier2(cmd, &dep_info);
 }
 
-void convert_readback_to_rgba8_opaque(
+void convert_readback_to_rgba8(
     const VkFormat          source_format,
     const std::byte*        source,
     const std::size_t       pixel_count,
@@ -1922,7 +1922,7 @@ void convert_readback_to_rgba8_opaque(
         out_rgba8[o + 0] = is_bgra ? c2 : c0; // R
         out_rgba8[o + 1] = c1;                // G
         out_rgba8[o + 2] = is_bgra ? c0 : c2; // B
-        out_rgba8[o + 3] = std::byte{0xff};   // A
+        out_rgba8[o + 3] = source[o + 3];     // A
     }
 }
 

@@ -927,7 +927,7 @@ void Swapchain_impl::record_capture(const uint64_t frame_id, VkCommandBuffer com
         m_capture_requested = false;
         return;
     }
-    // The readback conversion (convert_readback_to_rgba8_opaque) only
+    // The readback conversion (convert_readback_to_rgba8) only
     // understands 4x8-bit RGBA/BGRA; skip capture for anything else
     // (e.g. a 10-bit HDR surface format).
     switch (m_swapchain_format) {
@@ -1104,7 +1104,7 @@ auto Swapchain_impl::read_back_capture(
     vmaInvalidateAllocation(allocator, m_capture_allocation, 0, VK_WHOLE_SIZE);
 
     const std::size_t pixel_count = static_cast<std::size_t>(m_capture_extent.width) * static_cast<std::size_t>(m_capture_extent.height);
-    convert_readback_to_rgba8_opaque(
+    convert_readback_to_rgba8(
         m_capture_format,
         static_cast<const std::byte*>(m_capture_allocation_info.pMappedData),
         pixel_count,

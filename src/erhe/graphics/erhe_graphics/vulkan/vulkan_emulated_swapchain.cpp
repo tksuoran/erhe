@@ -533,7 +533,7 @@ auto Emulated_swapchain_impl::read_back_last_frame(
         // Make the GPU writes visible to the host (no-op for coherent memory).
         vmaInvalidateAllocation(allocator, staging_allocation, 0, VK_WHOLE_SIZE);
 
-        convert_readback_to_rgba8_opaque(
+        convert_readback_to_rgba8(
             m_color_format,
             static_cast<const std::byte*>(staging_info.pMappedData),
             static_cast<std::size_t>(pixel_count),

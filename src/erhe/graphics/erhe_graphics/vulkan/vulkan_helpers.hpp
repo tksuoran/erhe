@@ -52,10 +52,8 @@ void log_image_layout_transition(
 );
 
 // Convert a read-back 4x8-bit color buffer (RGBA or BGRA order, per
-// source_format) to tightly packed RGBA8 with forced opaque alpha (a
-// composited swapchain frame's alpha is not meaningful). Used by the
-// swapchain screenshot readback paths (emulated and WSI).
-void convert_readback_to_rgba8_opaque(
+// source_format) to tightly packed RGBA8, alpha kept (swapchain screenshot readback).
+void convert_readback_to_rgba8(
     VkFormat                source_format,
     const std::byte*        source,
     std::size_t             pixel_count,

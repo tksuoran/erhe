@@ -1622,6 +1622,7 @@ auto Mcp_server::action_capture_screenshot(const json& args) -> std::string
     // of its own) - see the note in mcp_server_ui.cpp.
     json annotations = json::array();
     const bool annotate = args.value("annotate_imgui_items", false);
+    const bool keep_alpha = args.value("keep_alpha", false);
     if (annotate) {
         if (m_screenshot_annotation_request != m_current_request) {
             std::string                    error;
@@ -1671,6 +1672,11 @@ auto Mcp_server::action_capture_screenshot(const json& args) -> std::string
     }
     m_screenshot_annotation_request = nullptr;
 
+    if (!keep_alpha) {
+        for (std::size_t i = 3, end = pixels.size(); i < end; i += 4) {
+            pixels[i] = std::byte{0xff};
+        }
+    }
     if (annotate) {
         draw_imgui_annotations(width, height, std::span<std::byte>{pixels});
     }

@@ -6709,6 +6709,10 @@
           "description": "Output PNG path (default logs/mcp_screenshot.png)",
           "type": "string"
         },
+        "keep_alpha": {
+          "description": "Keep the frame's alpha channel in the PNG (default false: alpha forced to 255). Shows what a transparent desktop window lets through (Vulkan backend).",
+          "type": "boolean"
+        },
         "annotate_imgui_items": {
           "description": "Draw a numbered rectangle over every recorded visible labelled item of the desktop ImGui host and report the number -> {window, label, rect} table (default false). Costs one extra frame, the one the items are recorded in.",
           "type": "boolean"
