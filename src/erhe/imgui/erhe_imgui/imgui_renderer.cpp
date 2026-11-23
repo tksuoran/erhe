@@ -1373,7 +1373,7 @@ void Imgui_renderer::render_draw_data(
     render_encoder.set_bind_group_layout(&m_bind_group_layout);
     erhe::graphics::Render_pipeline* pipeline = m_pipeline.get_pipeline_for(
         render_pass.get_descriptor(),
-        &erhe::graphics::Color_blend_state::color_blend_alpha,
+        &erhe::graphics::Color_blend_state::color_blend_alpha_over,
         &m_shader_stages,
         &m_vertex_input,
         &m_imgui_program_interface.vertex_format

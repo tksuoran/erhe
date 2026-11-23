@@ -37,6 +37,8 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
   `Binding_desc::drag_modifier_match`, the last argument of `Commands::bind_command_to_mouse_drag()`
   and of the `Mouse_drag_binding` constructor (`mouse_drag_binding.hpp`, default `subset`)
   (`doc/erhe/commands.md` "Binding model").
+- `erhe::graphics`: `color_blend_state.hpp` - `Color_blend_state::color_blend_alpha_over`: straight-alpha
+  color, destination alpha accumulates coverage (the Dear ImGui backends' blend; `doc/erhe/imgui.md` "Blending").
 - `erhe::graphics`: `device.hpp` - `Device_info::workaround_unrolled_runtime_array_index_out_of_bounds`
   (NVIDIA OpenGL; shaders get `#pragma optionNV(unroll none)`; `doc/erhe/shader_workarounds.md`).
 - `erhe::graphics`: `glsl_format_source.hpp` - `format_info_log_locations()`: the source lines around
@@ -240,6 +242,10 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
   attach of the freed suffix); the sibling-unique rename logs at trace instead of info (`doc/erhe/item.md`
   "Sibling-unique names").
 
+- `erhe::imgui`: `Imgui_renderer` blends with `color_blend_alpha_over` (was `color_blend_alpha`), so
+  translucent items no longer lower the destination alpha of an opaque window.
+- `erhe::xr`: `Quad_layer` content is composited as premultiplied color (dropped
+  `XR_COMPOSITION_LAYER_UNPREMULTIPLIED_ALPHA_BIT`).
 - `erhe::scene_renderer`: `Pvs_page_streamer` takes a `Pvs_page_read_executor`
   (`std::function<tf::Executor*()>`, called at each spawn of its read task; empty or a null
   result reads inline) in place of a `tf::Executor*`, and

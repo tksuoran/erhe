@@ -50,6 +50,17 @@ management system that tracks, registers, and dispatches input events to ImGui w
   viewport), because each host sets `io.DeltaTime` and renders every frame, so
   nothing has to force a redraw for the animation.
 
+## Blending
+
+`Imgui_renderer` draws with `Color_blend_state::color_blend_alpha_over`, the
+blend of Dear ImGui's own backends: color `SRC_ALPHA, ONE_MINUS_SRC_ALPHA`,
+alpha `ONE, ONE_MINUS_SRC_ALPHA`. Destination alpha accumulates coverage, so a
+translucent item (text, hover highlight) over an opaque window leaves the pixel
+opaque, and the window's own alpha shows through a transparent desktop window
+or an XR quad layer. Over a transparent clear the result is premultiplied
+color, which is what the swapchain composite alpha (`doc/erhe/graphics.md`
+"Swapchain composite alpha") and `erhe::xr::Quad_layer` expect.
+
 ## Cross splitter (Dear ImGui fork feature)
 
 erhe's Dear ImGui (the in-tree copy `src/imgui/imgui/`, file-identical to the

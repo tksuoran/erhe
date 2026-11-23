@@ -181,8 +181,8 @@ auto Quad_layer::build_layer(XrSpace space, XrCompositionLayerQuad& out) const -
     out = XrCompositionLayerQuad{
         .type          = XR_TYPE_COMPOSITION_LAYER_QUAD,
         .next          = nullptr,
-        .layerFlags    = XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT |
-                         XR_COMPOSITION_LAYER_UNPREMULTIPLIED_ALPHA_BIT,
+        // Quad content is premultiplied: blended over a transparent clear (ImGui, text).
+        .layerFlags    = XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT,
         .space         = space,
         .eyeVisibility = m_eye_visibility,
         .subImage      = XrSwapchainSubImage{

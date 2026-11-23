@@ -96,6 +96,28 @@ Color_blend_state Color_blend_state::color_blend_alpha {
     }
 };
 
+// Straight-alpha colour; destination alpha accumulates coverage (Dear ImGui backends' blend).
+Color_blend_state Color_blend_state::color_blend_alpha_over {
+    .enabled = true,
+    .rgb = {
+        .equation_mode      = Blend_equation_mode::func_add,
+        .source_factor      = Blending_factor::src_alpha,
+        .destination_factor = Blending_factor::one_minus_src_alpha
+    },
+    .alpha = {
+        .equation_mode      = Blend_equation_mode::func_add,
+        .source_factor      = Blending_factor::one,
+        .destination_factor = Blending_factor::one_minus_src_alpha
+    },
+    .constant = {0.0f, 0.0f, 0.0f, 0.0f},
+    .write_mask = {
+        .red   = true,
+        .green = true,
+        .blue  = true,
+        .alpha = true
+    }
+};
+
 Color_blend_state Color_blend_state::color_blend_premultiplied_alpha_replace {
     .enabled = true,
     .rgb = {
