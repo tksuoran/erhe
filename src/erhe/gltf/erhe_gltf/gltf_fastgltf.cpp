@@ -367,7 +367,7 @@ auto to_erhe_attribute(const fastgltf::Accessor& accessor) -> erhe::dataformat::
     // malformed attribute in an imported file is not the right trade.
     log_gltf->error(
         "glTF attribute accessor: unsupported accessor type {} / component type {} (normalized = {})",
-        fastgltf::getAccessorTypeName(accessor.type),
+        fastgltf::internal::getAccessorTypeName(accessor.type),
         c_str(accessor.componentType),
         accessor.normalized != 0
     );
@@ -1501,7 +1501,7 @@ enum class Soup_tangents : unsigned int {
             erhe::dataformat::c_str(attribute_usage), // semantics
             attribute_index,
             c_str(accessor.componentType),
-            fastgltf::getAccessorTypeName(accessor.type),
+            fastgltf::internal::getAccessorTypeName(accessor.type),
             accessor.normalized != 0,
             accessor.count,
             accessor.byteOffset
@@ -1825,10 +1825,10 @@ namespace {
         (static_cast<uint32_t>(bytes[3]) << 24);
 }
 
-// fastgltf::URI decodes its argument once and writes what it holds: encoded twice, it writes `encoded_uri`.
-[[nodiscard]] auto make_fastgltf_uri(const std::string_view encoded_uri) -> fastgltf::URI
+// fastgltf::URI holds and writes its argument verbatim, so it gets the already encoded uri.
+[[nodiscard]] auto make_fastgltf_uri(const std::string_view encoded_uri) -> fastgltf::box<fastgltf::URI>
 {
-    return fastgltf::URI{std::string_view{percent_encode_uri_segment(encoded_uri)}};
+    return fastgltf::box<fastgltf::URI>{fastgltf::URI{encoded_uri}};
 }
 
 void read_json_uris(const simdjson::dom::element& root, const char* const key, std::vector<std::string>& out)
@@ -3041,7 +3041,7 @@ public:
         std::size_t                source_index {0};
         std::size_t                source_offset{0};
         std::size_t                byte_length{0};
-        fastgltf::Optional<std::size_t> byte_stride{};
+        fastgltf::optional<std::size_t> byte_stride{};
     };
     class Attribute
     {
@@ -3255,7 +3255,7 @@ public:
         return build_triangle_soup(asset, primitive, tangents);
     }
 
-    [[nodiscard]] static auto copy_accessor(const fastgltf::Accessor& accessor, const fastgltf::Optional<std::size_t> buffer_view_index) -> fastgltf::Accessor
+    [[nodiscard]] static auto copy_accessor(const fastgltf::Accessor& accessor, const fastgltf::optional<std::size_t> buffer_view_index) -> fastgltf::Accessor
     {
         fastgltf::Accessor copy{};
         copy.byteOffset      = accessor.byteOffset;
@@ -3310,7 +3310,7 @@ public:
         if (accessor.sparse.has_value()) {
             return std::nullopt;
         }
-        fastgltf::Optional<std::size_t> local_view{};
+        fastgltf::optional<std::size_t> local_view{};
         if (accessor.bufferViewIndex.has_value()) {
             const std::size_t view_index = accessor.bufferViewIndex.value();
             if (view_index >= asset.bufferViews.size()) {
@@ -3465,11 +3465,11 @@ public:
         m_file.read(static_cast<char*>(ptr), static_cast<std::streamsize>(count));
     }
 
-    [[nodiscard]] auto read(const std::size_t count, const std::size_t padding) -> fastgltf::span<std::byte> override
+    [[nodiscard]] auto read(const std::size_t count, const std::size_t padding) -> std::span<std::byte> override
     {
         m_buffer.resize(count + padding);
         m_file.read(reinterpret_cast<char*>(m_buffer.data()), static_cast<std::streamsize>(count));
-        return fastgltf::span<std::byte>(m_buffer.data(), m_buffer.size());
+        return std::span<std::byte>(m_buffer.data(), m_buffer.size());
     }
 
     void reset() override
@@ -3539,11 +3539,11 @@ public:
         read_bytes(std::span<std::byte>{static_cast<std::byte*>(ptr), count});
     }
 
-    [[nodiscard]] auto read(const std::size_t count, const std::size_t padding) -> fastgltf::span<std::byte> override
+    [[nodiscard]] auto read(const std::size_t count, const std::size_t padding) -> std::span<std::byte> override
     {
         m_buffer.resize(count + padding);
         read_bytes(std::span<std::byte>{m_buffer.data(), count});
-        return fastgltf::span<std::byte>(m_buffer.data(), m_buffer.size());
+        return std::span<std::byte>(m_buffer.data(), m_buffer.size());
     }
 
     void reset() override
@@ -3857,7 +3857,7 @@ public:
             return false;
         }
         const Gltf_buffer_origin& origin = origins.buffers[view.bufferIndex].value();
-        fastgltf::StaticVector<std::byte> bytes(view.byteLength);
+        fastgltf::static_vector<std::byte> bytes(view.byteLength);
         if (!origins.source_files->read(origin.source_index, origin.source_offset + view.byteOffset, std::span<std::byte>{bytes.data(), bytes.size()})) {
             log_gltf->error(
                 "glTF load: reading bufferView {} ({} bytes at offset {} of '{}') failed",
@@ -4241,12 +4241,13 @@ private:
 
     void trace_info() const
     {
-        if (m_asset->assetInfo.has_value()) {
-            const fastgltf::AssetInfo& asset_info = m_asset->assetInfo.value();
-            log_gltf->trace("Asset Version:    {}", asset_info.gltfVersion);
-            log_gltf->trace("Asset Copyright:  {}", asset_info.copyright);
-            log_gltf->trace("Asset Generator:  {}", asset_info.generator);
+        const fastgltf::AssetInfo& asset_info = m_asset->assetInfo;
+        log_gltf->trace("Asset Version:    {}", asset_info.version.asString());
+        if (asset_info.minVersion.has_value()) {
+            log_gltf->trace("Asset minVersion: {}", asset_info.minVersion->asString());
         }
+        log_gltf->trace("Asset Copyright:  {}", asset_info.copyright);
+        log_gltf->trace("Asset Generator:  {}", asset_info.generator);
         log_gltf->trace("Node Count:       {}", m_asset->nodes.size());
         log_gltf->trace("Camera Count:     {}", m_asset->cameras.size());
         log_gltf->trace("Light Count:      {}", m_asset->lights.size());
@@ -4298,8 +4299,8 @@ private:
                 "input timestamp count = {}, value count = {}",
                 animation_name,
                 sampler_index,
-                fastgltf::getAccessorTypeName(inputAccessor.type),
-                fastgltf::getAccessorTypeName(outputAccessor.type),
+                fastgltf::internal::getAccessorTypeName(inputAccessor.type),
+                fastgltf::internal::getAccessorTypeName(outputAccessor.type),
                 c_str(sampler.interpolation),
                 inputAccessor.count,
                 outputAccessor.count
@@ -5812,9 +5813,9 @@ private:
         if ((primitive.type != fastgltf::PrimitiveType::Triangles) || !primitive.indicesAccessor.has_value() || !primitive.targets.empty()) {
             return "not an indexed TRIANGLES primitive without targets";
         }
-        const auto* position_attribute = primitive.findAttribute("POSITION");
-        const auto* normal_attribute   = primitive.findAttribute("NORMAL");
-        const auto* tangent_attribute  = primitive.findAttribute("TANGENT");
+        const std::vector<fastgltf::Attribute>::const_iterator position_attribute = primitive.findAttribute("POSITION");
+        const std::vector<fastgltf::Attribute>::const_iterator normal_attribute = primitive.findAttribute("NORMAL");
+        const std::vector<fastgltf::Attribute>::const_iterator tangent_attribute = primitive.findAttribute("TANGENT");
         if (
             (position_attribute == primitive.attributes.end()) ||
             (normal_attribute   == primitive.attributes.end()) ||
@@ -5975,7 +5976,7 @@ private:
             return {};
         }
 
-        const auto* position_attribute = primitive.findAttribute("POSITION");
+        const std::vector<fastgltf::Attribute>::const_iterator position_attribute = primitive.findAttribute("POSITION");
         if (position_attribute == primitive.attributes.cend()) {
             log_gltf->warn("ERHE_geometry: primitive '{}' has no POSITION attribute", name);
             return {};
@@ -6159,11 +6160,11 @@ private:
         }
         Primitive_variant_mappings record{};
         record.erhe_primitive_index = erhe_primitive_index;
-        record.material_indices.reserve(primitive.mappings.size());
-        for (const fastgltf::Optional<std::size_t>& mapping : primitive.mappings) {
-            record.material_indices.push_back(
-                mapping.has_value() ? std::optional<std::size_t>{mapping.value()} : std::optional<std::size_t>{}
-            );
+        for (const fastgltf::MaterialMapping& mapping : primitive.mappings) {
+            if (mapping.variantIndex >= record.material_indices.size()) {
+                record.material_indices.resize(mapping.variantIndex + 1);
+            }
+            record.material_indices[mapping.variantIndex] = mapping.materialIndex;
         }
         m_mesh_variant_mappings[mesh_index].push_back(std::move(record));
     }
@@ -8048,6 +8049,17 @@ auto parse_gltf(const Gltf_parse_arguments& arguments) -> Gltf_data
         std::vector<std::pair<std::size_t, Gltf_raw_extensions>> mesh_extensions;
         std::vector<std::pair<std::pair<std::size_t, std::size_t>, Gltf_raw_extensions>> mesh_primitive_extensions;
         Skip_glb_bin_state* skip_glb_bin_state{nullptr};
+        // The callbacks get raw JSON text; values read from a parse are copied out before the next one.
+        simdjson::dom::parser json_parser;
+
+        [[nodiscard]] auto parse_object(const std::string_view json_text, simdjson::dom::object& out_object) -> bool
+        {
+            simdjson::dom::element element;
+            if (json_parser.parse(simdjson::padded_string{json_text}).get(element) != simdjson::SUCCESS) {
+                return false;
+            }
+            return element.get_object().get(out_object) == simdjson::SUCCESS;
+        }
     };
     Parse_extras_context parse_extras_context;
     parse_extras_context.skip_glb_bin_state = &skip_glb_bin_state;
@@ -8065,13 +8077,14 @@ auto parse_gltf(const Gltf_parse_arguments& arguments) -> Gltf_data
         );
     }
     fastgltf_parser.setExtensionsParseCallback(
-        [](simdjson::dom::object* extensions_object, std::size_t object_index, std::size_t sub_object_index, fastgltf::Category object_type, void* user_pointer) {
-            if (extensions_object == nullptr) {
+        [](std::string_view extensions_json, std::size_t object_index, std::size_t sub_object_index, fastgltf::Category object_type, void* user_pointer) {
+            Parse_extras_context* context = static_cast<Parse_extras_context*>(user_pointer);
+            simdjson::dom::object extensions_object;
+            if (!context->parse_object(extensions_json, extensions_object)) {
                 return;
             }
-            Parse_extras_context* context = static_cast<Parse_extras_context*>(user_pointer);
             Gltf_raw_extensions captured;
-            for (const simdjson::dom::key_value_pair& field : *extensions_object) {
+            for (const simdjson::dom::key_value_pair& field : extensions_object) {
                 const std::string_view key = field.key;
                 if (!key.starts_with("ERHE_")) {
                     continue; // typed extensions keep their typed paths
@@ -8104,15 +8117,19 @@ auto parse_gltf(const Gltf_parse_arguments& arguments) -> Gltf_data
         }
     );
     fastgltf_parser.setExtrasParseCallback(
-        [](simdjson::dom::object* extras, std::size_t object_index, fastgltf::Category object_type, void* user_pointer) {
-            if (extras == nullptr) {
+        [](std::string_view extras_json, std::size_t object_index, fastgltf::Category object_type, void* user_pointer) {
+            if ((object_type != fastgltf::Category::Nodes) && (object_type != fastgltf::Category::Materials)) {
                 return;
             }
             Parse_extras_context* context = static_cast<Parse_extras_context*>(user_pointer);
+            simdjson::dom::object extras_object;
+            if (!context->parse_object(extras_json, extras_object)) {
+                return;
+            }
 
             if (object_type == fastgltf::Category::Nodes) {
                 simdjson::dom::element flags_element;
-                if (extras->at_key("erhe_flags").get(flags_element) == simdjson::error_code::SUCCESS) {
+                if (extras_object.at_key("erhe_flags").get(flags_element) == simdjson::error_code::SUCCESS) {
                     simdjson::dom::array flags_array;
                     if (flags_element.get_array().get(flags_array) == simdjson::error_code::SUCCESS) {
                         uint64_t flag_bits = 0;
@@ -8141,7 +8158,7 @@ auto parse_gltf(const Gltf_parse_arguments& arguments) -> Gltf_data
             Material_extras& entry = context->material_extras[object_index];
 
             simdjson::dom::element roughness_y_element;
-            if (extras->at_key("roughness_y").get(roughness_y_element) == simdjson::error_code::SUCCESS) {
+            if (extras_object.at_key("roughness_y").get(roughness_y_element) == simdjson::error_code::SUCCESS) {
                 double value = 0.0;
                 if (roughness_y_element.get_double().get(value) == simdjson::error_code::SUCCESS) {
                     entry.roughness_y = static_cast<float>(value);
@@ -8149,7 +8166,7 @@ auto parse_gltf(const Gltf_parse_arguments& arguments) -> Gltf_data
             }
 
             simdjson::dom::element bxdf_model_element;
-            if (extras->at_key("bxdf_model").get(bxdf_model_element) == simdjson::error_code::SUCCESS) {
+            if (extras_object.at_key("bxdf_model").get(bxdf_model_element) == simdjson::error_code::SUCCESS) {
                 std::string_view value;
                 if (bxdf_model_element.get_string().get(value) == simdjson::error_code::SUCCESS) {
                     if (auto parsed = bxdf_model_from_string(value); parsed.has_value()) {
@@ -8162,7 +8179,7 @@ auto parse_gltf(const Gltf_parse_arguments& arguments) -> Gltf_data
             // screen_door) ride here; opaque/blend/mask are restored
             // from the standard alphaMode in parse_material().
             simdjson::dom::element blending_mode_element;
-            if (extras->at_key("blending_mode").get(blending_mode_element) == simdjson::error_code::SUCCESS) {
+            if (extras_object.at_key("blending_mode").get(blending_mode_element) == simdjson::error_code::SUCCESS) {
                 std::string_view value;
                 if (blending_mode_element.get_string().get(value) == simdjson::error_code::SUCCESS) {
                     if (auto parsed = blending_mode_from_string(value); parsed.has_value()) {
@@ -8172,7 +8189,7 @@ auto parse_gltf(const Gltf_parse_arguments& arguments) -> Gltf_data
             }
 
             simdjson::dom::element circular_element;
-            if (extras->at_key("use_circular_brushed_metal").get(circular_element) == simdjson::error_code::SUCCESS) {
+            if (extras_object.at_key("use_circular_brushed_metal").get(circular_element) == simdjson::error_code::SUCCESS) {
                 bool value = false;
                 if (circular_element.get_bool().get(value) == simdjson::error_code::SUCCESS) {
                     entry.use_circular_brushed_metal = value;
@@ -8180,7 +8197,7 @@ auto parse_gltf(const Gltf_parse_arguments& arguments) -> Gltf_data
             }
 
             simdjson::dom::element circular_texgen_element;
-            if (extras->at_key("circular_brushed_metal_texgen_mode").get(circular_texgen_element) == simdjson::error_code::SUCCESS) {
+            if (extras_object.at_key("circular_brushed_metal_texgen_mode").get(circular_texgen_element) == simdjson::error_code::SUCCESS) {
                 std::string_view value;
                 if (circular_texgen_element.get_string().get(value) == simdjson::error_code::SUCCESS) {
                     if (auto parsed = texgen_mode_from_string(value); parsed.has_value()) {
@@ -8190,7 +8207,7 @@ auto parse_gltf(const Gltf_parse_arguments& arguments) -> Gltf_data
             }
 
             simdjson::dom::element aniso_element;
-            if (extras->at_key("use_aniso_control").get(aniso_element) == simdjson::error_code::SUCCESS) {
+            if (extras_object.at_key("use_aniso_control").get(aniso_element) == simdjson::error_code::SUCCESS) {
                 bool value = false;
                 if (aniso_element.get_bool().get(value) == simdjson::error_code::SUCCESS) {
                     entry.use_aniso_control = value;
@@ -9152,7 +9169,7 @@ auto scan_gltf(std::filesystem::path path) -> Gltf_scan
                     }
                     const fastgltf::Mesh& mesh = asset->meshes[node.meshIndex.value()];
                     for (const fastgltf::Primitive& primitive : mesh.primitives) {
-                        const auto* position_attribute = primitive.findAttribute("POSITION");
+                        const std::vector<fastgltf::Attribute>::const_iterator position_attribute = primitive.findAttribute("POSITION");
                         if (position_attribute == primitive.attributes.cend()) {
                             continue;
                         }
@@ -9459,9 +9476,9 @@ public:
         fastgltf::Accessor indices_accessor{
             .byteOffset      = 0,
             .count           = index_count,
+            .normalized      = false,
             .type            = fastgltf::AccessorType::Scalar,
             .componentType   = fastgltf::ComponentType::UnsignedInt,
-            .normalized      = false,
             .max             = {},
             .min             = {},
             .bufferViewIndex = entry.index_buffer_view,
@@ -9551,20 +9568,20 @@ public:
             fastgltf::Accessor accessor{
                 .byteOffset      = erhe_attribute.attribute->offset,
                 .count           = vertex_count,
+                .normalized      = get_normalized    (erhe_attribute.attribute->format),
                 .type            = get_accessor_type (erhe_attribute.attribute->format),
                 .componentType   = get_component_type(erhe_attribute.attribute->format),
-                .normalized      = get_normalized    (erhe_attribute.attribute->format),
                 .max             = {},
                 .min             = {},
                 .bufferViewIndex = entry.vertex_buffer_view,
                 .sparse          = {},
-                .name            = FASTGLTF_STD_PMR_NS::string{attribute_name}
+                .name            = std::string{attribute_name}
             };
             accessor.max = std::move(max_value);
             accessor.min = std::move(min_value);
             const size_t accessor_index = m_gltf_asset.accessors.size();
             m_gltf_asset.accessors.emplace_back(std::move(accessor));
-            FASTGLTF_STD_PMR_NS::string gltf_attribute_name{attribute_name};
+            std::string gltf_attribute_name{attribute_name};
             entry.attributes.emplace_back(gltf_attribute_name, accessor_index);
         }
     }
@@ -9636,9 +9653,9 @@ public:
         fastgltf::Accessor accessor{
             .byteOffset      = attribute.offset,
             .count           = vertex_count,
+            .normalized      = get_normalized    (attribute.format),
             .type            = get_accessor_type (attribute.format),
             .componentType   = get_component_type(attribute.format),
-            .normalized      = get_normalized    (attribute.format),
             .max             = {},
             .min             = {},
             .bufferViewIndex = view_index,
@@ -9794,7 +9811,7 @@ public:
                 // glTF requires min / max on POSITION only.
                 (name == "POSITION") ? Accessor_bounds::min_max : Accessor_bounds::none
             );
-            entry.attributes.emplace_back(FASTGLTF_STD_PMR_NS::string{name}, accessor);
+            entry.attributes.emplace_back(std::string{name}, accessor);
         }
 
         // Optimized: named by the extension only.
@@ -10144,7 +10161,7 @@ public:
                 (i > 0) ? "," : "",
                 accessor.bufferViewIndex.value(), accessor.byteOffset,
                 fastgltf::getGLComponentType(accessor.componentType), accessor.count,
-                fastgltf::getAccessorTypeName(accessor.type)
+                fastgltf::internal::getAccessorTypeName(accessor.type)
             );
             if (accessor.normalized) {
                 meta += ",\"normalized\":true";
@@ -10543,8 +10560,8 @@ private:
             fastgltf::Accessor accessor{};
             accessor.byteOffset      = static_cast<std::size_t>(byte_offset);
             accessor.count           = static_cast<std::size_t>(count);
-            accessor.type            = fastgltf::getAccessorType(type_name);
-            accessor.componentType   = fastgltf::getComponentType(static_cast<std::uint16_t>(component_type));
+            accessor.type            = fastgltf::internal::getAccessorType(type_name);
+            accessor.componentType   = fastgltf::internal::getComponentType(static_cast<std::uint16_t>(component_type));
             accessor.bufferViewIndex = view_base + static_cast<std::size_t>(view_index);
             if ((accessor.type == fastgltf::AccessorType::Invalid) || (accessor.componentType == fastgltf::ComponentType::Invalid)) {
                 return fail("malformed accessor");
@@ -10556,15 +10573,21 @@ private:
             simdjson::dom::array min_json;
             simdjson::dom::array max_json;
             if ((accessor_json["min"].get_array().get(min_json) == simdjson::SUCCESS) && (accessor_json["max"].get_array().get(max_json) == simdjson::SUCCESS)) {
-                accessor.min = read_bounds_json(min_json);
-                accessor.max = read_bounds_json(max_json);
+                std::optional<fastgltf::AccessorBoundsArray> min_bounds = read_bounds_json(min_json);
+                std::optional<fastgltf::AccessorBoundsArray> max_bounds = read_bounds_json(max_json);
+                if (min_bounds.has_value()) {
+                    accessor.min = std::move(min_bounds.value());
+                }
+                if (max_bounds.has_value()) {
+                    accessor.max = std::move(max_bounds.value());
+                }
                 if (!accessor.min.has_value() || !accessor.max.has_value()) {
                     return fail("malformed accessor bounds");
                 }
             }
             std::string_view name;
             if (accessor_json["name"].get_string().get(name) == simdjson::SUCCESS) {
-                accessor.name = FASTGLTF_STD_PMR_NS::string{name};
+                accessor.name = std::string{name};
             }
             accessors.push_back(std::move(accessor));
         }
@@ -10576,7 +10599,7 @@ private:
             if ((attribute.value.get_uint64().get(accessor_index) != simdjson::SUCCESS) || (accessor_index >= accessors.size())) {
                 return fail("malformed attribute");
             }
-            entry.attributes.emplace_back(FASTGLTF_STD_PMR_NS::string{attribute.key}, accessor_base + static_cast<std::size_t>(accessor_index));
+            entry.attributes.emplace_back(std::string{attribute.key}, accessor_base + static_cast<std::size_t>(accessor_index));
         }
         std::string members;
         for (const simdjson::dom::key_value_pair extension : extensions_json) {
@@ -10599,7 +10622,7 @@ private:
                 .byteLength = static_cast<std::size_t>(byte_length),
                 .data       = fastgltf::sources::URI{
                     .fileByteOffset = 0,
-                    .uri            = fastgltf::URI{reference.uri},
+                    .uri            = fastgltf::box<fastgltf::URI>{fastgltf::URI{reference.uri}},
                     .mimeType       = fastgltf::MimeType::GltfBuffer
                 },
                 .name = {}
@@ -10679,7 +10702,7 @@ private:
                 .byteLength = static_cast<std::size_t>(byte_length),
                 .data       = fastgltf::sources::URI{
                     .fileByteOffset = 0,
-                    .uri            = fastgltf::URI{reference.uri},
+                    .uri            = fastgltf::box<fastgltf::URI>{fastgltf::URI{reference.uri}},
                     .mimeType       = fastgltf::MimeType::GltfBuffer
                 },
                 .name = {}
@@ -11168,14 +11191,14 @@ private:
         fastgltf::Accessor accessor{
             .byteOffset      = 0,
             .count           = values.size(),
+            .normalized      = false,
             .type            = fastgltf::AccessorType::Scalar,
             .componentType   = fastgltf::ComponentType::UnsignedInt,
-            .normalized      = false,
             .max             = {},
             .min             = {},
             .bufferViewIndex = buffer_view_index,
             .sparse          = {},
-            .name            = FASTGLTF_STD_PMR_NS::string{name}
+            .name            = std::string{name}
         };
         const std::size_t accessor_index = m_gltf_asset.accessors.size();
         m_gltf_asset.accessors.emplace_back(std::move(accessor));
@@ -11241,7 +11264,7 @@ private:
                 .byteLength = static_cast<std::size_t>(byte_length),
                 .data       = fastgltf::sources::URI{
                     .fileByteOffset = 0,
-                    .uri            = fastgltf::URI{item.uri},
+                    .uri            = fastgltf::box<fastgltf::URI>{fastgltf::URI{item.uri}},
                     .mimeType       = fastgltf::MimeType::GltfBuffer
                 },
                 .name = {}
@@ -11338,7 +11361,7 @@ private:
             true, // POSITION requires min/max
             "POSITION"
         );
-        entry.attributes.emplace_back(FASTGLTF_STD_PMR_NS::string{"POSITION"}, position_accessor);
+        entry.attributes.emplace_back(std::string{"POSITION"}, position_accessor);
 
         const std::size_t facet_vertex_counts_accessor  = add_u32_accessor(flat.facet_vertex_counts,  "facet_vertex_counts");
         const std::size_t facet_vertex_indices_accessor = add_u32_accessor(flat.facet_vertex_indices, "facet_vertex_indices");
@@ -11412,9 +11435,9 @@ private:
                 fastgltf::Accessor normal_accessor{
                     .byteOffset      = 0,
                     .count           = flat.vertex_count,
+                    .normalized      = false,
                     .type            = fastgltf::AccessorType::Vec3,
                     .componentType   = fastgltf::ComponentType::Float,
-                    .normalized      = false,
                     .max             = {},
                     .min             = {},
                     .bufferViewIndex = buffer_view_index,
@@ -11435,7 +11458,7 @@ private:
                     }
                 }
                 if (!dual_listed_normal) {
-                    entry.attributes.emplace_back(FASTGLTF_STD_PMR_NS::string{"NORMAL"}, normal_accessor_index);
+                    entry.attributes.emplace_back(std::string{"NORMAL"}, normal_accessor_index);
                     dual_listed_normal = true;
                 }
             }
@@ -11467,7 +11490,7 @@ private:
         if (reference_it != m_arguments.material_asset_references.end()) {
             const Gltf_export_asset_reference& reference = reference_it->second;
             fastgltf::Material stub_material{};
-            stub_material.name = FASTGLTF_STD_PMR_NS::string{material->get_name()};
+            stub_material.name = std::string{material->get_name()};
             const std::size_t stub_material_index = m_gltf_asset.materials.size();
             m_gltf_asset.materials.push_back(std::move(stub_material));
             const std::size_t file_index = get_file_index(reference.path, reference.mime_type);
@@ -11516,7 +11539,7 @@ private:
                 .volume                                   = {},
                 .packedNormalMetallicRoughnessTexture     = {},
                 .packedOcclusionRoughnessMetallicTextures = {},
-                .name                                     = FASTGLTF_STD_PMR_NS::string{material->get_name()}
+                .name                                     = std::string{material->get_name()}
             };
             // Preserve the unlit BxDF via the standard KHR_materials_unlit
             // extension; the import path keys off material.unlit in the
@@ -11532,7 +11555,7 @@ private:
             // this IS the persistence path for both fields.
             gltf_material.ior = data.ior;
             if (data.transmission > 0.0f) {
-                gltf_material.transmission = std::make_unique<fastgltf::MaterialTransmission>();
+                gltf_material.transmission.emplace();
                 gltf_material.transmission->transmissionFactor = data.transmission;
             }
 
@@ -11865,7 +11888,7 @@ private:
         }
 
         fastgltf::Mesh gltf_mesh{};
-        gltf_mesh.name = FASTGLTF_STD_PMR_NS::string{erhe_mesh->get_name()};
+        gltf_mesh.name = std::string{erhe_mesh->get_name()};
         std::vector<std::optional<std::size_t>>& primitive_index_map = m_erhe_mesh_primitive_index_map[erhe_mesh];
         primitive_index_map.resize(erhe_primitives.size());
         std::vector<std::pair<std::size_t, std::string>> pending_geometry_extensions; // (gltf primitive index, extension members)
@@ -11976,7 +11999,7 @@ private:
             gltf_primitive.indicesAccessor = export_entry.index_buffer_accessor;
             const std::string name = fmt::format("mesh_item_{}", i);
             fastgltf::Mesh gltf_mesh{};
-            gltf_mesh.name = FASTGLTF_STD_PMR_NS::string{name};
+            gltf_mesh.name = std::string{name};
             gltf_mesh.primitives.emplace_back(std::move(gltf_primitive));
             const std::size_t gltf_mesh_index = m_gltf_asset.meshes.size();
             m_gltf_asset.meshes.emplace_back(std::move(gltf_mesh));
@@ -11984,7 +12007,7 @@ private:
                 m_prepared_primitive_extensions[{gltf_mesh_index, 0}] = std::move(export_entry.prepared_extensions);
             }
             fastgltf::Node gltf_node{};
-            gltf_node.name      = FASTGLTF_STD_PMR_NS::string{name};
+            gltf_node.name      = std::string{name};
             gltf_node.meshIndex = gltf_mesh_index;
             out_node_indices.push_back(m_gltf_asset.nodes.size());
             m_gltf_asset.nodes.emplace_back(std::move(gltf_node));
@@ -12068,20 +12091,24 @@ private:
                 const std::size_t gltf_primitive_index = map_it->second[binding.primitive_index].value();
                 fastgltf::Mesh& gltf_mesh = m_gltf_asset.meshes[mesh_it->second];
                 fastgltf::Primitive& gltf_primitive = gltf_mesh.primitives[gltf_primitive_index];
-                gltf_primitive.mappings.resize(variant_count);
                 const std::size_t material_index = process_material(binding.material.get());
-                const fastgltf::Optional<std::size_t>& mapped = gltf_primitive.mappings[variant_index];
-                if (mapped.has_value() && (mapped.value() != material_index)) {
+                const std::vector<fastgltf::MaterialMapping>::const_iterator mapped = std::ranges::find(
+                    gltf_primitive.mappings, variant_index, &fastgltf::MaterialMapping::variantIndex
+                );
+                if (mapped != gltf_primitive.mappings.cend()) {
+                    if (mapped->materialIndex == material_index) {
+                        continue;
+                    }
                     // Two erhe meshes of identical content share one glTF
                     // mesh, and KHR_materials_variants is per glTF primitive:
                     // the first binding written wins.
                     log_gltf->warn(
                         "KHR_materials_variants: variant '{}' binds two materials to mesh '{}' primitive {} - keeping material {}",
-                        variant.name, binding.mesh->get_name(), binding.primitive_index, mapped.value()
+                        variant.name, binding.mesh->get_name(), binding.primitive_index, mapped->materialIndex
                     );
                     continue;
                 }
-                gltf_primitive.mappings[variant_index] = material_index;
+                gltf_primitive.mappings.push_back(fastgltf::MaterialMapping{.variantIndex = variant_index, .materialIndex = material_index});
             }
         }
         m_gltf_asset.extensionsUsed.emplace_back("KHR_materials_variants");
@@ -12279,14 +12306,14 @@ private:
         fastgltf::Accessor accessor{
             .byteOffset      = 0,
             .count           = element_count,
+            .normalized      = false,
             .type            = accessor_type,
             .componentType   = fastgltf::ComponentType::Float,
-            .normalized      = false,
             .max             = {},
             .min             = {},
             .bufferViewIndex = buffer_view_index,
             .sparse          = {},
-            .name            = FASTGLTF_STD_PMR_NS::string{name}
+            .name            = std::string{name}
         };
         if (with_bounds && (element_count > 0)) {
             const std::size_t component_count = values.size() / element_count;
@@ -12402,7 +12429,7 @@ private:
             .bufferViewIndex = buffer_view_index,
             .mimeType        = mime_type
         };
-        gltf_image.name = FASTGLTF_STD_PMR_NS::string{texture->get_name()};
+        gltf_image.name = std::string{texture->get_name()};
         const std::size_t image_index = m_gltf_asset.images.size();
         m_gltf_asset.images.emplace_back(std::move(gltf_image));
         m_exported_images.insert({texture, image_index});
@@ -12452,7 +12479,7 @@ private:
                 .byteLength = byte_length,
                 .data       = fastgltf::sources::URI{
                     .fileByteOffset = 0,
-                    .uri            = fastgltf::URI{item.uri},
+                    .uri            = fastgltf::box<fastgltf::URI>{fastgltf::URI{item.uri}},
                     .mimeType       = fastgltf::MimeType::GltfBuffer
                 },
                 .name = {}
@@ -12471,7 +12498,7 @@ private:
             .bufferViewIndex = buffer_view_index,
             .mimeType        = mime_type
         };
-        gltf_image.name = FASTGLTF_STD_PMR_NS::string{texture.get_name()};
+        gltf_image.name = std::string{texture.get_name()};
         const std::size_t image_index = m_gltf_asset.images.size();
         m_gltf_asset.images.emplace_back(std::move(gltf_image));
         m_exported_images.insert({&texture, image_index});
@@ -12707,7 +12734,7 @@ private:
             (slot.offset != glm::vec2{0.0f, 0.0f}) ||
             (slot.scale != glm::vec2{1.0f, 1.0f});
         if (has_transform) {
-            out.transform = std::make_unique<fastgltf::TextureTransform>();
+            out.transform.emplace();
             out.transform->rotation = slot.rotation;
             out.transform->uvOffset = fastgltf::math::nvec2{slot.offset.x, slot.offset.y};
             out.transform->uvScale  = fastgltf::math::nvec2{slot.scale.x, slot.scale.y};
@@ -12753,7 +12780,7 @@ private:
     void process_animation(const erhe::scene::Animation& animation)
     {
         fastgltf::Animation gltf_animation{};
-        gltf_animation.name = FASTGLTF_STD_PMR_NS::string{animation.get_name()};
+        gltf_animation.name = std::string{animation.get_name()};
 
         // erhe sampler index -> emitted glTF sampler index, filled lazily:
         // the output accessor type comes from the channel path, and samplers
@@ -12869,7 +12896,7 @@ private:
         const erhe::scene::Skin_data& skin_data = skin->skin_data;
 
         fastgltf::Skin gltf_skin{};
-        gltf_skin.name = FASTGLTF_STD_PMR_NS::string{skin->get_name()};
+        gltf_skin.name = std::string{skin->get_name()};
         for (const std::shared_ptr<erhe::scene::Node>& joint : skin_data.joints) {
             const std::optional<std::size_t> joint_index = find_gltf_node_index(joint);
             if (!joint_index.has_value()) {
@@ -13735,8 +13762,8 @@ private:
         {
         public:
             std::size_t                  index;
-            FASTGLTF_STD_PMR_NS::string* gltf_uid;
-            FASTGLTF_STD_PMR_NS::string* gltf_name;
+            std::string* gltf_uid;
+            std::string* gltf_name;
             const erhe::Item_base*       item;
         };
         std::vector<Uid_target> targets;
@@ -13787,7 +13814,7 @@ private:
         // namespace; the writer's ValidateAsset rejects such a file) is written
         // as one derived from it, in target order; the item keeps its own.
         std::unordered_set<std::string> used_uids;
-        const auto collides_with_name = [&name_counts](const std::string& uid, const FASTGLTF_STD_PMR_NS::string& own_name) -> bool {
+        const auto collides_with_name = [&name_counts](const std::string& uid, const std::string& own_name) -> bool {
             const auto it = name_counts.find(uid);
             if (it == name_counts.end()) {
                 return false;
@@ -13804,7 +13831,7 @@ private:
             if (uid != carried) {
                 log_gltf->warn("glTF export: uid '{}' of '{}' collides with another identifier - written as '{}'", carried, target.item->get_name(), uid);
             }
-            *target.gltf_uid = FASTGLTF_STD_PMR_NS::string{uid};
+            *target.gltf_uid = std::string{uid};
             used_uids.insert(uid);
         }
     }
@@ -13912,10 +13939,10 @@ private:
 auto Gltf_exporter::export_gltf() -> Gltf_export_document
 {
     m_gltf_asset.assetInfo = fastgltf::AssetInfo{
-        .gltfVersion = "2.0",
-        .minVersion  = "",
-        .copyright   = "",
-        .generator   = "erhe"
+        .copyright  = "",
+        .generator  = "erhe",
+        .version    = fastgltf::Version{.major = 2, .minor = 0},
+        .minVersion = {}
     };
     m_gltf_asset.defaultScene = std::size_t{0};
 
@@ -13989,8 +14016,8 @@ auto Gltf_exporter::export_gltf() -> Gltf_export_document
     // declare both the version and the minimum version. Plain exports keep
     // writing glTF 2.0.
     if (!m_gltf_asset.files.empty()) {
-        m_gltf_asset.assetInfo->gltfVersion = "2.1";
-        m_gltf_asset.assetInfo->minVersion  = "2.1";
+        m_gltf_asset.assetInfo.version    = fastgltf::Version{.major = 2, .minor = 1};
+        m_gltf_asset.assetInfo.minVersion = fastgltf::Version{.major = 2, .minor = 1};
     }
 
     // KHR_lights_punctual: exported when process_light() emitted any light;

@@ -984,7 +984,9 @@ endif ()
 
 CPMAddPackage(
     NAME              simdjson
-    VERSION           4.6.6
+    # Same version fastgltf downloads when no simdjson::simdjson target exists;
+    # fastgltf links this target, so the process has one simdjson.
+    VERSION           5.2.0
     GIT_SHALLOW       TRUE
     GITHUB_REPOSITORY simdjson/simdjson
     OPTIONS
@@ -993,6 +995,9 @@ CPMAddPackage(
         # erhe is C++20 throughout; build simdjson the same way.
         "SIMDJSON_CXX_STANDARD 20"
 )
+# simdjson headers are third-party: warnings in them are not reported in the targets that include them.
+get_target_property(_simdjson_interface_includes simdjson INTERFACE_INCLUDE_DIRECTORIES)
+set_target_properties(simdjson PROPERTIES INTERFACE_SYSTEM_INCLUDE_DIRECTORIES "${_simdjson_interface_includes}")
 
 CPMAddPackage(
     NAME              meshoptimizer
@@ -1198,27 +1203,19 @@ endif ()
 if (${ERHE_GLTF_LIBRARY} STREQUAL "fastgltf")
     CPMAddPackage(
         NAME              fastgltf
-        # erhe fork carrying (a) KHR_physics_rigid_bodies spec-compliance fixes
-        # (mesh-keyed collider geometry, spec inertia key names, exporter JSON
-        # fixes), (b) a subset of the glTF 2.1 proposal
-        # (KhronosGroup/glTF#2585): unified "files" array, "externalAssets" +
-        # Node::externalAssetIndex, minVersion handling, (c) the
-        # KHR_lights_punctual spot-light exporter fix (nested "spot" object;
-        # PR'd upstream), and (d) generic extension passthrough callbacks
-        # (ExtensionsParseCallback / ExtensionsWriteCallback, the enabler for
-        # erhe's ERHE_* vendor extensions; worth offering upstream), and
-        # (e) glTF 2.1 unique IDs (uid property on top-level objects, parse +
-        # verbatim re-export + uniqueness validation; KhronosGroup/glTF#2597).
-        # Drop the fork when upstream fastgltf ships the current physics spec,
-        # glTF 2.1 and an extension passthrough.
-        GIT_TAG           erhe-2026-08-14-1
-        #GIT_TAG           v0.9.0
-        GITHUB_REPOSITORY tksuoran/fastgltf
+        # erhe fork of upstream fastgltf 1.0 carrying (a) KHR_physics_rigid_bodies
+        # field defaults and infinite-maxForce omission, (b) a subset of the glTF 2.1
+        # proposal (KhronosGroup/glTF#2585): unified "files" array, "externalAssets" +
+        # Node::externalAssetIndex, minVersion handling, (c) generic extension
+        # passthrough callbacks (ExtensionsParseCallback / ExtensionsWriteCallback,
+        # the enabler for erhe's ERHE_* vendor extensions) and (d) glTF 2.1 unique
+        # IDs (uid property on top-level objects; KhronosGroup/glTF#2597).
+        # TEMP: pinned to a local checkout of the rebased fork (branch erhe-rebase,
+        # not pushed yet); restore GIT_TAG + GITHUB_REPOSITORY tksuoran/fastgltf
+        # once the branch is pushed and tagged.
+        SOURCE_DIR        /home/timo/git/tksuoran/fastgltf-rebase
         OPTIONS
-                  "FASTGLTF_ENABLE_DEPRECATED_EXT ON"
-                       "FASTGLTF_COMPILE_AS_CPP20 ON"
-        "FASTGLTF_ENABLE_KHR_PHYSICS_RIGID_BODIES ON"
-                         "FASTGLTF_ENABLE_INSTALL OFF"
+            "FASTGLTF_ENABLE_INSTALL OFF"
     )
     message(STATUS "Erhe configured to use fastgltf for glTF.")
     add_definitions(-DERHE_GLTF_LIBRARY_FASTGLTF)
