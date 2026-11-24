@@ -328,8 +328,10 @@ void Quad_view::set_composition_order(int order)
 
 void Quad_view::set_clear_color(const std::array<double, 4>& clear_color)
 {
+#if defined(ERHE_XR_LIBRARY_OPENXR)
     m_quad_layer_clear_color = clear_color;
     m_quad_render_passes.clear();
+#endif
     if (m_rendertarget_mesh) {
         m_rendertarget_mesh->set_clear_color(clear_color);
     }

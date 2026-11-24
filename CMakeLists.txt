@@ -436,6 +436,16 @@ if (NOT MSVC)
     endforeach ()
 endif ()
 
+# Geogram's bundled triangle C code fails under GCC 15's C23 default
+# (https://github.com/BrunoLevy/geogram/issues/257); only geogram gets gnu99.
+if (CMAKE_C_COMPILER_ID STREQUAL "GNU")
+    foreach (geo_target geogram geogram_third_party geogram_num_3rdparty)
+        if (TARGET ${geo_target})
+            target_compile_options(${geo_target} PRIVATE "$<$<COMPILE_LANGUAGE:C>:-std=gnu99>")
+        endif ()
+    endforeach ()
+endif ()
+
 if (geogram_SOURCE_DIR AND EXISTS "${geogram_SOURCE_DIR}/.git")
     execute_process(
         COMMAND git rev-parse HEAD

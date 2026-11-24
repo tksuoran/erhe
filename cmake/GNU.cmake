@@ -31,9 +31,6 @@ if (ERHE_USE_TSAN)
     add_link_options(-fsanitize=thread)
 endif ()
 
-# Workaround for https://github.com/BrunoLevy/geogram/issues/257
-add_compile_options("$<$<COMPILE_LANGUAGE:C>:-std=gnu99>")
-
 # Workaround for MinGW linker (ld) is failing due to relocation overflows
 if (WIN32)
     add_compile_options(-Wa,-mbig-obj)
