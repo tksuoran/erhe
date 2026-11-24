@@ -93,8 +93,8 @@ auto Graph::connect(Pin* source_pin, Pin* sink_pin) -> Link*
     ERHE_VERIFY(source_pin != nullptr);
     ERHE_VERIFY(sink_pin != nullptr);
 
-    if (sink_pin->get_key() != source_pin->get_key()) {
-        log_graph->warn("Sink pin key {} does not match source pin key {}", sink_pin->get_key(), source_pin->get_key());
+    if (!are_keys_compatible(source_pin->get_key(), sink_pin->get_key())) {
+        log_graph->warn("Sink pin key {} is not compatible with source pin key {}", sink_pin->get_key(), source_pin->get_key());
         return nullptr;
     }
     // sort() requires an acyclic graph; a link that closes a cycle (self
@@ -130,6 +130,11 @@ void Graph::disconnect(Link* link)
     link->disconnect();
     m_links.erase(i);
     m_is_sorted = false;
+}
+
+auto Graph::are_keys_compatible(const std::size_t source_key, const std::size_t sink_key) const -> bool
+{
+    return source_key == sink_key;
 }
 
 auto Graph::get_host_name() const -> const char*

@@ -42,7 +42,7 @@ TEST(Value_type, convert_grayscale_to_rgba)
 
 TEST(Value_type, convert_rgb_to_grayscale)
 {
-    EXPECT_EQ(convert("v", Value_type::rgb, Value_type::grayscale), "(dot(v, vec3(1.0))/3.0)");
+    EXPECT_EQ(convert("v", Value_type::rgb, Value_type::grayscale), "((v).r)");
 }
 
 TEST(Value_type, convert_rgb_to_rgba)
@@ -52,7 +52,7 @@ TEST(Value_type, convert_rgb_to_rgba)
 
 TEST(Value_type, convert_rgba_to_grayscale)
 {
-    EXPECT_EQ(convert("v", Value_type::rgba, Value_type::grayscale), "(dot((v).rgb, vec3(1.0))/3.0)");
+    EXPECT_EQ(convert("v", Value_type::rgba, Value_type::grayscale), "((v).r)");
 }
 
 TEST(Value_type, convert_rgba_to_rgb)

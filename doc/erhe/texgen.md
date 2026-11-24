@@ -17,7 +17,8 @@ the editor's node graph bridges to this library.
 - `Value_type` -- MVP value types flowing between nodes: `grayscale` (GLSL
   float, Material Maker "f"), `rgb` (vec3), `rgba` (vec4). Conversion
   expression templates between all pairs (from Material Maker's
-  io_types.mmt); `convert(expression, from, to)` wraps an expression.
+  io_types.mmt, except that -> `grayscale` takes the red channel);
+  `convert(expression, from, to)` wraps an expression.
 - `Shader_code` -- accumulated composition result: globals (de-duplicated by
   exact content), uniforms (de-duplicated by name, registration order),
   defs (emitted input helper functions), inline code, and the output

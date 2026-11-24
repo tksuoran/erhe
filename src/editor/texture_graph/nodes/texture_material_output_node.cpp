@@ -80,15 +80,15 @@ constexpr std::size_t c_pin_emissive  = 10; // rgb, rgba
 // Returns false (and leaves fragment / uniforms untouched) when the subtree
 // does not compose (unconnected, missing descriptor, or an error marker).
 [[nodiscard]] auto compose_channel(
-    const Texture_payload&               source,
+    const Texture_input&                 input,
     std::string&                         out_fragment,
     std::vector<erhe::texgen::Uniform>&  out_uniforms
 ) -> bool
 {
-    if (source.source_node == nullptr) {
+    if (input.source.source_node == nullptr) {
         return false;
     }
-    const Texture_compose_dag dag = build_texture_compose_dag(*source.source_node, source.output_index);
+    const Texture_compose_dag dag = build_texture_input_dag(input);
     if (!dag.ok || (dag.sink == nullptr)) {
         return false;
     }
@@ -220,17 +220,17 @@ auto Texture_material_output_node::get_base_name() const -> const std::string&
     return m_base_name;
 }
 
-auto Texture_material_output_node::pick_channel(const std::size_t first_pin) const -> Texture_payload
+auto Texture_material_output_node::pick_channel(const std::size_t first_pin) const -> Texture_input
 {
     // Prefer the channel's primary input pin (listed first); fall back to its
     // secondary pin.
     for (std::size_t offset = 0; offset < 2; ++offset) {
-        const Texture_payload source = input_from_links(first_pin + offset);
-        if (source.source_node != nullptr) {
-            return source;
+        const Texture_input input = typed_input_from_links(first_pin + offset);
+        if (input.source.source_node != nullptr) {
+            return input;
         }
     }
-    return Texture_payload{};
+    return Texture_input{};
 }
 
 void Texture_material_output_node::evaluate(Texture_graph&)
@@ -334,7 +334,7 @@ void Texture_material_output_node::unregister_orm()
 void Texture_material_output_node::render_separate_channel(
     Texture_renderer&      renderer,
     const Separate_channel channel,
-    const Texture_payload& source,
+    const Texture_input&   input,
     const int              size
 )
 {
@@ -363,7 +363,7 @@ void Texture_material_output_node::render_separate_channel(
 
     std::string                        fragment;
     std::vector<erhe::texgen::Uniform> uniforms;
-    const bool connected = compose_channel(source, fragment, uniforms);
+    const bool connected = compose_channel(input, fragment, uniforms);
     if (!connected) {
         // Unconnected (or failed compose): drop the baked texture and revert the
         // material slot to its scalar default.
@@ -494,9 +494,9 @@ void Texture_material_output_node::render_products(App_context& context, Texture
     render_separate_channel(renderer, Separate_channel::emissive, pick_channel(c_pin_emissive), size);
     render_orm(
         renderer,
-        pick_channel(c_pin_occlusion),
-        pick_channel(c_pin_roughness),
-        pick_channel(c_pin_metallic),
+        pick_channel(c_pin_occlusion).source,
+        pick_channel(c_pin_roughness).source,
+        pick_channel(c_pin_metallic).source,
         size
     );
 
@@ -510,16 +510,16 @@ auto Texture_material_output_node::build_channel_exports() const -> std::vector<
 {
     std::vector<Material_channel_export> exports;
 
-    const Texture_payload albedo    = pick_channel(c_pin_albedo);
-    const Texture_payload normal    = pick_channel(c_pin_normal);
-    const Texture_payload emissive  = pick_channel(c_pin_emissive);
-    const Texture_payload occlusion = pick_channel(c_pin_occlusion);
-    const Texture_payload roughness = pick_channel(c_pin_roughness);
-    const Texture_payload metallic  = pick_channel(c_pin_metallic);
+    const Texture_input albedo    = pick_channel(c_pin_albedo);
+    const Texture_input normal    = pick_channel(c_pin_normal);
+    const Texture_input emissive  = pick_channel(c_pin_emissive);
+    const Texture_input occlusion = pick_channel(c_pin_occlusion);
+    const Texture_input roughness = pick_channel(c_pin_roughness);
+    const Texture_input metallic  = pick_channel(c_pin_metallic);
 
-    auto push_separate = [&exports](const char* suffix, const Texture_payload& source) {
+    auto push_separate = [&exports](const char* suffix, const Texture_input& input) {
         Material_channel_export entry{};
-        if (compose_channel(source, entry.fragment, entry.uniforms)) {
+        if (compose_channel(input, entry.fragment, entry.uniforms)) {
             entry.suffix = suffix;
             exports.push_back(std::move(entry));
         }
@@ -530,7 +530,7 @@ auto Texture_material_output_node::build_channel_exports() const -> std::vector<
     push_separate("occlusion", occlusion);
 
     Material_channel_export orm{};
-    if (compose_orm(occlusion, roughness, metallic, orm.fragment, orm.uniforms)) {
+    if (compose_orm(occlusion.source, roughness.source, metallic.source, orm.fragment, orm.uniforms)) {
         orm.suffix = "metallic_roughness";
         exports.push_back(std::move(orm));
     }

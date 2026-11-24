@@ -3,6 +3,7 @@
 #include "erhe_item/item.hpp"
 #include "erhe_item/item_host.hpp"
 
+#include <cstddef>
 #include <memory>
 #include <string>
 #include <string_view>
@@ -39,6 +40,10 @@ public:
     // own node included). connect() refuses such links; UI link gestures
     // can pre-query this to reject them visually before the drop.
     [[nodiscard]] auto would_create_cycle(const Pin* source_pin, const Pin* sink_pin) const -> bool;
+
+    // Whether a source pin with source_key may link to a sink pin with
+    // sink_key; connect() refuses other links. Default: equal keys.
+    [[nodiscard]] virtual auto are_keys_compatible(std::size_t source_key, std::size_t sink_key) const -> bool;
 
     [[nodiscard]] auto get_nodes() const -> const std::vector<Node*>&;
     [[nodiscard]] auto get_nodes()       -> std::vector<Node*>&;

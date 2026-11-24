@@ -4,8 +4,12 @@
 
 #include "erhe_texgen/compose_node.hpp"
 #include "erhe_texgen/node_descriptor.hpp"
+#include "erhe_texgen/value_type.hpp"
+
+#include <fmt/format.h>
 
 #include <algorithm>
+#include <array>
 #include <map>
 #include <unordered_map>
 #include <unordered_set>
@@ -30,6 +34,31 @@ Texture_compose_dag::Texture_compose_dag(Texture_compose_dag&&) noexcept = defau
 auto Texture_compose_dag::operator=(Texture_compose_dag&&) noexcept -> Texture_compose_dag& = default;
 
 namespace {
+
+// Identity node with one input of `type`: the composer converts the linked
+// source to `type` at that input. Never registered in the factory or palette.
+[[nodiscard]] auto conversion_descriptor(const erhe::texgen::Value_type type) -> const erhe::texgen::Node_descriptor&
+{
+    static const std::array<erhe::texgen::Node_descriptor, erhe::texgen::value_type_count> descriptors = [] {
+        std::array<erhe::texgen::Node_descriptor, erhe::texgen::value_type_count> result{};
+        for (std::size_t i = 0; i < erhe::texgen::value_type_count; ++i) {
+            const erhe::texgen::Value_type value_type = static_cast<erhe::texgen::Value_type>(i);
+            erhe::texgen::Node_descriptor& d = result[i];
+            d.name    = fmt::format("implicit_convert_{}", erhe::texgen::value_type_name(value_type));
+            d.label   = "Convert";
+            d.inputs  = {
+                erhe::texgen::Input_descriptor{
+                    .name               = "in",
+                    .type               = value_type,
+                    .default_expression = fmt::format("{}(0.0)", erhe::texgen::glsl_type_name(value_type))
+                }
+            };
+            d.outputs = {erhe::texgen::Output_descriptor{.type = value_type, .expression = "$in($uv)"}};
+        }
+        return result;
+    }();
+    return descriptors[static_cast<std::size_t>(type)];
+}
 
 // Depth-first builder mapping each editor node to one Compose_node, shared when
 // reached through multiple paths (a DAG, not a tree). The visiting set breaks
@@ -64,6 +93,17 @@ public:
             bind_input(*combiner, i, root);
         }
         return combiner;
+    }
+
+    // Creates a hidden conversion Compose_node to input.type fed by input.source.
+    auto build_conversion(const Texture_input& input) -> erhe::texgen::Compose_node*
+    {
+        std::unique_ptr<erhe::texgen::Compose_node> owned =
+            std::make_unique<erhe::texgen::Compose_node>(conversion_descriptor(input.type), m_next_id++);
+        erhe::texgen::Compose_node* conversion = owned.get();
+        m_dag.nodes.push_back(std::move(owned));
+        bind_input(*conversion, 0, input.source);
+        return conversion;
     }
 
     // Wires the sink's input `input_index` to the source described by `source`.
@@ -181,6 +221,22 @@ auto build_texture_compose_dag(Texture_graph_node& sink_node, const std::size_t 
     }
     dag.sink              = sink;
     dag.sink_output_index = (sink->is_sampler_source() ? 0 : output_index);
+    dag.ok                = true;
+    return dag;
+}
+
+auto build_texture_input_dag(const Texture_input& input) -> Texture_compose_dag
+{
+    if (input.source.source_node == nullptr) {
+        return Texture_compose_dag{};
+    }
+    if (input.source.value_type == input.type) {
+        return build_texture_compose_dag(*input.source.source_node, input.source.output_index);
+    }
+    Texture_compose_dag dag{};
+    Dag_builder builder{dag};
+    dag.sink              = builder.build_conversion(input);
+    dag.sink_output_index = 0;
     dag.ok                = true;
     return dag;
 }

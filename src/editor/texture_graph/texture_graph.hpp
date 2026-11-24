@@ -36,6 +36,10 @@ public:
     // load, which forces a full pass).
     [[nodiscard]] auto consume_forced_full() -> bool;
 
+    // Any two of grayscale / rgb / rgba link; the composer converts at the
+    // sink input (doc/editor/texture_graph.md "Pin types and conversions").
+    [[nodiscard]] auto are_keys_compatible(std::size_t source_key, std::size_t sink_key) const -> bool override;
+
 private:
     void evaluate();
 

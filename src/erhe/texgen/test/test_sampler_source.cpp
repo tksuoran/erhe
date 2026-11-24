@@ -51,7 +51,7 @@ TEST(Sampler_source, grayscale_buffer_converts_rgba_sample_to_float)
 
     EXPECT_EQ(shader_code.get_output_type(), Value_type::grayscale);
     // rgba -> f conversion template wraps the texture() call.
-    EXPECT_NE(shader_code.get_code().find("dot((texture(tex_1, (uv))).rgb, vec3(1.0))/3.0"), std::string::npos)
+    EXPECT_NE(shader_code.get_code().find("((texture(tex_1, (uv))).r)"), std::string::npos)
         << shader_code.get_code();
     // Grayscale sink is wrapped back to vec4 at the entry-point output.
     const std::string fragment = composer.assemble_fragment(shader_code);

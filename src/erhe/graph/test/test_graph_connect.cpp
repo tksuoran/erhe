@@ -52,6 +52,44 @@ TEST(GraphConnect, RefusesKeyMismatch)
     graph.unregister_node(&b);
 }
 
+// A graph whose compatibility hook lets key_alpha sources feed key_beta sinks.
+class Alpha_to_beta_graph : public Graph
+{
+public:
+    auto are_keys_compatible(const std::size_t source_key, const std::size_t sink_key) const -> bool override
+    {
+        return (source_key == sink_key) || ((source_key == key_alpha) && (sink_key == key_beta));
+    }
+};
+
+TEST(GraphConnect, CompatibilityHookAcceptsMismatchedKeys)
+{
+    Alpha_to_beta_graph graph{};
+    Test_node a{"a"};
+    Test_node b{"b"};
+    a.add_output_pin(key_alpha, "out_alpha");
+    a.add_input_pin (key_alpha, "in_alpha");
+    b.add_input_pin (key_beta,  "in_beta");
+    b.add_output_pin(key_beta,  "out_beta");
+    graph.register_node(&a);
+    graph.register_node(&b);
+
+    Link* link = graph.connect(a.output_pin(0), b.input_pin(0));
+    ASSERT_NE(link, nullptr);
+    EXPECT_EQ(graph.get_links().size(), 1u);
+
+    // The hook is directional: beta -> alpha stays refused.
+    Test_node c{"c"};
+    c.add_input_pin(key_alpha, "in_alpha");
+    graph.register_node(&c);
+    EXPECT_EQ(graph.connect(b.output_pin(0), c.input_pin(0)), nullptr);
+    EXPECT_EQ(graph.get_links().size(), 1u);
+
+    graph.unregister_node(&a);
+    graph.unregister_node(&b);
+    graph.unregister_node(&c);
+}
+
 TEST(GraphConnect, RefusesSelfLink)
 {
     Graph graph{};

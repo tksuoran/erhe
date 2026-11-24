@@ -15,7 +15,8 @@ execution. Used as the base for the render graph system.
 
 ## Public API
 - `graph.register_node(node)` / `graph.unregister_node(node)` -- Add/remove nodes.
-- `graph.connect(source_pin, sink_pin)` -- Create a link between pins, returns `Link*`.
+- `graph.connect(source_pin, sink_pin)` -- Create a link between pins, returns `Link*`; refuses pins whose keys `are_keys_compatible()` rejects and links that close a cycle.
+- `graph.are_keys_compatible(source_key, sink_key)` -- Virtual; equal keys by default. A graph whose pin types convert (the editor's texture graph) overrides it.
 - `graph.disconnect(link)` -- Remove a link.
 - `graph.sort()` -- Topological sort of nodes.
 - `node.base_make_input_pin(key, name)` / `base_make_output_pin(key, name)` -- Create pins on a node.

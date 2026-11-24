@@ -12,7 +12,7 @@ constexpr const char* c_glsl_type_names [value_type_count] = { "float", "vec3", 
 
 // Conversion expression templates, indexed [from][to].
 // "$(value)" is the placeholder for the source expression.
-// Expressions are verbatim from Material Maker's io_types.mmt (MIT license).
+// From Material Maker's io_types.mmt (MIT license), except -> f takes red.
 constexpr const char* c_conversion_templates[value_type_count][value_type_count] = {
     // from grayscale ("f")
     {
@@ -22,13 +22,13 @@ constexpr const char* c_conversion_templates[value_type_count][value_type_count]
     },
     // from rgb
     {
-        "(dot($(value), vec3(1.0))/3.0)", // rgb  -> f
+        "(($(value)).r)",                 // rgb  -> f (red channel)
         nullptr,                          // rgb  -> rgb
         "vec4($(value), 1.0)"             // rgb  -> rgba
     },
     // from rgba
     {
-        "(dot(($(value)).rgb, vec3(1.0))/3.0)", // rgba -> f
+        "(($(value)).r)",                       // rgba -> f (red channel)
         "(($(value)).rgb)",                     // rgba -> rgb
         nullptr                                 // rgba -> rgba
     }

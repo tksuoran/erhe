@@ -1,5 +1,6 @@
 #include "texture_graph/texture_graph.hpp"
 #include "texture_graph/texture_graph_node.hpp"
+#include "texture_graph/texture_payload.hpp"
 #include "editor_log.hpp"
 
 #include "erhe_graph/link.hpp"
@@ -31,6 +32,14 @@ auto Texture_graph::is_evaluation_needed() const -> bool
         }
     }
     return false;
+}
+
+auto Texture_graph::are_keys_compatible(const std::size_t source_key, const std::size_t sink_key) const -> bool
+{
+    const auto is_value_key = [](const std::size_t key) -> bool {
+        return (key == Texture_pin_key::grayscale) || (key == Texture_pin_key::rgb) || (key == Texture_pin_key::rgba);
+    };
+    return (source_key == sink_key) || (is_value_key(source_key) && is_value_key(sink_key));
 }
 
 void Texture_graph::evaluate_if_dirty()

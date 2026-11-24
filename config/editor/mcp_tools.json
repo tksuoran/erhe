@@ -11528,7 +11528,7 @@
     "name": "texture_graph_add_node"
   },
   {
-    "description": "Connect an output pin of one texture graph node to an input pin of another (pins are addressed by node id + pin slot index; pin keys / value types must match). Undoable. Returns an error result when the pin keys differ or the link would create a cycle.",
+    "description": "Connect an output pin of one texture graph node to an input pin of another (pins are addressed by node id + pin slot index). Any of f / rgb / rgba links to any other; the value converts at the input (-> f takes red, -> rgb drops alpha, f -> rgb / rgba duplicates, -> rgba sets alpha 1). Undoable. Returns an error result when the link would create a cycle.",
     "inputSchema": {
       "properties": {
         "sink_node_id": {

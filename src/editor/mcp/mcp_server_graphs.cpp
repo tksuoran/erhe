@@ -861,9 +861,9 @@ namespace {
     }
     const std::size_t input_count = node.get_input_pins().size();
     for (std::size_t i = input_count; i-- > 0; ) {
-        const Texture_payload source = node.input_from_links(i);
-        if (source.source_node != nullptr) {
-            return build_texture_compose_dag(*source.source_node, source.output_index);
+        const Texture_input input = node.typed_input_from_links(i);
+        if (input.source.source_node != nullptr) {
+            return build_texture_input_dag(input);
         }
     }
     return Texture_compose_dag{};
@@ -1621,7 +1621,7 @@ auto Mcp_server::action_texture_graph_connect(const json& args) -> std::string
     erhe::graph::Pin* sink_pin   = &sink_node->get_input_pins().at(sink_slot);
     const bool connected = window->connect(source_pin, sink_pin);
     if (!connected) {
-        return make_error_content("Connect failed (pin key mismatch, or the link would create a cycle)");
+        return make_error_content("Connect failed (incompatible pin types, or the link would create a cycle)");
     }
     window->request_automatic_layout();
 

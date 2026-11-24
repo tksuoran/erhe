@@ -115,7 +115,7 @@ mapping, and that a Buffer node round-trips it unchanged.
 | `combine`             | Channels   | `combine.mmg`                | Full. |
 | `decompose`           | Channels   | `decompose.mmg`              | Full (4 grayscale outputs). |
 | `swap_channels`       | Channels   | `swap_channels.mmg`          | Full (10 sources per output channel). |
-| `greyscale`           | Color      | `greyscale.mmg`              | Full (5 weightings). Input typed rgba, not MM's rgb: pins are type-strict here and rgba is what the color producers emit. |
+| `greyscale`           | Color      | `greyscale.mmg`              | Full (5 weightings). Input typed rgba, not MM's rgb (rgb sources link through the implicit conversion). |
 | `tones`               | Color      | `tones.mmg`                  | Full levels control (in black/mid/white, out black/white). |
 | `tones_map`           | Color      | `tones_map.mmg`              | Full. |
 | `tones_range`         | Color      | `tones_range.mmg`            | Full. |
@@ -126,7 +126,7 @@ mapping, and that a Buffer node round-trips it unchanged.
 | `palettize`           | Color      | `palettize.mmg`              | Full; MM's instance helper inlined as for `warp`. |
 | `default_color`       | Color      | `default_color.mmg`          | Full. |
 | `compare`             | Color      | `compare.mmg`                | Full. |
-| `ensure_greyscale`    | Channels   | `ensure_greyscale.mmg`       | Re-purposed: MM's is a no-op coercion, this is the explicit rgb -> f bridge type-strict pins need. |
+| `ensure_greyscale`    | Channels   | `ensure_greyscale.mmg`       | Explicit rgb -> f as the channel average; a direct link takes red instead ("Pin types and conversions"). |
 | `ensure_rgba`         | Channels   | `ensure_rgba.mmg`            | Re-purposed likewise as the f -> rgba bridge. |
 | `reroute`             | Utility    | `gen_reroute.gd` (engine)    | Pass-through wiring helper, same concept. |
 | `switch` / `switch_grayscale` / `switch_rgb` | Utility | `gen_switch.gd` (engine) | Compile-time branch select, same semantics (the unselected branch emits no code). MM's node is dynamic-arity and typed "any"; erhe pins are static and per-type, so this is a fixed 4-choice switch registered once per value type. |
@@ -159,7 +159,7 @@ ones still missing are the backlog, prioritized in
 | Material Maker family        | ~Count | Representative nodes | Cost | Benefit | Score | erhe status |
 |------------------------------|--------|----------------------|------|---------|-------|-------------|
 | Gradients                    | 5      | `gradient`, `circular_gradient`, `radial_gradient`, `spiral_gradient`, `multigradient` | 1 | 4 | 4.0 | All 5 ported as descriptors in a new "Gradients" palette category. |
-| Switch                       | 1      | `switch` (engine, `gen_switch.gd`) | 1 | 3 | 3.0 | Registered once per value type (`switch`, `switch_grayscale`, `switch_rgb`) because erhe pins are type-strict; 4 choices each. |
+| Switch                       | 1      | `switch` (engine, `gen_switch.gd`) | 1 | 3 | 3.0 | Registered once per value type (`switch`, `switch_grayscale`, `switch_rgb`) because erhe pins are static and per-type; 4 choices each. |
 | Image / texture input        | 2      | `image`, `texture` (engine) | 2 | 5 | 2.5 | Missing. Sample an external bitmap as a graph source; the `buffer` node already proves `sampler2D`-backed expressions downstream. |
 | Transform / UV warps         | 25     | `translate`, `rotate`, `scale`, `shear`, `skew`, `warp`, `directional_warp`, `multi_warp`, `warp_dilation*`, `swirl`, `twist`, `spherize`, `kaleidoscope`, `mirror`, `repeat`, `custom_uv`, `distort`, `refract`, `magnify` | 2 | 5 | 2.5 | 13 of ~25 ported: rotate, scale, shear, skew, mirror, repeat, swirl, spherize, magnify, kaleidoscope, warp, directional_warp, refract. Still missing: `multi_warp` (compound node), `distort` (needs a lattice widget type), `custom_uv` (tileset + variation machinery), `twist` (sdf3d, out of scope), `warp_dilation*` (multi-pass buffers). |
 | Color / tone filters         | 18     | `auto_tones`, `tonality`, `tones`, `tones_map/range/step`, `palettize`, `colormap`, `convert_colorspace`, `greyscale`, `ensure_greyscale`, `ensure_rgba`, `default_color`, `compare` | 2 | 4 | 2.0 | 14 nodes ported. Still missing: `auto_tones` (no shader_model - needs a min/max reduction over the whole image, which the composer cannot express). `tones` needed no levels widget after all: it is five color parameters. |
@@ -252,7 +252,8 @@ Substitution grammar (`gen_shader.gd::replace_variables`):
 
 Connection compatibility = matching `slot` integer (`f`/`rgb`/`rgba` freely
 interconnect); conversions are expression-rewrite templates
-(`f`->`rgb` = `vec3($(value))`, `rgba`->`f` = `dot(rgb, vec3(1))/3`).
+(`f`->`rgb` = `vec3($(value))`, `rgba`->`f` = `dot(rgb, vec3(1))/3`; erhe
+takes red for -> `f`, "Pin types and conversions").
 
 ### Buffers, seeds, widgets, material output
 
@@ -384,10 +385,9 @@ precedent; it is unrelated to this feature despite the name.
 
 6. **Unified expression payloads.** There are no separate scalar payload
    types: a float constant node outputs type `f` with expression `0.5`; a
-   color constant outputs `rgba`. Pin compatibility follows Material Maker's
-   slot classes (`f`/`rgb`/`rgba` interconnect via conversion expressions).
-   Types today: `f`, `rgb`, `rgba`; an `sdf2d` type would arrive with the SDF
-   nodes.
+   color constant outputs `rgba`. Any of `f`/`rgb`/`rgba` links to any other
+   ("Pin types and conversions" below). Types today: `f`, `rgb`, `rgba`; an
+   `sdf2d` type would arrive with the SDF nodes.
 
 7. **Parameters as uniforms.** Float/color parameters become entries in one
    std140 UBO per composed shader (respecting the project's explicit
@@ -401,6 +401,37 @@ precedent; it is unrelated to this feature despite the name.
    subtrees. Each node caches its composed `Shader_code`. Preview rendering
    and output baking are recorded during the editor frame (the window's
    render hook), never blocking on GPU readback.
+
+### Pin types and conversions
+
+A pin's key is its value type (`Texture_pin_key`). `Texture_graph` overrides
+`erhe::graph::Graph::are_keys_compatible()` so any `f` / `rgb` / `rgba`
+output links to any `f` / `rgb` / `rgba` input; the node editor's link drag,
+`Texture_graph_window::connect()` (UI drop and MCP `texture_graph_connect`)
+and scene load all ask that one predicate. The graph shows only the link: no
+conversion node appears in the node editor, the MCP node listing or the
+saved file.
+
+The value converts where the input reads it, with the
+`erhe::texgen::convert()` table (`value_type.cpp`):
+
+| Link (source -> sink) | Sink reads |
+|---|---|
+| `f` -> `rgb`     | `vec3(v)` |
+| `f` -> `rgba`    | `vec4(vec3(v), 1.0)` |
+| `rgb` -> `f`     | `v.r` |
+| `rgba` -> `f`    | `v.r` |
+| `rgb` -> `rgba`  | `vec4(v, 1.0)` |
+| `rgba` -> `rgb`  | `v.rgb` |
+
+Descriptor nodes get the conversion from the composer at each typed input.
+Sinks that render what is linked to an input (the output, buffer and
+material output nodes, and the MCP export of an output node) build their
+DAG with `build_texture_input_dag()`: when the source's type differs from
+the input pin's, the DAG sink is a hidden identity Compose_node with one
+input of the pin's type (`implicit_convert_<type>`), never registered in the
+factory or palette. The `greyscale` (weightings) and `ensure_greyscale`
+(average) nodes remain for a mix of the channels.
 
 ---
 

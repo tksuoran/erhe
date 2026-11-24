@@ -125,12 +125,12 @@ void Texture_output_node::render_products(App_context& context, Texture_renderer
     if (input_index < 0) {
         return; // disconnected - keep the last baked texture
     }
-    const Texture_payload source = input_from_links(static_cast<std::size_t>(input_index));
-    if (source.source_node == nullptr) {
+    const Texture_input input = typed_input_from_links(static_cast<std::size_t>(input_index));
+    if (input.source.source_node == nullptr) {
         return;
     }
 
-    const Texture_compose_dag dag = build_texture_compose_dag(*source.source_node, source.output_index);
+    const Texture_compose_dag dag = build_texture_input_dag(input);
     const bool ok = render_dag(context, renderer, dag, get_preview_texture_ref(), render_target_size());
     if (!ok) {
         return; // compose error / buffer texture not ready - keep the previous texture

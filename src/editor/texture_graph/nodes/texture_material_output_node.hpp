@@ -105,12 +105,12 @@ private:
 
     // The connected source for a channel (empty source_node when unconnected),
     // preferring the channel's primary input pin over its secondary one.
-    [[nodiscard]] auto pick_channel(std::size_t first_pin) const -> Texture_payload;
+    [[nodiscard]] auto pick_channel(std::size_t first_pin) const -> Texture_input;
 
     void render_separate_channel(
         Texture_renderer&      renderer,
         Separate_channel       channel,
-        const Texture_payload& source,
+        const Texture_input&   input,
         int                    size
     );
     void render_orm(

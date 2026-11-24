@@ -166,7 +166,7 @@ TEST(Inputs, function_form_return_value_is_converted_on_type_mismatch)
     const Composer composer{};
     const Shader_code shader_code = composer.compose(blur, 0);
     EXPECT_NE(
-        shader_code.get_defs().find("return (dot(o1_0_0_rgb, vec3(1.0))/3.0);"),
+        shader_code.get_defs().find("return ((o1_0_0_rgb).r);"),
         std::string::npos
     );
 }

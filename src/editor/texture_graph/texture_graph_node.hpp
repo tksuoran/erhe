@@ -54,6 +54,9 @@ public:
     // later node needs fan-in it accumulates here.
     [[nodiscard]] auto input_from_links(std::size_t i) const -> Texture_payload;
 
+    // input_from_links(i) together with the value type of input pin slot i.
+    [[nodiscard]] auto typed_input_from_links(std::size_t i) const -> Texture_input;
+
     // Stores input_from_links() into every input payload slot. Call at the
     // start of evaluate() so imgui() and downstream sinks can read the inputs
     // via get_input() without re-walking the links.

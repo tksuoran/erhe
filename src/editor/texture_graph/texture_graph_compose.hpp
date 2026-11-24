@@ -73,6 +73,11 @@ public:
 // ok is false when the sink has no descriptor; nodes is then empty.
 [[nodiscard]] auto build_texture_compose_dag(Texture_graph_node& sink_node, std::size_t output_index) -> Texture_compose_dag;
 
+// Compose DAG for a sink that renders what is linked to one of its inputs
+// (output, buffer and material output nodes). When the source's type differs
+// from the input's, the DAG sink is a hidden conversion node of input.type.
+[[nodiscard]] auto build_texture_input_dag(const Texture_input& input) -> Texture_compose_dag;
+
 // Builds one compose DAG whose sink is a synthetic Compose_node created from
 // combiner_descriptor, with each combiner input i wired to the source subtree
 // named by channel_roots[i] (source editor node + output index; a null

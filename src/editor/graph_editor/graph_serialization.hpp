@@ -182,8 +182,8 @@ auto read_graph_asset_json(
             log_graph_editor->warn("{} load: link pin slot out of range", log_label);
             return false;
         }
-        if (source->get_output_pins().at(source_slot).get_key() != sink->get_input_pins().at(sink_slot).get_key()) {
-            log_graph_editor->warn("{} load: link pin key mismatch", log_label);
+        if (!asset.graph().are_keys_compatible(source->get_output_pins().at(source_slot).get_key(), sink->get_input_pins().at(sink_slot).get_key())) {
+            log_graph_editor->warn("{} load: link pin keys are not compatible", log_label);
             return false;
         }
     }

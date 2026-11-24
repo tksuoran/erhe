@@ -104,12 +104,12 @@ void Texture_buffer_node::render_products(App_context& context, Texture_renderer
     if (input_index < 0) {
         return; // disconnected - keep the last texture
     }
-    const Texture_payload source = input_from_links(static_cast<std::size_t>(input_index));
-    if (source.source_node == nullptr) {
+    const Texture_input input = typed_input_from_links(static_cast<std::size_t>(input_index));
+    if (input.source.source_node == nullptr) {
         return;
     }
     // Render the input subtree (never this buffer itself) into our own texture.
-    const Texture_compose_dag dag = build_texture_compose_dag(*source.source_node, source.output_index);
+    const Texture_compose_dag dag = build_texture_input_dag(input);
     static_cast<void>(render_dag(context, renderer, dag, get_preview_texture_ref(), render_target_size()));
 }
 

@@ -79,6 +79,14 @@ auto Texture_graph_node::input_from_links(const std::size_t i) const -> Texture_
     return result;
 }
 
+auto Texture_graph_node::typed_input_from_links(const std::size_t i) const -> Texture_input
+{
+    return Texture_input{
+        .source = input_from_links(i),
+        .type   = pin_key_to_value_type(get_input_pins().at(i).get_key())
+    };
+}
+
 void Texture_graph_node::pull_inputs()
 {
     for (std::size_t i = 0, end = m_input_payloads.size(); i < end; ++i) {

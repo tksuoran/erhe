@@ -9,6 +9,8 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::graph`: `Graph::are_keys_compatible()` - virtual pin-key compatibility test used by
+  `connect()`; equal keys by default (`doc/erhe/graph.md`).
 - `erhe::primitive`: `material.hpp` - the detail blend values of `Material` and `Material_values`
   (`detail_blend`, `detail_blend_weight_channel`, `detail_blend_height_channel`,
   `detail_blend_height_influence`, `detail_blend_transition_width`, `detail_blend_noise_amount`,
@@ -234,6 +236,8 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Changed
 
+- `erhe::texgen`: `convert()` / `conversion_template()` from `rgb` or `rgba` to `grayscale` take the red
+  channel instead of the channel average (`doc/erhe/texgen.md`).
 - `erhe::scene_renderer`: `shader_key.hpp` - `Shader_key::bool_mask` and `make_shader_bool_mask()` are
   `Shader_bool_mask` (`uint64_t`, was `uint32_t`), as are the force enable / disable masks of
   `Forward_renderer::Prepare_parameters`, `Forward_renderer::Prewarm_parameters`,

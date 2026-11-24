@@ -323,12 +323,15 @@ void Texture_graph_window::remove_node(const std::shared_ptr<Texture_graph_node>
 
 auto Texture_graph_window::connect(erhe::graph::Pin* source_pin, erhe::graph::Pin* sink_pin) -> bool
 {
-    if ((source_pin == nullptr) || (sink_pin == nullptr) || (source_pin->get_key() != sink_pin->get_key())) {
+    if ((source_pin == nullptr) || (sink_pin == nullptr)) {
         return false;
     }
     const std::shared_ptr<Graph_texture>& graph_texture = get_current_graph_texture();
     if (!graph_texture) {
         return false; // empty state - no asset selected
+    }
+    if (!graph_texture->graph().are_keys_compatible(source_pin->get_key(), sink_pin->get_key())) {
+        return false;
     }
     // Validate before creating the operation: a refused link must not leave a
     // no-op entry on the undo stack. (The cycle test is unaffected by the sink
@@ -803,7 +806,7 @@ void Texture_graph_window::handle_link_create()
                     (sink_pin != nullptr) &&
                     (source_pin != sink_pin) &&
                     (source_node != sink_node) &&
-                    (source_pin->get_key() == sink_pin->get_key()) &&
+                    graph().are_keys_compatible(source_pin->get_key(), sink_pin->get_key()) &&
                     !graph().would_create_cycle(source_pin, sink_pin)
                 ) {
                     acceptable = true;

@@ -25,6 +25,9 @@ public:
 // Maps a texgen Value_type to its Texture_pin_key.
 [[nodiscard]] auto value_type_to_pin_key(erhe::texgen::Value_type type) -> std::size_t;
 
+// Maps a Texture_pin_key to its texgen Value_type.
+[[nodiscard]] auto pin_key_to_value_type(std::size_t key) -> erhe::texgen::Value_type;
+
 // Value carried through texture graph pins.
 //
 // Unlike the geometry graph - whose payload holds a concrete result
@@ -50,6 +53,15 @@ public:
     Texture_graph_node*      source_node {nullptr};
     std::size_t              output_index{0};
     erhe::texgen::Value_type value_type  {erhe::texgen::Value_type::rgba};
+};
+
+// The source linked to an input pin, with the pin's own value type: the
+// source's value is converted to `type` where the input reads it.
+class Texture_input
+{
+public:
+    Texture_payload          source{};
+    erhe::texgen::Value_type type  {erhe::texgen::Value_type::rgba};
 };
 
 } // namespace editor

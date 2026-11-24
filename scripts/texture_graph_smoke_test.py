@@ -4,8 +4,9 @@
 Drives the in-editor MCP server (headless Vulkan build) through the whole
 texture graph feature: every node type constructs with the expected pins and
 default parameters, parameter sweeps round-trip with undo/redo, out-of-range
-parameter abuse never crashes, connect/disconnect obey the pin-key rules and
-reject type mismatches / self links / cycles, undo/redo of add + connect +
+parameter abuse never crashes, connect/disconnect obey the pin rules (any
+two of f / rgb / rgba link with a hidden conversion; self links and cycles
+are rejected), undo/redo of add + connect +
 parameter edits, and - the core "it actually renders" proof - export_png of a
 uniform node whose center pixel must match the set color, a perlin node whose
 output must vary, and the Output node's baked subtree. Graphs only live in the
@@ -14,12 +15,14 @@ creating + selecting a fresh Graph_texture asset (fresh_graph()); persistence
 is scene save/load, covered by section_graph_texture_asset. Prints a
 structured PASS/FAIL report and exits non-zero on any failure.
 
-Assumes the headless editor is already running with the MCP server reachable on
-127.0.0.1:3743 (exactly like scripts/geometry_nodes_smoke_test.py). Texture
+Assumes the editor is already running with the MCP server reachable on
+127.0.0.1:<--port> (default 3743, like scripts/geometry_nodes_smoke_test.py).
+--only <name>[,<name>...] runs the named sections (section_ prefix optional). Texture
 graph evaluation is synchronous (doc/editor/texture_graph.md decision 8), so a
 get_texture_graph after a mutation reads settled state with no async barrier.
 """
 
+import argparse
 import json
 import pathlib
 import struct
@@ -177,7 +180,10 @@ def fresh_graph():
     tools target the selected asset). Graphs only live in the content library
     - there is no window scratch graph and no clear/load tool."""
     global _fresh_count
+    taken = {g["name"] for g in call("get_graph_textures").get("graph_textures", [])}
     _fresh_count += 1
+    while f"Smoke {_fresh_count}" in taken:  # an earlier run against the same editor
+        _fresh_count += 1
     mutate("create_graph_texture", {"name": f"Smoke {_fresh_count}", "scene_name": _get_scene_name()})
 
 
@@ -590,9 +596,9 @@ def section_parameter_abuse():
 
 
 def section_connect_rules():
-    """Pin-key rules: valid chain connects, disconnect removes, and
-    type-mismatch / self / 2-node / 3-node cycles are all rejected with no
-    link created and no undo entry."""
+    """Pin rules: valid chain connects, disconnect removes, and self /
+    2-node / 3-node cycles are all rejected with no link created and no undo
+    entry. Cross-type links are section_implicit_conversions."""
     S = "connect"
     fresh_graph()
     perlin = add_node("perlin")["id"]        # out f (key grayscale)
@@ -627,8 +633,6 @@ def section_connect_rules():
 
     # Rejections.
     fresh_graph()
-    uni = add_node("uniform")["id"]           # out rgba (key rgba)
-    colorize = add_node("colorize")["id"]     # in f (key grayscale)
     tr_a = add_node("transform")["id"]        # in rgba, out rgba
     tr_b = add_node("transform")["id"]
     tr_c = add_node("transform")["id"]
@@ -637,8 +641,6 @@ def section_connect_rules():
     links_before = len(get_graph()["links"])
     depth_before = undo_depth()
 
-    err = connect_expect_error(uni, 0, colorize, 0)  # rgba -> f (key mismatch)
-    check(S, "type mismatch (rgba->f) rejected", err is not None, f"err={err}")
     err = connect_expect_error(tr_a, 0, tr_a, 0)     # self link
     check(S, "self connect rejected", err is not None, f"err={err}")
     err = connect_expect_error(tr_b, 0, tr_a, 0)     # 2-node cycle B->A
@@ -651,6 +653,91 @@ def section_connect_rules():
           f"before={links_before} after={links_after}")
     check(S, "rejected connects add no undo entries", undo_depth() == depth_before,
           f"before={depth_before} after={undo_depth()}")
+
+
+def export_center(node_id, name):
+    """Exports node_id at 16x16 and returns its center pixel as 0..255 ints."""
+    path = TMP_DIR / f"{name}.png"
+    export_png(node_id, path, size=16)
+    w, _h, ch, buf = decode_png(path)
+    return pixel(w, ch, buf, 8, 8)
+
+
+def check_pixel(section, name, actual, expected_unit):
+    expected = [round(c * 255) for c in expected_unit]
+    match = all(abs(actual[i] - expected[i]) <= 3 for i in range(4))
+    check(section, name, match, f"pixel={actual} expected={expected}")
+
+
+def section_implicit_conversions():
+    """f / rgb / rgba links in every direction: accepted with no extra node in
+    the graph, converted at the sink input (-> f takes red, -> rgb drops
+    alpha, f -> color duplicates, -> rgba sets alpha one), undoable, and the
+    links survive a scene save / load."""
+    S = "implicit-conversions"
+    TMP_DIR.mkdir(parents=True, exist_ok=True)
+    color = [0.8, 0.3, 0.1, 0.5]
+
+    fresh_graph()
+    uni = add_node("uniform")["id"]                # out rgba
+    set_param(uni, {"color": color})
+    to_rgba = add_node("ensure_rgba")["id"]        # in f,   out rgba
+    to_f = add_node("ensure_greyscale")["id"]      # in rgb, out f (average)
+    gray = add_node("uniform_greyscale")["id"]     # out f
+    set_param(gray, {"color": 0.25})
+    tr = add_node("transform")["id"]               # in rgba, out rgba
+    depth = undo_depth()
+    connect(uni, 0, to_rgba, 0)                    # rgba -> f
+    connect(uni, 0, to_f, 0)                       # rgba -> rgb
+    connect(gray, 0, tr, 0)                        # f -> rgba
+    graph = get_graph()
+    check(S, "cross-type links are created", len(graph["links"]) == 3, f"links={graph['links']}")
+    check(S, "no hidden node shows in the graph", len(graph["nodes"]) == 5, f"nodes={len(graph['nodes'])}")
+    check(S, "each cross-type connect is one undo entry", undo_depth() == depth + 3,
+          f"before={depth} after={undo_depth()}")
+
+    check_pixel(S, "rgba -> f takes red", export_center(to_rgba, "conv_rgba_to_f"), [0.8, 0.8, 0.8, 1.0])
+    average = (0.8 + 0.3 + 0.1) / 3.0
+    check_pixel(S, "rgba -> rgb keeps the color channels", export_center(to_f, "conv_rgba_to_rgb"),
+                [average, average, average, 1.0])
+    check_pixel(S, "f -> rgba duplicates and sets alpha one", export_center(tr, "conv_f_to_rgba"),
+                [0.25, 0.25, 0.25, 1.0])
+
+    undo(1)
+    check(S, "undo removes the cross-type link", len(get_graph()["links"]) == 2)
+    redo(1)
+    check(S, "redo restores the cross-type link", len(get_graph()["links"]) == 3)
+
+    # Sinks that render their input directly convert to the pin's type.
+    def output_pixel(slot, name):
+        fresh_graph()
+        source = add_node("uniform")["id"]
+        set_param(source, {"color": color})
+        output = add_node("output")["id"]           # in f / rgb / rgba (slots 0 / 1 / 2)
+        connect(source, 0, output, slot)
+        return export_center(output, name)
+    check_pixel(S, "output f pin takes red", output_pixel(0, "conv_output_f"), [0.8, 0.8, 0.8, 1.0])
+    check_pixel(S, "output rgb pin drops alpha", output_pixel(1, "conv_output_rgb"), [0.8, 0.3, 0.1, 1.0])
+
+    # Scene save / load keeps a graph whose only link is cross-type.
+    scene_name = _get_scene_name()
+    taken = {g["name"] for g in call("get_graph_textures").get("graph_textures", [])}
+    run = next(n for n in range(1, 1000) if f"Conversion Asset {n}" not in taken)
+    asset_name = f"Conversion Asset {run}"
+    mutate("create_graph_texture", {"name": asset_name, "scene_name": scene_name})
+    source = add_node("uniform")["id"]
+    set_param(source, {"color": color})
+    output = add_node("output")["id"]
+    connect(source, 0, output, 0)                   # rgba -> f
+    scene_path = TMP_DIR / f"conversion_roundtrip_{run}.glb"
+    wait_for_save(call, mutate("save_scene", {"scene_name": scene_name, "path": str(scene_path)}))
+    check(S, "save wrote the scene file", scene_path.is_file(), detail=str(scene_path))
+    before = len([g for g in call("get_graph_textures")["graph_textures"] if g["name"] == asset_name])
+    mutate("load_scene", {"path": str(scene_path)})
+    check(S, "loaded scene appears in list_scenes", wait_for_scene(f"conversion_roundtrip_{run}"))
+    after = [g for g in call("get_graph_textures")["graph_textures"] if g["name"] == asset_name]
+    check(S, "reloaded asset keeps the cross-type link and bakes", len(after) == before + 1 and all(g.get("has_output") for g in after),
+          detail=str(after))
 
 
 def section_undo_redo():
@@ -1517,15 +1604,14 @@ def section_switch():
     check(S, "source=2 (unconnected) renders the default, opaque black",
           all(v < 12 for v in px3[:3]) and px3[3] > 200, f"pixel={px3}")
 
-    # The grayscale variant exists precisely because pin keys are per value
-    # type: connecting a grayscale generator to the rgba switch must be
-    # refused, and must be accepted by switch_grayscale.
+    # A grayscale generator links to the rgba switch (implicit f -> rgba)
+    # and to switch_grayscale.
     fresh_graph()
     sw_rgba = add_node("switch")["id"]
     sw_gray = add_node("switch_grayscale")["id"]
     perlin = add_node("perlin")["id"]
-    err = connect_expect_error(perlin, 0, sw_rgba, 0)
-    check(S, "grayscale source refused by the rgba switch (pin key mismatch)", bool(err), f"err={err}")
+    check(S, "grayscale source accepted by the rgba switch (implicit conversion)",
+          connect(perlin, 0, sw_rgba, 0) is not None)
     check(S, "grayscale source accepted by switch_grayscale",
           connect(perlin, 0, sw_gray, 0) is not None)
 
@@ -1962,6 +2048,7 @@ def main():
         section_parameter_sweeps,
         section_parameter_abuse,
         section_connect_rules,
+        section_implicit_conversions,
         section_undo_redo,
         section_render_export,
         section_gradient_curve,
@@ -1980,6 +2067,19 @@ def main():
         section_material_output,
         section_graph_texture_asset,
     ]
+    parser = argparse.ArgumentParser(description="Texture graph smoke test")
+    parser.add_argument("--port", type=int, default=3743)
+    parser.add_argument("--only", default="", help="comma separated section names")
+    args = parser.parse_args()
+    global PORT
+    PORT = args.port
+    if args.only:
+        wanted = {name if name.startswith("section_") else f"section_{name}" for name in args.only.split(",")}
+        unknown = wanted - {section.__name__ for section in sections}
+        if unknown:
+            print(f"unknown sections: {sorted(unknown)}")
+            return 2
+        sections = [section for section in sections if section.__name__ in wanted]
     for section in sections:
         print(f"\n=== {section.__name__} ===")
         try:
