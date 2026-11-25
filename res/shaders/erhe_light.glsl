@@ -924,9 +924,11 @@ float sample_light_visibility_normal_offset(vec3 view_relative_position, vec3 ge
     vec3  to_light       = perspective ? (-receiver_point / light_distance) : light.direction_and_outer_spot_cos.xyz;
     float texel          = light.mobile_bias.x * light_distance;
     vec2  texels         = light_block.shadow_normal_offset;
-    float n_dot_l        = clamp(dot(geometric_normal, to_light), 0.0, 1.0);
+    // The offset leaves on the lit face: a transmitting (leaf) fragment faces away from the light.
+    vec3  lit_normal     = (dot(geometric_normal, to_light) < 0.0) ? -geometric_normal : geometric_normal;
+    float n_dot_l        = clamp(dot(lit_normal, to_light), 0.0, 1.0);
     float sin_theta      = sqrt(1.0 - (n_dot_l * n_dot_l));
-    receiver_point      += (geometric_normal * (texels.x * texel * sin_theta)) + (to_light * (texels.y * texel));
+    receiver_point      += (lit_normal * (texels.x * texel * sin_theta)) + (to_light * (texels.y * texel));
     vec4  h              = light.texture_from_view_relative * vec4(receiver_point, 1.0);
     vec3  p              = h.xyz / h.w;
     // The linear compare sampler: the hardware's 2x2 percentage-closer filter
@@ -948,9 +950,11 @@ float sample_point_light_visibility_normal_offset(vec3 view_relative_position, v
     vec3  to_light          = -light_to_receiver / light_distance;
     float texel             = light.mobile_bias.x * light_distance;
     vec2  texels            = light_block.shadow_normal_offset;
-    float n_dot_l           = clamp(dot(geometric_normal, to_light), 0.0, 1.0);
+    // The offset leaves on the lit face: a transmitting (leaf) fragment faces away from the light.
+    vec3  lit_normal        = (dot(geometric_normal, to_light) < 0.0) ? -geometric_normal : geometric_normal;
+    float n_dot_l           = clamp(dot(lit_normal, to_light), 0.0, 1.0);
     float sin_theta         = sqrt(1.0 - (n_dot_l * n_dot_l));
-    light_to_receiver      += (geometric_normal * (texels.x * texel * sin_theta)) + (to_light * (texels.y * texel));
+    light_to_receiver      += (lit_normal * (texels.x * texel * sin_theta)) + (to_light * (texels.y * texel));
     float stored            = textureLod(s_shadow_cube, vec4(light_to_receiver, light.shadow_params.z), 0.0).r;
     return (length(light_to_receiver) > stored) ? 0.0 : 1.0;
 #else

@@ -117,6 +117,7 @@ public:
         case erhe::primitive::Bxdf_model::anisotropic_brdf:         return "anisotropic_brdf";
         case erhe::primitive::Bxdf_model::anisotropic_slope:        return "anisotropic_slope";
         case erhe::primitive::Bxdf_model::anisotropic_engine_ready: return "anisotropic_engine_ready";
+        case erhe::primitive::Bxdf_model::leaf:                     return "leaf";
     }
     return "isotropic_brdf";
 }
@@ -128,6 +129,7 @@ public:
     if (s == "anisotropic_brdf")         return erhe::primitive::Bxdf_model::anisotropic_brdf;
     if (s == "anisotropic_slope")        return erhe::primitive::Bxdf_model::anisotropic_slope;
     if (s == "anisotropic_engine_ready") return erhe::primitive::Bxdf_model::anisotropic_engine_ready;
+    if (s == "leaf")                     return erhe::primitive::Bxdf_model::leaf;
     return std::nullopt;
 }
 
@@ -4895,6 +4897,25 @@ private:
             if (material.transmission) {
                 create_data.transmission = material.transmission->transmissionFactor;
             }
+            // KHR_materials_diffuse_transmission: a thin translucent surface
+            // is the leaf BxDF (doc/plans/leaf_material.md). glTF has one set
+            // of reflective parameters, so the back face copies the front.
+            if (material.diffuseTransmission && (material.diffuseTransmission->diffuseTransmissionFactor > 0.0f) && !material.unlit) {
+                const fastgltf::MaterialDiffuseTransmission& diffuse_transmission = *material.diffuseTransmission;
+                create_data.bxdf_model                 = erhe::primitive::Bxdf_model::leaf;
+                create_data.diffuse_transmission       = diffuse_transmission.diffuseTransmissionFactor;
+                create_data.diffuse_transmission_color = glm::vec3{
+                    diffuse_transmission.diffuseTransmissionColorFactor[0],
+                    diffuse_transmission.diffuseTransmissionColorFactor[1],
+                    diffuse_transmission.diffuseTransmissionColorFactor[2]
+                };
+                create_data.back_base_color  = create_data.base_color;
+                create_data.back_roughness   = create_data.roughness.x;
+                create_data.back_reflectance = create_data.reflectance;
+                if (diffuse_transmission.diffuseTransmissionTexture.has_value() || diffuse_transmission.diffuseTransmissionColorTexture.has_value()) {
+                    log_gltf->info("Material '{}': KHR_materials_diffuse_transmission textures are not supported; the factors are used", material.name);
+                }
+            }
             log_gltf->trace(
                 "Material PBR metallic roughness base color factor = {}, {}, {}, {}",
                 pbr_data.baseColorFactor[0],
@@ -7811,6 +7832,7 @@ auto rebind_sources_to_written_file(const std::filesystem::path& path, const Glt
         fastgltf::Extensions::KHR_materials_iridescence           |
         fastgltf::Extensions::KHR_materials_volume                |
         fastgltf::Extensions::KHR_materials_transmission          |
+        fastgltf::Extensions::KHR_materials_diffuse_transmission  |
         fastgltf::Extensions::KHR_materials_clearcoat             |
         fastgltf::Extensions::KHR_materials_emissive_strength     |
         fastgltf::Extensions::KHR_materials_sheen                 |
@@ -8020,6 +8042,7 @@ auto parse_gltf(const Gltf_parse_arguments& arguments) -> Gltf_data
         fastgltf::Extensions::KHR_materials_iridescence           |
         fastgltf::Extensions::KHR_materials_volume                |
         fastgltf::Extensions::KHR_materials_transmission          |
+        fastgltf::Extensions::KHR_materials_diffuse_transmission  |
         fastgltf::Extensions::KHR_materials_clearcoat             |
         fastgltf::Extensions::KHR_materials_emissive_strength     |
         fastgltf::Extensions::KHR_materials_sheen                 |
@@ -8858,6 +8881,29 @@ auto parse_gltf(const Gltf_parse_arguments& arguments) -> Gltf_data
                         material->set_bxdf_model(parsed.value());
                     }
                 }
+                simdjson::dom::array back_base_color_array;
+                if ((extension_object.at_key("back_base_color").get_array().get(back_base_color_array) == simdjson::SUCCESS) && (back_base_color_array.size() == 3)) {
+                    glm::vec3   back_base_color{1.0f, 1.0f, 1.0f};
+                    std::size_t component = 0;
+                    bool        valid     = true;
+                    for (const simdjson::dom::element item : back_base_color_array) {
+                        double number{0.0};
+                        if (item.get_double().get(number) != simdjson::SUCCESS) {
+                            valid = false;
+                            break;
+                        }
+                        back_base_color[static_cast<glm::length_t>(component++)] = static_cast<float>(number);
+                    }
+                    if (valid) {
+                        material->set_back_base_color(back_base_color);
+                    }
+                }
+                if (read_float(extension_object, "back_roughness", float_value)) {
+                    material->set_back_roughness(float_value);
+                }
+                if (read_float(extension_object, "back_reflectance", float_value)) {
+                    material->set_back_reflectance(float_value);
+                }
                 if (extension_object.at_key("blending_mode").get_string().get(string_value) == simdjson::SUCCESS) {
                     if (const auto parsed = blending_mode_from_string(string_value); parsed.has_value()) {
                         material->set_blending_mode(parsed.value());
@@ -8998,6 +9044,7 @@ auto scan_gltf(std::filesystem::path path) -> Gltf_scan
         fastgltf::Extensions::KHR_materials_iridescence           |
         fastgltf::Extensions::KHR_materials_volume                |
         fastgltf::Extensions::KHR_materials_transmission          |
+        fastgltf::Extensions::KHR_materials_diffuse_transmission  |
         fastgltf::Extensions::KHR_materials_clearcoat             |
         fastgltf::Extensions::KHR_materials_emissive_strength     |
         fastgltf::Extensions::KHR_materials_sheen                 |
@@ -11558,6 +11605,16 @@ private:
                 gltf_material.transmission.emplace();
                 gltf_material.transmission->transmissionFactor = data.transmission;
             }
+            // The leaf BxDF's transmission; its back face rides ERHE_material.
+            if ((data.bxdf_model == erhe::primitive::Bxdf_model::leaf) && (data.diffuse_transmission > 0.0f)) {
+                gltf_material.diffuseTransmission.emplace();
+                gltf_material.diffuseTransmission->diffuseTransmissionFactor      = data.diffuse_transmission;
+                gltf_material.diffuseTransmission->diffuseTransmissionColorFactor = fastgltf::math::nvec3{
+                    data.diffuse_transmission_color.x,
+                    data.diffuse_transmission_color.y,
+                    data.diffuse_transmission_color.z
+                };
+            }
 
             // Material_blending_mode -> alphaMode (+ alphaCutoff for
             // MASK). erhe-specific modes (multiply / add / subtract /
@@ -11683,6 +11740,8 @@ private:
             (data.detail_blend_noise_space      != detail_defaults.detail_blend_noise_space     ) ||
             detail_texture_index.has_value();
 
+        const bool emit_leaf_back = (data.bxdf_model == erhe::primitive::Bxdf_model::leaf);
+
         if (!emit_roughness_y &&
             !emit_bxdf_model &&
             !emit_blending_mode &&
@@ -11691,7 +11750,8 @@ private:
             !data.use_circular_brushed_metal &&
             !data.use_aniso_control &&
             !emit_style &&
-            !emit_detail_blend)
+            !emit_detail_blend &&
+            !emit_leaf_back)
         {
             return;
         }
@@ -11729,6 +11789,16 @@ private:
         }
         if (emit_normalmap_encoding) {
             fields += fmt::format("{}\"normalmap_encoding\":\"{}\"", separator, normalmap_encoding_to_c_str(data.normalmap_encoding));
+            separator = ",";
+        }
+        if (emit_leaf_back) {
+            fields += fmt::format(
+                "{}\"back_base_color\":[{},{},{}],\"back_roughness\":{},\"back_reflectance\":{}",
+                separator,
+                data.back_base_color.x, data.back_base_color.y, data.back_base_color.z,
+                data.back_roughness,
+                data.back_reflectance
+            );
             separator = ",";
         }
         if (emit_blending_mode) {

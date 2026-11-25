@@ -3054,7 +3054,14 @@ auto Mcp_server::query_material_details(const json& args) -> std::string
                     (d.bxdf_model == erhe::primitive::Bxdf_model::anisotropic_brdf)         ? "anisotropic_brdf" :
                     (d.bxdf_model == erhe::primitive::Bxdf_model::anisotropic_slope)        ? "anisotropic_slope" :
                     (d.bxdf_model == erhe::primitive::Bxdf_model::anisotropic_engine_ready) ? "anisotropic_engine_ready" :
+                    (d.bxdf_model == erhe::primitive::Bxdf_model::leaf)                     ? "leaf" :
                                                                                               "isotropic_brdf"},
+                {"double_sided",               d.double_sided},
+                {"back_base_color",            {d.back_base_color.x, d.back_base_color.y, d.back_base_color.z}},
+                {"back_roughness",             d.back_roughness},
+                {"back_reflectance",           d.back_reflectance},
+                {"diffuse_transmission",       d.diffuse_transmission},
+                {"diffuse_transmission_color", {d.diffuse_transmission_color.x, d.diffuse_transmission_color.y, d.diffuse_transmission_color.z}},
                 {"use_circular_brushed_metal", d.use_circular_brushed_metal},
                 {"use_aniso_control",          d.use_aniso_control},
                 {"blending_mode",

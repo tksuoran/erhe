@@ -60,7 +60,8 @@ enable / disable masks of the passes (`Forward_renderer`, `Shadow_renderer`,
 
 `ERHE_BXDF_MODEL` (integer axis) is the cast of
 `erhe::primitive::Bxdf_model` (`unlit`, `isotropic_brdf`,
-`anisotropic_brdf`, `anisotropic_slope`, `anisotropic_engine_ready`).
+`anisotropic_brdf`, `anisotropic_slope`, `anisotropic_engine_ready`, `leaf`;
+the leaf model is described in [leaf_material.md](leaf_material.md)).
 The GLSL `BXDF_CALL` macro in `standard.frag` dispatches on this
 constant.
 

@@ -90,8 +90,8 @@ for the user's test.
 22. Detail blend weight (height blended per vertex weight): every step
     is built. The user's windowed test ("User test") and rulings ("Open")
     of `doc/plans/detail_blend_weight_implementation.md`, then the push.
-23. Leaf material (double-sided reflection and diffuse transmission):
-    proposed; read `doc/plans/leaf_material.md` and start at step 1.
+23. Leaf material follow-ups (textures, baked translucency, ray query
+    path, USD): `doc/plans/leaf_material.md`.
 
 ## Quest session follow-ups
 

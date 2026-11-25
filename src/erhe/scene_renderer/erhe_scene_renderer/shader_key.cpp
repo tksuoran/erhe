@@ -91,7 +91,8 @@ namespace {
                 {"ERHE_BXDF_MODEL_ISOTROPIC_BRDF",           u(Bxdf_model::isotropic_brdf)},
                 {"ERHE_BXDF_MODEL_ANISOTROPIC_BRDF",         u(Bxdf_model::anisotropic_brdf)},
                 {"ERHE_BXDF_MODEL_ANISOTROPIC_SLOPE",        u(Bxdf_model::anisotropic_slope)},
-                {"ERHE_BXDF_MODEL_ANISOTROPIC_ENGINE_READY", u(Bxdf_model::anisotropic_engine_ready)}
+                {"ERHE_BXDF_MODEL_ANISOTROPIC_ENGINE_READY", u(Bxdf_model::anisotropic_engine_ready)},
+                {"ERHE_BXDF_MODEL_LEAF",                     u(Bxdf_model::leaf)}
             });
         }
         case Shader_int::MATERIAL_BLENDING_MODE: {

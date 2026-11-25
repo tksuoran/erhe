@@ -105,6 +105,12 @@ Material_interface::Material_interface(erhe::graphics::Device& graphics_device, 
         .detail_blend_parameters     = add_f4("detail_blend_parameters"    )->get_offset_in_parent(),
         .detail_blend_texture        = material_struct.add_uvec2("detail_blend_texture"       )->get_offset_in_parent(),
         .detail_blend_offset         = add_f2("detail_blend_offset"        )->get_offset_in_parent(),
+
+        // The leaf BxDF: back_reflectance completes the 16 bytes of
+        // detail_blend_offset; the two vec4s stay vec4-aligned.
+        .back_reflectance            = add_f1("back_reflectance"           )->get_offset_in_parent(),
+        .back_base_color_roughness   = add_f4("back_base_color_roughness"  )->get_offset_in_parent(),
+        .diffuse_transmission        = add_f4("diffuse_transmission"       )->get_offset_in_parent(),
     };
     material_block.add_struct("materials", &material_struct, erhe::graphics::Shader_resource::unsized_array);
     log_startup->info(
@@ -195,6 +201,9 @@ auto gather_material_record_inputs(
         data.detail_blend_noise_amount,
         data.detail_blend_noise_scale
     };
+    inputs.back_reflectance          = data.back_reflectance;
+    inputs.back_base_color_roughness = glm::vec4{data.back_base_color, data.back_roughness};
+    inputs.diffuse_transmission      = glm::vec4{data.diffuse_transmission_color, data.diffuse_transmission};
 
     const auto gather_texture = [&sampler_cache](
         const erhe::primitive::Material_texture_sampler& texture_sampler
@@ -272,6 +281,9 @@ auto get_default_material_record_inputs() -> Material_record_inputs
         defaults.detail_blend_noise_amount,
         defaults.detail_blend_noise_scale
     };
+    inputs.back_reflectance          = defaults.back_reflectance;
+    inputs.back_base_color_roughness = glm::vec4{defaults.back_base_color, defaults.back_roughness};
+    inputs.diffuse_transmission      = glm::vec4{defaults.diffuse_transmission_color, defaults.diffuse_transmission};
     // Every texture slot stays empty, so the handles resolve to
     // invalid_texture_handle and no heap allocation is made.
     return inputs;
@@ -383,6 +395,9 @@ void Material_buffer::write_record(
     write_floats(offsets.detail_blend_parameters,     &inputs.detail_blend_parameters.x,          4);
     write(gpu_data, write_offset + offsets.detail_blend_texture,              as_span(detail_blend_handle));
     write_floats(offsets.detail_blend_offset,         inputs.detail_blend_texture.offset,         2);
+    write_floats(offsets.back_reflectance,            &inputs.back_reflectance,                   1);
+    write_floats(offsets.back_base_color_roughness,   &inputs.back_base_color_roughness.x,        4);
+    write_floats(offsets.diffuse_transmission,        &inputs.diffuse_transmission.x,             4);
 }
 
 void Material_buffer::write_records(

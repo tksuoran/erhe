@@ -72,6 +72,10 @@ auto is_brushed_metal(const erhe::property::Dependency_object& object) -> bool
     const Material& material = static_cast<const Material&>(object);
     return supports_anisotropy(material.get_bxdf_model()) && material.get_use_circular_brushed_metal();
 }
+auto is_leaf(const erhe::property::Dependency_object& object) -> bool
+{
+    return static_cast<const Material&>(object).get_bxdf_model() == Bxdf_model::leaf;
+}
 auto is_alpha_test(const erhe::property::Dependency_object& object) -> bool
 {
     return static_cast<const Material&>(object).get_blending_mode() == Material_blending_mode::alpha_test;
@@ -197,6 +201,23 @@ const Property<Material_blending_mode> Material::blending_mode_property = Proper
 );
 const Property<bool> Material::double_sided_property = Property<bool>::register_property(
     "double_sided", c_owner, Property_metadata{.default_value = false, .inherits = true, .flags = c_partition_native, .ui = Property_ui{.label = "Double Sided"}}
+);
+// The leaf model's rows (doc/plans/leaf_material.md): the back face and the
+// diffuse transmission; base color, roughness and reflectance are the front's.
+const Property<glm::vec3> Material::back_base_color_property = Property<glm::vec3>::register_property(
+    "back_base_color", c_owner, Property_metadata{.default_value = glm::vec3{1.0f, 1.0f, 1.0f}, .inherits = true, .ui = Property_ui{.presentation = Property_ui::Presentation::color, .label = "Back Base Color", .visible_when = is_leaf}}
+);
+const Property<float> Material::back_roughness_property = Property<float>::register_property(
+    "back_roughness", c_owner, Property_metadata{.default_value = 0.5f, .inherits = true, .ui = Property_ui{.min = 0.001f, .max = 1.0f, .presentation = Property_ui::Presentation::slider, .label = "Back Roughness", .visible_when = is_leaf}}
+);
+const Property<float> Material::back_reflectance_property = Property<float>::register_property(
+    "back_reflectance", c_owner, Property_metadata{.default_value = 0.5f, .inherits = true, .ui = slider(0.0f, 1.0f, "Back Reflectance", {}, is_leaf)}, unit_range
+);
+const Property<float> Material::diffuse_transmission_property = Property<float>::register_property(
+    "diffuse_transmission", c_owner, Property_metadata{.default_value = 0.0f, .inherits = true, .ui = slider(0.0f, 1.0f, "Diffuse Transmission", "Fraction of the diffuse lobe that passes through to the other face", is_leaf)}, unit_range
+);
+const Property<glm::vec3> Material::diffuse_transmission_color_property = Property<glm::vec3>::register_property(
+    "diffuse_transmission_color", c_owner, Property_metadata{.default_value = glm::vec3{1.0f, 1.0f, 1.0f}, .inherits = true, .ui = Property_ui{.presentation = Property_ui::Presentation::color, .label = "Transmission Color", .visible_when = is_leaf}}
 );
 const Property<float> Material::alpha_cutoff_property = Property<float>::register_property(
     "alpha_cutoff", c_owner, Property_metadata{.default_value = 0.5f, .inherits = true, .ui = slider(0.0f, 1.0f, "Alpha Cutoff", "Used by the Alpha Test blending mode", is_alpha_test)}, unit_range
@@ -868,6 +889,11 @@ auto Material::get_values() const -> Material_values
         .bxdf_model                         = get_bxdf_model(),
         .blending_mode                      = get_blending_mode(),
         .double_sided                       = get_double_sided(),
+        .back_base_color                    = get_back_base_color(),
+        .back_roughness                     = get_back_roughness(),
+        .back_reflectance                   = get_back_reflectance(),
+        .diffuse_transmission               = get_diffuse_transmission(),
+        .diffuse_transmission_color         = get_diffuse_transmission_color(),
         .alpha_cutoff                       = get_alpha_cutoff(),
         .use_circular_brushed_metal         = get_use_circular_brushed_metal(),
         .circular_brushed_metal_texgen_mode = get_circular_brushed_metal_texgen_mode(),
@@ -928,6 +954,11 @@ void Material::set_values(const Material_values& values)
     set_or_clear(*this, bxdf_model_property,                         values.bxdf_model);
     set_or_clear(*this, blending_mode_property,                      values.blending_mode);
     set_or_clear(*this, double_sided_property,                       values.double_sided);
+    set_or_clear(*this, back_base_color_property,                    values.back_base_color);
+    set_or_clear(*this, back_roughness_property,                     values.back_roughness);
+    set_or_clear(*this, back_reflectance_property,                   values.back_reflectance);
+    set_or_clear(*this, diffuse_transmission_property,               values.diffuse_transmission);
+    set_or_clear(*this, diffuse_transmission_color_property,         values.diffuse_transmission_color);
     set_or_clear(*this, alpha_cutoff_property,                       values.alpha_cutoff);
     set_or_clear(*this, use_circular_brushed_metal_property,         values.use_circular_brushed_metal);
     set_or_clear(*this, circular_brushed_metal_texgen_mode_property, values.circular_brushed_metal_texgen_mode);
@@ -968,6 +999,11 @@ auto Material::to_property_set(const Material_values& values) -> erhe::property:
     result.set(bxdf_model_property,                         make_value(values.bxdf_model));
     result.set(blending_mode_property,                      make_value(values.blending_mode));
     result.set(double_sided_property,                       make_value(values.double_sided));
+    result.set(back_base_color_property,                    make_value(values.back_base_color));
+    result.set(back_roughness_property,                     make_value(values.back_roughness));
+    result.set(back_reflectance_property,                   make_value(values.back_reflectance));
+    result.set(diffuse_transmission_property,               make_value(values.diffuse_transmission));
+    result.set(diffuse_transmission_color_property,         make_value(values.diffuse_transmission_color));
     result.set(alpha_cutoff_property,                       make_value(values.alpha_cutoff));
     result.set(use_circular_brushed_metal_property,         make_value(values.use_circular_brushed_metal));
     result.set(circular_brushed_metal_texgen_mode_property, make_value(values.circular_brushed_metal_texgen_mode));
@@ -1040,6 +1076,11 @@ auto Material::to_property_set(const Material_values& values) -> erhe::property:
         (lhs.bxdf_model                         == rhs.bxdf_model                        ) &&
         (lhs.blending_mode                      == rhs.blending_mode                     ) &&
         (lhs.double_sided                       == rhs.double_sided                      ) &&
+        (lhs.back_base_color                    == rhs.back_base_color                   ) &&
+        (lhs.back_roughness                     == rhs.back_roughness                    ) &&
+        (lhs.back_reflectance                   == rhs.back_reflectance                  ) &&
+        (lhs.diffuse_transmission               == rhs.diffuse_transmission              ) &&
+        (lhs.diffuse_transmission_color         == rhs.diffuse_transmission_color        ) &&
         (lhs.alpha_cutoff                       == rhs.alpha_cutoff                      ) &&
         (lhs.use_circular_brushed_metal         == rhs.use_circular_brushed_metal        ) &&
         (lhs.circular_brushed_metal_texgen_mode == rhs.circular_brushed_metal_texgen_mode) &&

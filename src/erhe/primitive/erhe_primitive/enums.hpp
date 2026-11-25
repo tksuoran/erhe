@@ -72,7 +72,10 @@ enum class Bxdf_model : uint16_t
     isotropic_brdf           = 1,
     anisotropic_brdf         = 2,
     anisotropic_slope        = 3,
-    anisotropic_engine_ready = 4
+    anisotropic_engine_ready = 4,
+    // Thin double-sided surface (leaves): per-face reflection and diffuse
+    // transmission (doc/plans/leaf_material.md).
+    leaf                     = 5
 };
 
 enum class Material_blending_mode : uint16_t

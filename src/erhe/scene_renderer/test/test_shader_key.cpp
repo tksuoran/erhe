@@ -109,7 +109,7 @@ TEST(Shader_key_specular_anti_aliasing, anisotropic_without_tangents_is_off)
 TEST(Shader_key_specular_anti_aliasing, other_bxdf_models_are_off)
 {
     const Vertex_format format = make_format(true);
-    for (const Bxdf_model bxdf_model : {Bxdf_model::unlit, Bxdf_model::isotropic_brdf, Bxdf_model::anisotropic_slope}) {
+    for (const Bxdf_model bxdf_model : {Bxdf_model::unlit, Bxdf_model::isotropic_brdf, Bxdf_model::anisotropic_slope, Bxdf_model::leaf}) {
         const std::shared_ptr<Material> material = make_material(bxdf_model);
         for (const Specular_anti_aliasing mode : c_modes) {
             const Shader_key key = make_environment(mode).derive(material.get(), &format, Vertex_space::node);
@@ -128,7 +128,7 @@ TEST(Shader_key_specular_anti_aliasing, derive_equals_prepare_then_environment)
 {
     for (const bool with_tangent : {false, true}) {
         const Vertex_format format = make_format(with_tangent);
-        for (const Bxdf_model bxdf_model : {Bxdf_model::isotropic_brdf, Bxdf_model::anisotropic_brdf, Bxdf_model::anisotropic_slope, Bxdf_model::anisotropic_engine_ready}) {
+        for (const Bxdf_model bxdf_model : {Bxdf_model::isotropic_brdf, Bxdf_model::anisotropic_brdf, Bxdf_model::anisotropic_slope, Bxdf_model::anisotropic_engine_ready, Bxdf_model::leaf}) {
             const std::shared_ptr<Material> material = make_material(bxdf_model);
             for (const Specular_anti_aliasing mode : c_modes) {
                 const Shader_key full     = make_environment(mode).derive(material.get(), &format, Vertex_space::node);
@@ -166,7 +166,7 @@ constexpr uint32_t c_fp16_masks[] = {0u, 1u, 2u, 3u, fp16_paths_low_end_set, fp1
 TEST(Shader_key_fp16_paths, lit_variants_keep_the_mask)
 {
     const Vertex_format format = make_format(true);
-    for (const Bxdf_model bxdf_model : {Bxdf_model::isotropic_brdf, Bxdf_model::anisotropic_brdf, Bxdf_model::anisotropic_slope, Bxdf_model::anisotropic_engine_ready}) {
+    for (const Bxdf_model bxdf_model : {Bxdf_model::isotropic_brdf, Bxdf_model::anisotropic_brdf, Bxdf_model::anisotropic_slope, Bxdf_model::anisotropic_engine_ready, Bxdf_model::leaf}) {
         const std::shared_ptr<Material> material = make_material(bxdf_model);
         for (const uint32_t mask : c_fp16_masks) {
             const Shader_key key = make_fp16_environment(mask).derive(material.get(), &format, Vertex_space::node);
@@ -319,4 +319,15 @@ TEST(Shader_key_detail_blend, axes_follow_the_switch_and_the_noise_amount)
     EXPECT_TRUE(debug.get(Shader_bool::USE_DETAIL_BLEND));
     EXPECT_TRUE(debug.get(Shader_bool::USE_DETAIL_BLEND_NOISE));
     EXPECT_TRUE(debug.get(Shader_bool::USE_VERTEX_VARYING_NODE_POSITION));
+}
+
+// The leaf model (doc/plans/leaf_material.md) is a lit model: its key has
+// the leaf BXDF_MODEL value and reads the vertex normal.
+TEST(Shader_key_leaf, leaf_is_lit_and_reads_the_normal)
+{
+    const Vertex_format             format   = make_format(false);
+    const std::shared_ptr<Material> material = make_material(Bxdf_model::leaf);
+    const Shader_key                key      = Shader_key{}.derive(material.get(), &format, Vertex_space::node);
+    EXPECT_EQ(key.get(Shader_int::BXDF_MODEL), static_cast<uint32_t>(Bxdf_model::leaf));
+    EXPECT_TRUE(key.get(Shader_bool::USE_VERTEX_VARYING_NORMAL));
 }

@@ -34,6 +34,7 @@ auto supports_anisotropy(Bxdf_model bxdf_model) -> bool
         case Bxdf_model::anisotropic_brdf: return true;
         case Bxdf_model::anisotropic_slope: return true;
         case Bxdf_model::anisotropic_engine_ready: return true;
+        case Bxdf_model::leaf: return false;
         default: {
             ERHE_FATAL("Bad Bxdf_model");
         }
@@ -91,6 +92,7 @@ constexpr erhe::property::Enum_entry c_bxdf_model_entries[] = {
     {"Anisotropic BRDF",         static_cast<int32_t>(Bxdf_model::anisotropic_brdf)},
     {"Anisotropic Slope",        static_cast<int32_t>(Bxdf_model::anisotropic_slope)},
     {"Anisotropic Engine-Ready", static_cast<int32_t>(Bxdf_model::anisotropic_engine_ready)},
+    {"Leaf",                     static_cast<int32_t>(Bxdf_model::leaf)},
 };
 constexpr erhe::property::Enum_entry c_material_blending_mode_entries[] = {
     {"Opaque",      static_cast<int32_t>(Material_blending_mode::opaque)},
@@ -181,6 +183,7 @@ auto c_str(const Bxdf_model bxdf_model) -> const char*
         case Bxdf_model::anisotropic_brdf        : return "anisotropic_brdf";
         case Bxdf_model::anisotropic_slope       : return "anisotropic_slope";
         case Bxdf_model::anisotropic_engine_ready: return "anisotropic_engine_ready";
+        case Bxdf_model::leaf                    : return "leaf";
         default: { 
             ERHE_FATAL("Bad Bxdf_model");
         }

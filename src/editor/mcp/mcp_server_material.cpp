@@ -525,11 +525,56 @@ void apply_slot_edit(const Slot_edit& edit, erhe::primitive::Material_texture_sa
                 after_values.bxdf_model = erhe::primitive::Bxdf_model::anisotropic_slope;
             } else if (s == "anisotropic_engine_ready") {
                 after_values.bxdf_model = erhe::primitive::Bxdf_model::anisotropic_engine_ready;
+            } else if (s == "leaf") {
+                after_values.bxdf_model = erhe::primitive::Bxdf_model::leaf;
             } else {
-                return "bxdf_model must be one of 'unlit', 'isotropic_brdf', 'anisotropic_brdf', 'anisotropic_slope', 'anisotropic_engine_ready'";
+                return "bxdf_model must be one of 'unlit', 'isotropic_brdf', 'anisotropic_brdf', 'anisotropic_slope', 'anisotropic_engine_ready', 'leaf'";
             }
             applied["bxdf_model"] = s;
         }
+    }
+    // A leaf is a thin surface seen from both sides (doc/plans/leaf_material.md).
+    if (try_read_bool(args, "double_sided", b)) {
+        after_values.double_sided = b;
+        applied["double_sided"] = b;
+    } else if (applied.contains("bxdf_model") && (after_values.bxdf_model == erhe::primitive::Bxdf_model::leaf)) {
+        after_values.double_sided = true;
+        applied["double_sided"] = true;
+    }
+    switch (try_read_vec3(args, "back_base_color", v3, field_err)) {
+        case Field_status::Ok: {
+            const glm::vec3 clamped = clamp01_vec3(v3);
+            after_values.back_base_color = clamped;
+            applied["back_base_color"] = {clamped.x, clamped.y, clamped.z};
+            break;
+        }
+        case Field_status::Invalid:    return field_err;
+        case Field_status::NotPresent: break;
+    }
+    switch (try_read_float(args, "back_roughness", f, field_err)) {
+        case Field_status::Ok:         after_values.back_roughness = clamp01(f); applied["back_roughness"] = after_values.back_roughness; break;
+        case Field_status::Invalid:    return field_err;
+        case Field_status::NotPresent: break;
+    }
+    switch (try_read_float(args, "back_reflectance", f, field_err)) {
+        case Field_status::Ok:         after_values.back_reflectance = clamp01(f); applied["back_reflectance"] = after_values.back_reflectance; break;
+        case Field_status::Invalid:    return field_err;
+        case Field_status::NotPresent: break;
+    }
+    switch (try_read_float(args, "diffuse_transmission", f, field_err)) {
+        case Field_status::Ok:         after_values.diffuse_transmission = clamp01(f); applied["diffuse_transmission"] = after_values.diffuse_transmission; break;
+        case Field_status::Invalid:    return field_err;
+        case Field_status::NotPresent: break;
+    }
+    switch (try_read_vec3(args, "diffuse_transmission_color", v3, field_err)) {
+        case Field_status::Ok: {
+            const glm::vec3 clamped = clamp01_vec3(v3);
+            after_values.diffuse_transmission_color = clamped;
+            applied["diffuse_transmission_color"] = {clamped.x, clamped.y, clamped.z};
+            break;
+        }
+        case Field_status::Invalid:    return field_err;
+        case Field_status::NotPresent: break;
     }
     {
         const auto blending_it = args.find("blending_mode");

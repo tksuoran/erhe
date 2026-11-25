@@ -1850,3 +1850,43 @@ TEST(Gltf_roundtrip, mesh_lod_on_stored_vertex_streams)
 }
 
 } // anonymous namespace
+
+// A leaf material (doc/plans/leaf_material.md) keeps its model, its back face
+// (ERHE_material) and its diffuse transmission
+// (KHR_materials_diffuse_transmission) through an export and a parse.
+TEST(Gltf_roundtrip, leaf_material_round_trips)
+{
+    erhe::scene::Scene          source_scene{"source", nullptr};
+    const erhe::gltf::Gltf_data source = parse_file(data_path("variants.gltf"), source_scene);
+    const std::shared_ptr<erhe::scene::Node> panel = find_by_name(source.nodes, "Panel");
+    ASSERT_TRUE(panel);
+    const std::shared_ptr<erhe::primitive::Material> material = erhe::scene::get_mesh(panel.get())->get_primitives().at(0).material;
+    ASSERT_TRUE(material);
+    const std::string material_name{material->get_name()};
+
+    erhe::primitive::Material_values values = material->get_values();
+    values.bxdf_model                 = erhe::primitive::Bxdf_model::leaf;
+    values.double_sided               = true;
+    values.base_color                 = glm::vec3{0.0625f, 0.25f, 0.03125f};
+    values.back_base_color            = glm::vec3{0.125f, 0.25f, 0.0625f};
+    values.back_roughness             = 0.75f;
+    values.back_reflectance           = 0.375f;
+    values.diffuse_transmission       = 0.5f;
+    values.diffuse_transmission_color = glm::vec3{0.5f, 0.75f, 0.125f};
+    material->set_values(values);
+
+    erhe::scene::Scene          loaded_scene{"loaded", nullptr};
+    const erhe::gltf::Gltf_data loaded = round_trip(source_scene, "leaf_material.glb", loaded_scene);
+    EXPECT_TRUE(loaded.errors.empty());
+    const std::shared_ptr<erhe::primitive::Material> loaded_material = find_by_name(loaded.materials, material_name);
+    ASSERT_TRUE(loaded_material);
+    const erhe::primitive::Material_values loaded_values = loaded_material->get_values();
+    EXPECT_EQ(loaded_values.bxdf_model,                 erhe::primitive::Bxdf_model::leaf);
+    EXPECT_TRUE(loaded_values.double_sided);
+    EXPECT_EQ(loaded_values.base_color,                 values.base_color);
+    EXPECT_EQ(loaded_values.back_base_color,            values.back_base_color);
+    EXPECT_EQ(loaded_values.back_roughness,             values.back_roughness);
+    EXPECT_EQ(loaded_values.back_reflectance,           values.back_reflectance);
+    EXPECT_EQ(loaded_values.diffuse_transmission,       values.diffuse_transmission);
+    EXPECT_EQ(loaded_values.diffuse_transmission_color, values.diffuse_transmission_color);
+}

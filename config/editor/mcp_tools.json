@@ -4742,7 +4742,8 @@
             "isotropic_brdf",
             "anisotropic_brdf",
             "anisotropic_slope",
-            "anisotropic_engine_ready"
+            "anisotropic_engine_ready",
+            "leaf"
           ],
           "type": "string"
         },
@@ -5183,6 +5184,40 @@
             "node"
           ],
           "type": "string"
+        },
+        "double_sided": {
+          "description": "Draw and shade both faces (glTF doubleSided). Setting bxdf_model to leaf without this field also sets it true",
+          "type": "boolean"
+        },
+        "back_base_color": {
+          "description": "Leaf BxDF: linear RGB base color of the back face [r, g, b]",
+          "items": {
+            "type": "number"
+          },
+          "maxItems": 3,
+          "minItems": 3,
+          "type": "array"
+        },
+        "back_roughness": {
+          "description": "Leaf BxDF: roughness of the back face in [0, 1]",
+          "type": "number"
+        },
+        "back_reflectance": {
+          "description": "Leaf BxDF: dielectric reflectance of the back face in [0, 1]",
+          "type": "number"
+        },
+        "diffuse_transmission": {
+          "description": "Leaf BxDF: fraction of the diffuse lobe transmitted to the other face, in [0, 1] (KHR_materials_diffuse_transmission)",
+          "type": "number"
+        },
+        "diffuse_transmission_color": {
+          "description": "Leaf BxDF: linear RGB tint of the transmitted light [r, g, b]",
+          "items": {
+            "type": "number"
+          },
+          "maxItems": 3,
+          "minItems": 3,
+          "type": "array"
         }
       },
       "required": [
@@ -5230,7 +5265,8 @@
             "isotropic_brdf",
             "anisotropic_brdf",
             "anisotropic_slope",
-            "anisotropic_engine_ready"
+            "anisotropic_engine_ready",
+            "leaf"
           ],
           "type": "string"
         },
@@ -5675,6 +5711,40 @@
             "node"
           ],
           "type": "string"
+        },
+        "double_sided": {
+          "description": "Draw and shade both faces (glTF doubleSided). Setting bxdf_model to leaf without this field also sets it true",
+          "type": "boolean"
+        },
+        "back_base_color": {
+          "description": "Leaf BxDF: linear RGB base color of the back face [r, g, b]",
+          "items": {
+            "type": "number"
+          },
+          "maxItems": 3,
+          "minItems": 3,
+          "type": "array"
+        },
+        "back_roughness": {
+          "description": "Leaf BxDF: roughness of the back face in [0, 1]",
+          "type": "number"
+        },
+        "back_reflectance": {
+          "description": "Leaf BxDF: dielectric reflectance of the back face in [0, 1]",
+          "type": "number"
+        },
+        "diffuse_transmission": {
+          "description": "Leaf BxDF: fraction of the diffuse lobe transmitted to the other face, in [0, 1] (KHR_materials_diffuse_transmission)",
+          "type": "number"
+        },
+        "diffuse_transmission_color": {
+          "description": "Leaf BxDF: linear RGB tint of the transmitted light [r, g, b]",
+          "items": {
+            "type": "number"
+          },
+          "maxItems": 3,
+          "minItems": 3,
+          "type": "array"
         }
       },
       "required": [

@@ -95,6 +95,14 @@ public:
     std::size_t detail_blend_parameters;           // vec4
     std::size_t detail_blend_texture;              // uvec2
     std::size_t detail_blend_offset;               // vec2
+
+    // The leaf BxDF (doc/plans/leaf_material.md): the back face's
+    // reflectance, which completes the 16 bytes of detail_blend_offset;
+    // (back base color, back roughness); (diffuse transmission color,
+    // diffuse transmission).
+    std::size_t back_reflectance;                  // float
+    std::size_t back_base_color_roughness;         // vec4
+    std::size_t diffuse_transmission;              // vec4
 };
 
 // The texture half of one material record, resolved: the exact texture and
@@ -140,6 +148,11 @@ public:
     glm::uvec2 detail_blend_channels     {0u, 0u};
     // (height influence, transition width, noise amount, noise scale)
     glm::vec4  detail_blend_parameters   {0.0f, 0.0f, 0.0f, 0.0f};
+    float      back_reflectance          {0.0f};
+    // (back base color, back roughness)
+    glm::vec4  back_base_color_roughness {0.0f, 0.0f, 0.0f, 0.0f};
+    // (diffuse transmission color, diffuse transmission)
+    glm::vec4  diffuse_transmission      {0.0f, 0.0f, 0.0f, 0.0f};
 
     Material_texture_record_inputs base_color_texture        {};
     Material_texture_record_inputs metallic_roughness_texture{};

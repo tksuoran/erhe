@@ -945,6 +945,16 @@ void main()
 #  if (ERHE_BXDF_MODEL == ERHE_BXDF_MODEL_ANISOTROPIC_SLOPE) && defined(ERHE_USE_VERTEX_VARYING_TANGENT) && defined(ERHE_USE_VERTEX_VARYING_BITANGENT)
         mat3 TBN_t = transpose(mat3(T, B, N));
 #    define BXDF_CALL(L_arg, P2L_arg, POSITIONAL_arg) slope_brdf(vec3(base_color), float(roughness_x), float(roughness_y), float(metallic), material.reflectance, TBN_t, L_arg, V, T, B, N)
+#  elif ERHE_BXDF_MODEL == ERHE_BXDF_MODEL_LEAF
+        // The face the viewer sees selects its parameters; the material's
+        // base color, roughness and reflectance are the front face's.
+        float      leaf_transmission_factor = float(material.diffuse_transmission.w);
+        brdf_vec3  leaf_albedo              = gl_FrontFacing ? brdf_vec3(base_color) : brdf_vec3(vec3(material.back_base_color_roughness.rgb));
+        brdf_vec3  leaf_reflect_albedo      = leaf_albedo * brdf_float(1.0 - leaf_transmission_factor);
+        brdf_vec3  leaf_transmission        = brdf_vec3(vec3(material.diffuse_transmission.rgb) * leaf_transmission_factor);
+        brdf_float leaf_roughness           = gl_FrontFacing ? brdf_float(roughness_x) : brdf_float(max(float(material.back_base_color_roughness.w), c_roughness_floor));
+        brdf_float leaf_reflectance         = brdf_float(gl_FrontFacing ? float(material.reflectance) : float(material.back_reflectance));
+#    define BXDF_CALL(L_arg, P2L_arg, POSITIONAL_arg) leaf_bsdf(leaf_reflect_albedo, leaf_roughness, leaf_reflectance, leaf_transmission, L_arg, V, N)
 #  elif defined(ERHE_USES_ANISOTROPIC_BRDF)
 #    define BXDF_CALL(L_arg, P2L_arg, POSITIONAL_arg) anisotropic_brdf(vec3(base_color), float(roughness_x), float(roughness_y), float(metallic), material.reflectance, L_arg, V, T, B, N, ERHE_SPECULAR_AA_KERNEL(L_arg, P2L_arg, POSITIONAL_arg))
 #  else
@@ -995,7 +1005,19 @@ void main()
         }
 #endif
 
+#if ERHE_BXDF_MODEL == ERHE_BXDF_MODEL_LEAF
+        // Ambient light reaches both faces: the viewer's face reflects its
+        // side, the far face's side is transmitted.
+        vec3 ambient_back_term = ambient_term;
+#  if defined(ERHE_USE_DDGI)
+        if (!lightmap_valid) {
+            ambient_back_term = ddgi_sample_irradiance(v_position.xyz, -N, V);
+        }
+#  endif
+        color  = (acc_vec3(ERHE_ACCUMULATE_TERM(ambient_term)) * acc_vec3(leaf_reflect_albedo) + acc_vec3(ERHE_ACCUMULATE_TERM(ambient_back_term)) * acc_vec3(leaf_transmission)) * acc_float(occlusion);
+#else
         color  = acc_vec3(ERHE_ACCUMULATE_TERM(ambient_term)) * acc_vec3(base_color) * acc_float(occlusion);
+#endif
         color += acc_vec3(ERHE_ACCUMULATE_TERM(emissive));
 
         if (!lightmap_valid) {
@@ -1029,6 +1051,12 @@ void main()
 #    define ERHE_LIGHT_VISIBILITY(LIGHT_INDEX, SHADOW_RECORD) 1.0
 #    define ERHE_POINT_LIGHT_VISIBILITY(SHADOW_RECORD, LIGHT) 1.0
 #  endif
+        // The leaf model also shades lights behind the surface (transmission).
+#  if ERHE_BXDF_MODEL == ERHE_BXDF_MODEL_LEAF
+#    define ERHE_LIGHT_REACHES(N_DOT_L) ((N_DOT_L) != 0.0)
+#  else
+#    define ERHE_LIGHT_REACHES(N_DOT_L) ((N_DOT_L) > 0.0)
+#  endif
 #  define ERHE_SHADE_DIRECTIONAL_SHADOWMAPPED(LIGHT_INDEX, SHADOW_RECORD) { \
             uint  light_index    = (LIGHT_INDEX); \
             uint  shadow_record  = (SHADOW_RECORD); \
@@ -1036,7 +1064,7 @@ void main()
             vec3  point_to_light = light.direction_and_outer_spot_cos.xyz; \
             vec3  L              = normalize(point_to_light); \
             float N_dot_L        = dot(N, L); \
-            if (N_dot_L > 0.0) { \
+            if (ERHE_LIGHT_REACHES(N_dot_L)) { \
                 vis_float light_visibility = vis_float(ERHE_LIGHT_VISIBILITY(light_index, shadow_record)); \
                 acc_vec3  intensity        = acc_vec3(ERHE_ACCUMULATE_TERM(light.radiance_and_range.rgb)) * acc_float(light_visibility); \
                 color += intensity * acc_vec3(BXDF_CALL(L, point_to_light, 0.0)); \
@@ -1048,7 +1076,7 @@ void main()
             vec3  point_to_light = light.direction_and_outer_spot_cos.xyz; \
             vec3  L              = normalize(point_to_light); \
             float N_dot_L        = dot(N, L); \
-            if (N_dot_L > 0.0) { \
+            if (ERHE_LIGHT_REACHES(N_dot_L)) { \
                 acc_vec3 intensity = acc_vec3(ERHE_ACCUMULATE_TERM(light.radiance_and_range.rgb)); \
                 color += intensity * acc_vec3(BXDF_CALL(L, point_to_light, 0.0)); \
             } \
@@ -1061,7 +1089,7 @@ void main()
             vec3  L              = normalize(point_to_light); \
             float N_dot_L        = dot(N, L); \
             att_float range_attenuation = get_range_attenuation(light.radiance_and_range.w, length(point_to_light)); \
-            if ((N_dot_L > 0.0) && (range_attenuation > att_float(0.0))) { \
+            if (ERHE_LIGHT_REACHES(N_dot_L) && (range_attenuation > att_float(0.0))) { \
                 att_float spot_attenuation = get_spot_attenuation(-point_to_light, light.direction_and_outer_spot_cos.xyz, light.direction_and_outer_spot_cos.w, light.position_and_inner_spot_cos.w); \
                 vis_float light_visibility = vis_float(ERHE_LIGHT_VISIBILITY(light_index, shadow_record)); \
                 acc_vec3  intensity        = acc_vec3(float(range_attenuation * spot_attenuation) * ERHE_ACCUMULATE_TERM(light.radiance_and_range.rgb)) * acc_float(light_visibility); \
@@ -1075,7 +1103,7 @@ void main()
             vec3  L              = normalize(point_to_light); \
             float N_dot_L        = dot(N, L); \
             att_float range_attenuation = get_range_attenuation(light.radiance_and_range.w, length(point_to_light)); \
-            if ((N_dot_L > 0.0) && (range_attenuation > att_float(0.0))) { \
+            if (ERHE_LIGHT_REACHES(N_dot_L) && (range_attenuation > att_float(0.0))) { \
                 att_float spot_attenuation = get_spot_attenuation(-point_to_light, light.direction_and_outer_spot_cos.xyz, light.direction_and_outer_spot_cos.w, light.position_and_inner_spot_cos.w); \
                 acc_vec3  intensity        = acc_vec3(float(range_attenuation * spot_attenuation) * ERHE_ACCUMULATE_TERM(light.radiance_and_range.rgb)); \
                 color += intensity * acc_vec3(BXDF_CALL(L, point_to_light, 1.0)); \
@@ -1091,7 +1119,7 @@ void main()
             vec3  L              = normalize(point_to_light); \
             float N_dot_L        = dot(N, L); \
             att_float range_attenuation = get_range_attenuation(light.radiance_and_range.w, length(point_to_light)); \
-            if ((N_dot_L > 0.0) && (range_attenuation > att_float(0.0))) { \
+            if (ERHE_LIGHT_REACHES(N_dot_L) && (range_attenuation > att_float(0.0))) { \
                 vis_float light_visibility = vis_float(ERHE_POINT_LIGHT_VISIBILITY(shadow_record, light)); \
                 acc_vec3  intensity        = acc_vec3(float(range_attenuation) * ERHE_ACCUMULATE_TERM(light.radiance_and_range.rgb)) * acc_float(light_visibility); \
                 color += intensity * acc_vec3(BXDF_CALL(L, point_to_light, 1.0)); \
@@ -1104,7 +1132,7 @@ void main()
             vec3  L              = normalize(point_to_light); \
             float N_dot_L        = dot(N, L); \
             att_float range_attenuation = get_range_attenuation(light.radiance_and_range.w, length(point_to_light)); \
-            if ((N_dot_L > 0.0) && (range_attenuation > att_float(0.0))) { \
+            if (ERHE_LIGHT_REACHES(N_dot_L) && (range_attenuation > att_float(0.0))) { \
                 acc_vec3  intensity        = acc_vec3(float(range_attenuation) * ERHE_ACCUMULATE_TERM(light.radiance_and_range.rgb)); \
                 color += intensity * acc_vec3(BXDF_CALL(L, point_to_light, 1.0)); \
             } \
@@ -1190,6 +1218,7 @@ void main()
 #  undef ERHE_LIGHT_VISIBILITY
 #  undef ERHE_POINT_LIGHT_VISIBILITY
 #  undef ERHE_SHADOW_RECORD_COUNT
+#  undef ERHE_LIGHT_REACHES
 
         } // !lightmap_valid - analytic lights gated off for lightmapped draws
 #  undef BXDF_CALL

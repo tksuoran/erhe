@@ -270,6 +270,31 @@ brdf_vec3 isotropic_brdf(
     return max(N_dot_L, brdf_float(0.0)) * (diffuse_factor * diffuse_lambert + specular_microfacet);
 }
 
+// Leaf BSDF (doc/plans/leaf_material.md "Model"), cosine-weighted like
+// isotropic_brdf(). N faces the viewer. reflect_albedo is the face's albedo
+// times (1 - diffuse transmission); transmission is diffuse transmission
+// times its color. Light on the viewer's side is reflected, light from the
+// far side is transmitted as a Lambertian lobe.
+brdf_vec3 leaf_bsdf(
+    brdf_vec3  reflect_albedo,
+    brdf_float roughness,
+    brdf_float reflectance,
+    brdf_vec3  transmission,
+    vec3       L,
+    vec3       V,
+    vec3       N
+) {
+    float N_dot_L = dot(N, L);
+    if (N_dot_L > 0.0) {
+        return isotropic_brdf(reflect_albedo, roughness, brdf_float(0.0), reflectance, L, V, N);
+    }
+    // The exit through the viewer's face: (1 - Fresnel) at the view angle.
+    brdf_float F0      = brdf_float(0.16) * reflectance * reflectance;
+    brdf_float N_dot_V = brdf_float(clamped_dot(N, V));
+    brdf_float F_v     = F0 + (brdf_float(1.0) - F0) * pow(brdf_float(1.0) - N_dot_V, brdf_float(5.0));
+    return brdf_float(-N_dot_L) * (brdf_float(1.0) - F_v) * brdf_float(m_i_pi) * transmission;
+}
+
 vec3 anisotropic_brdf(
     vec3  base_color,
     float roughness_x,

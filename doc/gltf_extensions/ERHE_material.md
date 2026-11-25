@@ -32,8 +32,13 @@ no divergent fields gets no extension at all. `unlit` rides the standard
 
 - `roughness_y`: anisotropic roughness (emitted when != roughness x).
 - `bxdf_model`: one of `unlit`, `isotropic_brdf`, `anisotropic_brdf`,
-  `anisotropic_slope`, `anisotropic_engine_ready` (emitted for values not
-  covered by `KHR_materials_unlit` / the default `isotropic_brdf`).
+  `anisotropic_slope`, `anisotropic_engine_ready`, `leaf` (emitted for values
+  not covered by `KHR_materials_unlit` / the default `isotropic_brdf`).
+- `back_base_color` (`[r, g, b]`), `back_roughness`, `back_reflectance`: the
+  back face of a `leaf` material (emitted for every `leaf` material). Its
+  diffuse transmission rides the standard
+  `KHR_materials_diffuse_transmission`; importing that extension with a
+  factor above 0 makes a `leaf` material whose back face copies the front.
 - `blending_mode`: one of `opaque`, `alpha_blend`, `alpha_test`,
   `multiply`, `add`, `subtract`, `screen_door` (emitted only for the modes
   `alphaMode` cannot represent; those export with `alphaMode` `BLEND` as a

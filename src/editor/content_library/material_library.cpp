@@ -19,6 +19,20 @@ auto make_brushed_metal_style() -> std::shared_ptr<Style>
     return style;
 }
 
+namespace {
+
+// The leaf BxDF (doc/plans/leaf_material.md): a thin double-sided surface.
+auto make_leaf_style() -> std::shared_ptr<Style>
+{
+    using erhe::primitive::Material;
+    std::shared_ptr<Style> style = std::make_shared<Style>("Leaf");
+    style->set_value(Material::bxdf_model_property,   erhe::primitive::Bxdf_model::leaf);
+    style->set_value(Material::double_sided_property, true);
+    return style;
+}
+
+} // anonymous namespace
+
 void add_default_materials(Content_library& library)
 {
     std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{library.mutex};
@@ -49,6 +63,44 @@ void add_default_materials(Content_library& library)
     make("Aluminum",  0.913f, 0.922f, 0.924f);
     make("Silver",    0.972f, 0.960f, 0.915f);
     make("Cobalt",    0.662f, 0.655f, 0.634f);
+
+    // Vegetation: front and back face albedo (linear), roughness and
+    // reflectance, and the diffuse transmission. Reflectance 0.23 - 0.65 and
+    // roughness 0.28 - 0.71 are the measured leaf ranges of the plan's
+    // "Model" section; the back face is lighter and rougher than the front.
+    const std::shared_ptr<Style> leaf = make_leaf_style();
+    library.add(leaf);
+    class Leaf_preset
+    {
+    public:
+        const char* name;
+        glm::vec3   front_color;
+        float       front_roughness;
+        float       front_reflectance;
+        glm::vec3   back_color;
+        float       back_roughness;
+        float       back_reflectance;
+        float       transmission;
+        glm::vec3   transmission_color;
+    };
+    const Leaf_preset leaf_presets[] = {
+        {"Leaf, glossy", {0.05f, 0.16f, 0.03f}, 0.30f, 0.65f, {0.12f, 0.22f, 0.08f}, 0.70f, 0.35f, 0.40f, {0.35f, 0.60f, 0.10f}},
+        {"Leaf, matte",  {0.06f, 0.14f, 0.04f}, 0.70f, 0.30f, {0.12f, 0.20f, 0.09f}, 0.80f, 0.30f, 0.45f, {0.35f, 0.55f, 0.12f}},
+        {"Grass blade",  {0.08f, 0.20f, 0.04f}, 0.50f, 0.40f, {0.10f, 0.22f, 0.06f}, 0.60f, 0.40f, 0.35f, {0.40f, 0.65f, 0.12f}},
+        {"Petal",        {0.70f, 0.15f, 0.25f}, 0.60f, 0.35f, {0.75f, 0.30f, 0.40f}, 0.70f, 0.35f, 0.50f, {0.90f, 0.40f, 0.50f}}
+    };
+    for (const Leaf_preset& preset : leaf_presets) {
+        const std::shared_ptr<Material> material = library.make<Material>(std::string_view{preset.name});
+        material->set_style(leaf);
+        material->set_value(Material::base_color_property,                 preset.front_color);
+        material->set_value(Material::roughness_property,                  glm::vec2{preset.front_roughness, preset.front_roughness});
+        material->set_value(Material::reflectance_property,                preset.front_reflectance);
+        material->set_value(Material::back_base_color_property,            preset.back_color);
+        material->set_value(Material::back_roughness_property,             preset.back_roughness);
+        material->set_value(Material::back_reflectance_property,           preset.back_reflectance);
+        material->set_value(Material::diffuse_transmission_property,       preset.transmission);
+        material->set_value(Material::diffuse_transmission_color_property, preset.transmission_color);
+    }
 
     // water          0.020
     // plastic, glass 0.040 .. 0.045

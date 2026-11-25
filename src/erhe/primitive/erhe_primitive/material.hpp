@@ -136,6 +136,15 @@ public:
     Bxdf_model                bxdf_model                        {Bxdf_model::isotropic_brdf};
     Material_blending_mode    blending_mode                     {Material_blending_mode::opaque};
     bool                      double_sided                      {false};
+    // The leaf BxDF model (doc/plans/leaf_material.md): the back face's
+    // reflective parameters (base_color, roughness.x and reflectance are the
+    // front face's) and the diffuse transmission of
+    // KHR_materials_diffuse_transmission.
+    glm::vec3                 back_base_color                   {1.0f, 1.0f, 1.0f};
+    float                     back_roughness                    {0.5f};
+    float                     back_reflectance                  {0.5f};
+    float                     diffuse_transmission              {0.0f};
+    glm::vec3                 diffuse_transmission_color        {1.0f, 1.0f, 1.0f};
     float                     alpha_cutoff                      {0.5f};
     bool                      use_circular_brushed_metal        {false};
     // Texgen source for the in-shader circular brushed metal block
@@ -217,6 +226,11 @@ public:
     static const erhe::property::Property<Bxdf_model>             bxdf_model_property;
     static const erhe::property::Property<Material_blending_mode> blending_mode_property;
     static const erhe::property::Property<bool>                   double_sided_property;
+    static const erhe::property::Property<glm::vec3>              back_base_color_property;
+    static const erhe::property::Property<float>                  back_roughness_property;
+    static const erhe::property::Property<float>                  back_reflectance_property;
+    static const erhe::property::Property<float>                  diffuse_transmission_property;
+    static const erhe::property::Property<glm::vec3>              diffuse_transmission_color_property;
     static const erhe::property::Property<float>                  alpha_cutoff_property;
     static const erhe::property::Property<bool>                   use_circular_brushed_metal_property;
     static const erhe::property::Property<Texgen_mode>            circular_brushed_metal_texgen_mode_property;
@@ -344,6 +358,11 @@ public:
     [[nodiscard]] auto get_bxdf_model                        () const -> Bxdf_model             { return get_value(bxdf_model_property); }
     [[nodiscard]] auto get_blending_mode                     () const -> Material_blending_mode { return get_value(blending_mode_property); }
     [[nodiscard]] auto get_double_sided                      () const -> bool                   { return get_value(double_sided_property); }
+    [[nodiscard]] auto get_back_base_color                   () const -> glm::vec3              { return get_value(back_base_color_property); }
+    [[nodiscard]] auto get_back_roughness                    () const -> float                  { return get_value(back_roughness_property); }
+    [[nodiscard]] auto get_back_reflectance                  () const -> float                  { return get_value(back_reflectance_property); }
+    [[nodiscard]] auto get_diffuse_transmission              () const -> float                  { return get_value(diffuse_transmission_property); }
+    [[nodiscard]] auto get_diffuse_transmission_color        () const -> glm::vec3              { return get_value(diffuse_transmission_color_property); }
     [[nodiscard]] auto get_alpha_cutoff                      () const -> float                  { return get_value(alpha_cutoff_property); }
     [[nodiscard]] auto get_use_circular_brushed_metal        () const -> bool                   { return get_value(use_circular_brushed_metal_property); }
     [[nodiscard]] auto get_circular_brushed_metal_texgen_mode() const -> Texgen_mode            { return get_value(circular_brushed_metal_texgen_mode_property); }
@@ -379,6 +398,11 @@ public:
     void set_bxdf_model                        (Bxdf_model value)            { set_value(bxdf_model_property, value); }
     void set_blending_mode                     (Material_blending_mode value){ set_value(blending_mode_property, value); }
     void set_double_sided                      (bool value)                  { set_value(double_sided_property, value); }
+    void set_back_base_color                   (glm::vec3 value)             { set_value(back_base_color_property, value); }
+    void set_back_roughness                    (float value)                 { set_value(back_roughness_property, value); }
+    void set_back_reflectance                  (float value)                 { set_value(back_reflectance_property, value); }
+    void set_diffuse_transmission              (float value)                 { set_value(diffuse_transmission_property, value); }
+    void set_diffuse_transmission_color        (glm::vec3 value)             { set_value(diffuse_transmission_color_property, value); }
     void set_alpha_cutoff                      (float value)                 { set_value(alpha_cutoff_property, value); }
     void set_use_circular_brushed_metal        (bool value)                  { set_value(use_circular_brushed_metal_property, value); }
     void set_circular_brushed_metal_texgen_mode(Texgen_mode value)           { set_value(circular_brushed_metal_texgen_mode_property, value); }

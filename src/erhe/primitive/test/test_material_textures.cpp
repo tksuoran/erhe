@@ -432,3 +432,33 @@ TEST(Material_detail_blend, slot_inherits_from_a_folder)
     EXPECT_FALSE(material->get_detail_blend_texture());
     material->set_inheritance_container(nullptr);
 }
+
+// Leaf BxDF values (doc/plans/leaf_material.md): the back face and the diffuse
+// transmission are ordinary material properties carried by the snapshot.
+TEST(Material_leaf, values_round_trip_through_the_snapshot)
+{
+    std::shared_ptr<Material> material = std::make_shared<Material>("m");
+    EXPECT_EQ(material->get_diffuse_transmission(), 0.0f);
+    EXPECT_EQ(material->get_back_roughness(),       0.5f);
+
+    erhe::primitive::Material_values values{};
+    values.bxdf_model                 = erhe::primitive::Bxdf_model::leaf;
+    values.double_sided               = true;
+    values.back_base_color            = glm::vec3{0.25f, 0.5f, 0.125f};
+    values.back_roughness             = 0.75f;
+    values.back_reflectance           = 0.25f;
+    values.diffuse_transmission       = 0.5f;
+    values.diffuse_transmission_color = glm::vec3{0.5f, 0.75f, 0.25f};
+    material->set_values(values);
+
+    EXPECT_TRUE(material->get_values() == values);
+    EXPECT_EQ(material->get_value_source(Material::back_base_color_property.get()), Value_source::local);
+
+    const Property_set diff = Property_set::diff(Material::to_property_set(erhe::primitive::Material_values{}), Material::to_property_set(values));
+    EXPECT_TRUE(diff.find(Material::diffuse_transmission_property.get()).has_value());
+    EXPECT_TRUE(diff.find(Material::back_reflectance_property.get()).has_value());
+
+    // The transmission fraction stays in [0, 1].
+    material->set_value(Material::diffuse_transmission_property, 1.5f);
+    EXPECT_EQ(material->get_diffuse_transmission(), 0.5f);
+}

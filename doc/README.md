@@ -252,6 +252,7 @@ flowchart TD
 - [erhe/math.md](erhe/math.md) (stable): Collection of math utilities for 3D graphics: AABB and bounding sphere types, viewport projection/unprojection, input axis smoothing, and various vector/matrix helper functions used throughout erhe
 - [erhe/mesh_memory.md](erhe/mesh_memory.md) (stable): Mesh_memory GPU vertex / index pools
 - [erhe/mesh_memory_deferred_free.md](erhe/mesh_memory_deferred_free.md) (stable): Shared-primitive draw-list records and deferred free of render shapes
+- [erhe/leaf_material.md](erhe/leaf_material.md) (experimental): Leaf BxDF: per-face reflection and diffuse transmission of thin double-sided surfaces
 - [erhe/meshoptimizer_attribute_encodings.md](erhe/meshoptimizer_attribute_encodings.md) (mostly stable): Compact optimized-vertex attribute encodings (TBN quaternion, UV affine, weights)
 - [erhe/meshoptimizer_integration.md](erhe/meshoptimizer_integration.md) (stable): meshoptimizer-based mesh optimization: source / optimized separation, caching, edit bracket
 - [erhe/message_bus.md](erhe/message_bus.md) (stable): Generic typed publish-subscribe message bus
@@ -479,6 +480,7 @@ flowchart TD
 - [plans/graphics_tests_agfx_port.md](plans/graphics_tests_agfx_port.md) (proposed): Port agfx GPU tests to erhe_graphics_gpu_tests: remaining work
 - [plans/id_renderer.md](plans/id_renderer.md) (proposed): ID renderer coverage
 - [plans/init_status_display.md](plans/init_status_display.md) (proposed): Multi-threaded init status reporting
+- [plans/leaf_material.md](plans/leaf_material.md) (proposed): Leaf material remaining work: textures, baked translucency, ray query path, USD
 - [plans/lightmap/lightmap_baking.md](plans/lightmap/lightmap_baking.md) (in progress): Lightmap baking follow-ups
 - [plans/lightmap/seam_driven_unwrap.md](plans/lightmap/seam_driven_unwrap.md) (in progress): Seam-driven lightmap unwrap (phases 2-4)
 - [plans/lightmap/tiling.md](plans/lightmap/tiling.md) (in progress): Lightmap spatial tiling and world-space partition

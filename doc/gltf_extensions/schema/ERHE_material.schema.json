@@ -13,8 +13,11 @@
         "roughness_y": {"type": "number"},
         "bxdf_model": {
             "type": "string",
-            "enum": ["unlit", "isotropic_brdf", "anisotropic_brdf", "anisotropic_slope", "anisotropic_engine_ready"]
+            "enum": ["unlit", "isotropic_brdf", "anisotropic_brdf", "anisotropic_slope", "anisotropic_engine_ready", "leaf"]
         },
+        "back_base_color": {"type": "array", "items": {"type": "number"}, "minItems": 3, "maxItems": 3},
+        "back_roughness":  {"type": "number"},
+        "back_reflectance": {"type": "number"},
         "blending_mode": {
             "type": "string",
             "enum": ["opaque", "alpha_blend", "alpha_test", "multiply", "add", "subtract", "screen_door"]

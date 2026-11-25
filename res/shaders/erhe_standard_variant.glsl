@@ -223,6 +223,7 @@
 #define ERHE_BXDF_MODEL_ANISOTROPIC_BRDF         2
 #define ERHE_BXDF_MODEL_ANISOTROPIC_SLOPE        3
 #define ERHE_BXDF_MODEL_ANISOTROPIC_ENGINE_READY 4
+#define ERHE_BXDF_MODEL_LEAF                     5
 
 // Material_blending_mode enum values. Keep in sync with
 // erhe::primitive::Material_blending_mode. The fragment shader branches

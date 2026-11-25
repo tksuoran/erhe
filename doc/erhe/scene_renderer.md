@@ -346,4 +346,3 @@ each re-renders on its next draw.
 
 ## Future work
 - [../plans/clustered_lights.md](../plans/clustered_lights.md): clustered light culling phases 3-5 (GPU binning, the headset grid, refinements)
-- [../plans/leaf_material.md](../plans/leaf_material.md): the leaf BxDF model (double-sided reflection and diffuse transmission)
