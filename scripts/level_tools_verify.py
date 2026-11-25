@@ -16646,7 +16646,7 @@ def check_more_shapes(editor):
           f"{kits['shape_count']} shapes, ceilings {[k['triangle_ceiling'] for k in kits['kits']]}")
     expected_catalog = {
         "nature.cliff": (["cliff", "grass"], "triangle_mesh", "solid", "start, end, base, top"),
-        "nature.palm":  (["bark", "foliage"], "triangle_mesh", "solid", ""),
+        "nature.palm":  (["bark", "leaf"], "triangle_mesh", "solid", ""),
         "nature.shore": (["sand"], "triangle_mesh", "solid", "start, end, top, base"),
         "nature.water": (["water"], "none", "surface", "left, right, front, back"),
     }
@@ -16831,8 +16831,8 @@ def check_more_shapes(editor):
     back = editor.call("level_replace_pieces", {"scene_name": scene, "node_ids": [palm_id], "shape": "nature.palm"})["pieces"][0]
     editor.wait_idle()
     palm_after = replace_state(editor, scene, palm_id)
-    check("a palm by a tree and back: the seed carries both ways, bark and foliage keep their materials, the palm's mesh comes back",
-          (as_tree["shape"] == "nature.tree") and ("seed" in as_tree["carried"]) and (sorted(as_tree["kept_materials"]) == ["bark", "foliage"]) and
+    check("a palm by a tree and back: the seed carries both ways, bark keeps its material (the palm's leaf is no tree slot), the palm's mesh comes back",
+          (as_tree["shape"] == "nature.tree") and ("seed" in as_tree["carried"]) and (sorted(as_tree["kept_materials"]) == ["bark"]) and
           (back["parameters"]["seed"] == 9) and (palm_after["parameters_text"] == palm_before["parameters_text"]) and palm_after["has_body"] and kept_place(palm_before, palm_after),
           f"tree {json.dumps({k: as_tree[k] for k in ('carried', 'kept_materials')})}, back {back['parameters'].get('seed')}")
     as_land = editor.call("level_replace_pieces", {"scene_name": scene, "node_ids": [cliff_id], "shape": "nature.land_mass"})["pieces"][0]
@@ -16965,7 +16965,7 @@ def check_more_shapes_2(editor):
         "architecture.torii":       (["wood"], "triangle_mesh", "base, opening_front, opening_back", "japanese"),
         "architecture.battlement":  (["wall", "trim"], "triangle_mesh", "base, start, end", "medieval"),
         "architecture.tower":       (["wall", "trim", "floor"], "triangle_mesh", "base, top, opening_front, left, right, back", "medieval"),
-        "nature.leaf_plant":        (["bark", "foliage", "shoot"], "none", "", "tropical"),
+        "nature.leaf_plant":        (["bark", "leaf", "young_leaf"], "none", "", "tropical"),
     }
     catalog_problems = []
     for shape_id, (slots, collision, connectors, tag) in expected_catalog.items():
@@ -17366,8 +17366,8 @@ def check_more_shapes_3(editor):
         "nature.rock_spire":     (["rock", "grass"], "triangle_mesh", "base", ["height", "radius", "lean"]),
         "nature.basalt_columns": (["rock"], "triangle_mesh", "base", ["radius", "height_spread"]),
         "architecture.roof":     (["roof", "trim"], "triangle_mesh", "base, left, right, front, back", []),
-        "nature.palm_clump":     (["bark", "foliage"], "triangle_mesh", "", ["stems", "height"]),
-        "nature.palm_shrub":     (["bark", "foliage", "shoot"], "convex_hull", "", ["size", "fronds"]),
+        "nature.palm_clump":     (["bark", "leaf"], "triangle_mesh", "", ["stems", "height"]),
+        "nature.palm_shrub":     (["bark", "leaf", "young_leaf"], "convex_hull", "", ["size", "fronds"]),
         "nature.dune":           (["sand"], "convex_hull", "", ["length", "width", "height"]),
         "nature.ground_patch":   (["earth"], "convex_hull", "", ["size", "irregularity"]),
     }

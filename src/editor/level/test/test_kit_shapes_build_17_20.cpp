@@ -357,7 +357,7 @@ class Kit_bamboo_culms : public testing::TestWithParam<int>
 TEST_P(Kit_bamboo_culms, corners_pass_over_seeds_with_every_slot)
 {
     const Kit_shape_definition& bamboo = get_shape("nature.bamboo");
-    ASSERT_EQ(bamboo.material_slots, (std::vector<std::string>{"cane", "bark", "foliage"}));
+    ASSERT_EQ(bamboo.material_slots, (std::vector<std::string>{"cane", "bark", "leaf"}));
     for (const int seed : {0, 5}) {
         Kit_parameter_values values = explicit_values(bamboo, seed);
         ASSERT_TRUE(values.set_int("culms", GetParam()));

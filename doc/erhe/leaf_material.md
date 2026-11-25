@@ -116,6 +116,12 @@ index 1.2 - 1.7 gives `F0 = ((n - 1) / (n + 1))^2 = 0.008 - 0.067`, reflectance
 `sqrt(F0 / 0.16) = 0.23 - 0.65`; Beckmann roughness 0.078 - 0.5 taken as GGX
 alpha gives roughness `sqrt(alpha) = 0.28 - 0.71`.
 
+The level kit's palette has leaf materials (Kit Leaf, Kit Young Leaf, Kit
+Autumn Leaf, Kit Grass Blade) on the slots `leaf`, `young_leaf` and `blade`
+of the shapes whose leaves are thin: the palms, the leaf plant, bamboo and the
+grass tuft (`doc/editor/level_kit_shapes.md` "Slots and palette"). Their
+leaves are closed thin solids, so these materials carry a thickness.
+
 ## Verification
 
 `scripts/leaf_material_verify.py` (headless) imports a scene with a plain

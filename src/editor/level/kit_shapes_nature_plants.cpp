@@ -1347,7 +1347,7 @@ void add_nature_plant_shapes(std::vector<Kit_shape_definition>& shapes)
             make_seed_parameter  (),
             make_count_parameter ("segments", "Trunk sides", 6, 4, 12)
         };
-        shape.material_slots  = {"bark", "foliage"};
+        shape.material_slots  = {"bark", "leaf"};
         shape.normal_style    = Kit_normal_style::faceted;
         shape.triangle_budget = 1600;
         shape.collision       = Kit_collision::triangle_mesh;
@@ -1379,7 +1379,7 @@ void add_nature_plant_shapes(std::vector<Kit_shape_definition>& shapes)
         };
         shape.parameters[4].float_min = 0.1f;
         shape.parameters[4].float_max = 0.6f;
-        shape.material_slots  = {"bark", "foliage", "shoot"};
+        shape.material_slots  = {"bark", "leaf", "young_leaf"};
         shape.normal_style    = Kit_normal_style::faceted;
         shape.triangle_budget = 520;
         shape.collision       = Kit_collision::none;
@@ -1406,7 +1406,7 @@ void add_nature_plant_shapes(std::vector<Kit_shape_definition>& shapes)
             derive_int(make_count_parameter("fronds", "Fronds or fan leaves per stem", 6, 2, 10), 4, 8),
             make_seed_parameter()
         };
-        shape.material_slots  = {"bark", "foliage"};
+        shape.material_slots  = {"bark", "leaf"};
         shape.normal_style    = Kit_normal_style::faceted;
         shape.triangle_budget = 1940;
         shape.collision       = Kit_collision::triangle_mesh;
@@ -1433,7 +1433,7 @@ void add_nature_plant_shapes(std::vector<Kit_shape_definition>& shapes)
             from_seed_by_default(derive_int(make_count_parameter("fronds", "Fronds or fan leaves", 10, 3, 16), 5, 16)),
             make_seed_parameter()
         };
-        shape.material_slots  = {"bark", "foliage", "shoot"};
+        shape.material_slots  = {"bark", "leaf", "young_leaf"};
         shape.normal_style    = Kit_normal_style::faceted;
         shape.triangle_budget = 1300;
         shape.collision       = Kit_collision::convex_hull;

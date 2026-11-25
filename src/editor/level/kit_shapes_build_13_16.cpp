@@ -1716,7 +1716,7 @@ void add_build_13_16_shapes(std::vector<Kit_shape_definition>& shapes)
             derive_float(make_ratio_parameter("spread", "How far the blades lean and arch out", 0.5f), 0.2f, 0.8f, 0.05f),
             make_seed_parameter()
         };
-        shape.material_slots  = {"grass", "plume"};
+        shape.material_slots  = {"blade", "plume"};
         shape.normal_style    = Kit_normal_style::faceted;
         shape.triangle_budget = 640;
         shape.collision       = Kit_collision::none;

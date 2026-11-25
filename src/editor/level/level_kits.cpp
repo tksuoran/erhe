@@ -223,6 +223,15 @@ auto make_palette_material(const Kit_palette_material& palette) -> std::shared_p
     material_values.roughness  = glm::vec2{palette.roughness, palette.roughness};
     material_values.metallic   = palette.metallic;
     material_values.emissive   = palette.emissive;
+    if (palette.transmission > 0.0f) {
+        // The shapes' leaves are closed thin solids: the viewer sees their front faces only.
+        material_values.bxdf_model                 = erhe::primitive::Bxdf_model::leaf;
+        material_values.diffuse_transmission       = palette.transmission;
+        material_values.diffuse_transmission_color = palette.transmission_color;
+        material_values.thickness                  = palette.thickness;
+        material_values.back_base_color            = palette.base_color;
+        material_values.back_roughness             = palette.roughness;
+    }
     return std::make_shared<erhe::primitive::Material>(
         erhe::primitive::Material_create_info{.name = palette.name, .values = material_values}
     );

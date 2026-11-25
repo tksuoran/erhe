@@ -1435,7 +1435,7 @@ void add_build_17_20_shapes(std::vector<Kit_shape_definition>& shapes)
             derive_float(make_length_parameter("cane_width", "Width of the thickest cane at its foot", 0.1f, Kit_default_scale::meters, 0.03f, 0.3f), 0.07f, 0.14f, 0.01f),
             make_seed_parameter()
         };
-        shape.material_slots  = {"cane", "bark", "foliage"};
+        shape.material_slots  = {"cane", "bark", "leaf"};
         shape.normal_style    = Kit_normal_style::faceted;
         shape.triangle_budget = 1200;
         shape.collision       = Kit_collision::triangle_mesh;

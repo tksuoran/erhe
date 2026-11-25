@@ -126,6 +126,28 @@ The palette (`Kit_shape_library::get_palette()`, base colors linear):
 | Kit Ember | (0.60, 0.18, 0.05) | 0.6 | 0 | (1.60, 0.45, 0.08) |
 | Kit Steel | (0.70, 0.72, 0.75) | 0.35 | 0.6 | - |
 | Kit Brass | (0.78, 0.58, 0.22) | 0.35 | 0.6 | - |
+| Kit Leaf | (0.17, 0.53, 0.13) | 0.6 | 0 | - |
+| Kit Young Leaf | (0.40, 0.70, 0.18) | 0.55 | 0 | - |
+| Kit Autumn Leaf | (0.80, 0.37, 0.08) | 0.7 | 0 | - |
+| Kit Grass Blade | (0.34, 0.65, 0.18) | 0.7 | 0 | - |
+
+The last four are leaf materials (`doc/erhe/leaf_material.md`): the light
+behind a leaf shows through it, tinted by its transmission color.
+
+| Material | Transmission | Transmission color | Thickness |
+|---|---|---|---|
+| Kit Leaf | 0.40 | (0.45, 0.75, 0.12) | 0.06 m |
+| Kit Young Leaf | 0.45 | (0.60, 0.85, 0.20) | 0.06 m |
+| Kit Autumn Leaf | 0.40 | (0.95, 0.55, 0.12) | 0.06 m |
+| Kit Grass Blade | 0.35 | (0.55, 0.80, 0.18) | 0.04 m |
+
+A leaf material's base color is its opaque counterpart's divided by
+`1 - transmission`, so a lit leaf reflects as much as the opaque material
+does. The shapes' leaves are closed thin solids, so the thickness is over the
+thickest leaf the shapes make (palm fronds and banana blades about 5 cm,
+grass blades about 3.6 cm): transmitted light's shadow is looked up at the
+far face. `make_palette_material()` makes a palette entry with a
+transmission a leaf material, single sided, its back face copying the front.
 
 Each slot name has a `Kit_slot_palette` (`get_slot_palettes()`,
 `find_slot_palette()`): its default material and a few alternatives, by
@@ -141,6 +163,9 @@ palette name:
 | earth | Kit Earth | Kit Grass, Kit Rock, Kit Stone, Kit Sand |
 | grass | Kit Grass | Kit Earth, Kit Foliage |
 | foliage | Kit Foliage | Kit Autumn Foliage, Kit Grass |
+| leaf | Kit Leaf | Kit Young Leaf, Kit Autumn Leaf, Kit Foliage |
+| young_leaf | Kit Young Leaf | Kit Leaf, Kit Autumn Leaf, Kit Grass |
+| blade | Kit Grass Blade | Kit Leaf, Kit Autumn Leaf, Kit Grass, Kit Straw |
 | bark | Kit Bark | Kit Wood, Kit Rock |
 | cliff | Kit Dark Rock | Kit Rock, Kit Stone, Kit Sand |
 | sand | Kit Sand | Kit Earth, Kit Rock |
@@ -1261,7 +1286,7 @@ horizontal offset, a share of the height, 0 - 0.5), `fronds` (3 - 24),
 `frond_length` (bounded to 0.1 - 0.6 of the height, so no leaf, fan rim or
 dead leaf reaches the ground and no frond is too small for the mesh checks),
 `droop`, `seed` and `segments` (trunk sides, 4 - 12); slots
-`bark` (trunk, nuts, dead leaves) and `foliage` (fronds, fan leaves,
+`bark` (trunk, nuts, dead leaves) and `leaf` (fronds, fan leaves,
 crownshaft); a triangle mesh body.
 
 - The species sets the trunk's radius per meter of height, how much of the
@@ -1330,21 +1355,21 @@ under 0.5 ms.
 leaves standing at its origin. Parameters `form` (`banana`, `taro`,
 `strelitzia`, `fern`, `tree_fern`), `height` (0.3 - 8 m), `leaves` (3 - 14),
 `droop` (0 - 1), `leaf_width` (0.1 - 0.6) and `seed`; height, leaves and droop
-in the default mask; slots `bark` (stems and dead leaves), `foliage` and
-`shoot` (the youngest leaves); no connectors; no body (`Kit_collision::none`,
+in the default mask; slots `bark` (stems and dead leaves), `leaf` and
+`young_leaf` (the youngest leaves); no connectors; no body (`Kit_collision::none`,
 P5 of `doc/plans/level_kit_extra_shapes.md`: soft dressing a walker passes
 through; its pieces carry `pass_through`). It shares its parts with the palm
 shrub ("Plant parts"). By form:
 
 - `banana`: a tapering stem, broad oblong blades with a V fold at the base
   that arch over and twist, a rolled new leaf standing in the crown (slot
-  `shoot`) and one or two dry leaves hanging down the stem (slot `bark`).
+  `young_leaf`) and one or two dry leaves hanging down the stem (slot `bark`).
 - `taro`: heart-shaped blades hanging from the tips of long stalks that rise
   from a mound, each blade's halves raised about its midrib.
 - `strelitzia`: paddle blades on long stalks in one fan, alternately to
   either side, leaning out more the older they are.
 - `fern`: arching fronds of nine pairs of leaflets (seven above ten fronds)
-  about two or three unrolling croziers (slot `shoot`).
+  about two or three unrolling croziers (slot `young_leaf`).
 - `tree_fern`: the fern's crown on a trunk with two or three dead fronds
   hanging under it (slot `bark`).
 
@@ -1449,7 +1474,7 @@ ringed canes and arching feather fronds; `rhapis`: thin canes with fan
 leaves; `nipa`: long erect fronds from short stems at the ground), `stems`
 (1 - 9), `height` (the tallest stem's crown, 1.2 wall heights), `spread`
 (how far the outer stems lean out), `fronds` (per stem, 2 - 10) and `seed`;
-stems and height in the default mask; slots `bark` and `foliage`; a
+stems and height in the default mask; slots `bark` and `leaf`; a
 triangle mesh body.
 
 - Each stem is the palm's trunk and crown (`add_palm_tree()`, shared with
@@ -1465,15 +1490,15 @@ triangle mesh body.
 `nature.palm_shrub` is a trunkless crown at the ground at its origin.
 Parameters `species`, `size` (1.2 m), `fronds` (3 - 16) and `seed`; size and
 fronds in the default mask; slots `bark` (the stem and dead leaves),
-`foliage` and `shoot` (the youngest leaves); a convex hull body. It shares
+`leaf` and `young_leaf` (the youngest leaves); a convex hull body. It shares
 its parts with the leaf plant ("Plant parts"). By species:
 
 - `palmetto`: pleated fans of eight pointed fingers on long stalks, the young
   ones standing and the old ones low and drooping, a spear leaf in the middle
-  (slot `shoot`) and one or two dead fans on the ground (slot `bark`).
+  (slot `young_leaf`) and one or two dead fans on the ground (slot `bark`).
 - `cycad`: a scaly barrel carrying a rosette of arching feather fronds of
   eleven leaflet pairs standing in a V (eight above twelve fronds) about a
-  flush of two or three new fronds (slot `shoot`).
+  flush of two or three new fronds (slot `young_leaf`).
 - `seedling`: pleated undivided wedge leaves of four fingers on a thin stem
   about a spear.
 
@@ -1572,7 +1597,7 @@ leaf and 62; with the default mask's leaves and size of seed 1 the shape has
 Parameters `form` (`grass`, `reed`, `pampas`), `height` (of the tallest
 stalk, 0.6 m, 0.1 - 3), `blades` (16, 4 - 40), `spread` (how far the blades
 lean and arch out, 0.5, 0 - 1) and `seed`; height and blades in the default
-mask; slots `grass` and `plume` (ears, panicles and plumes; Kit Straw);
+mask; slots `blade` (the blades and the tussock) and `plume` (ears, panicles and plumes; Kit Straw);
 faceted; no body (`Kit_collision::none`): a walker passes through it and it
 is no navigation input.
 
@@ -1653,7 +1678,7 @@ tallest cane, 1.5 wall heights, 1 - 16 m; in the default mask), `culms` (3 -
 modules, 0.1 - 4 m), `lean` (outward lean of the outermost canes, 5 degrees,
 0 - 20; in the default mask), `cane_width` (of the thickest cane at its foot,
 0.1 m, 0.03 - 0.3) and `seed`; slots `cane`, `bark` (the nodes) and
-`foliage`; no connectors; a triangle mesh body; seeded.
+`leaf`; no connectors; a triangle mesh body; seeded.
 
 - The tallest cane stands at the origin; the others stand around it on a
   golden-angle spiral out to the radius, 0.55 - 0.95 of the height, leaning

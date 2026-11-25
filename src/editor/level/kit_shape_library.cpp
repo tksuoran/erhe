@@ -214,7 +214,14 @@ Kit_shape_library::Kit_shape_library()
         Kit_palette_material{.name = "Kit Clay",           .base_color = glm::vec3{0.58f, 0.27f, 0.15f}, .roughness = 0.80f},
         Kit_palette_material{.name = "Kit Ember",          .base_color = glm::vec3{0.60f, 0.18f, 0.05f}, .roughness = 0.60f, .emissive = glm::vec3{1.60f, 0.45f, 0.08f}},
         Kit_palette_material{.name = "Kit Steel",          .base_color = glm::vec3{0.70f, 0.72f, 0.75f}, .roughness = 0.35f, .metallic = 0.6f},
-        Kit_palette_material{.name = "Kit Brass",          .base_color = glm::vec3{0.78f, 0.58f, 0.22f}, .roughness = 0.35f, .metallic = 0.6f}
+        Kit_palette_material{.name = "Kit Brass",          .base_color = glm::vec3{0.78f, 0.58f, 0.22f}, .roughness = 0.35f, .metallic = 0.6f},
+        // Leaves (doc/erhe/leaf_material.md): a base color of the opaque counterpart / (1 - transmission), so
+        // they reflect as much as it does; thicknesses over the shapes' thickest leaf (palm fronds and
+        // banana blades about 5 cm, grass blades about 3.6 cm).
+        Kit_palette_material{.name = "Kit Leaf",           .base_color = glm::vec3{0.17f, 0.53f, 0.13f}, .roughness = 0.60f, .transmission = 0.40f, .transmission_color = glm::vec3{0.45f, 0.75f, 0.12f}, .thickness = 0.06f},
+        Kit_palette_material{.name = "Kit Young Leaf",     .base_color = glm::vec3{0.40f, 0.70f, 0.18f}, .roughness = 0.55f, .transmission = 0.45f, .transmission_color = glm::vec3{0.60f, 0.85f, 0.20f}, .thickness = 0.06f},
+        Kit_palette_material{.name = "Kit Autumn Leaf",    .base_color = glm::vec3{0.80f, 0.37f, 0.08f}, .roughness = 0.70f, .transmission = 0.40f, .transmission_color = glm::vec3{0.95f, 0.55f, 0.12f}, .thickness = 0.06f},
+        Kit_palette_material{.name = "Kit Grass Blade",    .base_color = glm::vec3{0.34f, 0.65f, 0.18f}, .roughness = 0.70f, .transmission = 0.35f, .transmission_color = glm::vec3{0.55f, 0.80f, 0.18f}, .thickness = 0.04f}
     };
     // One default per slot name and a few alternatives (R2.9).
     m_slot_palettes = {
@@ -226,6 +233,10 @@ Kit_shape_library::Kit_shape_library()
         Kit_slot_palette{.slot = "earth",   .default_material = "Kit Earth",   .alternatives = {"Kit Grass", "Kit Rock", "Kit Stone", "Kit Sand"}},
         Kit_slot_palette{.slot = "grass",   .default_material = "Kit Grass",   .alternatives = {"Kit Earth", "Kit Foliage"}},
         Kit_slot_palette{.slot = "foliage", .default_material = "Kit Foliage", .alternatives = {"Kit Autumn Foliage", "Kit Grass"}},
+        // Thin leaves and blades (the leaf BxDF); "foliage" stays the closed clumps of trees and bushes.
+        Kit_slot_palette{.slot = "leaf",       .default_material = "Kit Leaf",        .alternatives = {"Kit Young Leaf", "Kit Autumn Leaf", "Kit Foliage"}},
+        Kit_slot_palette{.slot = "young_leaf", .default_material = "Kit Young Leaf",  .alternatives = {"Kit Leaf", "Kit Autumn Leaf", "Kit Grass"}},
+        Kit_slot_palette{.slot = "blade",      .default_material = "Kit Grass Blade", .alternatives = {"Kit Leaf", "Kit Autumn Leaf", "Kit Grass", "Kit Straw"}},
         Kit_slot_palette{.slot = "bark",    .default_material = "Kit Bark",    .alternatives = {"Kit Wood", "Kit Rock"}},
         Kit_slot_palette{.slot = "cliff",   .default_material = "Kit Dark Rock", .alternatives = {"Kit Rock", "Kit Stone", "Kit Sand"}},
         Kit_slot_palette{.slot = "sand",    .default_material = "Kit Sand",    .alternatives = {"Kit Earth", "Kit Rock"}},

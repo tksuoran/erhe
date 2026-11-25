@@ -27,6 +27,11 @@ public:
     float       roughness {0.8f};
     float       metallic  {0.0f};
     glm::vec3   emissive  {0.0f}; // linear, added to the shaded color; non-zero for a glowing material (P3)
+    // A leaf (doc/erhe/leaf_material.md) when above 0: the diffuse transmission, its color and the
+    // thickness of the shapes' closed leaves.
+    float       transmission      {0.0f};
+    glm::vec3   transmission_color{1.0f};
+    float       thickness         {0.0f};
 };
 
 // The palette materials of one slot name: its default and its alternatives, by palette material name.

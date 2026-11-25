@@ -95,7 +95,7 @@ void for_each_corner(const Kit_parameter_values& values, const std::vector<std::
     return topology;
 }
 
-const std::vector<std::string> plant_slots{"bark", "foliage", "shoot"};
+const std::vector<std::string> plant_slots{"bark", "leaf", "young_leaf"};
 
 TEST(Kit_nature_plants, palm_shrub_species_pass_at_the_corners_over_seeds)
 {

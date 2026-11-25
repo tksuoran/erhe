@@ -464,7 +464,7 @@ TEST(Kit_succulent, each_leaf_is_a_part)
 
 TEST(Kit_grass_tuft, every_form_passes_at_the_corners_over_seeds)
 {
-    ASSERT_EQ(get_shape("nature.grass_tuft").material_slots, (std::vector<std::string>{"grass", "plume"}));
+    ASSERT_EQ(get_shape("nature.grass_tuft").material_slots, (std::vector<std::string>{"blade", "plume"}));
     expect_forms_pass_at_the_corners("nature.grass_tuft", {"height", "blades", "spread"});
 }
 
