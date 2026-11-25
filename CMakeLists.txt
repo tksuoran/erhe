@@ -1222,7 +1222,7 @@ if (${ERHE_GLTF_LIBRARY} STREQUAL "fastgltf")
         # IDs (uid property on top-level objects; KhronosGroup/glTF#2597).
         # Branch erhe-rebase of the fork.
         VERSION           1.0.1
-        GIT_TAG           erhe-2026-11-23
+        GIT_TAG           erhe-2026-11-25
         GITHUB_REPOSITORY tksuoran/fastgltf
         OPTIONS
             "FASTGLTF_ENABLE_INSTALL OFF"
