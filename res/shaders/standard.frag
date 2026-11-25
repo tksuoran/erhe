@@ -621,6 +621,14 @@ void main()
     vec3 N = vec3(0.0, 1.0, 0.0);
 #  endif
 
+    // A back face is drawn only for a double-sided material; it shades with
+    // the reversed frame (glTF doubleSided), which also mirrors the normal map.
+    if (!gl_FrontFacing) {
+        N = -N;
+        T = -T;
+        B = -B;
+    }
+
     // The shadow lookup of every path (ERHE_SAMPLE_LIGHT_VISIBILITY /
     // ERHE_SAMPLE_POINT_LIGHT_VISIBILITY): the normal-offset lookup takes the
     // geometric normal (the interpolated normal before the normal map); the
