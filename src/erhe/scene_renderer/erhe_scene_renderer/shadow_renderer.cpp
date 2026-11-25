@@ -562,14 +562,16 @@ void Shadow_renderer::draw_shadow_casters(
         }
         // Mirrored (negative determinant) buckets get the front-face-flipped
         // variant so the active cull mode removes the same side (relative to
-        // the light) as for non-mirrored casters.
+        // the light) as for non-mirrored casters. Double-sided buckets write
+        // both faces, whichever side faces the light.
         erhe::graphics::Render_pipeline* render_pipeline = base_pipeline.get_pipeline_for(
             render_pass.get_descriptor(),
             color_blend,
             &reloadable_shader_stages->shader_stages,
             vertex_input.vertex_input.get(),
             &vertex_input.vertex_format,
-            bucket.negative_determinant
+            bucket.negative_determinant,
+            bucket.double_sided
         );
         if (render_pipeline == nullptr) {
             log_draw->warn("No render pipeline");
@@ -1703,7 +1705,8 @@ void Shadow_renderer::prewarm_pipelines(
                             &reloadable_shader_stages->shader_stages,
                             vertex_input.vertex_input.get(),
                             &vertex_input.vertex_format,
-                            front_face_flip
+                            front_face_flip,
+                            bucket.double_sided
                         )
                     );
                 }

@@ -4429,7 +4429,8 @@ auto Draw_list_scene::draw_shadow(const Draw_shadow_parameters& parameters) -> D
             &stages->shader_stages,
             vertex_input.vertex_input.get(),
             &vertex_input.vertex_format,
-            key.negative_determinant
+            key.negative_determinant,
+            key.double_sided
         );
         if (render_pipeline == nullptr) {
             log_draw_list->warn("No shadow render pipeline for draw list {}: {}", list_index, key.describe());

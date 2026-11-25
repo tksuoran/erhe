@@ -282,6 +282,9 @@ A minimum box extent (1 cm) keeps degenerate (flat) fits renderable.
   faces farther from the light and widens the leak. `cull_none` writes both
   sides; on closed meshes it stores the same nearest (front) surface as
   `cull_back`, rasterizing twice the faces.
+  A double-sided caster (`erhe::scene::is_double_sided()`) is drawn with face
+  culling off in every mode, so a single-layer surface casts whichever face
+  points at the light.
   `Shadow_renderer` pre-builds one pipeline per cull mode (`m_pipelines[]`).
   Mirrored (negative-determinant) buckets use the front-face-flipped pipeline
   variant; see "Mirrored (negative-determinant) geometry" in
