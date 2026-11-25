@@ -5218,6 +5218,10 @@
           "maxItems": 3,
           "minItems": 3,
           "type": "array"
+        },
+        "thickness": {
+          "description": "Leaf BxDF: distance in meters from the visible face to the far face of a closed leaf (0 for a single-layer surface); transmitted light's shadow is looked up at the far face",
+          "type": "number"
         }
       },
       "required": [
@@ -5745,6 +5749,10 @@
           "maxItems": 3,
           "minItems": 3,
           "type": "array"
+        },
+        "thickness": {
+          "description": "Leaf BxDF: distance in meters from the visible face to the far face of a closed leaf (0 for a single-layer surface); transmitted light's shadow is looked up at the far face",
+          "type": "number"
         }
       },
       "required": [

@@ -145,6 +145,9 @@ public:
     float                     back_reflectance                  {0.5f};
     float                     diffuse_transmission              {0.0f};
     glm::vec3                 diffuse_transmission_color        {1.0f, 1.0f, 1.0f};
+    // The leaf's thickness (0: a single-layer surface): transmitted light
+    // enters through the far face, this far behind the visible one.
+    float                     thickness                         {0.0f};
     float                     alpha_cutoff                      {0.5f};
     bool                      use_circular_brushed_metal        {false};
     // Texgen source for the in-shader circular brushed metal block
@@ -231,6 +234,7 @@ public:
     static const erhe::property::Property<float>                  back_reflectance_property;
     static const erhe::property::Property<float>                  diffuse_transmission_property;
     static const erhe::property::Property<glm::vec3>              diffuse_transmission_color_property;
+    static const erhe::property::Property<float>                  thickness_property;
     static const erhe::property::Property<float>                  alpha_cutoff_property;
     static const erhe::property::Property<bool>                   use_circular_brushed_metal_property;
     static const erhe::property::Property<Texgen_mode>            circular_brushed_metal_texgen_mode_property;
@@ -363,6 +367,7 @@ public:
     [[nodiscard]] auto get_back_reflectance                  () const -> float                  { return get_value(back_reflectance_property); }
     [[nodiscard]] auto get_diffuse_transmission              () const -> float                  { return get_value(diffuse_transmission_property); }
     [[nodiscard]] auto get_diffuse_transmission_color        () const -> glm::vec3              { return get_value(diffuse_transmission_color_property); }
+    [[nodiscard]] auto get_thickness                         () const -> float                  { return get_value(thickness_property); }
     [[nodiscard]] auto get_alpha_cutoff                      () const -> float                  { return get_value(alpha_cutoff_property); }
     [[nodiscard]] auto get_use_circular_brushed_metal        () const -> bool                   { return get_value(use_circular_brushed_metal_property); }
     [[nodiscard]] auto get_circular_brushed_metal_texgen_mode() const -> Texgen_mode            { return get_value(circular_brushed_metal_texgen_mode_property); }
@@ -403,6 +408,7 @@ public:
     void set_back_reflectance                  (float value)                 { set_value(back_reflectance_property, value); }
     void set_diffuse_transmission              (float value)                 { set_value(diffuse_transmission_property, value); }
     void set_diffuse_transmission_color        (glm::vec3 value)             { set_value(diffuse_transmission_color_property, value); }
+    void set_thickness                         (float value)                 { set_value(thickness_property, value); }
     void set_alpha_cutoff                      (float value)                 { set_value(alpha_cutoff_property, value); }
     void set_use_circular_brushed_metal        (bool value)                  { set_value(use_circular_brushed_metal_property, value); }
     void set_circular_brushed_metal_texgen_mode(Texgen_mode value)           { set_value(circular_brushed_metal_texgen_mode_property, value); }

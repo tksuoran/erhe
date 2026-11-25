@@ -1873,6 +1873,7 @@ TEST(Gltf_roundtrip, leaf_material_round_trips)
     values.back_reflectance           = 0.375f;
     values.diffuse_transmission       = 0.5f;
     values.diffuse_transmission_color = glm::vec3{0.5f, 0.75f, 0.125f};
+    values.thickness                  = 0.03125f;
     material->set_values(values);
 
     erhe::scene::Scene          loaded_scene{"loaded", nullptr};
@@ -1889,4 +1890,5 @@ TEST(Gltf_roundtrip, leaf_material_round_trips)
     EXPECT_EQ(loaded_values.back_reflectance,           values.back_reflectance);
     EXPECT_EQ(loaded_values.diffuse_transmission,       values.diffuse_transmission);
     EXPECT_EQ(loaded_values.diffuse_transmission_color, values.diffuse_transmission_color);
+    EXPECT_EQ(loaded_values.thickness,                  values.thickness);
 }

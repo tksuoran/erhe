@@ -103,6 +103,7 @@ public:
     std::size_t back_reflectance;                  // float
     std::size_t back_base_color_roughness;         // vec4
     std::size_t diffuse_transmission;              // vec4
+    std::size_t thickness;                         // float
 };
 
 // The texture half of one material record, resolved: the exact texture and
@@ -153,6 +154,7 @@ public:
     glm::vec4  back_base_color_roughness {0.0f, 0.0f, 0.0f, 0.0f};
     // (diffuse transmission color, diffuse transmission)
     glm::vec4  diffuse_transmission      {0.0f, 0.0f, 0.0f, 0.0f};
+    float      thickness                 {0.0f};
 
     Material_texture_record_inputs base_color_texture        {};
     Material_texture_record_inputs metallic_roughness_texture{};

@@ -35,6 +35,7 @@ its own. Remaining work: [../plans/leaf_material.md](../plans/leaf_material.md).
 | `back_base_color`, `back_roughness`, `back_reflectance` | The back face |
 | `diffuse_transmission` | Fraction of the diffuse lobe that is transmitted, 0 - 1 |
 | `diffuse_transmission_color` | Tint of the transmitted light |
+| `thickness` | Distance from the visible face to the far face, meters; 0 for a single-layer surface |
 
 `metallic` does not apply. The Properties window shows the back face and
 transmission rows only for a leaf material. The front face is the face whose
@@ -64,10 +65,16 @@ reflectance.
   `albedo * (1 - t) + t * diffuse_transmission_color`. With DDGI, the
   viewer's side reads the irradiance along `N` and the transmitted side along
   `-N`. A lightmapped leaf uses the lightmap value for both sides.
-- Shadows: a transmitting fragment takes the visibility of the lit face at
-  the same point. The receiver-plane lookups do not depend on the plane
-  normal's sign; the normal-offset lookups offset along the geometric normal
-  turned toward the light (`erhe_light.glsl`).
+- Shadows: transmitted light enters through the far face, so the shadow
+  lookup of a light behind the surface is made `thickness` behind the
+  fragment along `-N` (`ERHE_SHADOW_POSITION` in `standard.frag`). A closed
+  leaf (a thin solid, as the level kit's leaves are) needs a thickness at
+  least its own: at 0 its far face lies between the light and the lookup and
+  shadows all of its transmitted light. A thickness larger than the leaf's
+  moves the lookup into the air beyond it, toward the light. The
+  receiver-plane lookups do not depend on the plane normal's sign; the
+  normal-offset lookups offset along the geometric normal turned toward the
+  light (`erhe_light.glsl`).
 
 The ray query shader (`erhe_ray_hit.glsl`) shades a leaf material with the
 isotropic BRDF.
@@ -90,10 +97,12 @@ double-sided material, leaf or not:
 
 - Import: a material with `KHR_materials_diffuse_transmission` and
   `diffuseTransmissionFactor > 0` becomes a leaf material; its back face
-  copies the front (glTF has one set of reflective parameters). The
-  extension's textures are not read; a log line names the material.
+  copies the front (glTF has one set of reflective parameters), and
+  `KHR_materials_volume` `thicknessFactor` gives its thickness. The
+  extensions' textures are not read; a log line names the material.
 - Export: a leaf material with `diffuse_transmission > 0` writes the
-  extension; the back face rides `ERHE_material` (`back_base_color`,
+  extension, and `KHR_materials_volume` when its thickness is above 0; the
+  back face rides `ERHE_material` (`back_base_color`,
   `back_roughness`, `back_reflectance`;
   [../gltf_extensions/ERHE_material.md](../gltf_extensions/ERHE_material.md)).
 
@@ -111,9 +120,11 @@ alpha gives roughness `sqrt(alpha) = 0.28 - 0.71`.
 
 `scripts/leaf_material_verify.py` (headless) imports a scene with a plain
 double-sided quad, a `KHR_materials_diffuse_transmission` quad and a flipped
-double-sided blocker quad, and checks the import, the dark back face of the
-plain quad, the tinted transmitted light on the leaf's back face, the
-blocker's shadow removing it, and `diffuse_transmission` 0 removing it. Unit
+double-sided blocker quad and a closed 2 cm slab leaf, and checks the import,
+the dark back face of the plain quad, the tinted transmitted light on the
+leaf's back face, the blocker's shadow removing it, the slab transmitting as
+much as the quad with its thickness and nothing at thickness 0, and
+`diffuse_transmission` 0 removing the light. Unit
 tests: `Material_leaf.*` (`erhe_primitive` tests), `Shader_key_leaf.*` and the
 leaf cases of `Shader_key_*` (`erhe_scene_renderer` tests),
 `Gltf_roundtrip.leaf_material_round_trips` (`erhe_gltf` tests).

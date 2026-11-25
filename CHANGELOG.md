@@ -11,10 +11,11 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 - `erhe::primitive`: `enums.hpp` - `Bxdf_model::leaf`; `material.hpp` - the leaf BxDF values of
   `Material` and `Material_values` (`back_base_color`, `back_roughness`, `back_reflectance`,
-  `diffuse_transmission`, `diffuse_transmission_color`, each with its `*_property`, getter and setter)
-  (`doc/plans/leaf_material.md`).
+  `diffuse_transmission`, `diffuse_transmission_color`, `thickness`, each with its `*_property`, getter and
+  setter) (`doc/erhe/leaf_material.md`).
 - `erhe::scene_renderer`: `material_buffer.hpp` - `Material_struct::back_reflectance`,
-  `back_base_color_roughness`, `diffuse_transmission` and the matching `Material_record_inputs` fields.
+  `back_base_color_roughness`, `diffuse_transmission`, `thickness` and the matching `Material_record_inputs`
+  fields.
 - `erhe::codegen`: `serialize_helpers.hpp` - `find_field()` (the key lookup of the generated
   `deserialize()`) and `ERHE_CODEGEN_NOINLINE`, which now marks `find_field()` and every
   `deserialize_field()` overload (`doc/erhe/codegen.md` "Generated deserialize code size").

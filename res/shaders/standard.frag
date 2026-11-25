@@ -327,6 +327,16 @@ layout(location = 16) flat in float v_wire_width;
 #  define ERHE_USES_LIT_LOCALS 1
 #endif
 
+#if (ERHE_BXDF_MODEL == ERHE_BXDF_MODEL_LEAF) && defined(ERHE_USE_VARYING_POSITION)
+// The direction toward the light of a 2D shadow map's record (directional, or
+// spot when its projection is perspective), from the fragment.
+vec3 erhe_leaf_shadow_record_to_light(uint shadow_record)
+{
+    Light_shadowed light = light_shadowed_array.lights[shadow_record];
+    return (light.mobile_bias.y != 0.0) ? (light.position_and_inner_spot_cos.xyz - v_position.xyz) : light.direction_and_outer_spot_cos.xyz;
+}
+#endif
+
 // The BxDF dispatch below calls anisotropic_brdf(), which takes the
 // specular anti-aliasing kernel (erhe_bxdf.glsl).
 #if ((ERHE_BXDF_MODEL == ERHE_BXDF_MODEL_ANISOTROPIC_BRDF) || (ERHE_BXDF_MODEL == ERHE_BXDF_MODEL_ANISOTROPIC_ENGINE_READY)) && defined(ERHE_USE_VERTEX_VARYING_TANGENT) && defined(ERHE_USE_VERTEX_VARYING_BITANGENT)
@@ -635,14 +645,24 @@ void main()
     // derived-bound lookups take the receiver plane, taken here in uniform
     // control flow, ahead of the per-light branches, from the view-relative
     // position (its rounding scales with the distance from the camera).
+    // ERHE_SHADOW_POSITION(TO_LIGHT, POINT_TO_LIGHT): the receiver of a
+    // light's shadow lookup. Light from behind a leaf enters through its far
+    // face, the material's thickness behind this one, and is looked up
+    // there (doc/erhe/leaf_material.md "Shading").
+#  if (ERHE_BXDF_MODEL == ERHE_BXDF_MODEL_LEAF) && defined(ERHE_USE_VARYING_POSITION)
+    vec3 leaf_far_face_offset = N * float(material.thickness);
+#    define ERHE_SHADOW_POSITION(TO_LIGHT) ((dot(N, (TO_LIGHT)) < 0.0) ? (v_view_relative_position - leaf_far_face_offset) : v_view_relative_position)
+#  else
+#    define ERHE_SHADOW_POSITION(TO_LIGHT) v_view_relative_position
+#  endif
 #  if defined(ERHE_SHADOW_NORMAL_OFFSET)
     vec3 shadow_normal = N;
-#    define ERHE_SAMPLE_LIGHT_VISIBILITY(LIGHT_INDEX, SHADOW_RECORD) sample_light_visibility_normal_offset(v_view_relative_position, shadow_normal, (SHADOW_RECORD))
-#    define ERHE_SAMPLE_POINT_LIGHT_VISIBILITY(SHADOW_RECORD, LIGHT) sample_point_light_visibility_normal_offset(v_view_relative_position, shadow_normal, (SHADOW_RECORD))
+#    define ERHE_SAMPLE_LIGHT_VISIBILITY(LIGHT_INDEX, SHADOW_RECORD) sample_light_visibility_normal_offset(ERHE_SHADOW_POSITION(erhe_leaf_shadow_record_to_light(SHADOW_RECORD)), shadow_normal, (SHADOW_RECORD))
+#    define ERHE_SAMPLE_POINT_LIGHT_VISIBILITY(SHADOW_RECORD, LIGHT) sample_point_light_visibility_normal_offset(ERHE_SHADOW_POSITION((LIGHT).position_and_inner_spot_cos.xyz - v_position.xyz), shadow_normal, (SHADOW_RECORD))
 #  else
     vec4 shadow_receiver_plane = get_receiver_geometric_normal(v_view_relative_position, v_position_rounding);
-#    define ERHE_SAMPLE_LIGHT_VISIBILITY(LIGHT_INDEX, SHADOW_RECORD) sample_light_visibility(v_view_relative_position, v_position_rounding, (LIGHT_INDEX), (SHADOW_RECORD), shadow_receiver_plane)
-#    define ERHE_SAMPLE_POINT_LIGHT_VISIBILITY(SHADOW_RECORD, LIGHT) sample_point_light_visibility(v_view_relative_position, v_position_rounding, (LIGHT).view_origin.xyz, (LIGHT).shadow_params.z, (LIGHT).shadow_params.x, shadow_receiver_plane)
+#    define ERHE_SAMPLE_LIGHT_VISIBILITY(LIGHT_INDEX, SHADOW_RECORD) sample_light_visibility(ERHE_SHADOW_POSITION(erhe_leaf_shadow_record_to_light(SHADOW_RECORD)), v_position_rounding, (LIGHT_INDEX), (SHADOW_RECORD), shadow_receiver_plane)
+#    define ERHE_SAMPLE_POINT_LIGHT_VISIBILITY(SHADOW_RECORD, LIGHT) sample_point_light_visibility(ERHE_SHADOW_POSITION((LIGHT).position_and_inner_spot_cos.xyz - v_position.xyz), v_position_rounding, (LIGHT).view_origin.xyz, (LIGHT).shadow_params.z, (LIGHT).shadow_params.x, shadow_receiver_plane)
 #  endif
 
     // Visibility phase (doc/plans/shader_fp16.md R1): the loop path looks up

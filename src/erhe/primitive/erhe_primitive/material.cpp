@@ -219,6 +219,10 @@ const Property<float> Material::diffuse_transmission_property = Property<float>:
 const Property<glm::vec3> Material::diffuse_transmission_color_property = Property<glm::vec3>::register_property(
     "diffuse_transmission_color", c_owner, Property_metadata{.default_value = glm::vec3{1.0f, 1.0f, 1.0f}, .inherits = true, .ui = Property_ui{.presentation = Property_ui::Presentation::color, .label = "Transmission Color", .visible_when = is_leaf}}
 );
+const Property<float> Material::thickness_property = Property<float>::register_property(
+    "thickness", c_owner, Property_metadata{.default_value = 0.0f, .inherits = true, .ui = Property_ui{.min = 0.0f, .max = 0.2f, .step = 0.001f, .tooltip = "Distance from the visible face to the far face, in meters; 0 for a single-layer surface", .label = "Thickness", .visible_when = is_leaf}},
+    [](const Property_value& v) -> bool { return std::get<float>(v) >= 0.0f; }
+);
 const Property<float> Material::alpha_cutoff_property = Property<float>::register_property(
     "alpha_cutoff", c_owner, Property_metadata{.default_value = 0.5f, .inherits = true, .ui = slider(0.0f, 1.0f, "Alpha Cutoff", "Used by the Alpha Test blending mode", is_alpha_test)}, unit_range
 );
@@ -894,6 +898,7 @@ auto Material::get_values() const -> Material_values
         .back_reflectance                   = get_back_reflectance(),
         .diffuse_transmission               = get_diffuse_transmission(),
         .diffuse_transmission_color         = get_diffuse_transmission_color(),
+        .thickness                          = get_thickness(),
         .alpha_cutoff                       = get_alpha_cutoff(),
         .use_circular_brushed_metal         = get_use_circular_brushed_metal(),
         .circular_brushed_metal_texgen_mode = get_circular_brushed_metal_texgen_mode(),
@@ -959,6 +964,7 @@ void Material::set_values(const Material_values& values)
     set_or_clear(*this, back_reflectance_property,                   values.back_reflectance);
     set_or_clear(*this, diffuse_transmission_property,               values.diffuse_transmission);
     set_or_clear(*this, diffuse_transmission_color_property,         values.diffuse_transmission_color);
+    set_or_clear(*this, thickness_property,                          values.thickness);
     set_or_clear(*this, alpha_cutoff_property,                       values.alpha_cutoff);
     set_or_clear(*this, use_circular_brushed_metal_property,         values.use_circular_brushed_metal);
     set_or_clear(*this, circular_brushed_metal_texgen_mode_property, values.circular_brushed_metal_texgen_mode);
@@ -1004,6 +1010,7 @@ auto Material::to_property_set(const Material_values& values) -> erhe::property:
     result.set(back_reflectance_property,                   make_value(values.back_reflectance));
     result.set(diffuse_transmission_property,               make_value(values.diffuse_transmission));
     result.set(diffuse_transmission_color_property,         make_value(values.diffuse_transmission_color));
+    result.set(thickness_property,                          make_value(values.thickness));
     result.set(alpha_cutoff_property,                       make_value(values.alpha_cutoff));
     result.set(use_circular_brushed_metal_property,         make_value(values.use_circular_brushed_metal));
     result.set(circular_brushed_metal_texgen_mode_property, make_value(values.circular_brushed_metal_texgen_mode));
@@ -1081,6 +1088,7 @@ auto Material::to_property_set(const Material_values& values) -> erhe::property:
         (lhs.back_reflectance                   == rhs.back_reflectance                  ) &&
         (lhs.diffuse_transmission               == rhs.diffuse_transmission              ) &&
         (lhs.diffuse_transmission_color         == rhs.diffuse_transmission_color        ) &&
+        (lhs.thickness                          == rhs.thickness                         ) &&
         (lhs.alpha_cutoff                       == rhs.alpha_cutoff                      ) &&
         (lhs.use_circular_brushed_metal         == rhs.use_circular_brushed_metal        ) &&
         (lhs.circular_brushed_metal_texgen_mode == rhs.circular_brushed_metal_texgen_mode) &&

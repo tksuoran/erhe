@@ -1,20 +1,24 @@
 #!/usr/bin/env python3
-"""Leaf material: headless checks of doc/plans/leaf_material.md.
+"""Leaf material: headless checks of doc/erhe/leaf_material.md.
 
 The scene: two double-sided quads facing +Z, "Plain" (isotropic BRDF) and
 "Leaf" (KHR_materials_diffuse_transmission, imported as the leaf BxDF), and a
 directional light shining along -Z, so the quads' front faces are lit. A third
 double-sided quad, "Blocker", faces -Z (its front face points away from the
 light) and moves between the light and the Leaf for the shadow checks.
+"Slab" is a closed 2 cm thick leaf (KHR_materials_volume thickness 2.5 cm),
+the form of the level kit's leaves.
 
   - import: the Leaf material is a leaf, double sided, with the file's
-    transmission and its back face copying the front (step 5);
+    transmission and its back face copying the front;
   - back faces of a double-sided material shade with the reversed normal: the
-    Plain quad's back is far darker than its lit front (step 1);
+    Plain quad's back is far darker than its lit front;
   - the Leaf's back face shows the light transmitted through it, tinted by the
-    transmission color (step 4);
+    transmission color;
   - the Blocker, whose front face points away from the light, casts a shadow
-    that removes the transmitted light (steps 2 and 4).
+    that removes the transmitted light;
+  - the closed Slab transmits light through its thickness, and does not with
+    thickness 0 (its own far face shadows it).
 
     python3 scripts/leaf_material_verify.py [--editor <path>]
 
@@ -44,6 +48,9 @@ FOV_Y        = 50.0
 EYE_DISTANCE = 6.0
 PLAIN_X      = -1.5
 LEAF_X       = 1.5
+SLAB_X       = 4.0
+SLAB_HALF_THICKNESS = 0.01
+SLAB_THICKNESS      = 0.025
 LEAF_COLOR   = [0.1, 0.3, 0.1]
 TRANSMISSION = 0.5
 TRANSMISSION_COLOR = [0.2, 1.0, 0.2]
@@ -62,17 +69,19 @@ def write_scene(directory):
     builder = pav.Gltf_builder()
     document = {
         "asset": {"version": "2.0", "generator": "leaf_material_verify.py"},
-        "extensionsUsed": ["KHR_materials_diffuse_transmission"],
-        "scene": 0, "scenes": [{"nodes": [0, 1, 2]}],
+        "extensionsUsed": ["KHR_materials_diffuse_transmission", "KHR_materials_volume"],
+        "scene": 0, "scenes": [{"nodes": [0, 1, 2, 3]}],
         "nodes": [
             {"name": "Plain",   "mesh": 0, "translation": [PLAIN_X, 0.0, 0.0]},
             {"name": "Leaf",    "mesh": 1, "translation": [LEAF_X, 0.0, 0.0]},
-            {"name": "Blocker", "mesh": 2, "translation": [50.0, 0.0, 0.0]}
+            {"name": "Blocker", "mesh": 2, "translation": [50.0, 0.0, 0.0]},
+            {"name": "Slab",    "mesh": 3, "translation": [SLAB_X, 0.0, 0.0]}
         ],
         "meshes": [
             {"name": "plain",   "primitives": [builder.primitive(make_quad(1.0,  1.0), 0)]},
             {"name": "leaf",    "primitives": [builder.primitive(make_quad(1.0,  1.0), 1)]},
-            {"name": "blocker", "primitives": [builder.primitive(make_quad(1.5, -1.0), 0)]}
+            {"name": "blocker", "primitives": [builder.primitive(make_quad(1.5, -1.0), 0)]},
+            {"name": "slab",    "primitives": [builder.primitive(pav.make_box(0.7, 0.7, SLAB_HALF_THICKNESS), 2)]}
         ],
         "materials": [
             {"name": "Plain Material", "doubleSided": True,
@@ -80,7 +89,12 @@ def write_scene(directory):
             {"name": "Leaf Material", "doubleSided": True,
              "pbrMetallicRoughness": {"baseColorFactor": LEAF_COLOR + [1.0], "metallicFactor": 0.0, "roughnessFactor": 0.5},
              "extensions": {"KHR_materials_diffuse_transmission": {
-                 "diffuseTransmissionFactor": TRANSMISSION, "diffuseTransmissionColorFactor": TRANSMISSION_COLOR}}}
+                 "diffuseTransmissionFactor": TRANSMISSION, "diffuseTransmissionColorFactor": TRANSMISSION_COLOR}}},
+            {"name": "Slab Material",
+             "pbrMetallicRoughness": {"baseColorFactor": LEAF_COLOR + [1.0], "metallicFactor": 0.0, "roughnessFactor": 0.5},
+             "extensions": {
+                 "KHR_materials_diffuse_transmission": {"diffuseTransmissionFactor": TRANSMISSION, "diffuseTransmissionColorFactor": TRANSMISSION_COLOR},
+                 "KHR_materials_volume": {"thicknessFactor": SLAB_THICKNESS}}}
         ],
         "accessors": builder.accessors, "bufferViews": builder.views
     }
@@ -129,7 +143,7 @@ class Session:
                                            "output": "linear", "color_format": "rgba32f", "msaa_samples": 0, "path": path})
         rows = read_pfm(path)
         result = {}
-        for name, world_x in (("plain", PLAIN_X), ("leaf", LEAF_X)):
+        for name, world_x in (("plain", PLAIN_X), ("leaf", LEAF_X), ("slab", SLAB_X)):
             cx = pixel_column(world_x, eye_z)
             cy = HEIGHT // 2
             patch = [rows[y][x] for y in range(cy - 4, cy + 5) for x in range(cx - 4, cx + 5)]
@@ -182,6 +196,18 @@ def run(s):
     reopened = s.render(-EYE_DISTANCE)
     check("the transmitted light returns when the blocker moves away", abs(reopened["leaf"][1] - back["leaf"][1]) < 1.0e-3 * max(1.0, back["leaf"][1]),
           f"{fmt(reopened['leaf'])} vs {fmt(back['leaf'])}")
+
+    # A closed leaf: transmitted light enters through its far face, a thickness behind the visible one.
+    slab = s.e.call("get_material_details", {"scene_name": s.scene, "material_name": "Slab Material"})
+    check("import: KHR_materials_volume gives the thickness", abs(slab.get("thickness", -1.0) - SLAB_THICKNESS) < 1.0e-5, str(slab.get("thickness")))
+    print(f"  back: slab {fmt(back['slab'])}")
+    check("a closed leaf with its thickness transmits the light", back["slab"][1] > 0.8 * back["leaf"][1],
+          f"slab {fmt(back['slab'])}, single-layer leaf {fmt(back['leaf'])}")
+    s.e.call("edit_material", {"scene_name": s.scene, "material_name": "Slab Material", "thickness": 0.0})
+    s.e.wait_idle()
+    thin = s.render(-EYE_DISTANCE)
+    check("a closed leaf of thickness 0 shadows its own transmitted light", thin["slab"][1] < 0.25 * back["slab"][1],
+          f"thickness 0 {fmt(thin['slab'])}, thickness {SLAB_THICKNESS} {fmt(back['slab'])}")
 
     # Transmission 0 turns the back face into the plain diffuse back.
     s.e.call("edit_material", {"scene_name": s.scene, "material_name": "Leaf Material", "diffuse_transmission": 0.0})

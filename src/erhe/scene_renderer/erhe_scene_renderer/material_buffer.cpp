@@ -111,6 +111,7 @@ Material_interface::Material_interface(erhe::graphics::Device& graphics_device, 
         .back_reflectance            = add_f1("back_reflectance"           )->get_offset_in_parent(),
         .back_base_color_roughness   = add_f4("back_base_color_roughness"  )->get_offset_in_parent(),
         .diffuse_transmission        = add_f4("diffuse_transmission"       )->get_offset_in_parent(),
+        .thickness                   = add_f1("thickness"                  )->get_offset_in_parent(),
     };
     material_block.add_struct("materials", &material_struct, erhe::graphics::Shader_resource::unsized_array);
     log_startup->info(
@@ -204,6 +205,7 @@ auto gather_material_record_inputs(
     inputs.back_reflectance          = data.back_reflectance;
     inputs.back_base_color_roughness = glm::vec4{data.back_base_color, data.back_roughness};
     inputs.diffuse_transmission      = glm::vec4{data.diffuse_transmission_color, data.diffuse_transmission};
+    inputs.thickness                 = data.thickness;
 
     const auto gather_texture = [&sampler_cache](
         const erhe::primitive::Material_texture_sampler& texture_sampler
@@ -284,6 +286,7 @@ auto get_default_material_record_inputs() -> Material_record_inputs
     inputs.back_reflectance          = defaults.back_reflectance;
     inputs.back_base_color_roughness = glm::vec4{defaults.back_base_color, defaults.back_roughness};
     inputs.diffuse_transmission      = glm::vec4{defaults.diffuse_transmission_color, defaults.diffuse_transmission};
+    inputs.thickness                 = defaults.thickness;
     // Every texture slot stays empty, so the handles resolve to
     // invalid_texture_handle and no heap allocation is made.
     return inputs;
@@ -398,6 +401,7 @@ void Material_buffer::write_record(
     write_floats(offsets.back_reflectance,            &inputs.back_reflectance,                   1);
     write_floats(offsets.back_base_color_roughness,   &inputs.back_base_color_roughness.x,        4);
     write_floats(offsets.diffuse_transmission,        &inputs.diffuse_transmission.x,             4);
+    write_floats(offsets.thickness,                   &inputs.thickness,                          1);
 }
 
 void Material_buffer::write_records(

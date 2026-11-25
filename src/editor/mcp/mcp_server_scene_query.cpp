@@ -3062,6 +3062,7 @@ auto Mcp_server::query_material_details(const json& args) -> std::string
                 {"back_reflectance",           d.back_reflectance},
                 {"diffuse_transmission",       d.diffuse_transmission},
                 {"diffuse_transmission_color", {d.diffuse_transmission_color.x, d.diffuse_transmission_color.y, d.diffuse_transmission_color.z}},
+                {"thickness",                  d.thickness},
                 {"use_circular_brushed_metal", d.use_circular_brushed_metal},
                 {"use_aniso_control",          d.use_aniso_control},
                 {"blending_mode",

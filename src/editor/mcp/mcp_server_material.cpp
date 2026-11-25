@@ -566,6 +566,11 @@ void apply_slot_edit(const Slot_edit& edit, erhe::primitive::Material_texture_sa
         case Field_status::Invalid:    return field_err;
         case Field_status::NotPresent: break;
     }
+    switch (try_read_float(args, "thickness", f, field_err)) {
+        case Field_status::Ok:         after_values.thickness = std::max(0.0f, f); applied["thickness"] = after_values.thickness; break;
+        case Field_status::Invalid:    return field_err;
+        case Field_status::NotPresent: break;
+    }
     switch (try_read_vec3(args, "diffuse_transmission_color", v3, field_err)) {
         case Field_status::Ok: {
             const glm::vec3 clamped = clamp01_vec3(v3);

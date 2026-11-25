@@ -449,9 +449,12 @@ TEST(Material_leaf, values_round_trip_through_the_snapshot)
     values.back_reflectance           = 0.25f;
     values.diffuse_transmission       = 0.5f;
     values.diffuse_transmission_color = glm::vec3{0.5f, 0.75f, 0.25f};
+    values.thickness                  = 0.03f;
     material->set_values(values);
 
     EXPECT_TRUE(material->get_values() == values);
+    material->set_value(Material::thickness_property, -1.0f);
+    EXPECT_EQ(material->get_thickness(), 0.03f);
     EXPECT_EQ(material->get_value_source(Material::back_base_color_property.get()), Value_source::local);
 
     const Property_set diff = Property_set::diff(Material::to_property_set(erhe::primitive::Material_values{}), Material::to_property_set(values));

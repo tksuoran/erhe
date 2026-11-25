@@ -4912,6 +4912,10 @@ private:
                 create_data.back_base_color  = create_data.base_color;
                 create_data.back_roughness   = create_data.roughness.x;
                 create_data.back_reflectance = create_data.reflectance;
+                // KHR_materials_volume: the thickness of a closed leaf.
+                if (material.volume) {
+                    create_data.thickness = material.volume->thicknessFactor;
+                }
                 if (diffuse_transmission.diffuseTransmissionTexture.has_value() || diffuse_transmission.diffuseTransmissionColorTexture.has_value()) {
                     log_gltf->info("Material '{}': KHR_materials_diffuse_transmission textures are not supported; the factors are used", material.name);
                 }
@@ -11614,6 +11618,10 @@ private:
                     data.diffuse_transmission_color.y,
                     data.diffuse_transmission_color.z
                 };
+                if (data.thickness > 0.0f) {
+                    gltf_material.volume.emplace();
+                    gltf_material.volume->thicknessFactor = data.thickness;
+                }
             }
 
             // Material_blending_mode -> alphaMode (+ alphaCutoff for
