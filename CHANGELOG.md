@@ -12,6 +12,9 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 - `erhe::codegen`: `serialize_helpers.hpp` - `find_field()` (the key lookup of the generated
   `deserialize()`) and `ERHE_CODEGEN_NOINLINE`, which now marks `find_field()` and every
   `deserialize_field()` overload (`doc/erhe/codegen.md` "Generated deserialize code size").
+- `erhe::codegen`: the generator writes `codegen_unity.cpp` into each output directory, and the CMake
+  function `erhe_codegen_unity()` compiles a directory's generated units as that one translation unit
+  (`doc/erhe/codegen.md` "Unity translation unit").
 - `erhe::graph`: `Graph::are_keys_compatible()` - virtual pin-key compatibility test used by
   `connect()`; equal keys by default (`doc/erhe/graph.md`).
 - `erhe::primitive`: `material.hpp` - the detail blend values of `Material` and `Material_values`
@@ -239,6 +242,8 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Changed
 
+- `erhe::codegen`: `erhe_codegen_source_settings()` compiles generated units unoptimized and without the
+  shared precompiled header on every compiler, not only MSVC (`doc/erhe/codegen.md` "Build settings").
 - `erhe::texgen`: `convert()` / `conversion_template()` from `rgb` or `rgba` to `grayscale` take the red
   channel instead of the channel average (`doc/erhe/texgen.md`).
 - `erhe::scene_renderer`: `shader_key.hpp` - `Shader_key::bool_mask` and `make_shader_bool_mask()` are

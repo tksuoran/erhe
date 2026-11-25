@@ -28,9 +28,17 @@ set(_generated_sources
     ${_codegen_out}/demo_renamed.cpp
     ${_codegen_out}/blend_mode.hpp
     ${_codegen_out}/blend_mode.cpp
+    ${_codegen_out}/color.hpp
+    ${_codegen_out}/color_serialization.hpp
+    ${_codegen_out}/color.cpp
+    ${_codegen_out}/light.hpp
+    ${_codegen_out}/light_serialization.hpp
+    ${_codegen_out}/light.cpp
+    ${_codegen_out}/material.hpp
+    ${_codegen_out}/material_serialization.hpp
+    ${_codegen_out}/material.cpp
 )
-erhe_codegen_source_settings(${_generated_sources})
-target_sources(${_target} PRIVATE ${_generated_sources})
+erhe_codegen_unity(TARGET ${_target} OUTPUT_DIR "${_codegen_out}" SOURCES ${_generated_sources})
 
 target_include_directories(${_target}
     PRIVATE

@@ -87,8 +87,7 @@ set(_example_codegen_sources
     ${_gfx_gen}/metal_config_serialization.hpp
     ${_gfx_gen}/metal_config.cpp
 )
-erhe_codegen_source_settings(${_example_codegen_sources})
-target_sources(${_target} PRIVATE ${_example_codegen_sources})
+erhe_codegen_unity(TARGET ${_target} OUTPUT_DIR "${_gfx_gen}" SOURCES ${_example_codegen_sources})
 source_group("codegen generated" FILES ${_example_codegen_sources})
 
 set(_scene_renderer_gen "${CMAKE_BINARY_DIR}/src/erhe/scene_renderer/erhe_scene_renderer/generated")
@@ -96,8 +95,7 @@ set(_scene_renderer_ser_sources
     ${_scene_renderer_gen}/mesh_memory_config_serialization.hpp
     ${_scene_renderer_gen}/mesh_memory_config.cpp
 )
-erhe_codegen_source_settings(${_scene_renderer_ser_sources})
-target_sources(${_target} PRIVATE ${_scene_renderer_ser_sources})
+erhe_codegen_unity(TARGET ${_target} OUTPUT_DIR "${_scene_renderer_gen}" SOURCES ${_scene_renderer_ser_sources})
 source_group("codegen generated/scene_renderer" FILES ${_scene_renderer_ser_sources})
 
 target_include_directories(${_target} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR})

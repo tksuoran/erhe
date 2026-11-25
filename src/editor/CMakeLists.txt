@@ -1210,8 +1210,7 @@ erhe_codegen_generate(
         "${_codegen_defs}/level_settings.py"
         "${_codegen_defs}/scene_settings.py"
 )
-erhe_codegen_source_settings(${_codegen_sources})
-target_sources(${_target} PRIVATE ${_codegen_sources})
+erhe_codegen_unity(TARGET ${_target} OUTPUT_DIR "${_codegen_out}" SOURCES ${_codegen_sources})
 source_group("codegen generated/scene" FILES ${_codegen_sources})
 
 # Editor config codegen — generate into build directory
@@ -1524,8 +1523,7 @@ erhe_codegen_generate(
         "${_scene_renderer_defs}:erhe_scene_renderer/generated/"
         "${_xr_config_defs}:erhe_xr/generated/"
 )
-erhe_codegen_source_settings(${_config_sources})
-target_sources(${_target} PRIVATE ${_config_sources})
+erhe_codegen_unity(TARGET ${_target} OUTPUT_DIR "${_config_out}" SOURCES ${_config_sources})
 source_group("codegen generated/config" FILES ${_config_sources})
 
 # Serialize/deserialize .cpp from library codegen must compile here (same
@@ -1541,8 +1539,7 @@ set(_gfx_ser_sources
     ${_gfx_gen}/metal_config_serialization.hpp
     ${_gfx_gen}/metal_config.cpp
 )
-erhe_codegen_source_settings(${_gfx_ser_sources})
-target_sources(${_target} PRIVATE ${_gfx_ser_sources})
+erhe_codegen_unity(TARGET ${_target} OUTPUT_DIR "${_gfx_gen}" SOURCES ${_gfx_ser_sources})
 source_group("codegen generated/graphics" FILES ${_gfx_ser_sources})
 
 set(_renderer_gen "${CMAKE_BINARY_DIR}/src/erhe/renderer/erhe_renderer/generated")
@@ -1550,8 +1547,7 @@ set(_renderer_ser_sources
     ${_renderer_gen}/visualization_mode.hpp
     ${_renderer_gen}/visualization_mode.cpp
 )
-erhe_codegen_source_settings(${_renderer_ser_sources})
-target_sources(${_target} PRIVATE ${_renderer_ser_sources})
+erhe_codegen_unity(TARGET ${_target} OUTPUT_DIR "${_renderer_gen}" SOURCES ${_renderer_ser_sources})
 source_group("codegen generated/renderer" FILES ${_renderer_ser_sources})
 
 set(_scene_renderer_gen "${CMAKE_BINARY_DIR}/src/erhe/scene_renderer/erhe_scene_renderer/generated")
@@ -1561,8 +1557,7 @@ set(_scene_renderer_ser_sources
     ${_scene_renderer_gen}/mesh_memory_config_serialization.hpp
     ${_scene_renderer_gen}/mesh_memory_config.cpp
 )
-erhe_codegen_source_settings(${_scene_renderer_ser_sources})
-target_sources(${_target} PRIVATE ${_scene_renderer_ser_sources})
+erhe_codegen_unity(TARGET ${_target} OUTPUT_DIR "${_scene_renderer_gen}" SOURCES ${_scene_renderer_ser_sources})
 source_group("codegen generated/scene_renderer" FILES ${_scene_renderer_ser_sources})
 
 set(_xr_gen "${CMAKE_BINARY_DIR}/src/erhe/xr/erhe_xr/generated")
@@ -1572,8 +1567,7 @@ set(_xr_ser_sources
     ${_xr_gen}/perf_settings_level.cpp
     ${_xr_gen}/foveation_level.cpp
 )
-erhe_codegen_source_settings(${_xr_ser_sources})
-target_sources(${_target} PRIVATE ${_xr_ser_sources})
+erhe_codegen_unity(TARGET ${_target} OUTPUT_DIR "${_xr_gen}" SOURCES ${_xr_ser_sources})
 source_group("codegen generated/xr" FILES ${_xr_ser_sources})
 
 target_link_libraries(

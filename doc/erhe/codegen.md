@@ -29,6 +29,8 @@ For each struct, three files are generated:
 
 For each enum, two files: `foo.hpp` (enum class + `to_string`/`from_string` declarations) and `foo.cpp` (implementations + `Enum_info` reflection).
 
+Each output directory also gets `codegen_unity.cpp`, which `#include`s every generated `.cpp` of that directory ("Unity translation unit" below).
+
 The header split allows libraries to use the struct type without depending on simdjson. This is important when libraries compile with different arch flags (e.g. Jolt compatibility) that cause simdjson to select different implementation namespaces (haswell vs fallback).
 
 ## Supported Types
@@ -211,6 +213,20 @@ erhe_codegen_generate(
 ```
 
 All definition files must be listed explicitly in `DEFINITIONS` (no globbing). They appear in the IDE under "codegen definitions" source group and trigger regeneration on change. Generator source files are also tracked as dependencies.
+
+### Unity translation unit
+
+A target compiles a directory of generated sources through `erhe_codegen_unity()`:
+
+```cmake
+erhe_codegen_unity(TARGET ${_target} OUTPUT_DIR "${_config_out}" SOURCES ${_config_sources})
+```
+
+`SOURCES` lists every generated file of `OUTPUT_DIR`; they are added to the target for IDEs and marked `HEADER_FILE_ONLY`, and the target compiles only `OUTPUT_DIR/codegen_unity.cpp`. Every compiler builds the directory as one translation unit, so `simdjson.h` (most of a generated unit's front-end time) is parsed once and the out-of-line `serialize_helpers.hpp` functions are compiled once. Measured with clang 18 on the 113 editor config units: 123 s of CPU as separate `-O0` units against 2.0 s as one unit, and 268 s against 20.7 s at `-O3` with ASan + UBSan. A target that compiles only some units of a directory (`editor_level_tests`) lists those `.cpp` files itself and applies `erhe_codegen_source_settings()` to them.
+
+### Build settings
+
+`erhe_codegen_source_settings()` marks generated files `GENERATED` and compiles their translation units unoptimized (`/Od` on MSVC, `-O0` elsewhere) and without the shared precompiled header; `erhe_codegen_unity()` applies it to `codegen_unity.cpp`. The generated code runs only when a config is loaded or saved, so optimizing it buys nothing measurable, while the optimizers' cost grows faster than the straight-line size of these units: at MSVC `/O2` one unit (`transform_tool_config.cpp`) took 4 minutes. The precompiled header is skipped because `erhe_pch` is built optimized, and a unit at another optimization level does not accept it (MSVC C4653, which `/WX` makes an error; clang rejects the `__OPTIMIZE__` mismatch). Source file properties are directory-scoped, so the settings are applied in the directory that compiles the files, which for several libraries is a consuming target's directory (the "compiles in the editor" notes at those call sites).
 
 ## Architecture Notes
 

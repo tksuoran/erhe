@@ -106,8 +106,7 @@ set(_gfx_ser_sources
     ${_gfx_gen}/metal_config_serialization.hpp
     ${_gfx_gen}/metal_config.cpp
 )
-erhe_codegen_source_settings(${_gfx_ser_sources})
-target_sources(${_target} PRIVATE ${_gfx_ser_sources})
+erhe_codegen_unity(TARGET ${_target} OUTPUT_DIR "${_gfx_gen}" SOURCES ${_gfx_ser_sources})
 source_group("codegen generated/graphics" FILES ${_gfx_ser_sources})
 
 if (ERHE_GRAPHICS_API_OPENGL)
