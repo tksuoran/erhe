@@ -71,88 +71,100 @@ inline void collapse_single_line_object(std::string& out)
     out = "{ " + member + " }";
 }
 
-// Deserialization helpers (scalar) -- inline to avoid simdjson ABI mismatch
+// Deserialization helpers -- inline to avoid simdjson ABI mismatch
 // (simdjson::ondemand::value resolves to a platform-specific namespace like
 // simdjson::haswell::ondemand::value, which can differ between translation
-// units compiled with different /arch flags)
-inline void deserialize_field(simdjson::ondemand::value val, bool& out)
+// units compiled with different /arch flags), but never inlined into the
+// generated deserialize() (doc/erhe/codegen.md "Generated deserialize code size").
+#if defined(_MSC_VER) && !defined(__clang__)
+#   define ERHE_CODEGEN_NOINLINE __declspec(noinline)
+#else
+#   define ERHE_CODEGEN_NOINLINE __attribute__((noinline))
+#endif
+
+ERHE_CODEGEN_NOINLINE inline auto find_field(simdjson::ondemand::object& obj, std::string_view key, simdjson::ondemand::value& out) -> bool
+{
+    return obj[key].get(out) == simdjson::SUCCESS;
+}
+
+ERHE_CODEGEN_NOINLINE inline void deserialize_field(simdjson::ondemand::value val, bool& out)
 {
     bool v;
     if (!val.get_bool().get(v)) {
         out = v;
     }
 }
-inline void deserialize_field(simdjson::ondemand::value val, int8_t& out)
+ERHE_CODEGEN_NOINLINE inline void deserialize_field(simdjson::ondemand::value val, int8_t& out)
 {
     int64_t v;
     if (!val.get_int64().get(v)) {
         out = static_cast<int8_t>(v);
     }
 }
-inline void deserialize_field(simdjson::ondemand::value val, uint8_t& out)
+ERHE_CODEGEN_NOINLINE inline void deserialize_field(simdjson::ondemand::value val, uint8_t& out)
 {
     uint64_t v;
     if (!val.get_uint64().get(v)) {
         out = static_cast<uint8_t>(v);
     }
 }
-inline void deserialize_field(simdjson::ondemand::value val, int16_t& out)
+ERHE_CODEGEN_NOINLINE inline void deserialize_field(simdjson::ondemand::value val, int16_t& out)
 {
     int64_t v;
     if (!val.get_int64().get(v)) {
         out = static_cast<int16_t>(v);
     }
 }
-inline void deserialize_field(simdjson::ondemand::value val, uint16_t& out)
+ERHE_CODEGEN_NOINLINE inline void deserialize_field(simdjson::ondemand::value val, uint16_t& out)
 {
     uint64_t v;
     if (!val.get_uint64().get(v)) {
         out = static_cast<uint16_t>(v);
     }
 }
-inline void deserialize_field(simdjson::ondemand::value val, int32_t& out)
+ERHE_CODEGEN_NOINLINE inline void deserialize_field(simdjson::ondemand::value val, int32_t& out)
 {
     int64_t v;
     if (!val.get_int64().get(v)) {
         out = static_cast<int32_t>(v);
     }
 }
-inline void deserialize_field(simdjson::ondemand::value val, uint32_t& out)
+ERHE_CODEGEN_NOINLINE inline void deserialize_field(simdjson::ondemand::value val, uint32_t& out)
 {
     uint64_t v;
     if (!val.get_uint64().get(v)) {
         out = static_cast<uint32_t>(v);
     }
 }
-inline void deserialize_field(simdjson::ondemand::value val, int64_t& out)
+ERHE_CODEGEN_NOINLINE inline void deserialize_field(simdjson::ondemand::value val, int64_t& out)
 {
     int64_t v;
     if (!val.get_int64().get(v)) {
         out = v;
     }
 }
-inline void deserialize_field(simdjson::ondemand::value val, uint64_t& out)
+ERHE_CODEGEN_NOINLINE inline void deserialize_field(simdjson::ondemand::value val, uint64_t& out)
 {
     uint64_t v;
     if (!val.get_uint64().get(v)) {
         out = v;
     }
 }
-inline void deserialize_field(simdjson::ondemand::value val, float& out)
+ERHE_CODEGEN_NOINLINE inline void deserialize_field(simdjson::ondemand::value val, float& out)
 {
     double v;
     if (!val.get_double().get(v)) {
         out = static_cast<float>(v);
     }
 }
-inline void deserialize_field(simdjson::ondemand::value val, double& out)
+ERHE_CODEGEN_NOINLINE inline void deserialize_field(simdjson::ondemand::value val, double& out)
 {
     double v;
     if (!val.get_double().get(v)) {
         out = v;
     }
 }
-inline void deserialize_field(simdjson::ondemand::value val, std::string& out)
+ERHE_CODEGEN_NOINLINE inline void deserialize_field(simdjson::ondemand::value val, std::string& out)
 {
     std::string_view v;
     if (!val.get_string().get(v)) {
@@ -161,20 +173,20 @@ inline void deserialize_field(simdjson::ondemand::value val, std::string& out)
 }
 // int/unsigned int: only if distinct from int32_t/uint32_t (platform-dependent)
 template <typename T, std::enable_if_t<std::is_same_v<T, int> && !std::is_same_v<int, int32_t>, int> = 0>
-inline void deserialize_field(simdjson::ondemand::value val, T& out)
+ERHE_CODEGEN_NOINLINE inline void deserialize_field(simdjson::ondemand::value val, T& out)
 {
     int64_t tmp;
     if (!val.get_int64().get(tmp)) { out = static_cast<T>(tmp); }
 }
 template <typename T, std::enable_if_t<std::is_same_v<T, unsigned int> && !std::is_same_v<unsigned int, uint32_t>, int> = 0>
-inline void deserialize_field(simdjson::ondemand::value val, T& out)
+ERHE_CODEGEN_NOINLINE inline void deserialize_field(simdjson::ondemand::value val, T& out)
 {
     uint64_t tmp;
     if (!val.get_uint64().get(tmp)) { out = static_cast<T>(tmp); }
 }
 
 // Deserialization helpers (glm) -- inline for same reason
-inline void deserialize_field(simdjson::ondemand::value val, glm::vec2& out)
+ERHE_CODEGEN_NOINLINE inline void deserialize_field(simdjson::ondemand::value val, glm::vec2& out)
 {
     simdjson::ondemand::array arr;
     if (!val.get_array().get(arr)) {
@@ -189,7 +201,7 @@ inline void deserialize_field(simdjson::ondemand::value val, glm::vec2& out)
         }
     }
 }
-inline void deserialize_field(simdjson::ondemand::value val, glm::vec3& out)
+ERHE_CODEGEN_NOINLINE inline void deserialize_field(simdjson::ondemand::value val, glm::vec3& out)
 {
     simdjson::ondemand::array arr;
     if (!val.get_array().get(arr)) {
@@ -204,7 +216,7 @@ inline void deserialize_field(simdjson::ondemand::value val, glm::vec3& out)
         }
     }
 }
-inline void deserialize_field(simdjson::ondemand::value val, glm::vec4& out)
+ERHE_CODEGEN_NOINLINE inline void deserialize_field(simdjson::ondemand::value val, glm::vec4& out)
 {
     simdjson::ondemand::array arr;
     if (!val.get_array().get(arr)) {
@@ -219,7 +231,7 @@ inline void deserialize_field(simdjson::ondemand::value val, glm::vec4& out)
         }
     }
 }
-inline void deserialize_field(simdjson::ondemand::value val, glm::ivec2& out)
+ERHE_CODEGEN_NOINLINE inline void deserialize_field(simdjson::ondemand::value val, glm::ivec2& out)
 {
     simdjson::ondemand::array arr;
     if (!val.get_array().get(arr)) {
@@ -234,7 +246,7 @@ inline void deserialize_field(simdjson::ondemand::value val, glm::ivec2& out)
         }
     }
 }
-inline void deserialize_field(simdjson::ondemand::value val, glm::ivec3& out)
+ERHE_CODEGEN_NOINLINE inline void deserialize_field(simdjson::ondemand::value val, glm::ivec3& out)
 {
     simdjson::ondemand::array arr;
     if (!val.get_array().get(arr)) {
@@ -249,7 +261,7 @@ inline void deserialize_field(simdjson::ondemand::value val, glm::ivec3& out)
         }
     }
 }
-inline void deserialize_field(simdjson::ondemand::value val, glm::mat4& out)
+ERHE_CODEGEN_NOINLINE inline void deserialize_field(simdjson::ondemand::value val, glm::mat4& out)
 {
     simdjson::ondemand::array arr;
     if (!val.get_array().get(arr)) {
@@ -298,7 +310,7 @@ void serialize_vector(std::string& out, const std::vector<T>& value)
 
 // Deserialization helpers (vector/array) -- templates in header
 template <typename T, std::size_t N>
-void deserialize_field(simdjson::ondemand::value val, std::array<T, N>& out)
+ERHE_CODEGEN_NOINLINE void deserialize_field(simdjson::ondemand::value val, std::array<T, N>& out)
 {
     simdjson::ondemand::array arr;
     if (!val.get_array().get(arr)) {
@@ -315,7 +327,7 @@ void deserialize_field(simdjson::ondemand::value val, std::array<T, N>& out)
 }
 
 template <typename T>
-void deserialize_field(simdjson::ondemand::value val, std::vector<T>& out)
+ERHE_CODEGEN_NOINLINE void deserialize_field(simdjson::ondemand::value val, std::vector<T>& out)
 {
     simdjson::ondemand::array arr;
     if (!val.get_array().get(arr)) {

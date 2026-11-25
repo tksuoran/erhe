@@ -9,6 +9,9 @@ the rule for adding entries is in `doc/README.md` ("Changelog").
 
 ### Added
 
+- `erhe::codegen`: `serialize_helpers.hpp` - `find_field()` (the key lookup of the generated
+  `deserialize()`) and `ERHE_CODEGEN_NOINLINE`, which now marks `find_field()` and every
+  `deserialize_field()` overload (`doc/erhe/codegen.md` "Generated deserialize code size").
 - `erhe::graph`: `Graph::are_keys_compatible()` - virtual pin-key compatibility test used by
   `connect()`; equal keys by default (`doc/erhe/graph.md`).
 - `erhe::primitive`: `material.hpp` - the detail blend values of `Material` and `Material_values`

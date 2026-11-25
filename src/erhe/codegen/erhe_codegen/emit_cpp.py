@@ -232,7 +232,7 @@ def _deserialize_field_code(f: FieldSchema, indent: str = "    ") -> list[str]:
     if f.renamed_from:
         for renamed_in, previous_name in reversed(f.renamed_from):
             key = f'((version < {renamed_in}) ? "{previous_name}" : {key})'
-    lines.append(f'{inner}if (!obj[{key}].get(val)) {{')
+    lines.append(f'{inner}if (erhe::codegen::find_field(obj, {key}, val)) {{')
     lines.extend(_deserialize_value_code(f.type, f"out.{f.name}", inner + "    "))
 
     if f.default_history:
@@ -432,7 +432,7 @@ def emit_struct_cpp(s: StructSchema) -> str:
     lines.append("    uint64_t version = 1;")
     lines.append("    {")
     lines.append("        simdjson::ondemand::value v;")
-    lines.append('        if (!obj["_version"].get(v)) {')
+    lines.append('        if (erhe::codegen::find_field(obj, "_version", v)) {')
     lines.append("            simdjson::error_code version_error = v.get_uint64().get(version);")
     lines.append("            static_cast<void>(version_error);")
     lines.append("        }")
