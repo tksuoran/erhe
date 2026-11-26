@@ -152,6 +152,7 @@ public:
     bool      skirt       {true};  // a fan crown's dead leaves
     float     lowest      {-1.0e9f}; // no frond control point lies lower: a low crown's fronds rest above the ground
     float     least_radius{0.08f};
+    Kit_leaf_section frond_section{Kit_leaf_section::folded}; // folded_split: the former fronds of the *_old shapes
 };
 
 void add_palm_tree(Kit_mesh_builder& builder, GEO::Mesh& scratch, const Palm_species& species, const Palm_tree& tree, Kit_random& frond_random)
@@ -228,7 +229,7 @@ void add_palm_tree(Kit_mesh_builder& builder, GEO::Mesh& scratch, const Palm_spe
                 lift(base + ((0.70f * length) * direction) - ((0.3f * sag * length) * up)),
                 lift(base + ((0.85f * length * (1.0f - (0.2f * sag))) * direction) - ((0.7f * sag * length) * up))
             };
-            frond.section    = Kit_leaf_section::folded;
+            frond.section    = tree.frond_section;
             frond.width      = species.frond_width * length;
             frond.thickness  = std::max(0.01f, 0.006f * length);
             frond.fold       = species.fold;
@@ -288,7 +289,7 @@ void add_palm_tree(Kit_mesh_builder& builder, GEO::Mesh& scratch, const Palm_spe
     }
 }
 
-void generate_palm(const Kit_parameter_values& values, GEO::Mesh& mesh)
+void generate_palm_fronds(const Kit_parameter_values& values, GEO::Mesh& mesh, const Kit_leaf_section frond_section)
 {
     const Palm_species species = get_palm_species(values.get_enum("species"));
     const float        height  = values.get_float("height");
@@ -301,11 +302,22 @@ void generate_palm(const Kit_parameter_values& values, GEO::Mesh& mesh)
     tree.frond_length = std::clamp(values.get_float("frond_length"), palm_crown_least * height, palm_crown_reach * height);
     tree.droop        = values.get_float("droop") * species.droop_factor;
     tree.sides        = values.get_int("segments");
+    tree.frond_section = frond_section;
     Kit_mesh_builder builder;
     GEO::Mesh        scratch{3, true};
     Kit_random       frond_random{values.get_seed(), "palm fronds"};
     add_palm_tree(builder, scratch, species, tree, frond_random);
     builder.write(mesh);
+}
+
+void generate_palm(const Kit_parameter_values& values, GEO::Mesh& mesh)
+{
+    generate_palm_fronds(values, mesh, Kit_leaf_section::folded);
+}
+
+void generate_palm_old(const Kit_parameter_values& values, GEO::Mesh& mesh)
+{
+    generate_palm_fronds(values, mesh, Kit_leaf_section::folded_split);
 }
 
 constexpr int palm_clump_most_fronds = 40; // in all: with the stems the clump stays within the kit's ceiling
@@ -341,7 +353,7 @@ public:
     return 0.02f + (0.5f * species.frond_width * frond_length * std::max(species.fold, 0.3f)) + (0.01f * frond_length);
 }
 
-void generate_palm_clump(const Kit_parameter_values& values, GEO::Mesh& mesh)
+void generate_palm_clump_fronds(const Kit_parameter_values& values, GEO::Mesh& mesh, const Kit_leaf_section frond_section)
 {
     const Palm_habit habit  = get_clump_habit(values.get_enum("species"));
     const float      height = values.get_float("height");
@@ -375,12 +387,23 @@ void generate_palm_clump(const Kit_parameter_values& values, GEO::Mesh& mesh)
         tree.skirt        = false;
         tree.lowest       = palm_lowest(habit.species, tree.frond_length);
         tree.least_radius = habit.least_radius;
+        tree.frond_section = frond_section;
         add_palm_tree(builder, scratch, habit.species, tree, frond_random);
     }
     // The root ball the stems rise from.
     builder.set_slot(palm_bark_slot);
     builder.add_prism(7, root + std::max(0.05f, 0.4f * habit.least_radius * height), 0.0f, std::max(0.04f, 0.03f * height), 0.2f);
     builder.write(mesh);
+}
+
+void generate_palm_clump(const Kit_parameter_values& values, GEO::Mesh& mesh)
+{
+    generate_palm_clump_fronds(values, mesh, Kit_leaf_section::folded);
+}
+
+void generate_palm_clump_old(const Kit_parameter_values& values, GEO::Mesh& mesh)
+{
+    generate_palm_clump_fronds(values, mesh, Kit_leaf_section::folded_split);
 }
 
 // The palm shrub and the leaf plant: their topology follows from their integer values and integer draws alone;
@@ -1441,6 +1464,8 @@ void add_nature_plant_shapes(std::vector<Kit_shape_definition>& shapes)
         shape.generator       = generate_palm_shrub;
         shapes.push_back(std::move(shape));
     }
+    add_former_build(shapes, "nature.palm",       generate_palm_old);
+    add_former_build(shapes, "nature.palm_clump", generate_palm_clump_old);
 }
 
 } // namespace editor

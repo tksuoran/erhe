@@ -83,6 +83,29 @@ the ceiling at its range maxima.
   (`doc/editor/level_tools.md` "Lights on pieces"). "The kit's starting
   values" of a light are a warm white point light of 40 cd with a range of
   8 m.
+- Shared points: where two parts of a surface meet (the halves of a folded
+  leaf at its midrib and its tip, the two slopes of a ridge, a hull's sides at
+  its stem, a hook and the coil it continues), they are one solid that shares
+  the vertices of the join; the corner attributes (normals) stay per facet. A
+  concave section is closed by convex pieces that share their edges
+  (`Kit_mesh_builder::add_x_prism()`). Parts that only reach into one another
+  (a post into a beam) stay separate closed solids.
+- Former builds: a shape whose build was fixed keeps its former build for a
+  side by side comparison as `<id>_old` ("<name> (old)", `add_former_build()`
+  in `kit_shape_library.cpp`, the generator taking `Kit_build::former`), with
+  no former ids and no foliage radius. `editor_level_tests` holds each to its
+  shape's rows and to the triangle count and pins of the build before the fix
+  (`kit_shape_rows_former_builds.cpp`).
+  `scripts/level_kit_former_builds_gallery.py` builds a scene of every pair,
+  the former build at -X beside the current one. The former builds are
+  `nature.palm`, `nature.palm_clump` (fronds: two wedges crossing at the
+  midrib, capped short of the tip), `harbour.quay_wall` (coping set in from
+  the land face), `prop.market_stall` (a peaked awning of two boxes, an inset
+  valance), `prop.well` (a gable of two boxes), `light.fire` (tripod heads
+  apart), `industrial.vent` (a duct elbow of two boxes), `harbour.boat` (a
+  rowboat's and a skiff's bow a narrow board wide) and `machine.spring` (hooks
+  and legs separate from the coil). They are removed once compared
+  (`doc/plans/open_items.md` "Work order").
 - Water is no snap to surface target (`doc/editor/level_tools.md` "Surface
   placement"): a buoy and a boat stand on their base and are sunk by hand.
 
@@ -1319,14 +1342,14 @@ keeps within the kit's ceiling (`editor_level_tests` records the counts).
 `doc/plans/level_kit_more_shapes.md`) adds one leaf, frond or blade: a
 `Kit_leaf` holds the spine (four cubic Bezier points, base to tip), the
 section (`Kit_leaf_section::flat`, a thin lens; `thick`, a lens a third of its
-width; `folded`, two thin wedges meeting at the midrib in an inverted V, the
-leaflet rows of a feather frond), the width, thickness, fold, the spine
+width; `folded`, two thin halves sharing the midrib in an inverted V, the
+leaflet rows of a feather frond; `folded_split`, the former build of
+`folded`), the width, thickness, fold, the spine
 parameters of the widest station and of the end of the widest stretch
 (`widest_end`: an oblong blade; at most `widest_at`, one station), the base's
 share of the width, the section's roll about the spine (`roll`: pi / 2 stands
 the blade on edge) and the station count. Each part is a `make_sweep()` tapered from the base share to
-the widest station and to a point (folded: to a small cap, so the halves
-share no vertex), made in the generator's scratch mesh and taken in by
+the widest station and to a point, made in the generator's scratch mesh and taken in by
 `Kit_mesh_builder::add_mesh()`, which adds a generated mesh's facets under
 the current slot and splits each quad into two triangles (a bent sweep's
 quads are not planar). `add_kit_sweep()` is the same for a sweep a generator
@@ -1968,10 +1991,12 @@ and `stall`.
 - The awning (slot `cloth`) is a slab the width wide that reaches `overhang`
   beyond the posts at the front and the back: `flat` level at the height;
   `sloped` falling from the height at the back by 0.2 of the height to the
-  front; `peaked` two slabs falling by 0.18 of the height from a ridge along X
-  at the height. A valance hangs from its front edge.
+  front; `peaked` two slopes falling by 0.18 of the height from a ridge along X
+  at the height. A valance hangs flush from its front edge. The cloth and the
+  valance are one solid: a prism along X whose section's end caps are convex
+  quads sharing their edges (`Kit_mesh_builder::add_x_prism()`).
 - The sides are the width apart: stalls join side to side by end and start.
-- The parts are 12 boxes, 13 with a peaked awning.
+- The parts are 10 boxes and the awning.
 
 Derive ranges: `width` 2 - 3 modules (step 0.5), `depth` 1 - 1.5 modules
 (0.25), `height` 0.75 - 0.9 wall heights (0.05), `awning` all values,
@@ -2021,8 +2046,8 @@ connector base; a triangle mesh body; tags `prop` and `well`.
   height. A wooden bucket stands on the coping toward +Z at every roof.
 - `crossbar`: two posts beside the wall at +X and -X carry a beam, 1.4 radii
   (0.9 - 2.2 m) over the wall, over a windlass with a crank beyond the post at
-  +X. `gable`: the same under a roof of two slabs from a ridge along X, half
-  the radius and a post over the beam, on two king posts.
+  +X. `gable`: the same under a roof of two slopes sharing a ridge along X
+  (one prism), half the radius and a post over the beam, on two king posts.
 - The parts are 2, 8 with a crossbar and 12 with a gable.
 
 Derive ranges: `radius` 0.6 - 1 modules (step 0.05), `wall_height` 0.7 - 1 m
@@ -2421,7 +2446,9 @@ mirror plane x; tags `walkable`, `quay`, `harbour`, `wall` and `tiles`.
   thickness, so the top is the thickness wide at every batter. The origin is
   under the middle of the top.
 - The wall stands on a plinth at the water's foot under a coping, whose top is
-  the walking surface. A timber kerb (slot `wood`) runs along the water's edge
+  the walking surface. The wall and the coping are one prism along X: the land
+  face rises upright to the walking surface, the coping overhangs the water
+  face. A timber kerb (slot `wood`) runs along the water's edge
   on the coping, up to 0.12 m high, and `fenders` timbers lean on the water
   face from over the plinth to under the coping, evenly along the length.
 - The ends are the length apart, so segments join end to start.
@@ -2569,9 +2596,10 @@ rises toward the ends, 0 - 0.3, default 0.15), `thwarts` (0 - 4, default 2),
   inner skin a skin's thickness inside it, joined by a rim along both gunwales
   and across both ends. Its facets are triangles. The rim and the top strake
   of both sides are slot `trim`.
-- `rowboat`: a round section, a transom at the stern and a narrow stem at the
-  bow, the keel rising toward the bow. `skiff`: a flat bottom out to a chine
-  under flared sides. `barge`: a flat bottom under nearly upright sides, the
+- `rowboat`: a round section, a transom at the stern and a stem at the bow,
+  where the two sides share their points, the keel rising toward the bow.
+  `skiff`: a flat bottom out to a chine under flared sides, closing to a stem
+  the same way. `barge`: a flat bottom under nearly upright sides, the
   ends square and raked. The hull is 0.36 beams deep (a barge 0.3).
 - `sheer` lifts the gunwale toward the ends by up to 0.25 of it times the
   length, the bow more than the stern.
@@ -2681,7 +2709,8 @@ and `fire`.
   on an arm from a stone on the wall behind it (0.12 sizes toward -Z), under a
   cup; the back connector is on that wall.
 - `campfire`: embers in a ring of seven stones 1.5 sizes wide, under a tripod
-  of three rods (slot `metal`) that meet over the flame.
+  of three rods (slot `metal`) that cross on the axis over the flame, at 0.85
+  of their height.
 - The flame (slot `glow`) is rings of six points up to a point, `flame` high
   over its foot; the seed sets each point's reach and where the tip stands.
   The campfire's stones take their sizes and places from the seed too.
@@ -2855,7 +2884,8 @@ body for the louvre box, a convex hull body for the other forms; tags
 - `stack`: a pipe on a flange under a rain cap the width wide, on `slats`
   struts around the pipe's mouth.
 - `duct_elbow`: a duct up from a curb at the back, turning toward +Z to a
-  mouth of `slats` slats.
+  mouth of `slats` slats; the riser and the arm are one prism of an L
+  section.
 - The parts are three and the slats (on two faces of a louvre box).
 
 Derive ranges: `form` all values, `width` and `height` 0.5 - 1.5 modules (step
@@ -3188,14 +3218,14 @@ convex hull body; origin rule `base_contains_origin`; tags `decoration`,
   up.
 - `extension`: lying along X, wound tight (a coil's pitch 1.08 wires), with
   a hook at each end: half a ring of the coil's radius from the coil's end
-  point (its first point a quarter wire back into the coil), in the plane
+  point, the same wire as the coil through a mitred joint, in the plane
   through the axis and that point, so it rises from the coil's lowest side
   and reaches no lower than the coils. No point of a coil lies straight
   under the axis, so it rests on two lines. Start and end are the hooks' far
   points.
 - `torsion`: standing, wound tight, with a leg 1.5 coil diameters long from
-  each end along the wire's tangent: toward +Z on the ground and toward -Z
-  at the top. Start and end are the legs' ends.
+  each end along the wire's tangent, the wire's own first and last stretch:
+  toward +Z on the ground and toward -Z at the top. Start and end are the legs' ends.
 
 Budget 780 triangles.
 

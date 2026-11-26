@@ -34,6 +34,22 @@ auto make_length_parameter(
     return parameter;
 }
 
+void add_former_build(std::vector<Kit_shape_definition>& shapes, const std::string_view id, Kit_generator former_generator)
+{
+    const std::vector<Kit_shape_definition>::const_iterator current = std::find_if(
+        shapes.begin(), shapes.end(), [id](const Kit_shape_definition& shape) { return shape.id == id; }
+    );
+    ERHE_VERIFY(current != shapes.end());
+    Kit_shape_definition former = *current;
+    former.id           = fmt::format("{}_old", id);
+    former.display_name = fmt::format("{} (old)", current->display_name);
+    former.description  = fmt::format("The former build of {}, kept for comparison. {}", id, current->description);
+    former.former_ids.clear();
+    former.foliage_radius.reset();
+    former.generator    = std::move(former_generator);
+    shapes.push_back(std::move(former));
+}
+
 auto make_ratio_parameter(const char* name, const char* description, const float default_value) -> Kit_parameter
 {
     Kit_parameter parameter;

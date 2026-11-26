@@ -235,7 +235,8 @@ auto make_mesh_pin(const std::string& name, const GEO::Mesh& mesh) -> Mesh_pin
 
 auto get_all_rows() -> const std::vector<Kit_shape_rows>&
 {
-    static const std::vector<Kit_shape_rows> all{
+    static const std::vector<Kit_shape_rows> all = [] {
+        std::vector<Kit_shape_rows> batches{
         get_starter_rows(),
         get_build_13_16_rows(),
         get_build_17_20_rows(),
@@ -247,7 +248,10 @@ auto get_all_rows() -> const std::vector<Kit_shape_rows>&
         get_extra_33_36_rows(),
         get_machine_01_08_rows(),
         get_machine_09_18_rows()
-    };
+        };
+        batches.push_back(get_former_build_rows(batches));
+        return batches;
+    }();
     return all;
 }
 

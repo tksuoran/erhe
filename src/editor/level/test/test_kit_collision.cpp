@@ -148,6 +148,16 @@ const std::vector<Kit_collision_row> c_collision_rows{
     {"machine.washer",                  Kit_collision::convex_hull,   Kit_collision_source::fixed, ""},
     {"machine.cylinder",                Kit_collision::triangle_mesh, Kit_collision_source::fixed, ""},
     {"machine.pillow_block",            Kit_collision::triangle_mesh, Kit_collision_source::fixed, ""},
+    // The former builds kept for comparison take their shapes' rows.
+    {"nature.palm_old",                  Kit_collision::triangle_mesh, Kit_collision_source::fixed, ""},
+    {"nature.palm_clump_old",            Kit_collision::triangle_mesh, Kit_collision_source::fixed, ""},
+    {"harbour.quay_wall_old",            Kit_collision::triangle_mesh, Kit_collision_source::by_values, "fenders stand out of the water face, or the face leans"},
+    {"prop.market_stall_old",            Kit_collision::triangle_mesh, Kit_collision_source::fixed, "the stall under its awning stays open"},
+    {"prop.well_old",                    Kit_collision::triangle_mesh, Kit_collision_source::fixed, ""},
+    {"light.fire_old",                   Kit_collision::convex_hull, Kit_collision_source::fixed, ""},
+    {"industrial.vent_old",              Kit_collision::convex_hull, Kit_collision_source::by_values, ""},
+    {"harbour.boat_old",                 Kit_collision::triangle_mesh, Kit_collision_source::fixed, ""},
+    {"machine.spring_old",               Kit_collision::convex_hull, Kit_collision_source::fixed, ""},
 };
 
 // A convex hull that fills at least this share of its bounds' volume is close to a box (U54).

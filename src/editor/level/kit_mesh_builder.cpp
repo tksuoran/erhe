@@ -184,6 +184,36 @@ void Kit_mesh_builder::add_ring_solid(const std::span<const glm::vec3> ring_poin
     }
 }
 
+void Kit_mesh_builder::add_x_prism(const float x0, const float x1, const std::span<const glm::vec2> section, const std::span<const std::vector<uint32_t>> cap_pieces)
+{
+    ERHE_VERIFY((x0 < x1) && (section.size() >= 3));
+    const uint32_t n    = static_cast<uint32_t>(section.size());
+    const uint32_t base = static_cast<uint32_t>(m_positions.size());
+    for (const glm::vec2& p : section) {
+        add_vertex(glm::vec3{x0, p.y, p.x});
+    }
+    for (const glm::vec2& p : section) {
+        add_vertex(glm::vec3{x1, p.y, p.x});
+    }
+    for (uint32_t i = 0; i < n; ++i) {
+        const uint32_t j = (i + 1) % n;
+        add_quad(base + i, base + j, base + n + j, base + n + i);
+    }
+    std::vector<uint32_t> corners;
+    for (const std::vector<uint32_t>& piece : cap_pieces) {
+        corners.clear();
+        for (const uint32_t index : piece) {
+            corners.push_back(base + n + index);
+        }
+        add_polygon(corners);
+        corners.clear();
+        for (std::size_t k = piece.size(); k > 0; --k) {
+            corners.push_back(base + piece[k - 1]);
+        }
+        add_polygon(corners);
+    }
+}
+
 void Kit_mesh_builder::add_mesh(const GEO::Mesh& mesh)
 {
     const uint32_t base = static_cast<uint32_t>(m_positions.size());

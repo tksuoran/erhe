@@ -92,6 +92,9 @@ for the user's test.
     of `doc/plans/detail_blend_weight_implementation.md`, then the push.
 23. Leaf material follow-ups (textures, baked translucency, ray query
     path, USD): `doc/plans/leaf_material.md`.
+24. Level kit shared points: the user's comparison of the former builds,
+    their removal, and the user's pick of the joins not yet fixed
+    (`doc/plans/level_kit_shared_points.md`).
 
 ## Quest session follow-ups
 

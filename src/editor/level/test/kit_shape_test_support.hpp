@@ -121,6 +121,8 @@ public:
 [[nodiscard]] auto get_extra_33_36_rows      () -> Kit_shape_rows;
 [[nodiscard]] auto get_machine_01_08_rows    () -> Kit_shape_rows;
 [[nodiscard]] auto get_machine_09_18_rows    () -> Kit_shape_rows;
+// The rows of the "<id>_old" former builds, from their shapes' rows in the batches.
+[[nodiscard]] auto get_former_build_rows(const std::vector<Kit_shape_rows>& batches) -> Kit_shape_rows;
 
 [[nodiscard]] auto get_all_rows() -> const std::vector<Kit_shape_rows>&;
 

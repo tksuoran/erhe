@@ -705,8 +705,9 @@ enum class Boat_form : unsigned int { rowboat = 0, skiff, barge };
 class Boat_lines
 {
 public:
-    explicit Boat_lines(const Kit_parameter_values& values)
-        : form  {get_boat_form(values.get_enum("form"))}
+    Boat_lines(const Kit_parameter_values& values, const Kit_build build_kind)
+        : build {build_kind}
+        , form  {get_boat_form(values.get_enum("form"))}
         , length{values.get_float("length")}
         , beam  {values.get_float("beam")}
         , sheer {values.get_float("sheer")}
@@ -721,9 +722,9 @@ public:
     {
         float share = 1.0f;
         if (form == Boat_form::rowboat) {
-            share = std::max(std::pow(std::max(std::sin(pi * (0.22f + (0.78f * u))), 0.0f), 0.75f), 0.05f);
+            share = std::max(std::pow(std::max(std::sin(pi * (0.22f + (0.78f * u))), 0.0f), 0.75f), (build == Kit_build::former) ? 0.05f : 0.0f);
         } else if (form == Boat_form::skiff) {
-            share = std::max(std::pow(std::max(std::sin(pi * (0.3f + (0.7f * u))), 0.0f), 0.6f), 0.07f);
+            share = std::max(std::pow(std::max(std::sin(pi * (0.3f + (0.7f * u))), 0.0f), 0.6f), (build == Kit_build::former) ? 0.07f : 0.0f);
         } else {
             share = std::min(1.0f, 0.82f + (2.2f * std::min(u, 1.0f - u)));
         }
@@ -775,7 +776,7 @@ public:
         const float     keel  = get_keel(u);
         const float     up    = (outer.y - keel) / std::max(get_gunwale(u) - keel, 1.0e-4f);
         const float     ends  = (u == 0.0f) ? skin : ((u == 1.0f) ? -skin : 0.0f);
-        return glm::vec3{outer.x + ends, outer.y + (skin * (1.0f - up)), outer.z * std::max(1.0f - (skin / get_half_beam(u)), 0.35f)};
+        return glm::vec3{outer.x + ends, outer.y + (skin * (1.0f - up)), outer.z * std::max(1.0f - (skin / std::max(get_half_beam(u), 1.0e-6f)), 0.35f)};
     }
     // Half the inner skin's width at height y over its strake points at u, as the mesh's lines run between them.
     [[nodiscard]] auto get_inner_half_width(const float u, const float y) const -> float
@@ -792,6 +793,10 @@ public:
         return below.z;
     }
 
+    // A rowboat's and a skiff's sides close to a stem at the bow; the former build kept a narrow bow board.
+    [[nodiscard]] auto has_stem() const -> bool { return (build == Kit_build::current) && (form != Boat_form::barge); }
+
+    Kit_build build {Kit_build::current};
     Boat_form form  {Boat_form::rowboat};
     float     length{0.0f};
     float     beam  {0.0f};
@@ -801,9 +806,9 @@ public:
     float     skin  {0.0f}; // thickness of the hull
 };
 
-void generate_boat(const Kit_parameter_values& values, GEO::Mesh& mesh)
+void generate_boat_build(const Kit_parameter_values& values, GEO::Mesh& mesh, const Kit_build build)
 {
-    const Boat_lines lines{values};
+    const Boat_lines lines{values, build};
     const int        thwarts = std::clamp(values.get_int("thwarts"), 0, boat_thwart_max);
     constexpr int    across  = boat_strakes + 1;
     // The two skins' points before the heel.
@@ -831,13 +836,21 @@ void generate_boat(const Kit_parameter_values& values, GEO::Mesh& mesh)
     Kit_mesh_builder builder;
     std::vector<uint32_t> out;
     std::vector<uint32_t> in;
-    for (std::size_t k = 0; k < outer.size(); ++k) {
-        out.push_back(builder.add_vertex(place.at(outer[k])));
-        in .push_back(builder.add_vertex(place.at(inner[k])));
-    }
     const auto at = [](const int i, const int j) -> std::size_t {
         return (static_cast<std::size_t>(i) * static_cast<std::size_t>(across)) + static_cast<std::size_t>(j);
     };
+    for (std::size_t k = 0; k < outer.size(); ++k) {
+        const int i = static_cast<int>(k) / across;
+        const int j = static_cast<int>(k) % across;
+        if (lines.has_stem() && (i == boat_bands) && (j > (boat_strakes / 2))) {
+            // The stem: both sides share the bow's points.
+            out.push_back(out[at(i, boat_strakes - j)]);
+            in .push_back(in [at(i, boat_strakes - j)]);
+            continue;
+        }
+        out.push_back(builder.add_vertex(place.at(outer[k])));
+        in .push_back(builder.add_vertex(place.at(inner[k])));
+    }
     for (int i = 0; i < boat_bands; ++i) {
         for (int j = 0; j < boat_strakes; ++j) {
             const std::size_t a = at(i, j);
@@ -853,7 +866,7 @@ void generate_boat(const Kit_parameter_values& values, GEO::Mesh& mesh)
             builder.add_triangle(in[a], in[d], in[e]);
         }
     }
-    // The rim between the two skins: along both gunwales and across the stern and the bow.
+    // The rim between the two skins: along both gunwales and across the stern and a bow without a stem.
     builder.set_slot(boat_trim_slot);
     const auto add_rim = [&](const std::size_t p, const std::size_t q) {
         builder.add_triangle(out[q], out[p], in[p]);
@@ -864,7 +877,9 @@ void generate_boat(const Kit_parameter_values& values, GEO::Mesh& mesh)
         add_rim(at(i + 1, boat_strakes), at(i, boat_strakes));
     }
     for (int j = 0; j < boat_strakes; ++j) {
-        add_rim(at(boat_bands, j), at(boat_bands, j + 1));
+        if (!lines.has_stem()) {
+            add_rim(at(boat_bands, j), at(boat_bands, j + 1));
+        }
         add_rim(at(0, j + 1), at(0, j));
     }
     // A board closes each end inside the hull: the transom at the stern, the stem (a barge's second transom) at the bow.
@@ -911,6 +926,16 @@ void generate_boat(const Kit_parameter_values& values, GEO::Mesh& mesh)
         builder.add_box(glm::vec3{x - (0.02f * lines.length), 0.0f, -0.42f * lines.beam}, glm::vec3{x + (0.02f * lines.length), top, 0.42f * lines.beam});
     }
     builder.write(mesh);
+}
+
+void generate_boat(const Kit_parameter_values& values, GEO::Mesh& mesh)
+{
+    generate_boat_build(values, mesh, Kit_build::current);
+}
+
+void generate_boat_old(const Kit_parameter_values& values, GEO::Mesh& mesh)
+{
+    generate_boat_build(values, mesh, Kit_build::former);
 }
 
 } // anonymous namespace
@@ -1072,6 +1097,7 @@ void add_extra_33_36_shapes(std::vector<Kit_shape_definition>& shapes)
         };
         shapes.push_back(std::move(shape));
     }
+    add_former_build(shapes, "harbour.boat", generate_boat_old);
 }
 
 } // namespace editor
