@@ -1780,6 +1780,7 @@ void add_build_21_24_shapes(std::vector<Kit_shape_definition>& shapes)
         shape.triangle_budget = 380;
         shape.collision       = Kit_collision::convex_hull;
         shape.randomness      = Kit_randomness::seeded;
+        shape.detail_counts   = {{"segments"}};
         shape.generator       = generate_log;
         shape.get_connectors  = [](const Kit_parameter_values& values, std::vector<Kit_connector>& out_connectors) {
             const Log_values log{values};

@@ -7,6 +7,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
 
 namespace editor {
 
@@ -21,20 +22,32 @@ void make_lens(const glm::vec2 a, const glm::vec2 b, const float thickness, std:
     out_profile = {a, middle - (0.5f * thickness * normal), b, middle + (0.5f * thickness * normal)};
 }
 
-// A thin wedge from a to b with its ridge raised (+y) by the thickness, counter-clockwise: a leaflet row of a folded leaf.
-void make_wedge(const glm::vec2 a, const glm::vec2 b, const float thickness, std::vector<glm::vec2>& out_profile)
+// The middle of the line from a to b raised (+y) by the thickness: the ridge of a folded leaf's half.
+[[nodiscard]] auto get_ridge(const glm::vec2 a, const glm::vec2 b, const float thickness) -> glm::vec2
 {
     const glm::vec2 d      = b - a;
     glm::vec2       normal = glm::normalize(glm::vec2{-d.y, d.x});
     if (normal.y < 0.0f) {
         normal = -normal;
     }
-    const glm::vec2 ridge = (0.5f * (a + b)) + (thickness * normal);
+    return (0.5f * (a + b)) + (thickness * normal);
+}
+
+// A thin wedge from a to b with its ridge raised (+y) by the thickness, counter-clockwise: a leaflet row of a folded_split leaf.
+void make_wedge(const glm::vec2 a, const glm::vec2 b, const float thickness, std::vector<glm::vec2>& out_profile)
+{
+    const glm::vec2 d     = b - a;
+    const glm::vec2 ridge = get_ridge(a, b, thickness);
     const float     area  = (d.x * (ridge.y - a.y)) - (d.y * (ridge.x - a.x));
     out_profile = (area > 0.0f) ? std::vector<glm::vec2>{a, b, ridge} : std::vector<glm::vec2>{a, ridge, b};
 }
 
-void add_sweep(Kit_mesh_builder& builder, const Kit_leaf& leaf, std::vector<glm::vec2>&& profile, const float tip_scale, GEO::Mesh& scratch)
+enum class Base_cap : unsigned int {
+    sweep = 0, // the sweep's own start cap: a convex profile
+    none       // the caller caps the base ring
+};
+
+void add_sweep(Kit_mesh_builder& builder, const Kit_leaf& leaf, std::vector<glm::vec2>&& profile, const float tip_scale, const Base_cap base_cap, GEO::Mesh& scratch)
 {
     if (leaf.roll != 0.0f) {
         const float c = std::cos(leaf.roll);
@@ -47,6 +60,7 @@ void add_sweep(Kit_mesh_builder& builder, const Kit_leaf& leaf, std::vector<glm:
     parameters.profile     = std::move(profile);
     parameters.spine       = std::vector<glm::vec3>{leaf.spine.begin(), leaf.spine.end()};
     parameters.spine_steps = std::max(1, leaf.steps);
+    parameters.start_cap   = (base_cap == Base_cap::sweep);
     const float widest_at = std::clamp(leaf.widest_at, 0.05f, 0.95f);
     parameters.taper = {glm::vec2{0.0f, leaf.base_width}, glm::vec2{widest_at, 1.0f}};
     if (leaf.widest_end > widest_at) {
@@ -54,6 +68,76 @@ void add_sweep(Kit_mesh_builder& builder, const Kit_leaf& leaf, std::vector<glm:
     }
     parameters.taper.emplace_back(1.0f, tip_scale);
     add_kit_sweep(builder, parameters, scratch);
+}
+
+constexpr float folded_arch_power = 1.6f; // a folded half's underside drops by (share across) ^ this: the leaflet rows arch down
+
+// A folded leaf whose halves are leaf.across segments each, along an underside dropping by (share across) ^ power to the
+// edge: points of the underside from the left edge over the keel to the right edge, then the upper side back, each upper
+// point over the middle of its underside segment, as thick as the leaf but thinning over the outer half to the edge.
+void add_arched_folded_leaf(Kit_mesh_builder& builder, const Kit_leaf& leaf, GEO::Mesh& scratch)
+{
+    const int   k    = leaf.across;
+    const float half = 0.5f * leaf.width;
+    const float drop = leaf.fold * half;
+    const auto  under = [half, drop](const float side, const float u) -> glm::vec2 {
+        return glm::vec2{side * u * half, -drop * std::pow(u, folded_arch_power)};
+    };
+    const auto  upper = [&leaf, k, &under](const float side, const int i) -> glm::vec2 {
+        const float     u0     = static_cast<float>(i) / static_cast<float>(k);
+        const float     u1     = static_cast<float>(i + 1) / static_cast<float>(k);
+        const glm::vec2 a      = under(side, u0);
+        const glm::vec2 b      = under(side, u1);
+        glm::vec2       normal = glm::normalize(glm::vec2{-(b - a).y, (b - a).x});
+        if (normal.y < 0.0f) {
+            normal = -normal;
+        }
+        const float middle = 0.5f * (u0 + u1);
+        return (0.5f * (a + b)) + ((leaf.thickness * std::min(1.0f, 2.0f * (1.0f - middle))) * normal);
+    };
+    // Profile indices: the left underside from the edge at 0, the keel at k, the right underside to 2k, the right
+    // upper side from its outer point at 2k + 1 to its inner one at 3k, the keel's top at 3k + 1, the left upper side
+    // from its inner point at 3k + 2 to its outer one at 4k + 1.
+    std::vector<glm::vec2> profile;
+    for (int j = k; j > 0; --j) {
+        profile.push_back(under(-1.0f, static_cast<float>(j) / static_cast<float>(k)));
+    }
+    profile.push_back(glm::vec2{0.0f, 0.0f});
+    for (int j = 1; j <= k; ++j) {
+        profile.push_back(under(1.0f, static_cast<float>(j) / static_cast<float>(k)));
+    }
+    for (int i = k - 1; i >= 0; --i) {
+        profile.push_back(upper(1.0f, i));
+    }
+    profile.push_back(glm::vec2{0.0f, leaf.thickness});
+    for (int i = 0; i < k; ++i) {
+        profile.push_back(upper(-1.0f, i));
+    }
+    const uint32_t base = static_cast<uint32_t>(builder.get_positions().size());
+    add_sweep(builder, leaf, std::move(profile), 0.0f, Base_cap::none, scratch);
+
+    // The base cap in triangles sharing their edges, wound to face back along the spine (the profile's
+    // counter-clockwise triangles reversed).
+    const uint32_t ku       = static_cast<uint32_t>(k);
+    const uint32_t keel     = base + ku;
+    const uint32_t keel_top = base + (3 * ku) + 1;
+    const auto right_under = [base, ku](const uint32_t j) -> uint32_t { return base + ku + j; };
+    const auto left_under  = [base, ku](const uint32_t j) -> uint32_t { return base + ku - j; };
+    const auto right_upper = [base, ku](const uint32_t i) -> uint32_t { return base + (2 * ku) + 1 + (ku - 1 - i); };
+    const auto left_upper  = [base, ku](const uint32_t i) -> uint32_t { return base + (3 * ku) + 2 + i; };
+    const auto add_cap_triangle = [&builder](const uint32_t a, const uint32_t b, const uint32_t c) {
+        builder.add_triangle(c, b, a);
+    };
+    add_cap_triangle(keel, right_upper(0), keel_top);
+    add_cap_triangle(keel, keel_top, left_upper(0));
+    for (uint32_t i = 0; i < ku; ++i) {
+        add_cap_triangle(right_under(i), right_under(i + 1), right_upper(i));
+        add_cap_triangle(left_under(i + 1), left_under(i), left_upper(i));
+        if ((i + 1) < ku) {
+            add_cap_triangle(right_under(i + 1), right_upper(i + 1), right_upper(i));
+            add_cap_triangle(left_under(i + 1), left_upper(i), left_upper(i + 1));
+        }
+    }
 }
 
 } // anonymous namespace
@@ -72,22 +156,41 @@ void add_leaf(Kit_mesh_builder& builder, const Kit_leaf& leaf, GEO::Mesh& scratc
     switch (leaf.section) {
         case Kit_leaf_section::flat: {
             make_lens(glm::vec2{-half, 0.0f}, glm::vec2{half, 0.0f}, leaf.thickness, profile);
-            add_sweep(builder, leaf, std::move(profile), 0.0f, scratch);
+            add_sweep(builder, leaf, std::move(profile), 0.0f, Base_cap::sweep, scratch);
             break;
         }
         case Kit_leaf_section::thick: {
             make_lens(glm::vec2{-half, 0.0f}, glm::vec2{half, 0.0f}, std::max(leaf.thickness, 0.33f * leaf.width), profile);
-            add_sweep(builder, leaf, std::move(profile), 0.0f, scratch);
+            add_sweep(builder, leaf, std::move(profile), 0.0f, Base_cap::sweep, scratch);
             break;
         }
         case Kit_leaf_section::folded: {
+            if (leaf.across > 1) {
+                add_arched_folded_leaf(builder, leaf, scratch);
+                break;
+            }
+            // One solid: the halves share the midrib's keel and top, and the tip is one vertex.
+            const float     drop       = leaf.fold * half;
+            const glm::vec2 left_edge {-half, -drop};
+            const glm::vec2 right_edge{half, -drop};
+            const glm::vec2 keel      {0.0f, 0.0f};
+            const glm::vec2 top       {0.0f, leaf.thickness};
+            profile = {left_edge, keel, right_edge, get_ridge(keel, right_edge, leaf.thickness), top, get_ridge(keel, left_edge, leaf.thickness)};
+            const uint32_t base = static_cast<uint32_t>(builder.get_positions().size());
+            add_sweep(builder, leaf, std::move(profile), 0.0f, Base_cap::none, scratch);
+            // The V profile is concave: its base cap is one convex quad per half, the two sharing the midrib.
+            builder.add_quad(base + 5, base + 4, base + 1, base + 0);
+            builder.add_quad(base + 4, base + 3, base + 2, base + 1);
+            break;
+        }
+        case Kit_leaf_section::folded_split: {
             // The halves overlap at the midrib and end in small caps, so no two vertices of the leaf share a position.
             const float overlap = 0.03f * leaf.width;
             const float drop    = leaf.fold * half;
             make_wedge(glm::vec2{-overlap, 0.0f}, glm::vec2{half, -drop}, leaf.thickness, profile);
-            add_sweep(builder, leaf, std::move(profile), 0.04f, scratch);
+            add_sweep(builder, leaf, std::move(profile), 0.04f, Base_cap::sweep, scratch);
             make_wedge(glm::vec2{overlap, 0.0f}, glm::vec2{-half, -drop}, leaf.thickness, profile);
-            add_sweep(builder, leaf, std::move(profile), 0.04f, scratch);
+            add_sweep(builder, leaf, std::move(profile), 0.04f, Base_cap::sweep, scratch);
             break;
         }
         default: {

@@ -534,7 +534,7 @@ enum class Fire_form : unsigned int { brazier = 0, torch, campfire };
     return glm::vec3{root.x, root.y + values.get_float("flame") + 0.06f, root.z};
 }
 
-void generate_fire(const Kit_parameter_values& values, GEO::Mesh& mesh)
+void generate_fire_build(const Kit_parameter_values& values, GEO::Mesh& mesh, const Kit_build build)
 {
     const Fire_form form  = get_fire_form(values.get_enum("form"));
     const float     s     = values.get_float("size");
@@ -598,8 +598,9 @@ void generate_fire(const Kit_parameter_values& values, GEO::Mesh& mesh)
             const glm::vec2 point = get_kit_circle_point(k, 3);
             const glm::vec3 out{point.x, 0.0f, point.y};
             const float     high = (1.5f * s) + flame;
-            // The rods' heads stand a little apart.
-            const Placement rod{.origin = (1.05f * s) * out, .y = glm::vec3{-((1.0f * s) / high) * out.x, 1.0f, -((1.0f * s) / high) * out.z}};
+            // The rods cross on the axis under their heads (the former build's heads stood a little apart).
+            const float     lean = (build == Kit_build::current) ? ((1.05f * s) / (0.85f * high)) : ((1.0f * s) / high);
+            const Placement rod{.origin = (1.05f * s) * out, .y = glm::vec3{-lean * out.x, 1.0f, -lean * out.z}};
             add_placed_box(builder, rod, glm::vec3{-0.02f * s, 0.0f, -0.02f * s}, glm::vec3{0.02f * s, high, 0.02f * s});
         }
     }
@@ -620,6 +621,16 @@ void generate_fire(const Kit_parameter_values& values, GEO::Mesh& mesh)
         });
     }
     builder.write(mesh);
+}
+
+void generate_fire(const Kit_parameter_values& values, GEO::Mesh& mesh)
+{
+    generate_fire_build(values, mesh, Kit_build::current);
+}
+
+void generate_fire_old(const Kit_parameter_values& values, GEO::Mesh& mesh)
+{
+    generate_fire_build(values, mesh, Kit_build::former);
 }
 
 //
@@ -1062,6 +1073,7 @@ void add_extra_17_24_shapes(std::vector<Kit_shape_definition>& shapes)
         shape.triangle_budget = 60;
         shape.collision       = Kit_collision::triangle_mesh;
         shape.randomness      = Kit_randomness::seeded;
+        shape.detail_counts   = {{.parameter = "segments", .least = 6}};
         shape.generator       = generate_broken_pillar;
         shape.get_connectors  = [](const Kit_parameter_values&, std::vector<Kit_connector>& out_connectors) {
             out_connectors.push_back(make_base_connector());
@@ -1093,6 +1105,7 @@ void add_extra_17_24_shapes(std::vector<Kit_shape_definition>& shapes)
         shape.triangle_budget = 130;
         shape.collision       = Kit_collision::triangle_mesh;
         shape.origin_rule     = Kit_origin_rule::base_contains_origin; // the two feet stand apart
+        shape.detail_counts   = {{"segments"}};
         shape.generator       = generate_broken_arch;
         shape.get_connectors  = [](const Kit_parameter_values& values, std::vector<Kit_connector>& out_connectors) {
             const float half = (0.5f * values.get_float("span")) + values.get_float("thickness");
@@ -1211,6 +1224,7 @@ void add_extra_17_24_shapes(std::vector<Kit_shape_definition>& shapes)
         shape.triangle_budget  = 320;
         shape.collision        = Kit_collision::convex_hull;
         shape.randomness       = Kit_randomness::seeded;
+        shape.detail_counts    = {{"segments"}};
         shape.generator        = generate_buoy;
         shape.get_connectors   = [](const Kit_parameter_values&, std::vector<Kit_connector>& out_connectors) {
             out_connectors.push_back(make_base_connector());
@@ -1313,6 +1327,7 @@ void add_extra_17_24_shapes(std::vector<Kit_shape_definition>& shapes)
         shape.hard_edge_angle_degrees = 45.0f;
         shape.triangle_budget   = 100;
         shape.collision         = Kit_collision::triangle_mesh;
+        shape.detail_counts     = {{"segments"}};
         shape.generator         = generate_tunnel;
         shape.mirror_planes     = std::vector<Kit_mirror_plane>{Kit_mirror_plane::x};
         shape.check_walkability = check_tunnel_walkability;
@@ -1324,6 +1339,7 @@ void add_extra_17_24_shapes(std::vector<Kit_shape_definition>& shapes)
         };
         shapes.push_back(std::move(shape));
     }
+    add_former_build(shapes, "light.fire", generate_fire_old);
 }
 
 } // namespace editor

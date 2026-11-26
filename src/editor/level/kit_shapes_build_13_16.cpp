@@ -779,15 +779,71 @@ public:
     uint32_t                       slot      {0};
     uint32_t                       tip_slot  {0};
     std::size_t                    tip_from  {0}; // the bands from this one on and the tip are the tip slot's
+    float                          detail    {1.0f}; // the detail factor (get_kit_detail_factor()) the stations follow
+    int                            least_stations{3}; // the fewest stations at a low detail; the table's count keeps its shape
 };
+
+// The blade's stations at its detail: the table at the factor 1; more by interpolating between the table's stations
+// (each gap taking a share by its length), fewer by keeping the first, the last and evenly spaced others. tip_from
+// becomes the index of the first station at or past the table's tip station.
+void get_blade_stations(const Blade& blade, std::vector<Blade_station>& out_stations, std::size_t& out_tip_from)
+{
+    const std::span<const Blade_station> table = blade.stations;
+    const int own   = static_cast<int>(table.size());
+    const int count = kit_detail_count(blade.detail, own, std::min(blade.least_stations, own), 2 * own);
+    out_stations.clear();
+    if (count == own) {
+        out_stations.assign(table.begin(), table.end());
+    } else if (count < own) {
+        for (int i = 0; i < count; ++i) {
+            out_stations.push_back(table[static_cast<std::size_t>(std::lround(static_cast<float>(i * (own - 1)) / static_cast<float>(count - 1)))]);
+        }
+    } else {
+        const float length = table.back().at - table.front().at;
+        const int   extra  = count - own;
+        int         placed = 0;
+        for (int g = 0; (g + 1) < own; ++g) {
+            const Blade_station& a = table[static_cast<std::size_t>(g)];
+            const Blade_station& b = table[static_cast<std::size_t>(g + 1)];
+            // Stations placed up to the end of this gap, by the gaps' lengths.
+            const int until = ((g + 2) == own) ? extra : static_cast<int>(std::lround(static_cast<float>(extra) * (b.at - table.front().at) / length));
+            out_stations.push_back(a);
+            const int inserts = until - placed;
+            for (int k = 1; k <= inserts; ++k) {
+                const float t = static_cast<float>(k) / static_cast<float>(inserts + 1);
+                out_stations.push_back(Blade_station{
+                    .at         = a.at + (t * (b.at - a.at)),
+                    .half_width = a.half_width + (t * (b.half_width - a.half_width)),
+                    .lift       = a.lift + (t * (b.lift - a.lift)),
+                    .depth      = a.depth + (t * (b.depth - a.depth))
+                });
+            }
+            placed = until;
+        }
+        out_stations.push_back(table.back());
+    }
+    out_tip_from = out_stations.size();
+    if (blade.tip_from < table.size()) {
+        const float tip_at = table[blade.tip_from].at;
+        for (std::size_t r = 0; r < out_stations.size(); ++r) {
+            if (out_stations[r].at >= tip_at) {
+                out_tip_from = r;
+                break;
+            }
+        }
+    }
+}
 
 void add_blade(Kit_mesh_builder& builder, const Blade& blade)
 {
+    std::vector<Blade_station> stations;
+    std::size_t                tip_from = 0;
+    get_blade_stations(blade, stations, tip_from);
     const uint32_t    n          = (blade.section == Blade_section::thick) ? 4u : 3u;
-    const std::size_t ring_count = blade.stations.size();
+    const std::size_t ring_count = stations.size();
     uint32_t first = 0;
     for (std::size_t r = 0; r < ring_count; ++r) {
-        const Blade_station& station = blade.stations[r];
+        const Blade_station& station = stations[r];
         const Blade_frame    frame   = blade_frame(blade.arc, station.at);
         const glm::vec3      edge    = (blade.half_width * station.half_width) * frame.side;
         const glm::vec3      lift    = (blade.half_width * station.lift) * frame.up;
@@ -801,7 +857,7 @@ void add_blade(Kit_mesh_builder& builder, const Blade& blade)
         builder.add_vertex(frame.center - edge + lift);
         builder.add_vertex(frame.center - ((blade.half_width * station.depth) * frame.up));
     }
-    const Blade_station& first_station = blade.stations.front();
+    const Blade_station& first_station = stations.front();
     const Blade_frame    start         = blade_frame(blade.arc, first_station.at);
     const glm::vec3      behind        = start.center
         - ((0.4f * blade.half_width * first_station.half_width) * start.along)
@@ -814,7 +870,7 @@ void add_blade(Kit_mesh_builder& builder, const Blade& blade)
         builder.add_triangle(base_cap, first + ((i + 1) % n), first + i);
     }
     for (std::size_t r = 0; (r + 1) < ring_count; ++r) {
-        builder.set_slot((r >= blade.tip_from) ? blade.tip_slot : blade.slot);
+        builder.set_slot((r >= tip_from) ? blade.tip_slot : blade.slot);
         const uint32_t lower = first + (static_cast<uint32_t>(r) * n);
         const uint32_t upper = lower + n;
         for (uint32_t i = 0; i < n; ++i) {
@@ -823,24 +879,27 @@ void add_blade(Kit_mesh_builder& builder, const Blade& blade)
             builder.add_triangle(lower + i, upper + j, upper + i);
         }
     }
-    builder.set_slot(((ring_count - 1) >= blade.tip_from) ? blade.tip_slot : blade.slot);
+    builder.set_slot(((ring_count - 1) >= tip_from) ? blade.tip_slot : blade.slot);
     const uint32_t last = first + (static_cast<uint32_t>(ring_count - 1) * n);
     for (uint32_t i = 0; i < n; ++i) {
         builder.add_triangle(last + i, last + ((i + 1) % n), tip);
     }
 }
 
-// A stem of rings around the Y axis from the ground; a ring is (share of the height, share of the radius).
+// A stem of rings around the Y axis from the ground; a ring is (share of the height, share of the radius). The sides
+// are own_sides at the default detail.
 void add_stem(
     Kit_mesh_builder&                builder,
     const std::span<const glm::vec2> rings,
-    const int                        sides,
+    const int                        own_sides,
     const float                      radius,
     const float                      height,
     const glm::vec3&                 lean,
-    const float                      top_y
+    const float                      top_y,
+    const float                      detail
 )
 {
+    const int sides = kit_detail_count(detail, own_sides, 4, 2 * own_sides);
     std::vector<glm::vec3> points;
     points.reserve(rings.size() * static_cast<std::size_t>(sides));
     for (const glm::vec2& ring : rings) {
@@ -882,6 +941,7 @@ void generate_succulent(const Kit_parameter_values& values, GEO::Mesh& mesh)
     const float            spread = glm::radians(values.get_float("spread"));
     const bool             agave  = (form == "agave");
     const bool             yucca  = (form == "yucca");
+    const float            detail = get_kit_detail_factor(values);
     Kit_random random{values.get_seed(), "succulent"};
     Kit_mesh_builder builder;
 
@@ -896,12 +956,12 @@ void generate_succulent(const Kit_parameter_values& values, GEO::Mesh& mesh)
         const float     height = 0.5f * size;
         const glm::vec3 lean   = (lean_share * size) * around_y(lean_angle);
         core_radius = 0.06f * size;
-        add_stem(builder, succulent_trunk, 7, core_radius, height, lean, height + (0.6f * core_radius));
+        add_stem(builder, succulent_trunk, 7, core_radius, height, lean, height + (0.6f * core_radius), detail);
         crown = glm::vec3{lean.x, height, lean.z};
     } else {
         const float height = (agave ? 0.07f : 0.09f) * size;
         core_radius = 0.05f * size;
-        add_stem(builder, succulent_core, 7, core_radius, height, glm::vec3{0.0f}, 1.15f * height);
+        add_stem(builder, succulent_core, 7, core_radius, height, glm::vec3{0.0f}, 1.15f * height, detail);
         crown = glm::vec3{0.0f, height, 0.0f};
     }
 
@@ -920,6 +980,7 @@ void generate_succulent(const Kit_parameter_values& values, GEO::Mesh& mesh)
         const float     outer      = std::pow(1.0f - rank, 0.8f); // 1 for the outermost leaf
         Blade blade;
         blade.section  = Blade_section::thick;
+        blade.detail   = detail;
         blade.arc.out  = out;
         blade.arc.roll = roll;
         blade.slot     = (k >= (blades - young)) ? succulent_shoot_slot : succulent_foliage_slot;
@@ -969,10 +1030,10 @@ void generate_succulent(const Kit_parameter_values& values, GEO::Mesh& mesh)
 
     // The bud of unopened leaves at the center.
     builder.set_slot(succulent_shoot_slot);
-    constexpr int bud_sides = 5;
+    const int   bud_sides  = kit_detail_count(detail, 5, 4, 10);
     const float bud_radius = (yucca ? 0.55f : 0.42f) * core_radius;
     const float bud_height = (yucca ? 0.30f : (agave ? 0.30f : 0.22f)) * size;
-    std::array<glm::vec3, 2 * bud_sides> bud{};
+    std::vector<glm::vec3> bud(static_cast<std::size_t>(2 * bud_sides));
     for (int i = 0; i < bud_sides; ++i) {
         const glm::vec2 circle = get_kit_circle_point(i, bud_sides);
         bud[static_cast<std::size_t>(i)]             = crown + glm::vec3{bud_radius * circle.x, -0.3f * crown.y, bud_radius * circle.y};
@@ -1005,6 +1066,7 @@ public:
     float spread{0.5f};
     int   blades{12};
     float turn  {0.0f};
+    float detail{1.0f}; // the detail factor (get_kit_detail_factor())
 };
 
 // An arching blade from the tussock, blade 0 at its center and the last at its edge.
@@ -1020,6 +1082,7 @@ void add_tuft_blade(Kit_mesh_builder& builder, Kit_random& random, const Tuft& t
     const glm::vec3 out     = around_y(azimuth);
     Blade blade;
     blade.stations        = grass_stations;
+    blade.detail          = tuft.detail;
     blade.foot            = Blade_foot::on_ground;
     blade.arc.out         = around_y(azimuth + swing);
     blade.arc.base        = ((reach * std::sqrt(share)) * out) + glm::vec3{0.0f, 0.02f * tuft.height, 0.0f};
@@ -1055,6 +1118,8 @@ void add_tuft_stalk(
     const glm::vec3 out     = around_y(azimuth);
     Blade blade;
     blade.stations        = stations;
+    blade.detail          = tuft.detail;
+    blade.least_stations  = static_cast<int>(stations.size()); // the ear's or the plume's swell
     blade.section         = Blade_section::thick;
     blade.foot            = Blade_foot::on_ground;
     blade.arc.out         = out;
@@ -1082,6 +1147,7 @@ void add_tuft_stalk(
     const glm::vec3 out     = around_y(azimuth);
     Blade cane;
     cane.stations        = cane_stations;
+    cane.detail          = tuft.detail;
     cane.section         = Blade_section::thick;
     cane.foot            = Blade_foot::on_ground;
     cane.arc.out         = out;
@@ -1096,6 +1162,8 @@ void add_tuft_stalk(
 
     Blade panicle;
     panicle.stations        = panicle_stations;
+    panicle.detail          = tuft.detail;
+    panicle.least_stations  = static_cast<int>(panicle_stations.size());
     panicle.section         = Blade_section::thick;
     panicle.arc.out         = around_y(droop);
     panicle.arc.base        = blade_frame(cane.arc, 0.95f).center;
@@ -1118,6 +1186,7 @@ void generate_grass_tuft(const Kit_parameter_values& values, GEO::Mesh& mesh)
     tuft.spread = values.get_float("spread");
     tuft.blades = values.get_int("blades");
     tuft.turn   = random.next_range(0.0f, two_pi);
+    tuft.detail = get_kit_detail_factor(values);
     Kit_mesh_builder builder;
     builder.set_slot(grass_blade_slot);
     if (form == "reed") {
@@ -1125,7 +1194,7 @@ void generate_grass_tuft(const Kit_parameter_values& values, GEO::Mesh& mesh)
         const int   canes  = std::max(2, tuft.blades / 3);
         const int   levels = (tuft.blades + canes - 1) / canes;
         const float reach  = 0.16f * tuft.height * (0.4f + tuft.spread);
-        add_stem(builder, tussock_rings, 6, 0.035f * tuft.height, 0.02f * tuft.height, glm::vec3{0.0f}, 0.025f * tuft.height);
+        add_stem(builder, tussock_rings, 6, 0.035f * tuft.height, 0.02f * tuft.height, glm::vec3{0.0f}, 0.025f * tuft.height, tuft.detail);
         std::vector<Blade_arc> arcs;
         for (int k = 0; k < canes; ++k) {
             arcs.push_back(add_reed_cane(builder, random, tuft, k, canes, reach));
@@ -1137,6 +1206,7 @@ void generate_grass_tuft(const Kit_parameter_values& values, GEO::Mesh& mesh)
             const float      grow    = random.next_range(0.8f, 1.0f);
             Blade leaf;
             leaf.stations        = grass_stations;
+            leaf.detail          = tuft.detail;
             leaf.arc.out         = around_y(azimuth);
             leaf.arc.base        = blade_frame(cane, 0.2f + (0.6f * level)).center;
             leaf.arc.length      = 0.36f * tuft.height * grow;
@@ -1154,7 +1224,7 @@ void generate_grass_tuft(const Kit_parameter_values& values, GEO::Mesh& mesh)
     }
     const bool  pampas = (form == "pampas");
     const float reach  = (pampas ? 0.07f : 0.09f) * tuft.height * (0.6f + (0.8f * tuft.spread));
-    add_stem(builder, tussock_rings, 6, 1.3f * reach, (pampas ? 0.07f : 0.05f) * tuft.height, glm::vec3{0.0f}, (pampas ? 0.09f : 0.065f) * tuft.height);
+    add_stem(builder, tussock_rings, 6, 1.3f * reach, (pampas ? 0.07f : 0.05f) * tuft.height, glm::vec3{0.0f}, (pampas ? 0.09f : 0.065f) * tuft.height, tuft.detail);
     for (int k = 0; k < tuft.blades; ++k) {
         if (pampas) {
             add_tuft_blade(builder, random, tuft, k, reach, 0.8f * tuft.height, glm::radians(125.0f));
@@ -1575,6 +1645,7 @@ void add_build_13_16_shapes(std::vector<Kit_shape_definition>& shapes)
         shape.normal_style      = Kit_normal_style::faceted;
         shape.triangle_budget   = 160;
         shape.collision         = Kit_collision::triangle_mesh;
+        shape.detail_counts     = {{"segments"}};
         shape.generator         = generate_window_wall;
         shape.mirror_planes     = std::vector<Kit_mirror_plane>{Kit_mirror_plane::x, Kit_mirror_plane::z};
         shape.check_combination = check_window_wall;
@@ -1695,6 +1766,7 @@ void add_build_13_16_shapes(std::vector<Kit_shape_definition>& shapes)
         shape.triangle_budget = 600;
         shape.collision       = Kit_collision::convex_hull;
         shape.randomness      = Kit_randomness::seeded;
+        shape.detail_response = Kit_detail_response::scaled;
         shape.generator       = generate_succulent;
         shapes.push_back(std::move(shape));
     }
@@ -1721,6 +1793,7 @@ void add_build_13_16_shapes(std::vector<Kit_shape_definition>& shapes)
         shape.triangle_budget = 640;
         shape.collision       = Kit_collision::none;
         shape.randomness      = Kit_randomness::seeded;
+        shape.detail_response = Kit_detail_response::scaled;
         shape.generator       = generate_grass_tuft;
         shapes.push_back(std::move(shape));
     }

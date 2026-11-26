@@ -53,6 +53,9 @@ public:
     // As add_ring_solid(), the caps strips of quads pairing point i with point (segments - 1 - i) across the first and
     // the last ring (an even count, each ring symmetric about x = 0 in z): a long narrow solid, where fans make slivers.
     void add_ring_solid_paired_caps(std::span<const glm::vec3> ring_points, int segments);
+    // A prism along X from x0 to x1 over a section of (z, y) points, counter-clockwise seen from +X; each end cap is the
+    // convex pieces of the section (indices into it), so a concave section closes with the pieces sharing their edges.
+    void add_x_prism (float x0, float x1, std::span<const glm::vec2> section, std::span<const std::vector<uint32_t>> cap_pieces);
     // The facets of a generated mesh (a sweep) under the current slot; a quad becomes two triangles, since a bent sweep's quads are not planar.
     void add_mesh    (const GEO::Mesh& mesh);
     // A box from a to b (P4), a != b: width along the horizontal normal of the axis, height along the normal above it.

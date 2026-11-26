@@ -12,6 +12,7 @@ add_executable(${_target}
     kit_shape_rows_extra_33_36.cpp
     kit_shape_rows_machine_01_08.cpp
     kit_shape_rows_machine_09_18.cpp
+    kit_shape_rows_former_builds.cpp
     kit_shape_test_support.cpp
     # The editor sources under test are compiled directly into the test
     # executable: the editor itself is an executable, so there is no editor
@@ -83,6 +84,7 @@ add_executable(${_target}
     ${_config_out}/surface_support.cpp
     test_kit_attachment.cpp
     test_kit_collision.cpp
+    test_kit_detail.cpp
     test_kit_connection_flow.cpp
     test_kit_connector.cpp
     test_kit_item_slot.cpp

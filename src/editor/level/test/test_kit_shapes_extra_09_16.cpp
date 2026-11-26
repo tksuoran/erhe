@@ -215,8 +215,9 @@ TEST(Kit_quay_wall, parts_bounds_and_walking_surface_follow_the_values)
         const unsigned int fenders   = static_cast<unsigned int>(values.get_int("fenders"));
         const Kit_mesh_report report = editor::check_kit_shape(values);
         ASSERT_TRUE(report.is_valid()) << describe(report);
-        EXPECT_EQ(report.component_count, 4u + fenders);
-        EXPECT_EQ(report.triangle_count, 12u * report.component_count);
+        // The wall and coping (a prism of 28 triangles), the plinth, the kerb and the fenders (boxes).
+        EXPECT_EQ(report.component_count, 3u + fenders);
+        EXPECT_EQ(report.triangle_count, (12u * report.component_count) + 16u);
         EXPECT_FLOAT_EQ(report.bounds_min.x, -0.5f * length);
         EXPECT_FLOAT_EQ(report.bounds_max.x, 0.5f * length);
         EXPECT_FLOAT_EQ(report.bounds_min.z, -0.5f * thickness);
@@ -500,8 +501,9 @@ TEST_P(Kit_market_stall_awnings, parts_and_bounds_follow_the_values)
         const float reach = (0.5f * values.get_float("depth")) + values.get_float("overhang");
         const Kit_mesh_report report = editor::check_kit_shape(values);
         ASSERT_TRUE(report.is_valid()) << describe(report);
-        EXPECT_EQ(report.component_count, (GetParam() == "peaked") ? 13u : 12u);
-        EXPECT_EQ(report.triangle_count, 12u * report.component_count);
+        // Ten boxes and the awning, one prism of 20 triangles (28 peaked).
+        EXPECT_EQ(report.component_count, 11u);
+        EXPECT_EQ(report.triangle_count, 120u + ((GetParam() == "peaked") ? 28u : 20u));
         EXPECT_FLOAT_EQ(report.bounds_min.x, -0.5f * width);
         EXPECT_FLOAT_EQ(report.bounds_max.x, 0.5f * width);
         EXPECT_FLOAT_EQ(report.bounds_min.z, -reach);
@@ -642,7 +644,7 @@ TEST_P(Kit_well_roofs, passes_at_the_corners_with_every_slot)
     expect_topology_from_integers(explicit_enum(well, "roof", GetParam(), 1), well_floats);
 }
 
-// The wall and the bucket; two posts, a beam, a windlass and two crank pieces; two roof slabs and two king posts.
+// The wall and the bucket; two posts, a beam, a windlass and two crank pieces; the roof and two king posts.
 // The wall is hollow down to the water's level, and the posts stand beside it.
 TEST_P(Kit_well_roofs, parts_and_size_follow_the_values)
 {
@@ -656,7 +658,7 @@ TEST_P(Kit_well_roofs, parts_and_size_follow_the_values)
         const float beam   = wall + std::clamp(1.4f * radius, 0.9f, 2.2f);
         const Kit_mesh_report report = editor::check_kit_shape(values);
         ASSERT_TRUE(report.is_valid()) << describe(report);
-        EXPECT_EQ(report.component_count, (roof == "none") ? 2u : ((roof == "crossbar") ? 8u : 12u));
+        EXPECT_EQ(report.component_count, (roof == "none") ? 2u : ((roof == "crossbar") ? 8u : 11u));
         EXPECT_EQ(report.bounds_min.y, 0.0f);
         if (roof == "none") {
             EXPECT_GT(report.bounds_max.y, wall + 0.1f);

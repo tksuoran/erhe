@@ -1405,6 +1405,7 @@ void add_extra_01_08_shapes(std::vector<Kit_shape_definition>& shapes)
         shape.normal_style    = Kit_normal_style::faceted;
         shape.triangle_budget = 620;
         shape.collision       = Kit_collision::convex_hull;
+        shape.detail_counts   = {{"segments"}};
         shape.generator       = generate_barrel;
         shape.mirror_planes   = std::vector<Kit_mirror_plane>{Kit_mirror_plane::z};
         shape.get_connectors  = [](const Kit_parameter_values& values, std::vector<Kit_connector>& out_connectors) {
@@ -1532,6 +1533,7 @@ void add_extra_01_08_shapes(std::vector<Kit_shape_definition>& shapes)
         shape.triangle_budget   = 220;
         shape.collision         = Kit_collision::triangle_mesh;
         shape.randomness        = Kit_randomness::seeded;
+        shape.detail_counts     = {{"segments"}};
         shape.generator         = generate_pier;
         shape.check_walkability = check_pier_walkability;
         shape.get_connectors    = [](const Kit_parameter_values& values, std::vector<Kit_connector>& out_connectors) {
@@ -1567,6 +1569,7 @@ void add_extra_01_08_shapes(std::vector<Kit_shape_definition>& shapes)
         shape.triangle_budget = 200;
         shape.collision       = Kit_collision::convex_hull;
         shape.randomness      = Kit_randomness::seeded;
+        shape.detail_counts   = {{"segments"}};
         shape.generator       = generate_mooring;
         shape.get_connectors  = [](const Kit_parameter_values&, std::vector<Kit_connector>& out_connectors) {
             out_connectors.push_back(make_base_connector());
@@ -1597,6 +1600,7 @@ void add_extra_01_08_shapes(std::vector<Kit_shape_definition>& shapes)
         shape.normal_style     = Kit_normal_style::faceted;
         shape.triangle_budget  = 270;
         shape.collision        = Kit_collision::convex_hull;
+        shape.detail_counts    = {{"segments"}};
         shape.generator        = generate_lamp_post;
         shape.mirror_planes    = std::vector<Kit_mirror_plane>{Kit_mirror_plane::z};
         shape.get_connectors   = [](const Kit_parameter_values&, std::vector<Kit_connector>& out_connectors) {

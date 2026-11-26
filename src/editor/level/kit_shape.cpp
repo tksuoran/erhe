@@ -3,6 +3,7 @@
 
 #include "erhe_geometry/geometry.hpp"
 #include "erhe_math/aabb.hpp"
+#include "erhe_verify/verify.hpp"
 
 #include <geogram/mesh/mesh.h>
 
@@ -477,12 +478,18 @@ auto Kit_parameter_values::to_canonical_text() const -> std::string
         return "{}";
     }
     std::string text{"{"};
+    bool        first_value = true;
     for (std::size_t i = 0, end = m_values.size(); i < end; ++i) {
         const Kit_parameter&       parameter = m_shape->parameters[i];
         const Kit_parameter_value& value     = m_values[i];
-        if (i > 0) {
+        if ((parameter.text_presence == Kit_text_presence::unless_default) && (parameter.type == Kit_parameter_type::float_value) &&
+            (value.float_value == parameter.float_default) && (get_value_source(i) == Kit_value_source::explicit_value)) {
+            continue;
+        }
+        if (!first_value) {
             text.push_back(',');
         }
+        first_value = false;
         text.append(fmt::format("\"{}\":", parameter.name));
         switch (parameter.type) {
             case Kit_parameter_type::float_value: {
@@ -733,12 +740,62 @@ auto parse_canonical_text(const Kit_shape_definition& shape, const std::string_v
         return fmt::format("{}: malformed parameter text", shape.id);
     }
     for (std::size_t i = 0, end = seen.size(); i < end; ++i) {
-        if (!seen[i]) {
-            return fmt::format("{}: parameter '{}' is missing", shape.id, shape.parameters[i].name);
+        if (seen[i]) {
+            continue;
         }
+        const Kit_parameter& parameter = shape.parameters[i];
+        if ((parameter.text_presence != Kit_text_presence::unless_default) || (parameter.type != Kit_parameter_type::float_value)) {
+            return fmt::format("{}: parameter '{}' is missing", shape.id, parameter.name);
+        }
+        values.set_value(i, Kit_parameter_value{.float_value = parameter.float_default});
     }
     out_values = values;
     return {};
+}
+
+auto get_kit_detail_factor(const Kit_parameter_values& values) -> float
+{
+    const Kit_shape_definition* const shape = values.get_shape();
+    if ((shape == nullptr) || (shape->detail_response != Kit_detail_response::scaled)) {
+        return 1.0f;
+    }
+    return std::clamp(values.get_float(c_kit_detail_parameter), c_kit_detail_min, 1.0f) / c_kit_detail_default;
+}
+
+auto kit_detail_count(const Kit_parameter_values& values, const int own, const int least, const int most, const int dimensions, const int step) -> int
+{
+    return kit_detail_count(get_kit_detail_factor(values), own, least, most, dimensions, step);
+}
+
+auto kit_detail_count(const float detail_factor, const int own, const int least, const int most, const int dimensions, const int step) -> int
+{
+    const float factor = std::pow(detail_factor, 1.0f / static_cast<float>(std::max(dimensions, 1)));
+    const int   unit   = std::max(step, 1);
+    int count = own + (unit * static_cast<int>(std::lround((factor - 1.0f) * static_cast<float>(own) / static_cast<float>(unit))));
+    while ((count > most) && ((count - unit) >= own)) {
+        count -= unit;
+    }
+    while ((count < least) && ((count + unit) <= own)) {
+        count += unit;
+    }
+    return std::clamp(count, std::min(least, own), std::max(most, own));
+}
+
+auto get_kit_detail_values(const Kit_parameter_values& values) -> Kit_parameter_values
+{
+    const Kit_shape_definition* const shape = values.get_shape();
+    if ((shape == nullptr) || shape->detail_counts.empty() || (get_kit_detail_factor(values) == 1.0f)) {
+        return values;
+    }
+    Kit_parameter_values scaled = values;
+    for (const Kit_detail_count& count : shape->detail_counts) {
+        const std::optional<std::size_t> index = shape->find_parameter(count.parameter);
+        ERHE_VERIFY(index.has_value() && (shape->parameters[index.value()].type == Kit_parameter_type::int_value));
+        const Kit_parameter& parameter = shape->parameters[index.value()];
+        const int            own       = values.get_int(count.parameter);
+        ERHE_VERIFY(scaled.set_int(count.parameter, kit_detail_count(values, own, std::max(parameter.int_min, count.least), parameter.int_max, count.dimensions, count.step)));
+    }
+    return scaled;
 }
 
 auto get_kit_collision(const Kit_parameter_values& values) -> Kit_collision

@@ -541,10 +541,13 @@ TEST_P(Kit_boat_forms, parts_and_size_follow_the_values)
         const Kit_mesh_report report = editor::check_kit_shape(values);
         ASSERT_TRUE(report.is_valid()) << describe(report);
         EXPECT_EQ(report.component_count, 5u + thwarts);
-        // Ten bands of eight strakes in two skins, the rim around them, the two end boards (of nine corners in a
-        // round hull, of four in a flat one) and the boxes.
+        // Ten bands of eight strakes in two skins, the rim along the gunwales and across the stern (a barge's bow too),
+        // the two end boards (of nine corners in a round hull, of four in a flat one) and the boxes. A skiff's flat
+        // bottom closes to the stem: the four bottom strakes of each skin lose a triangle in the last band.
         const unsigned int board = (GetParam() == "rowboat") ? 32u : 12u;
-        EXPECT_EQ(report.triangle_count, 320u + 72u + (2u * board) + (12u * (thwarts + 2u)));
+        const unsigned int rim   = (GetParam() == "barge") ? 72u : 56u;
+        const unsigned int bands = (GetParam() == "skiff") ? 312u : 320u;
+        EXPECT_EQ(report.triangle_count, bands + rim + (2u * board) + (12u * (thwarts + 2u)));
         EXPECT_EQ(report.bounds_min.y, 0.0f);
         EXPECT_FLOAT_EQ(report.bounds_min.x, -0.5f * length);
         EXPECT_FLOAT_EQ(report.bounds_max.x, 0.5f * length);

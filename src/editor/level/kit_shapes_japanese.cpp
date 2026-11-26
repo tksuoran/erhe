@@ -186,6 +186,7 @@ void add_japanese_shapes(std::vector<Kit_shape_definition>& shapes)
         shape.hard_edge_angle_degrees = 40.0f;
         shape.triangle_budget = 420;
         shape.collision       = Kit_collision::triangle_mesh;
+        shape.detail_counts   = {{"segments"}};
         shape.generator       = generate_torii;
         shape.mirror_planes   = std::vector<Kit_mirror_plane>{Kit_mirror_plane::x, Kit_mirror_plane::z};
         shape.check_combination = [](const Kit_parameter_values& values) -> std::string {

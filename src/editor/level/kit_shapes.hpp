@@ -91,7 +91,16 @@ void add_japanese_shapes      (std::vector<Kit_shape_definition>& shapes);
 void add_medieval_shapes      (std::vector<Kit_shape_definition>& shapes);
 void add_roof_shapes          (std::vector<Kit_shape_definition>& shapes);
 
+// Which build a generator makes: the current one, or the former one an "<id>_old" shape keeps for comparison.
+enum class Kit_build : unsigned int { current = 0, former };
+
+// Appends a copy of the shape of the id with the generator of its former build, id "<id>_old" and display name
+// "<name> (old)", for a side by side comparison (doc/editor/level_kit_shapes.md "Former builds").
+void add_former_build(std::vector<Kit_shape_definition>& shapes, std::string_view id, Kit_generator former_generator);
+
 // Parameter builders shared by the kit files.
+// The level of detail every shape takes as its last parameter; Kit_shape_library adds it.
+[[nodiscard]] auto make_detail_parameter() -> Kit_parameter;
 [[nodiscard]] auto make_length_parameter(
     const char*       name,
     const char*       description,

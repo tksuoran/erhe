@@ -707,8 +707,9 @@ TEST_P(Kit_spring_forms, parts_size_and_ends_follow_the_values)
             EXPECT_EQ(connectors[0].position, glm::vec3{0.0f});
             EXPECT_NEAR(connectors[1].position.y, length, 1.0e-5f);
         } else if (GetParam() == "extension") {
-            EXPECT_EQ(report.component_count, 3u);
-            EXPECT_EQ(report.triangle_count, helix + 136u);
+            // One wire: the coil and eight stretches of each hook.
+            EXPECT_EQ(report.component_count, 1u);
+            EXPECT_EQ(report.triangle_count, helix + 128u);
             // The hooks reach beyond the coils, which are wound wire on wire.
             const float body = 1.08f * wire * static_cast<float>(coils);
             EXPECT_GT(report.bounds_max.x, (0.5f * body) + (0.9f * radius));
@@ -718,8 +719,9 @@ TEST_P(Kit_spring_forms, parts_size_and_ends_follow_the_values)
             EXPECT_GT(connectors[1].position.x, 0.5f * body);
             EXPECT_LT(connectors[1].position.x, report.bounds_max.x);
         } else {
-            EXPECT_EQ(report.component_count, 3u);
-            EXPECT_EQ(report.triangle_count, helix + 24u);
+            // One wire: the coil and a stretch of each leg.
+            EXPECT_EQ(report.component_count, 1u);
+            EXPECT_EQ(report.triangle_count, helix + 16u);
             EXPECT_NEAR(report.bounds_max.y, 1.08f * wire * static_cast<float>(coils) + wire, 1.0e-5f);
             // The legs' ends: three coil radii out, on the ground toward +Z and at the top toward -Z.
             EXPECT_FLOAT_EQ(report.bounds_max.z, 3.0f * radius);
@@ -733,10 +735,9 @@ TEST_P(Kit_spring_forms, parts_size_and_ends_follow_the_values)
 
 INSTANTIATE_TEST_SUITE_P(Kit_spring, Kit_spring_forms, testing::Values("compression", "extension", "torsion"));
 
-// An extension spring's hooks start where the coil ends, at every wire (thin wires included): each hook's first
-// section lies within a quarter wire of the coil's end section. The coil's points come first, then the hook at -X,
-// then the one at +X, four corners to a point.
-TEST(Kit_spring, an_extension_springs_hooks_start_at_the_coils_ends)
+// An extension spring is one wire at every wire thickness (thin wires included): the hook at -X from its far point to
+// the coil, the coil, then the hook at +X, four corners to a point; the coil's end sections are the hooks' joints.
+TEST(Kit_spring, an_extension_springs_hooks_continue_the_coil)
 {
     const Kit_shape_definition& spring = get_shape("machine.spring");
     for (const float wire : {0.004f, 0.006f, 0.02f, 0.1f}) {
@@ -751,16 +752,22 @@ TEST(Kit_spring, an_extension_springs_hooks_start_at_the_coils_ends)
                 return 0.25f * (point_of(*mesh, first) + point_of(*mesh, first + 1) + point_of(*mesh, first + 2) + point_of(*mesh, first + 3));
             };
             const GEO::index_t coil_points = static_cast<GEO::index_t>((12 * coils) + 1);
-            const GEO::index_t hook_points = 9;
+            const GEO::index_t hook_points = 8; // besides the joint
             ASSERT_EQ(mesh->vertices.nb(), 4u * (coil_points + (2u * hook_points)));
-            const glm::vec3 coil_start = section(0);
-            const glm::vec3 coil_end   = section(4u * (coil_points - 1u));
-            const glm::vec3 hook_start = section(4u * coil_points);
-            const glm::vec3 hook_end   = section(4u * (coil_points + hook_points));
-            EXPECT_NEAR(glm::distance(hook_start, coil_start), 0.25f * wire, 1.0e-5f);
-            EXPECT_NEAR(glm::distance(hook_end, coil_end), 0.25f * wire, 1.0e-5f);
+            // Each hook's far point stands half a ring (the coil's diameter, 0.2 m) over the coil's end, at its x.
+            const glm::vec3 first = section(0);
+            const glm::vec3 last  = section(4u * (coil_points + (2u * hook_points) - 1u));
+            const glm::vec3 coil_start = section(4u * hook_points);
+            const glm::vec3 coil_end   = section(4u * (hook_points + coil_points - 1u));
+            EXPECT_NEAR(first.x, coil_start.x, 1.0e-5f);
+            EXPECT_NEAR(last.x, coil_end.x, 1.0e-5f);
+            EXPECT_GT(first.y, coil_start.y + 0.15f);
+            EXPECT_GT(last.y, coil_end.y + 0.15f);
+            const Kit_mesh_report report = editor::check_kit_shape(values);
+            EXPECT_TRUE(report.is_valid()) << describe(report);
+            EXPECT_EQ(report.component_count, 1u);
             // The hooks reach no lower than the coils: the spring stands on the ground.
-            EXPECT_NEAR(editor::check_kit_shape(values).bounds_min.y, 0.0f, 1.0e-6f);
+            EXPECT_NEAR(report.bounds_min.y, 0.0f, 1.0e-6f);
         }
     }
 }

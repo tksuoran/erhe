@@ -666,7 +666,7 @@ TEST_P(Kit_vent_forms, every_slat_count_passes_at_the_corners_with_every_slot)
     }
 }
 
-// Three parts and the slats (on two faces of a louvre box); the unit fills its width and its height.
+// Three parts (two of a duct elbow) and the slats (on two faces of a louvre box); the unit fills its width and its height.
 TEST_P(Kit_vent_forms, parts_and_bounds_follow_the_values)
 {
     const Kit_shape_definition& vent = get_shape("industrial.vent");
@@ -676,7 +676,7 @@ TEST_P(Kit_vent_forms, parts_and_bounds_follow_the_values)
         const unsigned int slats = static_cast<unsigned int>(values.get_int("slats"));
         const Kit_mesh_report report = editor::check_kit_shape(values);
         ASSERT_TRUE(report.is_valid()) << describe(report);
-        EXPECT_EQ(report.component_count, 3u + ((GetParam() == "louvre_box") ? (2u * slats) : slats));
+        EXPECT_EQ(report.component_count, ((GetParam() == "duct_elbow") ? 2u : 3u) + ((GetParam() == "louvre_box") ? (2u * slats) : slats));
         EXPECT_EQ(report.bounds_min.y, 0.0f);
         EXPECT_FLOAT_EQ(report.bounds_max.y, values.get_float("height"));
         EXPECT_FLOAT_EQ(report.bounds_max.x, 0.5f * values.get_float("width"));

@@ -645,26 +645,50 @@ void generate_hill(const Kit_parameter_values& values, GEO::Mesh& mesh)
 // Tree and bush: a trunk of rings with a root flare, limbs as tapered tubes, foliage as lumpy closed clumps.
 //
 
+// A value of a ring of own.size() draws at a position in units of the ring's points, interpolated around the ring: a
+// ring of more or fewer points at another detail keeps the draws of its own count, and the ring's own points.
+[[nodiscard]] auto sample_ring(const std::span<const float> own, const float position) -> float
+{
+    const int   count = static_cast<int>(own.size());
+    const float lower = std::floor(position);
+    const float t     = position - lower;
+    const int   i     = ((static_cast<int>(lower) % count) + count) % count;
+    const int   j     = (i + 1) % count;
+    return (t == 0.0f) ? own[static_cast<std::size_t>(i)] : (own[static_cast<std::size_t>(i)] + (t * (own[static_cast<std::size_t>(j)] - own[static_cast<std::size_t>(i)])));
+}
+
 // A lumpy closed clump of foliage about its center; a flat clump stands on its base ring at the center's height.
 enum class Clump_base : unsigned int { round = 0, flat };
 
-void add_clump(Kit_mesh_builder& builder, Kit_random& random, const glm::vec3& center, const glm::vec3& radii, const Clump_base base)
+constexpr int clump_sides = 6; // at the default detail
+
+void add_clump(Kit_mesh_builder& builder, Kit_random& random, const glm::vec3& center, const glm::vec3& radii, const Clump_base base, const float detail)
 {
-    constexpr int sides = 6;
     class Station { public: float y; float radius; };
     constexpr std::array<Station, 4> round_stations{{{-0.50f, 0.66f}, {0.02f, 1.00f}, {0.52f, 0.76f}, {0.88f, 0.36f}}};
     constexpr std::array<Station, 4> flat_stations {{{ 0.00f, 0.80f}, {0.32f, 1.00f}, {0.66f, 0.78f}, {0.90f, 0.38f}}};
     const bool                        flat     = (base == Clump_base::flat);
     const std::array<Station, 4>&     stations = flat ? flat_stations : round_stations;
     const float                       phase    = random.next_range(0.0f, two_pi);
+    // The draws of the default detail's points, ring by ring, whatever the detail.
+    std::array<std::array<float, clump_sides>, 4> radial_draws{};
+    std::array<std::array<float, clump_sides>, 4> height_draws{};
+    for (std::size_t r = 0; r < stations.size(); ++r) {
+        for (int i = 0; i < clump_sides; ++i) {
+            radial_draws[r][static_cast<std::size_t>(i)] = next_signed(random);
+            height_draws[r][static_cast<std::size_t>(i)] = next_signed(random);
+        }
+    }
+    const int sides = kit_detail_count(detail, clump_sides, 4, 2 * clump_sides);
     std::vector<glm::vec3> points;
-    points.reserve(stations.size() * sides);
+    points.reserve(stations.size() * static_cast<std::size_t>(sides));
     for (std::size_t r = 0; r < stations.size(); ++r) {
         for (int i = 0; i < sides; ++i) {
-            const float     radial_draw = next_signed(random);
-            const float     height_draw = next_signed(random);
+            const float     position    = static_cast<float>(i * clump_sides) / static_cast<float>(sides);
+            const float     radial_draw = sample_ring(radial_draws[r], position);
+            const float     height_draw = sample_ring(height_draws[r], position);
             const bool      on_ground   = flat && (r == 0);
-            const glm::vec3 direction   = around_y(phase + (two_pi * (static_cast<float>(i) + (0.5f * static_cast<float>(r))) / static_cast<float>(sides)));
+            const glm::vec3 direction   = around_y(phase + (two_pi * (position + (0.5f * static_cast<float>(r))) / static_cast<float>(clump_sides)));
             const float     reach       = stations[r].radius * (1.0f + (0.13f * radial_draw));
             const float     y           = on_ground ? 0.0f : (radii.y * (stations[r].y + (0.08f * height_draw)));
             points.push_back(center + glm::vec3{radii.x * reach * direction.x, y, radii.z * reach * direction.z});
@@ -717,7 +741,7 @@ public:
 };
 
 // Rings from a lobed root flare on the ground up to a point; the base's center vertex is the origin.
-void add_trunk(Kit_mesh_builder& builder, Kit_random& random, const Tree_trunk& trunk)
+void add_trunk(Kit_mesh_builder& builder, Kit_random& random, const Tree_trunk& trunk, const float detail)
 {
     class Station { public: float t; float radius; float lobes; };
     constexpr std::array<Station, 5> stations{{{0.00f, 1.75f, 0.30f}, {0.07f, 1.22f, 0.12f}, {0.24f, 1.00f, 0.0f}, {0.62f, 0.80f, 0.0f}, {1.00f, 0.50f, 0.0f}}};
@@ -725,22 +749,24 @@ void add_trunk(Kit_mesh_builder& builder, Kit_random& random, const Tree_trunk& 
     for (float& root : roots) {
         root = next_signed(random);
     }
+    const int sides = kit_detail_count(detail, tree_trunk_sides, 4, 2 * tree_trunk_sides);
     std::vector<glm::vec3> points;
-    points.reserve(stations.size() * tree_trunk_sides);
+    points.reserve(stations.size() * static_cast<std::size_t>(sides));
     for (const Station& station : stations) {
         const glm::vec3 center = trunk.center(station.t);
-        for (int i = 0; i < tree_trunk_sides; ++i) {
-            const glm::vec2 circle = get_kit_circle_point(i, tree_trunk_sides);
-            const float     reach  = trunk.radius * station.radius * (1.0f + (station.lobes * roots[static_cast<std::size_t>(i)]));
+        for (int i = 0; i < sides; ++i) {
+            const glm::vec2 circle = get_kit_circle_point(i, sides);
+            const float     root   = sample_ring(roots, static_cast<float>(i * tree_trunk_sides) / static_cast<float>(sides));
+            const float     reach  = trunk.radius * station.radius * (1.0f + (station.lobes * root));
             points.push_back(center + glm::vec3{reach * circle.x, 0.0f, reach * circle.y});
         }
     }
     const glm::vec3 top = trunk.center(1.0f) + glm::vec3{0.0f, trunk.radius, 0.0f};
-    builder.add_ring_solid(points, tree_trunk_sides, glm::vec3{0.0f}, top);
+    builder.add_ring_solid(points, sides, glm::vec3{0.0f}, top);
 }
 
 // A limb from the trunk at the share t of its height out to the end, with an elbow lifted above the straight line.
-void add_branch(Kit_mesh_builder& builder, const Tree_trunk& trunk, const float t, const glm::vec3& end, const float radius, const float lift)
+void add_branch(Kit_mesh_builder& builder, const Tree_trunk& trunk, const float t, const glm::vec3& end, const float radius, const float lift, const float detail)
 {
     // No lower than the limb's own width above the ground.
     const glm::vec3 start  = trunk.center(std::max(t, 2.2f * radius / trunk.height));
@@ -749,10 +775,10 @@ void add_branch(Kit_mesh_builder& builder, const Tree_trunk& trunk, const float 
     const glm::vec3 elbow  = start + (0.5f * out) + glm::vec3{0.0f, lift, 0.0f};
     const std::array<glm::vec3, 3> centers{start, elbow, end};
     const std::array<float, 3>     radii{radius, 0.75f * radius, 0.45f * radius};
-    add_limb(builder, centers, radii, side, tree_limb_sides);
+    add_limb(builder, centers, radii, side, kit_detail_count(detail, tree_limb_sides, 3, 2 * tree_limb_sides));
 }
 
-void add_broadleaf(Kit_mesh_builder& builder, Kit_random& random, const float trunk_height, const float canopy_size)
+void add_broadleaf(Kit_mesh_builder& builder, Kit_random& random, const float trunk_height, const float canopy_size, const float detail)
 {
     const float canopy_height = 0.85f * canopy_size;
     Tree_trunk trunk;
@@ -762,7 +788,7 @@ void add_broadleaf(Kit_mesh_builder& builder, Kit_random& random, const float tr
     const float bend_draw  = random.next_range(0.0f, 0.1f);
     trunk.bend = (bend_draw * canopy_size) * around_y(bend_angle);
     builder.set_slot(tree_bark_slot);
-    add_trunk(builder, random, trunk);
+    add_trunk(builder, random, trunk, detail);
 
     const int       branch_count  = 3 + static_cast<int>(random.next_u32() % 2u);
     const float     first_azimuth = random.next_range(0.0f, two_pi);
@@ -777,37 +803,48 @@ void add_broadleaf(Kit_mesh_builder& builder, Kit_random& random, const float tr
         const glm::vec3 out = around_y(first_azimuth + (two_pi * (static_cast<float>(b) + (0.3f * azimuth_draw)) / static_cast<float>(branch_count)));
         const glm::vec3 end{crown.x + (reach_draw * canopy_size * out.x), trunk_height + (rise_draw * canopy_height), crown.z + (reach_draw * canopy_size * out.z)};
         builder.set_slot(tree_bark_slot);
-        add_branch(builder, trunk, trunk_share * start_draw, end, 0.5f * trunk.radius, 0.06f * canopy_size);
+        add_branch(builder, trunk, trunk_share * start_draw, end, 0.5f * trunk.radius, 0.06f * canopy_size, detail);
         builder.set_slot(tree_foliage_slot);
         const glm::vec3 radii = (canopy_size * size_draw) * glm::vec3{0.29f, 0.22f, 0.29f};
-        add_clump(builder, random, end + glm::vec3{0.0f, 0.04f * canopy_size, 0.0f}, radii, Clump_base::round);
+        add_clump(builder, random, end + glm::vec3{0.0f, 0.04f * canopy_size, 0.0f}, radii, Clump_base::round, detail);
     }
     // The crown clump on the trunk's top and two small ones that break the outline.
     builder.set_slot(tree_foliage_slot);
-    add_clump(builder, random, glm::vec3{crown.x, trunk_height + (0.70f * canopy_height), crown.z}, canopy_size * glm::vec3{0.34f, 0.25f, 0.34f}, Clump_base::round);
+    add_clump(builder, random, glm::vec3{crown.x, trunk_height + (0.70f * canopy_height), crown.z}, canopy_size * glm::vec3{0.34f, 0.25f, 0.34f}, Clump_base::round, detail);
     for (int k = 0; k < 2; ++k) {
         const float azimuth    = random.next_range(0.0f, two_pi);
         const float reach_draw = random.next_range(0.30f, 0.38f);
         const float rise_draw  = random.next_range(0.35f, 0.80f);
         const glm::vec3 out    = around_y(azimuth);
         const glm::vec3 center{crown.x + (reach_draw * canopy_size * out.x), trunk_height + (rise_draw * canopy_height), crown.z + (reach_draw * canopy_size * out.z)};
-        add_clump(builder, random, center, canopy_size * glm::vec3{0.17f, 0.13f, 0.17f}, Clump_base::round);
+        add_clump(builder, random, center, canopy_size * glm::vec3{0.17f, 0.13f, 0.17f}, Clump_base::round, detail);
     }
 }
 
 // A tier of a conifer: a skirt with a ragged drooping edge, hollow underneath, closed about the trunk.
-void add_conifer_tier(Kit_mesh_builder& builder, Kit_random& random, const glm::vec3& base, const float radius, const float height)
+void add_conifer_tier(Kit_mesh_builder& builder, Kit_random& random, const glm::vec3& base, const float radius, const float height, const float detail)
 {
-    constexpr int sides = 9;
+    constexpr int own_sides = 9;
     const float phase = random.next_range(0.0f, two_pi);
     const float droop = std::min(0.12f * height, 0.7f * base.y);
+    // The draws of the default detail's points, ring by ring, whatever the detail.
+    std::array<std::array<float, own_sides>, 3> radial_draws{};
+    std::array<std::array<float, own_sides>, 3> droop_draws{};
+    for (std::size_t r = 0; r < 3; ++r) {
+        for (std::size_t i = 0; i < own_sides; ++i) {
+            radial_draws[r][i] = next_signed(random);
+            droop_draws[r][i]  = random.next_unit();
+        }
+    }
+    const int sides = kit_detail_count(detail, own_sides, 5, 2 * own_sides);
     std::vector<glm::vec3> points;
-    points.reserve(3 * sides);
+    points.reserve(3 * static_cast<std::size_t>(sides));
     for (int r = 0; r < 3; ++r) {
         for (int i = 0; i < sides; ++i) {
-            const float     radial_draw = next_signed(random);
-            const float     droop_draw  = random.next_unit();
-            const glm::vec3 direction   = around_y(phase + (two_pi * static_cast<float>(i) / static_cast<float>(sides)));
+            const float     position    = static_cast<float>(i * own_sides) / static_cast<float>(sides);
+            const float     radial_draw = sample_ring(radial_draws[static_cast<std::size_t>(r)], position);
+            const float     droop_draw  = sample_ring(droop_draws[static_cast<std::size_t>(r)], position);
+            const glm::vec3 direction   = around_y(phase + (two_pi * position / static_cast<float>(own_sides)));
             float reach = 0.28f * radius;
             float y     = 0.10f * height;
             if (r == 1) {
@@ -823,7 +860,7 @@ void add_conifer_tier(Kit_mesh_builder& builder, Kit_random& random, const glm::
     builder.add_ring_solid(points, sides, base + glm::vec3{0.0f, 0.16f * height, 0.0f}, base + glm::vec3{0.0f, height, 0.0f});
 }
 
-void add_conifer(Kit_mesh_builder& builder, Kit_random& random, const float trunk_height, const float canopy_size)
+void add_conifer(Kit_mesh_builder& builder, Kit_random& random, const float trunk_height, const float canopy_size, const float detail)
 {
     const float canopy_height = 1.4f * canopy_size;
     Tree_trunk trunk;
@@ -833,7 +870,7 @@ void add_conifer(Kit_mesh_builder& builder, Kit_random& random, const float trun
     const float bend_draw  = random.next_range(0.0f, 0.04f);
     trunk.bend = (bend_draw * canopy_size) * around_y(bend_angle);
     builder.set_slot(tree_bark_slot);
-    add_trunk(builder, random, trunk);
+    add_trunk(builder, random, trunk, detail);
 
     builder.set_slot(tree_foliage_slot);
     const int   tier_count = 4 + static_cast<int>(random.next_u32() % 2u);
@@ -845,12 +882,12 @@ void add_conifer(Kit_mesh_builder& builder, Kit_random& random, const float trun
         const float radius      = 0.5f * canopy_size * (1.0f - (0.78f * share)) * (1.0f + (0.08f * radius_draw));
         const float height      = ((k + 1) == tier_count) ? (trunk_height + canopy_height - y) : (1.75f * step);
         const glm::vec3 axis    = trunk.center(y / trunk.height);
-        add_conifer_tier(builder, random, glm::vec3{axis.x, y, axis.z}, radius, height);
+        add_conifer_tier(builder, random, glm::vec3{axis.x, y, axis.z}, radius, height, detail);
     }
 }
 
 // A bare tree: forked limbs and a few last tufts of leaves.
-void add_bare_tree(Kit_mesh_builder& builder, Kit_random& random, const float trunk_height, const float canopy_size)
+void add_bare_tree(Kit_mesh_builder& builder, Kit_random& random, const float trunk_height, const float canopy_size, const float detail)
 {
     constexpr int branch_count = 4;
     constexpr int tuft_count   = 3;
@@ -861,7 +898,7 @@ void add_bare_tree(Kit_mesh_builder& builder, Kit_random& random, const float tr
     const float bend_draw  = random.next_range(0.04f, 0.14f);
     trunk.bend = (bend_draw * canopy_size) * around_y(bend_angle);
     builder.set_slot(tree_bark_slot);
-    add_trunk(builder, random, trunk);
+    add_trunk(builder, random, trunk, detail);
 
     const float first_azimuth = random.next_range(0.0f, two_pi);
     const float trunk_share   = trunk_height / trunk.height;
@@ -879,7 +916,7 @@ void add_bare_tree(Kit_mesh_builder& builder, Kit_random& random, const float tr
         const glm::vec3 out      = around_y(azimuth);
         const glm::vec3 end      = start + (reach * out) + glm::vec3{0.0f, rise_draw * canopy_size, 0.0f};
         builder.set_slot(tree_bark_slot);
-        add_branch(builder, trunk, t, end, 0.42f * trunk.radius, 0.05f * canopy_size);
+        add_branch(builder, trunk, t, end, 0.42f * trunk.radius, 0.05f * canopy_size, detail);
         // The fork leaves the limb's elbow to one side.
         const glm::vec3 elbow      = start + (0.5f * (end - start)) + glm::vec3{0.0f, 0.05f * canopy_size, 0.0f};
         const glm::vec3 fork_out   = around_y(azimuth + (fork_side * fork_turn));
@@ -887,10 +924,10 @@ void add_bare_tree(Kit_mesh_builder& builder, Kit_random& random, const float tr
         const glm::vec3 fork_side_normal = glm::normalize(glm::vec3{fork_out.z, 0.0f, -fork_out.x});
         const std::array<glm::vec3, 3> centers{elbow, elbow + (0.5f * (fork_end - elbow)) + glm::vec3{0.0f, 0.03f * canopy_size, 0.0f}, fork_end};
         const std::array<float, 3>     radii{0.26f * trunk.radius, 0.2f * trunk.radius, 0.12f * trunk.radius};
-        add_limb(builder, centers, radii, fork_side_normal, tree_limb_sides);
+        add_limb(builder, centers, radii, fork_side_normal, kit_detail_count(detail, tree_limb_sides, 3, 2 * tree_limb_sides));
         if (b < tuft_count) {
             builder.set_slot(tree_foliage_slot);
-            add_clump(builder, random, end, canopy_size * glm::vec3{0.09f, 0.07f, 0.09f}, Clump_base::round);
+            add_clump(builder, random, end, canopy_size * glm::vec3{0.09f, 0.07f, 0.09f}, Clump_base::round, detail);
         }
     }
 }
@@ -900,14 +937,15 @@ void generate_tree(const Kit_parameter_values& values, GEO::Mesh& mesh)
     const float            trunk_height = values.get_float("trunk_height");
     const float            canopy_size  = values.get_float("canopy_size");
     const std::string_view species      = values.get_enum("species");
+    const float            detail       = get_kit_detail_factor(values);
     Kit_random random{values.get_seed()};
     Kit_mesh_builder builder;
     if (species == "conifer") {
-        add_conifer(builder, random, trunk_height, canopy_size);
+        add_conifer(builder, random, trunk_height, canopy_size, detail);
     } else if (species == "bare") {
-        add_bare_tree(builder, random, trunk_height, canopy_size);
+        add_bare_tree(builder, random, trunk_height, canopy_size, detail);
     } else {
-        add_broadleaf(builder, random, trunk_height, canopy_size);
+        add_broadleaf(builder, random, trunk_height, canopy_size, detail);
     }
     builder.write(mesh);
 }
@@ -920,12 +958,13 @@ void generate_bush(const Kit_parameter_values& values, GEO::Mesh& mesh)
 {
     const float size  = values.get_float("size");
     const int   twigs = std::clamp(values.get_int("twigs"), 1, bush_twig_max);
+    const float detail = get_kit_detail_factor(values);
     Kit_random random{values.get_seed()};
     Kit_mesh_builder builder;
 
     // The heart on the origin, a ring of lower clumps about it, small ones on top.
     builder.set_slot(bush_foliage_slot);
-    add_clump(builder, random, glm::vec3{0.0f}, size * glm::vec3{0.30f, 0.56f, 0.30f}, Clump_base::flat);
+    add_clump(builder, random, glm::vec3{0.0f}, size * glm::vec3{0.30f, 0.56f, 0.30f}, Clump_base::flat, detail);
     const int   ring_count    = 4 + static_cast<int>(random.next_u32() % 2u);
     const float first_azimuth = random.next_range(0.0f, two_pi);
     for (int k = 0; k < ring_count; ++k) {
@@ -934,14 +973,14 @@ void generate_bush(const Kit_parameter_values& values, GEO::Mesh& mesh)
         const float width_draw   = random.next_range(0.20f, 0.27f);
         const float height_draw  = random.next_range(0.26f, 0.46f);
         const glm::vec3 out = around_y(first_azimuth + (two_pi * (static_cast<float>(k) + (0.3f * azimuth_draw)) / static_cast<float>(ring_count)));
-        add_clump(builder, random, (reach_draw * size) * out, size * glm::vec3{width_draw, height_draw, width_draw}, Clump_base::flat);
+        add_clump(builder, random, (reach_draw * size) * out, size * glm::vec3{width_draw, height_draw, width_draw}, Clump_base::flat, detail);
     }
     for (int k = 0; k < 2; ++k) {
         const float azimuth    = random.next_range(0.0f, two_pi);
         const float reach_draw = random.next_range(0.10f, 0.22f);
         const float rise_draw  = random.next_range(0.36f, 0.46f);
         const glm::vec3 out    = around_y(azimuth);
-        add_clump(builder, random, glm::vec3{reach_draw * size * out.x, rise_draw * size, reach_draw * size * out.z}, size * glm::vec3{0.14f, 0.12f, 0.14f}, Clump_base::round);
+        add_clump(builder, random, glm::vec3{reach_draw * size * out.x, rise_draw * size, reach_draw * size * out.z}, size * glm::vec3{0.14f, 0.12f, 0.14f}, Clump_base::round, detail);
     }
 
     // Twigs out of the heart, past the leaves.
@@ -958,7 +997,7 @@ void generate_bush(const Kit_parameter_values& values, GEO::Mesh& mesh)
         const glm::vec3 elbow = start + (0.55f * (end - start)) + ((0.05f * size) * out);
         const std::array<glm::vec3, 3> centers{start, elbow, end};
         const std::array<float, 3>     radii{0.022f * size, 0.016f * size, 0.009f * size};
-        add_limb(builder, centers, radii, side, 4);
+        add_limb(builder, centers, radii, side, kit_detail_count(detail, 4, 3, 8));
     }
     builder.write(mesh);
 }
@@ -1003,6 +1042,7 @@ void add_nature_shapes(std::vector<Kit_shape_definition>& shapes)
         shape.triangle_budget = 280;
         shape.collision       = Kit_collision::triangle_mesh;
         shape.randomness      = Kit_randomness::seeded;
+        shape.detail_counts   = {{"segments"}};
         shape.generator       = generate_land_mass;
         shape.description =
             "Plateau with a lobed outline and a flat walkable top of turf: an overhanging turf rim over a soil band, a cliff "
@@ -1039,6 +1079,7 @@ void add_nature_shapes(std::vector<Kit_shape_definition>& shapes)
         shape.tags            = {"walkable", "ground", "size:6x6x1"};
         shape.triangle_budget = 320;
         shape.randomness      = Kit_randomness::seeded;
+        shape.detail_counts   = {{"segments", 2}};
         shape.generator       = generate_hill;
         shape.description =
             "Hill with a lobed foot and its crest off center: one side steep, the other long, a rounded crest and an easing "
@@ -1077,6 +1118,7 @@ void add_nature_shapes(std::vector<Kit_shape_definition>& shapes)
         shape.triangle_budget = 480;
         shape.collision       = Kit_collision::triangle_mesh;
         shape.randomness      = Kit_randomness::seeded;
+        shape.detail_response = Kit_detail_response::scaled;
         shape.generator       = generate_tree;
         shape.description =
             "Tree standing at the origin: a tapering trunk with a root flare (slot bark) and, by species, limbs carrying "
@@ -1101,6 +1143,7 @@ void add_nature_shapes(std::vector<Kit_shape_definition>& shapes)
         shape.normal_style    = Kit_normal_style::faceted;
         shape.triangle_budget = 420;
         shape.randomness      = Kit_randomness::seeded;
+        shape.detail_response = Kit_detail_response::scaled;
         shape.generator       = generate_bush;
         shape.description =
             "Bush on the origin: a heart clump, a ring of lower clumps about it and small ones on top (slot foliage), with "

@@ -913,7 +913,7 @@ void add_vent_slats(Kit_mesh_builder& builder, const int slats, const float half
     }
 }
 
-void generate_vent(const Kit_parameter_values& values, GEO::Mesh& mesh)
+void generate_vent_build(const Kit_parameter_values& values, GEO::Mesh& mesh, const Kit_build build)
 {
     const std::string_view form  = values.get_enum("form");
     const float            hw    = 0.5f * values.get_float("width");
@@ -949,8 +949,18 @@ void generate_vent(const Kit_parameter_values& values, GEO::Mesh& mesh)
     } else if (form == "duct_elbow") {
         // A duct up from a curb at the back, turning toward +Z to a mouth of slats.
         builder.add_box(glm::vec3{-hw, 0.0f, -hw}, glm::vec3{hw, 0.08f * h, 0.1f * hw});
-        builder.add_box(glm::vec3{-0.8f * hw, 0.05f * h, -0.9f * hw}, glm::vec3{0.8f * hw, 0.7f * h, -0.05f * hw});
-        builder.add_box(glm::vec3{-0.82f * hw, 0.5f * h, -0.92f * hw}, glm::vec3{0.82f * hw, h, 0.84f * hw});
+        if (build == Kit_build::current) {
+            // The riser and the arm, one solid of an L section.
+            const std::array<glm::vec2, 8> section{{
+                {-0.05f * hw, 0.05f * h}, {-0.9f * hw, 0.05f * h}, {-0.9f * hw, 0.5f * h}, {-0.9f * hw, h},
+                {-0.05f * hw, h}, {0.84f * hw, h}, {0.84f * hw, 0.5f * h}, {-0.05f * hw, 0.5f * h}
+            }};
+            const std::array<std::vector<uint32_t>, 3> pieces{{{0, 1, 2, 7}, {7, 2, 3, 4}, {6, 7, 4, 5}}};
+            builder.add_x_prism(-0.8f * hw, 0.8f * hw, section, pieces);
+        } else {
+            builder.add_box(glm::vec3{-0.8f * hw, 0.05f * h, -0.9f * hw}, glm::vec3{0.8f * hw, 0.7f * h, -0.05f * hw});
+            builder.add_box(glm::vec3{-0.82f * hw, 0.5f * h, -0.92f * hw}, glm::vec3{0.82f * hw, h, 0.84f * hw});
+        }
         add_vent_slats(builder, slats, 0.74f * hw, 0.54f * h, 0.96f * h, 0.84f * hw, 1.0f, 0.16f * hw);
     } else {
         // A box on a curb under a cap, with slats on its faces toward +Z and -Z.
@@ -961,6 +971,16 @@ void generate_vent(const Kit_parameter_values& values, GEO::Mesh& mesh)
         add_vent_slats(builder, slats, 0.82f * hw, 0.14f * h, 0.84f * h, -0.7f * hw, -1.0f, 0.1f * hw);
     }
     builder.write(mesh);
+}
+
+void generate_vent(const Kit_parameter_values& values, GEO::Mesh& mesh)
+{
+    generate_vent_build(values, mesh, Kit_build::current);
+}
+
+void generate_vent_old(const Kit_parameter_values& values, GEO::Mesh& mesh)
+{
+    generate_vent_build(values, mesh, Kit_build::former);
 }
 
 //
@@ -1111,6 +1131,7 @@ void add_extra_25_32_shapes(std::vector<Kit_shape_definition>& shapes)
         shape.normal_style     = Kit_normal_style::faceted;
         shape.triangle_budget  = 660;
         shape.collision        = Kit_collision::triangle_mesh;
+        shape.detail_counts    = {{"segments"}};
         shape.generator        = generate_lighthouse;
         shape.mirror_planes    = std::vector<Kit_mirror_plane>{Kit_mirror_plane::z};
         shape.get_connectors   = [](const Kit_parameter_values& values, std::vector<Kit_connector>& out_connectors) {
@@ -1149,6 +1170,7 @@ void add_extra_25_32_shapes(std::vector<Kit_shape_definition>& shapes)
         shape.normal_style    = Kit_normal_style::faceted;
         shape.triangle_budget = 400;
         shape.collision       = Kit_collision::convex_hull;
+        shape.detail_counts   = {{"segments"}};
         shape.generator       = generate_tank;
         shape.mirror_planes   = std::vector<Kit_mirror_plane>{Kit_mirror_plane::z};
         shape.get_connectors  = [](const Kit_parameter_values& values, std::vector<Kit_connector>& out_connectors) {
@@ -1283,6 +1305,7 @@ void add_extra_25_32_shapes(std::vector<Kit_shape_definition>& shapes)
         };
         shapes.push_back(std::move(shape));
     }
+    add_former_build(shapes, "industrial.vent", generate_vent_old);
 }
 
 } // namespace editor

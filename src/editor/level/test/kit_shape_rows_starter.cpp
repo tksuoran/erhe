@@ -47,10 +47,10 @@ auto get_starter_rows() -> Kit_shape_rows
         {"basic.block", 12}, {"basic.wedge", 8}, {"basic.cylinder", 60}, {"basic.stairs", 180}, {"basic.floor_slab", 12},
         {"architecture.wall", 12}, {"architecture.door_wall", 572}, {"architecture.pillar", 100}, {"architecture.arch", 516},
         {"nature.rock", 162}, {"nature.land_mass", 280}, {"nature.hill", 304}, {"nature.tree", 458}, {"nature.bush", 408},
-        {"nature.cliff", 428}, {"nature.shore", 238}, {"nature.water", 2}, {"nature.palm", 1510},
+        {"nature.cliff", 428}, {"nature.shore", 238}, {"nature.water", 2}, {"nature.palm", 1390},
         {"architecture.column", 724}, {"architecture.entablature", 540}, {"architecture.torii", 400}, {"architecture.battlement", 112},
         {"architecture.tower", 1524}, {"nature.leaf_plant", 488}, {"nature.rock_spire", 396}, {"nature.basalt_columns", 740},
-        {"architecture.roof", 508}, {"nature.palm_clump", 1912}, {"nature.palm_shrub", 1246}, {"nature.dune", 284}, {"nature.ground_patch", 144}
+        {"architecture.roof", 508}, {"nature.palm_clump", 1672}, {"nature.palm_shrub", 1246}, {"nature.dune", 284}, {"nature.ground_patch", 144}
     };
     // R2.6 where the triangle maxima lie at mixed values, not at the all-maximum corner.
     rows.worst_cases = {
@@ -96,12 +96,12 @@ auto get_starter_rows() -> Kit_shape_rows
         {"nature.basalt_columns 1", 444, 296, 1332, 0x44fbdab783dc67b2ull, {-1.71299f, 0.00000f, -1.55557f}, {1.72809f, 2.70000f, 1.56255f}, {0.00000f, 1.24459f, -0.00000f}, 148.30334f},
         {"nature.basalt_columns 3", 732, 488, 2196, 0x40fce0f82c29d472ull, {-2.57168f, 0.00000f, -2.30863f}, {2.58082f, 2.70000f, 2.31266f}, {0.00000f, 1.19754f, -0.00000f}, 285.46548f},
         {"nature.basalt_columns 17", 84, 56, 252, 0x4d50163cec202f6dull, {-0.72651f, 0.00000f, -0.69813f}, {0.72253f, 2.70000f, 0.68889f}, {0.00000f, 1.32857f, -0.00000f}, 30.45187f},
-        {"nature.palm 1", 843, 1495, 4500, 0x5d9ce96fdb009a31ull, {-3.05603f, 0.00000f, -1.48759f}, {2.37736f, 12.33090f, 3.88708f}, {-0.45316f, 10.53339f, 0.92783f}, 58.33212f},
-        {"nature.palm 3", 555, 983, 2964, 0x6eefdf6fe4d09787ull, {-3.48997f, 0.00000f, -2.01061f}, {1.86270f, 10.79839f, 3.08687f}, {-0.61547f, 9.04642f, 0.50534f}, 35.82668f},
-        {"nature.palm 17", 843, 1495, 4500, 0x5d9ce96fdb009a31ull, {-3.22049f, 0.00000f, -4.16760f}, {2.50953f, 12.78151f, 1.69860f}, {-0.43074f, 10.89694f, -1.16128f}, 58.57428f},
-        {"nature.palm_clump 1", 1134, 1865, 5642, 0x344df1114a183a71ull, {-1.56352f, 0.00000f, -2.17078f}, {1.37917f, 4.85206f, 1.75516f}, {-0.03700f, 2.77721f, -0.01980f}, 18.72364f},
-        {"nature.palm_clump 3", 670, 1097, 3322, 0x17ae610c8871716dull, {-0.39434f, 0.00000f, -0.74393f}, {0.88112f, 2.23237f, 0.61127f}, {0.11201f, 1.40232f, -0.03305f}, 2.72475f},
-        {"nature.palm_clump 17", 506, 825, 2502, 0x6dfb0758e807b7f2ull, {-1.68756f, 0.00000f, -0.69025f}, {0.93280f, 4.08483f, 0.83392f}, {-0.10641f, 2.28608f, -0.02681f}, 5.82635f},
+        {"nature.palm 1", 743, 1335, 4060, 0x52f3f1902a3f51e6ull, {-3.05531f, 0.00000f, -1.48759f}, {2.37726f, 12.33688f, 3.88702f}, {-0.45717f, 10.54681f, 0.91988f}, 56.33646f},
+        {"nature.palm 3", 495, 887, 2700, 0x62f1e9a5c17e737cull, {-3.48982f, 0.00000f, -2.01060f}, {1.86162f, 10.79839f, 3.08676f}, {-0.61603f, 8.99903f, 0.49047f}, 34.77498f},
+        {"nature.palm 17", 743, 1335, 4060, 0x52f3f1902a3f51e6ull, {-3.21624f, 0.00000f, -4.16758f}, {2.50948f, 12.78151f, 1.69853f}, {-0.44318f, 10.80576f, -1.14942f}, 56.67741f},
+        {"nature.palm_clump 1", 934, 1545, 4762, 0x1ba67dfbadf11a30ull, {-1.55982f, 0.00000f, -2.17077f}, {1.37892f, 4.85206f, 1.75213f}, {-0.03852f, 2.71130f, -0.01742f}, 18.17366f},
+        {"nature.palm_clump 3", 550, 905, 2794, 0x19035ef6fb024d2dull, {-0.39273f, 0.00000f, -0.74344f}, {0.88110f, 2.23237f, 0.61126f}, {0.10720f, 1.37321f, -0.03334f}, 2.65826f},
+        {"nature.palm_clump 17", 416, 681, 2106, 0x70fa42a869cda662ull, {-1.68755f, 0.00000f, -0.68790f}, {0.93149f, 4.08483f, 0.83121f}, {-0.10010f, 2.23638f, -0.02999f}, 5.65606f},
         {"basic.block 1", 8, 6, 24, 0x0d301e6ef1629ad3ull, {-0.50000f, 0.00000f, -0.50000f}, {0.50000f, 1.00000f, 0.50000f}, {0.00000f, 0.50000f, 0.00000f}, 6.00000f},
         {"basic.wedge 1", 6, 5, 18, 0x2d401a55eec16520ull, {-0.50000f, 0.00000f, -1.00000f}, {0.50000f, 1.00000f, 1.00000f}, {0.00000f, 0.33333f, -0.33333f}, 7.23607f},
         {"basic.cylinder 1", 32, 18, 96, 0x8cc58f15ad955627ull, {-0.50000f, 0.00000f, -0.50000f}, {0.50000f, 1.00000f, 0.50000f}, {0.00000f, 0.50000f, 0.00000f}, 4.65218f},

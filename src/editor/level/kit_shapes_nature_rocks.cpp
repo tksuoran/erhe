@@ -539,6 +539,7 @@ void add_nature_rock_shapes(std::vector<Kit_shape_definition>& shapes)
         shape.triangle_budget = 440;
         shape.collision       = Kit_collision::triangle_mesh;
         shape.randomness      = Kit_randomness::seeded;
+        shape.detail_counts   = {{"segments", 1, 2}};
         shape.generator       = generate_rock_spire;
         shape.get_connectors  = [](const Kit_parameter_values&, std::vector<Kit_connector>& out_connectors) {
             out_connectors.push_back(Kit_connector{.name = "base", .position = glm::vec3{0.0f}, .outward = glm::vec3{0.0f, -1.0f, 0.0f}, .up = glm::vec3{0.0f, 0.0f, 1.0f}});

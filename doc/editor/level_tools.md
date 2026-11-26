@@ -25,7 +25,10 @@ the editor.
   generator draws from the seed: every nature shape but the water), the
   mirror planes ("Groups") and the generator.
 - `Kit_parameter`: name, type (`float_value`, `int_value`, `enum_value`), unit,
-  range and default, and its derive range ("Derive from seed"). A float
+  range and default, its derive range ("Derive from seed") and whether the
+  canonical text leaves it out at its default (`Kit_text_presence`; the level
+  of detail every shape takes, `doc/editor/level_kit_shapes.md` "Level of
+  detail"). A float
   default is stated in meters, modules or wall heights (`Kit_default_scale`)
   and resolves against the level settings ("Level settings") when a piece is
   placed.
@@ -3272,7 +3275,8 @@ and range as tooltip), `kit_stairs_line()` the stairs layout line and
 `kit_message_line()` a refusal in red. A derivable parameter's row has a "from
 seed" checkbox in front (tooltip "Derive from seed (range a - b)", the range
 resolved against the lengths the row is given); a masked row shows its derived
-value disabled. The seed row has a New button that takes `kit_next_seed()`. A
+value disabled. The `detail` row of a shape without detail counts is
+disabled, its tooltip saying the shape has one level of detail. The seed row has a New button that takes `kit_next_seed()`. A
 toggle and the New button end an edit like a chosen combo entry; a seed change,
 dragged or typed, derives the masked values again on every change, so a seed
 drag previews live. The row names its items for the UI tools as
@@ -4698,7 +4702,8 @@ MCP: `set_inventory_slot` with `kit_item`, `get_inventory_slots` and
   `derive` `fixed` or `derivable`, `default_derived`, and for a derivable float
   or int `derive_min` and `derive_max`, a float's resolved to meters with its
   `derive_step`), `default_derive` (the default mask's names),
-  `default_size` and `default_bounds` of the mesh at the defaults (default
+  `detail_counts` (`parameter`, `dimensions`, `step`;
+  `doc/editor/level_kit_shapes.md` "Level of detail"), `default_size` and `default_bounds` of the mesh at the defaults (default
   mask, default seed), `material_slots` (in slot order: `slot`,
   `default_material` and `alternatives`, palette names), `connectors` (at the
   defaults, in the piece's local space: `name`, `position`, `outward`, `up`),
