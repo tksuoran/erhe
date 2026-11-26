@@ -1131,6 +1131,7 @@ void add_extra_25_32_shapes(std::vector<Kit_shape_definition>& shapes)
         shape.normal_style     = Kit_normal_style::faceted;
         shape.triangle_budget  = 660;
         shape.collision        = Kit_collision::triangle_mesh;
+        shape.detail_counts    = {{"segments"}};
         shape.generator        = generate_lighthouse;
         shape.mirror_planes    = std::vector<Kit_mirror_plane>{Kit_mirror_plane::z};
         shape.get_connectors   = [](const Kit_parameter_values& values, std::vector<Kit_connector>& out_connectors) {
@@ -1169,6 +1170,7 @@ void add_extra_25_32_shapes(std::vector<Kit_shape_definition>& shapes)
         shape.normal_style    = Kit_normal_style::faceted;
         shape.triangle_budget = 400;
         shape.collision       = Kit_collision::convex_hull;
+        shape.detail_counts   = {{"segments"}};
         shape.generator       = generate_tank;
         shape.mirror_planes   = std::vector<Kit_mirror_plane>{Kit_mirror_plane::z};
         shape.get_connectors  = [](const Kit_parameter_values& values, std::vector<Kit_connector>& out_connectors) {

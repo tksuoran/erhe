@@ -1532,6 +1532,7 @@ void add_build_17_20_shapes(std::vector<Kit_shape_definition>& shapes)
         shape.triangle_budget   = 420;
         shape.collision         = Kit_collision::triangle_mesh;
         shape.randomness        = Kit_randomness::seeded;
+        shape.detail_counts     = {{"segments"}};
         shape.generator         = generate_rock_arch;
         shape.check_walkability = [](const Kit_parameter_values& values, const Kit_agent& agent) -> std::string {
             const float clear = get_rock_arch_clear_width(values, agent.height + kit_opening_margin);

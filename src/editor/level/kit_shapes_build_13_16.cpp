@@ -1575,6 +1575,7 @@ void add_build_13_16_shapes(std::vector<Kit_shape_definition>& shapes)
         shape.normal_style      = Kit_normal_style::faceted;
         shape.triangle_budget   = 160;
         shape.collision         = Kit_collision::triangle_mesh;
+        shape.detail_counts     = {{"segments"}};
         shape.generator         = generate_window_wall;
         shape.mirror_planes     = std::vector<Kit_mirror_plane>{Kit_mirror_plane::x, Kit_mirror_plane::z};
         shape.check_combination = check_window_wall;

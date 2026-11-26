@@ -99,6 +99,8 @@ enum class Kit_build : unsigned int { current = 0, former };
 void add_former_build(std::vector<Kit_shape_definition>& shapes, std::string_view id, Kit_generator former_generator);
 
 // Parameter builders shared by the kit files.
+// The level of detail every shape takes as its last parameter; Kit_shape_library adds it.
+[[nodiscard]] auto make_detail_parameter() -> Kit_parameter;
 [[nodiscard]] auto make_length_parameter(
     const char*       name,
     const char*       description,

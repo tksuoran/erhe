@@ -1073,6 +1073,7 @@ void add_extra_17_24_shapes(std::vector<Kit_shape_definition>& shapes)
         shape.triangle_budget = 60;
         shape.collision       = Kit_collision::triangle_mesh;
         shape.randomness      = Kit_randomness::seeded;
+        shape.detail_counts   = {{"segments"}};
         shape.generator       = generate_broken_pillar;
         shape.get_connectors  = [](const Kit_parameter_values&, std::vector<Kit_connector>& out_connectors) {
             out_connectors.push_back(make_base_connector());
@@ -1104,6 +1105,7 @@ void add_extra_17_24_shapes(std::vector<Kit_shape_definition>& shapes)
         shape.triangle_budget = 130;
         shape.collision       = Kit_collision::triangle_mesh;
         shape.origin_rule     = Kit_origin_rule::base_contains_origin; // the two feet stand apart
+        shape.detail_counts   = {{"segments"}};
         shape.generator       = generate_broken_arch;
         shape.get_connectors  = [](const Kit_parameter_values& values, std::vector<Kit_connector>& out_connectors) {
             const float half = (0.5f * values.get_float("span")) + values.get_float("thickness");
@@ -1222,6 +1224,7 @@ void add_extra_17_24_shapes(std::vector<Kit_shape_definition>& shapes)
         shape.triangle_budget  = 320;
         shape.collision        = Kit_collision::convex_hull;
         shape.randomness       = Kit_randomness::seeded;
+        shape.detail_counts    = {{"segments"}};
         shape.generator        = generate_buoy;
         shape.get_connectors   = [](const Kit_parameter_values&, std::vector<Kit_connector>& out_connectors) {
             out_connectors.push_back(make_base_connector());
@@ -1324,6 +1327,7 @@ void add_extra_17_24_shapes(std::vector<Kit_shape_definition>& shapes)
         shape.hard_edge_angle_degrees = 45.0f;
         shape.triangle_budget   = 100;
         shape.collision         = Kit_collision::triangle_mesh;
+        shape.detail_counts     = {{"segments"}};
         shape.generator         = generate_tunnel;
         shape.mirror_planes     = std::vector<Kit_mirror_plane>{Kit_mirror_plane::x};
         shape.check_walkability = check_tunnel_walkability;

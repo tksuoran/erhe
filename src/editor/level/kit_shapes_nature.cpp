@@ -1003,6 +1003,7 @@ void add_nature_shapes(std::vector<Kit_shape_definition>& shapes)
         shape.triangle_budget = 280;
         shape.collision       = Kit_collision::triangle_mesh;
         shape.randomness      = Kit_randomness::seeded;
+        shape.detail_counts   = {{"segments"}};
         shape.generator       = generate_land_mass;
         shape.description =
             "Plateau with a lobed outline and a flat walkable top of turf: an overhanging turf rim over a soil band, a cliff "
@@ -1039,6 +1040,7 @@ void add_nature_shapes(std::vector<Kit_shape_definition>& shapes)
         shape.tags            = {"walkable", "ground", "size:6x6x1"};
         shape.triangle_budget = 320;
         shape.randomness      = Kit_randomness::seeded;
+        shape.detail_counts   = {{"segments", 2}};
         shape.generator       = generate_hill;
         shape.description =
             "Hill with a lobed foot and its crest off center: one side steep, the other long, a rounded crest and an easing "

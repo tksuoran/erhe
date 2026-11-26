@@ -35,7 +35,8 @@ the ceiling at its range maxima.
 
 ## Shared construction
 
-- Topology from integers (R3.7): the basic shapes, the door wall, pillar,
+- Topology from integers (R3.7), but for the level of detail ("Level of
+  detail"), the one float that sets counts: the basic shapes, the door wall, pillar,
   arch, battlement, tower, rock, land mass, hill, tree, bush, rock spire, leaf
   plant and palm shrub, every shape of the prop, ruin, traversal, harbour, light, industrial and machine kits, and the
   succulent, grass tuft, boulder cluster, stepping stone, timber bay,
@@ -108,6 +109,45 @@ the ceiling at its range maxima.
   (`doc/plans/open_items.md` "Work order").
 - Water is no snap to surface target (`doc/editor/level_tools.md` "Surface
   placement"): a buoy and a boat stand on their base and are sunk by hand.
+
+## Level of detail
+
+Every shape takes the float parameter `detail` (`c_kit_detail_parameter`),
+its last, which `Kit_shape_library` adds to every definition
+(`make_detail_parameter()`): a ratio from 0.1 to 1, default 0.5, never
+derived. At the default a shape builds with its own counts, so a piece's
+mesh is the one it had before the parameter existed; lower values make fewer
+triangles, higher values more. The default is left out of a piece's
+canonical text, and a text without `detail` reads as the default
+(`Kit_text_presence::unless_default`), so records written before the
+parameter read and keep their mesh key.
+
+A shape states the count parameters the detail scales in
+`Kit_shape_definition::detail_counts`: each `Kit_detail_count` names an int
+parameter, the dimensions of the mesh it resolves (1 for a ring's points, 2
+for a grid's columns whose rows follow them) and a step. The count takes
+(detail / 0.5) ^ (1 / dimensions) of its value, rounded to whole steps from
+it (a step of 2 keeps the parity of a count whose odd values build
+differently) and kept within the parameter's range
+(`get_kit_detail_values()`). The library wraps such a shape's generator and
+its other callbacks describing the mesh (walkability check, seam sides,
+connectors, light frames, collision kind), so all of them see the scaled
+counts. Parts the counts do not reach keep their triangles: the share is
+the counts' share. A shape with no detail counts ignores `detail` and builds
+one mesh at every value; its row is disabled ("This shape has one level of
+detail").
+
+The shapes with detail counts scale their `segments`: `basic.cylinder`,
+`architecture.pillar`, `architecture.column`, `architecture.torii`,
+`architecture.window_wall`, `architecture.tunnel`, `nature.land_mass`,
+`nature.hill` (two dimensions), `nature.rock_spire` (step 2),
+`nature.rock_arch`, `nature.log`, `nature.dune`, `nature.ground_patch`,
+`prop.barrel`, `prop.pot`, `prop.cart`, `prop.well`, `harbour.pier`,
+`harbour.mooring`, `harbour.buoy`, `harbour.lighthouse`, `light.lamp_post`,
+`industrial.pipe`, `industrial.tank`, `ruin.broken_pillar` and
+`ruin.broken_arch` (and `prop.well_old`). The other shapes, and the counts
+fixed inside generators, are converted step by step
+(`doc/plans/level_kit_detail.md`).
 
 ## Slots and palette
 

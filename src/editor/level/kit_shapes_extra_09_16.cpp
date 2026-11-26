@@ -1317,6 +1317,7 @@ void add_extra_09_16_shapes(std::vector<Kit_shape_definition>& shapes)
         shape.triangle_budget = 210;
         shape.collision       = Kit_collision::triangle_mesh;
         shape.origin_rule     = Kit_origin_rule::base_contains_origin;
+        shape.detail_counts   = {{"segments"}};
         shape.generator       = generate_pipe;
         shape.get_connectors  = [](const Kit_parameter_values& values, std::vector<Kit_connector>& out_connectors) {
             const Pipe_form form{values};
@@ -1357,6 +1358,7 @@ void add_extra_09_16_shapes(std::vector<Kit_shape_definition>& shapes)
         shape.normal_style    = Kit_normal_style::faceted;
         shape.triangle_budget = 250;
         shape.collision       = Kit_collision::convex_hull;
+        shape.detail_counts   = {{"segments"}};
         shape.generator       = generate_pot;
         shape.mirror_planes   = std::vector<Kit_mirror_plane>{Kit_mirror_plane::z};
         shape.get_connectors  = [](const Kit_parameter_values& values, std::vector<Kit_connector>& out_connectors) {
@@ -1453,6 +1455,7 @@ void add_extra_09_16_shapes(std::vector<Kit_shape_definition>& shapes)
         shape.triangle_budget = 540;
         shape.collision       = Kit_collision::triangle_mesh;
         shape.origin_rule     = Kit_origin_rule::base_contains_origin;
+        shape.detail_counts   = {{"segments"}};
         shape.generator       = generate_cart;
         shape.mirror_planes   = std::vector<Kit_mirror_plane>{Kit_mirror_plane::x};
         shape.get_connectors  = [](const Kit_parameter_values&, std::vector<Kit_connector>& out_connectors) {
@@ -1482,6 +1485,7 @@ void add_extra_09_16_shapes(std::vector<Kit_shape_definition>& shapes)
         shape.triangle_budget = 400;
         shape.collision       = Kit_collision::triangle_mesh;
         shape.origin_rule     = Kit_origin_rule::base_contains_origin;
+        shape.detail_counts   = {{"segments"}};
         shape.generator       = generate_well;
         shape.get_connectors  = [](const Kit_parameter_values&, std::vector<Kit_connector>& out_connectors) {
             out_connectors.push_back(make_base_connector());

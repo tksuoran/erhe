@@ -131,7 +131,8 @@ TEST(Kit_nature_shapes, nature_topology_follows_from_integers_alone)
         const Kit_shape_definition& shape = get_shape(id);
         std::vector<std::string> lengths;
         for (const Kit_parameter& parameter : shape.parameters) {
-            if (parameter.type == editor::Kit_parameter_type::float_value) {
+            // The detail scales the segments: the one float that sets a count.
+            if ((parameter.type == editor::Kit_parameter_type::float_value) && (parameter.name != editor::c_kit_detail_parameter)) {
                 lengths.push_back(parameter.name);
             }
         }

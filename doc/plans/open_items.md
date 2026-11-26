@@ -96,6 +96,9 @@ for the user's test.
     their removal, and the user's later pick of the deferred joins (tower
     merlons, roof courses, entablature, nut, container, stairs, stone
     lantern): `doc/plans/level_kit_shared_points.md` "Not yet fixed".
+25. Level kit level of detail: convert the remaining shapes to the shared
+    `detail` parameter, curved ones first, then automatic LOD chains
+    (`doc/plans/level_kit_detail.md`).
 
 ## Quest session follow-ups
 

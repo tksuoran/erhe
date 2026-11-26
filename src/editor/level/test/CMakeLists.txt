@@ -84,6 +84,7 @@ add_executable(${_target}
     ${_config_out}/surface_support.cpp
     test_kit_attachment.cpp
     test_kit_collision.cpp
+    test_kit_detail.cpp
     test_kit_connection_flow.cpp
     test_kit_connector.cpp
     test_kit_item_slot.cpp

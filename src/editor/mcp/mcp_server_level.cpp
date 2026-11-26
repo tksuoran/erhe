@@ -723,10 +723,16 @@ auto Mcp_server::query_level_kits(const json& args) -> std::string
                 default_derive.push_back(parameter.name);
             }
         }
+        // The count parameters the level of detail scales; empty: one level of detail.
+        json detail_counts = json::array();
+        for (const editor::Kit_detail_count& count : shape.detail_counts) {
+            detail_counts.push_back({{"parameter", count.parameter}, {"dimensions", count.dimensions}, {"step", count.step}});
+        }
         shapes.push_back({
             {"id",              shape.id},
             {"former_ids",      shape.former_ids},
             {"default_derive",  default_derive},
+            {"detail_counts",   detail_counts},
             {"kit",             shape.kit},
             {"name",            shape.display_name},
             {"kind",            shape.parameters.empty() ? "basic" : "parametric"},
