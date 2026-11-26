@@ -1528,10 +1528,11 @@ void add_build_17_20_shapes(std::vector<Kit_shape_definition>& shapes)
             derive_float(make_length_parameter("depth",     "Size along Z at the crown",                 1.6f, Kit_default_scale::meters, 0.5f, 6.0f),  1.2f, 2.6f, 0.2f),
             derive_float(make_ratio_parameter ("roughness", "Irregular outline and sections",            0.6f), 0.3f, 0.9f, 0.05f),
             make_seed_parameter (),
-            make_count_parameter("segments", "Stations along the arch", 14, 8, 24)
+            make_count_parameter("segments", "Stations along the arch", 14, 8, 24),
+            make_shading_parameter(Kit_shading::faceted)
         };
         shape.material_slots    = {"rock"};
-        shape.normal_style      = Kit_normal_style::faceted;
+        shape.normal_style      = Kit_normal_style::smooth; // when the shading parameter is smooth
         shape.triangle_budget   = 420;
         shape.collision         = Kit_collision::triangle_mesh;
         shape.randomness        = Kit_randomness::seeded;

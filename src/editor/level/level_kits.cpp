@@ -150,8 +150,9 @@ void set_crease_corner_normals(erhe::geometry::Geometry& geometry, const float c
     }
 }
 
-void process_kit_geometry(const Kit_shape_definition& shape, erhe::geometry::Geometry& geometry)
+void process_kit_geometry(const Kit_parameter_values& values, erhe::geometry::Geometry& geometry)
 {
+    const Kit_normal_style style = get_kit_shading(values);
     geometry.process(
         {
             .flags =
@@ -160,18 +161,18 @@ void process_kit_geometry(const Kit_shape_definition& shape, erhe::geometry::Geo
                 erhe::geometry::Geometry::process_flag_generate_facet_texture_coordinates
         }
     );
-    if (shape.normal_style == Kit_normal_style::smooth) {
+    if (style == Kit_normal_style::smooth) {
         set_crease_corner_normals(geometry, c_smooth_crease_angle_degrees);
-    } else if (shape.normal_style == Kit_normal_style::smooth_with_hard_edges) {
-        set_crease_corner_normals(geometry, shape.hard_edge_angle_degrees);
+    } else if (style == Kit_normal_style::smooth_with_hard_edges) {
+        set_crease_corner_normals(geometry, values.get_shape()->hard_edge_angle_degrees);
     }
 }
 
 } // anonymous namespace
 
-auto get_kit_normal_style(const Kit_shape_definition& shape) -> erhe::primitive::Normal_style
+auto get_kit_normal_style(const Kit_parameter_values& values) -> erhe::primitive::Normal_style
 {
-    switch (shape.normal_style) {
+    switch (get_kit_shading(values)) {
         case Kit_normal_style::smooth:
         case Kit_normal_style::smooth_with_hard_edges: return erhe::primitive::Normal_style::corner_normals;
         case Kit_normal_style::faceted:
@@ -190,7 +191,7 @@ auto make_kit_geometry(const Kit_parameter_values& values) -> std::shared_ptr<er
     if (mesh.facets.attributes().is_defined(c_kit_slot_attribute)) {
         mesh.facets.attributes().delete_attribute_store(c_kit_slot_attribute);
     }
-    process_kit_geometry(shape, *geometry.get());
+    process_kit_geometry(values, *geometry.get());
     return geometry;
 }
 
@@ -218,7 +219,7 @@ auto make_kit_part_geometries(
         if (part->get_mesh().facets.nb() == 0) {
             return fmt::format("slot '{}' has no facets", shape.material_slots[slot]);
         }
-        process_kit_geometry(shape, *part.get());
+        process_kit_geometry(values, *part.get());
         out_parts.push_back(std::move(part));
     }
     return {};
@@ -1217,7 +1218,7 @@ auto Level_kits::make_brush(const Kit_parameter_values& values) -> std::shared_p
             },
             .buffer_info     = m_context.mesh_memory->make_primitive_buffer_info()
         },
-        .normal_style       = get_kit_normal_style(shape),
+        .normal_style       = get_kit_normal_style(values),
         .geometry_generator = [values]() -> std::shared_ptr<erhe::geometry::Geometry> {
             return make_kit_geometry(values);
         },

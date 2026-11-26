@@ -46,6 +46,15 @@ enum class Kit_normal_style : unsigned int {
     smooth_with_hard_edges
 };
 
+// The values of a shape's shading parameter (make_shading_parameter()), in its enum order: faceted, or the shape's own
+// smooth normal style.
+enum class Kit_shading : unsigned int {
+    faceted = 0,
+    smooth
+};
+
+constexpr const char* c_kit_shading_parameter = "shading";
+
 // The collision shape of a shape's pieces (R2.11, D2.3); none: no physics body and no navigation input (P5); box: the
 // mesh bounds (U54).
 enum class Kit_collision : unsigned int {
@@ -100,6 +109,7 @@ enum class Kit_randomness : unsigned int {
 [[nodiscard]] auto c_str(Kit_unit unit) -> const char*;
 [[nodiscard]] auto c_str(Kit_default_scale scale) -> const char*;
 [[nodiscard]] auto c_str(Kit_normal_style style) -> const char*;
+[[nodiscard]] auto c_str(Kit_shading shading) -> const char*;
 [[nodiscard]] auto c_str(Kit_side side) -> const char*;
 [[nodiscard]] auto c_str(Kit_collision collision) -> const char*;
 [[nodiscard]] auto c_str(Kit_mesh_kind mesh_kind) -> const char*;
@@ -139,7 +149,8 @@ public:
 // Whether a parameter's value is written in a piece's canonical text (Kit_parameter_values::to_canonical_text()).
 enum class Kit_text_presence : unsigned int {
     always = 0,
-    unless_default // left out at its default, and a text without it reads as the default: a parameter added to every shape
+    unless_default // a float or enum parameter left out at its default, and a text without it reads as the default: a
+                   // parameter added after pieces were saved (detail, shading)
 };
 
 class Kit_parameter
@@ -339,6 +350,9 @@ public:
 
 // The collision kind of the values' pieces: the shape's get_collision at the values, else its collision.
 [[nodiscard]] auto get_kit_collision(const Kit_parameter_values& values) -> Kit_collision;
+
+// The normal style of the values' pieces: faceted where the shape's shading parameter says so, else its normal_style.
+[[nodiscard]] auto get_kit_shading(const Kit_parameter_values& values) -> Kit_normal_style;
 
 // The bounds of the values' mesh from the generator's CPU geometry alone (no renderable mesh, no upload): the min and
 // max of the facet corners' single precision points, the box a brush of the values reports. Invalid without facets.

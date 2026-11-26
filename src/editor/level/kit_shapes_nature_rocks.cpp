@@ -532,10 +532,11 @@ void add_nature_rock_shapes(std::vector<Kit_shape_definition>& shapes)
             derive_float(make_ratio_parameter("roughness", "Amount of lobes, grooves, dip, faults and lean of the top", 0.6f), 0.3f, 0.9f, 0.05f),
             derive_int(make_count_parameter("strata", "Bands of rock between the foot and the top", 9, 4, spire_strata_max), 7, 11),
             make_seed_parameter(),
-            make_count_parameter("segments", "Columns around the axis", 12, 6, 20)
+            make_count_parameter("segments", "Columns around the axis", 12, 6, 20),
+            make_shading_parameter(Kit_shading::faceted)
         };
         shape.material_slots  = {"rock", "grass"};
-        shape.normal_style    = Kit_normal_style::faceted;
+        shape.normal_style    = Kit_normal_style::smooth; // when the shading parameter is smooth
         shape.triangle_budget = 440;
         shape.collision       = Kit_collision::triangle_mesh;
         shape.randomness      = Kit_randomness::seeded;
@@ -564,10 +565,11 @@ void add_nature_rock_shapes(std::vector<Kit_shape_definition>& shapes)
             derive_float(make_length_parameter("height", "Height of the highest column", 1.0f, Kit_default_scale::wall_heights, 0.2f, 32.0f), 0.5f, 1.5f, 0.05f),
             from_seed_by_default(spread),
             make_length_parameter("step", "Height quantum of the tops", 0.3f, Kit_default_scale::meters, 0.05f, 2.0f),
-            make_seed_parameter()
+            make_seed_parameter(),
+            make_shading_parameter(Kit_shading::faceted)
         };
         shape.material_slots  = {"rock"};
-        shape.normal_style    = Kit_normal_style::faceted;
+        shape.normal_style    = Kit_normal_style::smooth; // when the shading parameter is smooth
         shape.triangle_budget = 760;
         shape.collision       = Kit_collision::triangle_mesh;
         shape.randomness      = Kit_randomness::seeded;

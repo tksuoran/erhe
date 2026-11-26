@@ -196,6 +196,20 @@ The shapes with detail counts scale their `segments`: `basic.cylinder`,
 
 The other shapes are converted step by step (`doc/plans/level_kit_detail.md`).
 
+## Shading
+
+The rocks (`nature.rock`, `nature.boulder_cluster`, `nature.stepping_stone`,
+`nature.rock_spire`, `nature.rock_arch`, `nature.basalt_columns`) take the
+enum parameter `shading` (`c_kit_shading_parameter`,
+`make_shading_parameter()`), the last of their own: `faceted`, or `smooth`, the shape's
+own normal style (smooth, with its hard edges). It is never derived and
+leaves the mesh as it is; the normals follow it (`get_kit_shading()`). The
+chamfered rocks, the boulder cluster and the stepping stone, are smooth by
+default; the others faceted. Like `detail`, the default is left out of a
+piece's canonical text and a text without it reads as the default
+(`Kit_text_presence::unless_default`), so rocks saved before the parameter
+read and keep their mesh key.
+
 ## Slots and palette
 
 The palette (`Kit_shape_library::get_palette()`, base colors linear):
@@ -1751,7 +1765,9 @@ Parameters `radius` (of the footprint, 2 modules, 0.3 - 16), `count` (5,
 2 - 10), `size_spread` (how much smaller the smallest boulder is than the
 largest, 0.5, 0 - 1), `form` (`angular`, `worn`, `mixed`; default mixed),
 `roughness` (0.6, 0 - 1) and `seed`; radius and count in the default mask;
-slot `rock`; faceted; a triangle mesh body.
+slot `rock`; `shading` ("Shading", default smooth: the base outline and a
+flat top's outline hard edges ("Hard edges"), so the sides and chamfers
+shade round); a triangle mesh body.
 
 - The largest boulder stands over the origin; the others follow the golden
   angle around it, each smaller than the last, leaning on its flank out to
@@ -1780,7 +1796,8 @@ most is 1380.
 `diameter` (its width before the outline's variation, 0.9 m, 0.3 - 4),
 `thickness` (the height of its level top, 0.25 m, 0.05 - 0.5), `sides` (of
 the outline, 7, 5 - 9) and `seed`; the diameter in the default mask; slot
-`rock`; faceted; connectors base and top (the top face's height); a convex
+`rock`; `shading` as the boulder cluster's (a boulder's base and level top
+hard edges); connectors base and top (the top face's height); a convex
 hull body; tag `walkable`.
 
 - The boulder's construction with a level top: a convex outline of the

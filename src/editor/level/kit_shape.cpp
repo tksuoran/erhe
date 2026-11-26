@@ -62,6 +62,15 @@ auto c_str(const Kit_normal_style style) -> const char*
     }
 }
 
+auto c_str(const Kit_shading shading) -> const char*
+{
+    switch (shading) {
+        case Kit_shading::faceted: return "faceted";
+        case Kit_shading::smooth:  return "smooth";
+        default:                   return "?";
+    }
+}
+
 auto c_str(const Kit_side side) -> const char*
 {
     switch (side) {
@@ -352,6 +361,19 @@ void Kit_parameter_values::resolve_derived(const float module, const float wall_
 
 namespace {
 
+// The value a text that leaves the parameter out reads as: an unless_default float or enum parameter's default.
+[[nodiscard]] auto get_omitted_value(const Kit_parameter& parameter) -> std::optional<Kit_parameter_value>
+{
+    if (parameter.text_presence != Kit_text_presence::unless_default) {
+        return {};
+    }
+    switch (parameter.type) {
+        case Kit_parameter_type::float_value: return Kit_parameter_value{.float_value = parameter.float_default};
+        case Kit_parameter_type::enum_value:  return Kit_parameter_value{.int_value = parameter.int_default};
+        default:                              return {};
+    }
+}
+
 auto format_number(const float value) -> std::string
 {
     return fmt::format("{}", value);
@@ -482,8 +504,11 @@ auto Kit_parameter_values::to_canonical_text() const -> std::string
     for (std::size_t i = 0, end = m_values.size(); i < end; ++i) {
         const Kit_parameter&       parameter = m_shape->parameters[i];
         const Kit_parameter_value& value     = m_values[i];
-        if ((parameter.text_presence == Kit_text_presence::unless_default) && (parameter.type == Kit_parameter_type::float_value) &&
-            (value.float_value == parameter.float_default) && (get_value_source(i) == Kit_value_source::explicit_value)) {
+        const std::optional<Kit_parameter_value> omitted = get_omitted_value(parameter);
+        const bool is_omitted_value = omitted.has_value() && (
+            (parameter.type == Kit_parameter_type::float_value) ? (value.float_value == omitted->float_value) : (value.int_value == omitted->int_value)
+        );
+        if (is_omitted_value && (get_value_source(i) == Kit_value_source::explicit_value)) {
             continue;
         }
         if (!first_value) {
@@ -743,11 +768,12 @@ auto parse_canonical_text(const Kit_shape_definition& shape, const std::string_v
         if (seen[i]) {
             continue;
         }
-        const Kit_parameter& parameter = shape.parameters[i];
-        if ((parameter.text_presence != Kit_text_presence::unless_default) || (parameter.type != Kit_parameter_type::float_value)) {
+        const Kit_parameter&                     parameter = shape.parameters[i];
+        const std::optional<Kit_parameter_value> omitted   = get_omitted_value(parameter);
+        if (!omitted.has_value()) {
             return fmt::format("{}: parameter '{}' is missing", shape.id, parameter.name);
         }
-        values.set_value(i, Kit_parameter_value{.float_value = parameter.float_default});
+        values.set_value(i, omitted.value());
     }
     out_values = values;
     return {};
@@ -805,6 +831,16 @@ auto get_kit_collision(const Kit_parameter_values& values) -> Kit_collision
         return Kit_collision::none;
     }
     return shape->get_collision ? shape->get_collision(values) : shape->collision;
+}
+
+auto get_kit_shading(const Kit_parameter_values& values) -> Kit_normal_style
+{
+    const Kit_shape_definition* const shape = values.get_shape();
+    ERHE_VERIFY(shape != nullptr);
+    if (shape->find_parameter(c_kit_shading_parameter).has_value() && (values.get_enum(c_kit_shading_parameter) == c_str(Kit_shading::faceted))) {
+        return Kit_normal_style::faceted;
+    }
+    return shape->normal_style;
 }
 
 auto get_kit_geometry_bounds(const Kit_parameter_values& values) -> erhe::math::Aabb

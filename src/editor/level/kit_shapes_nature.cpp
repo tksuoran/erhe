@@ -327,6 +327,10 @@ void add_rock_piece(Kit_mesh_builder& builder, Kit_random& random, const Rock_fo
         polygon[j] = first + (n - 1 - j);
     }
     builder.add_polygon(polygon);
+    // Smooth shaded, the flat base and a flat top keep their outlines sharp.
+    for (uint32_t j = 0; j < n; ++j) {
+        builder.add_hard_edge(first + j, first + ((j + 1) % n));
+    }
     for (uint32_t s = 0; s < static_cast<uint32_t>(station_count); ++s) {
         const uint32_t lower = first + (s * n);
         const uint32_t upper = lower + n;
@@ -357,6 +361,7 @@ void add_rock_piece(Kit_mesh_builder& builder, Kit_random& random, const Rock_fo
     }
     for (uint32_t j = 0; j < n; ++j) {
         polygon[j] = top_ring + j;
+        builder.add_hard_edge(top_ring + j, top_ring + ((j + 1) % n));
     }
     builder.add_polygon(polygon);
 }
@@ -1014,7 +1019,7 @@ void add_nature_shapes(std::vector<Kit_shape_definition>& shapes)
         shape.display_name    = "Rock";
         shape.tags            = {"obstacle", "decoration", "size:1x1"};
         shape.material_slots  = {"rock"};
-        shape.normal_style    = Kit_normal_style::faceted;
+        shape.normal_style    = Kit_normal_style::smooth; // when the shading parameter is smooth; base and flat tops are hard edges
         shape.triangle_budget = 200;
         shape.randomness      = Kit_randomness::seeded;
         shape.generator       = generate_rock;
@@ -1027,7 +1032,8 @@ void add_nature_shapes(std::vector<Kit_shape_definition>& shapes)
             from_seed_by_default(derive_float(make_length_parameter("size", "Width of the largest piece before roughness", 1.0f, Kit_default_scale::modules, 0.05f, 32.0f), 0.6f, 1.5f, 0.05f)),
             derive_float(make_ratio_parameter("roughness", "Irregular sides, strata dip and lean", 0.5f), 0.25f, 0.8f, 0.01f),
             derive_int(make_count_parameter("pieces", "The largest piece and the smaller ones against its flank", 3, 1, rock_piece_max), 1, rock_piece_max),
-            make_seed_parameter()
+            make_seed_parameter(),
+            make_shading_parameter(Kit_shading::faceted)
         };
         shapes.push_back(std::move(shape));
     }

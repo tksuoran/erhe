@@ -1512,6 +1512,10 @@ void add_stone(Kit_mesh_builder& builder, Kit_random& random, const Stone_form& 
         polygon[i] = first + (n - 1 - i);
     }
     builder.add_polygon(polygon);
+    // The flat base and a flat top keep their outlines sharp; the sides and the chamfers between them shade round.
+    for (uint32_t i = 0; i < n; ++i) {
+        builder.add_hard_edge(first + i, first + ((i + 1) % n));
+    }
     const bool     tilted = (form.top_tilt > 0.0f);
     const uint32_t bands  = static_cast<uint32_t>(station_count);
     for (uint32_t r = 0; r < bands; ++r) {
@@ -1537,6 +1541,7 @@ void add_stone(Kit_mesh_builder& builder, Kit_random& random, const Stone_form& 
     }
     for (uint32_t i = 0; i < n; ++i) {
         polygon[i] = top_ring + i;
+        builder.add_hard_edge(top_ring + i, top_ring + ((i + 1) % n));
     }
     builder.add_polygon(polygon);
 }
@@ -1814,10 +1819,11 @@ void add_build_13_16_shapes(std::vector<Kit_shape_definition>& shapes)
             derive_float(make_ratio_parameter("size_spread", "How much smaller the smallest boulder is than the largest", 0.5f), 0.3f, 0.8f, 0.05f),
             derive_enum (make_enum_parameter ("form",        "Angular, worn or both", {"angular", "worn", "mixed"}, 2)),
             derive_float(make_ratio_parameter("roughness",   "Irregular sides, lean and tilted tops", 0.6f), 0.3f, 0.9f, 0.05f),
-            make_seed_parameter()
+            make_seed_parameter(),
+            make_shading_parameter(Kit_shading::smooth)
         };
         shape.material_slots  = {"rock"};
-        shape.normal_style    = Kit_normal_style::faceted;
+        shape.normal_style    = Kit_normal_style::smooth; // the chamfered sides round off; base and flat tops are hard edges
         shape.triangle_budget = 340;
         shape.collision       = Kit_collision::triangle_mesh;
         shape.randomness      = Kit_randomness::seeded;
@@ -1837,10 +1843,11 @@ void add_build_13_16_shapes(std::vector<Kit_shape_definition>& shapes)
             from_seed_by_default(derive_float(make_length_parameter("diameter", "Width before the outline's variation", 0.9f, Kit_default_scale::meters, 0.3f, 4.0f), 0.6f, 1.5f, 0.05f)),
             derive_float(make_length_parameter("thickness", "Height of the level top", 0.25f, Kit_default_scale::meters, 0.05f, 0.5f), 0.2f, 0.4f, 0.05f),
             derive_int  (make_count_parameter ("sides",     "Sides of the outline",    7, 5, 9), 5, 9),
-            make_seed_parameter()
+            make_seed_parameter(),
+            make_shading_parameter(Kit_shading::smooth)
         };
         shape.material_slots  = {"rock"};
-        shape.normal_style    = Kit_normal_style::faceted;
+        shape.normal_style    = Kit_normal_style::smooth; // the chamfered sides round off; base and top are hard edges
         shape.triangle_budget = 120;
         shape.collision       = Kit_collision::convex_hull;
         shape.randomness      = Kit_randomness::seeded;

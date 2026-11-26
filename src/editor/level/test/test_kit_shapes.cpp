@@ -883,6 +883,35 @@ TEST(Kit_mesh_builder, hard_edges_split_the_corner_normals)
     EXPECT_FALSE(corner_normal.has(mesh.facets.corner(2, 2))); // w3
 }
 
+// The rocks' shading parameter: left out of the text at its default, a text without it (a piece saved before it) reads
+// as the default, and its value picks faceted or the shape's smooth style.
+TEST(Kit_shading, rocks_pick_faceted_or_smooth)
+{
+    for (const char* const id : {"nature.rock", "nature.boulder_cluster", "nature.stepping_stone", "nature.rock_spire", "nature.rock_arch", "nature.basalt_columns"}) {
+        SCOPED_TRACE(id);
+        const Kit_shape_definition& shape = get_shape(id);
+        ASSERT_TRUE(shape.find_parameter(editor::c_kit_shading_parameter).has_value());
+        EXPECT_NE(shape.normal_style, editor::Kit_normal_style::faceted);
+        Kit_parameter_values values = defaults(shape);
+        const std::string default_text = values.to_canonical_text();
+        EXPECT_EQ(default_text.find("shading"), std::string::npos) << default_text;
+        Kit_parameter_values read_back;
+        ASSERT_EQ(editor::parse_canonical_text(shape, default_text, read_back), "");
+        EXPECT_EQ(read_back.get_enum(editor::c_kit_shading_parameter), values.get_enum(editor::c_kit_shading_parameter));
+        const std::string_view other = (values.get_enum(editor::c_kit_shading_parameter) == "faceted") ? "smooth" : "faceted";
+        ASSERT_TRUE(values.set_enum(editor::c_kit_shading_parameter, other));
+        const std::string other_text = values.to_canonical_text();
+        EXPECT_NE(other_text.find(fmt::format("\"shading\":\"{}\"", other)), std::string::npos) << other_text;
+        ASSERT_EQ(editor::parse_canonical_text(shape, other_text, read_back), "");
+        EXPECT_EQ(read_back.get_enum(editor::c_kit_shading_parameter), other);
+        EXPECT_EQ(editor::get_kit_shading(read_back), (other == "faceted") ? editor::Kit_normal_style::faceted : shape.normal_style);
+    }
+    // The bevelled rocks are smooth by default, the others faceted.
+    EXPECT_EQ(defaults(get_shape("nature.boulder_cluster")).get_enum(editor::c_kit_shading_parameter), "smooth");
+    EXPECT_EQ(defaults(get_shape("nature.stepping_stone")).get_enum(editor::c_kit_shading_parameter), "smooth");
+    EXPECT_EQ(defaults(get_shape("nature.rock")).get_enum(editor::c_kit_shading_parameter), "faceted");
+}
+
 // P5: the water is an open surface facing up, without a body; its subdivisions make its quads.
 TEST(Kit_water, is_an_open_surface_without_a_body)
 {

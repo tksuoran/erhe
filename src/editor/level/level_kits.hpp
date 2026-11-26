@@ -561,7 +561,7 @@ public:
     std::vector<std::shared_ptr<erhe::geometry::Geometry>>& out_parts
 ) -> std::string;
 // The normal style the shape's renderable meshes are built with.
-[[nodiscard]] auto get_kit_normal_style(const Kit_shape_definition& shape) -> erhe::primitive::Normal_style;
+[[nodiscard]] auto get_kit_normal_style(const Kit_parameter_values& values) -> erhe::primitive::Normal_style;
 
 class Kit_thumbnails;
 

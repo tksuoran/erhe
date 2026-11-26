@@ -451,16 +451,18 @@ void Kit_thumbnails::queue(const std::size_t shape_index)
     ERHE_VERIFY(m_context.mesh_memory != nullptr);
     const Kit_shape_definition& shape   = m_level_kits.get_library().get_shapes()[shape_index];
     const Kit_lengths&          lengths = m_lengths.value();
+    Kit_parameter_values values = make_default_values(shape, lengths.module, lengths.wall_height);
+    const erhe::primitive::Normal_style normal_style = get_kit_normal_style(values);
     std::unique_ptr<Kit_thumbnail_build_request> request = std::make_unique<Kit_thumbnail_build_request>(
         Kit_thumbnail_build_request{
             .shape_index  = shape_index,
-            .values       = make_default_values(shape, lengths.module, lengths.wall_height),
+            .values       = std::move(values),
             .mesh_key     = {},
             .build_info   = erhe::primitive::Build_info{
                 .primitive_types = {.fill_triangles = true},
                 .buffer_info     = m_context.mesh_memory->make_primitive_buffer_info()
             },
-            .normal_style = get_kit_normal_style(shape)
+            .normal_style = normal_style
         }
     );
     request->mesh_key = Level_kits::get_mesh_key(request->values);

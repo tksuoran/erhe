@@ -114,6 +114,8 @@ void add_former_build(std::vector<Kit_shape_definition>& shapes, std::string_vie
 [[nodiscard]] auto make_count_parameter   (const char* name, const char* description, int default_value, int min_value, int max_value) -> Kit_parameter;
 [[nodiscard]] auto make_seed_parameter    () -> Kit_parameter;
 [[nodiscard]] auto make_enum_parameter    (const char* name, const char* description, std::vector<std::string> value_names, int default_index) -> Kit_parameter;
+// The shading parameter (c_kit_shading_parameter, get_kit_shading()): faceted, or the shape's own normal style.
+[[nodiscard]] auto make_shading_parameter (Kit_shading default_shading) -> Kit_parameter;
 [[nodiscard]] auto all_sides              () -> std::vector<Kit_side>;
 
 // Connector builders shared by the kit files (D1.12): "base" at the origin facing -Y, then "top" at top_y facing +Y,
