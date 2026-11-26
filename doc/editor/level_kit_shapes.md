@@ -133,8 +133,9 @@ keeps the parity of a count whose odd values build differently) and kept
 between a least and a most. Two ways use it:
 
 - Detail counts: `Kit_shape_definition::detail_counts` names int parameters
-  (`Kit_detail_count`: parameter, dimensions, step), scaled within the
-  parameter's range (`get_kit_detail_values()`); the library makes such a
+  (`Kit_detail_count`: parameter, dimensions, step, and the fewest the
+  detail lowers it to: the cylinder's and the pillars' round sides keep 6),
+  scaled within the parameter's range (`get_kit_detail_values()`); the library makes such a
   shape scaled and wraps its generator and its other callbacks describing
   the mesh (walkability check, seam sides, connectors, light frames,
   collision kind), so all of them see the scaled counts.
@@ -144,6 +145,10 @@ between a least and a most. Two ways use it:
   generator draws the default count's values and samples them at the scaled
   count, so the detail moves no draw and the plant or the piece keeps its
   layout at every detail.
+
+The detail keeps a shape's form: the same parts in the same places, coarser
+or finer. `Kit_detail` checks that a shape's bounds at every detail lie
+within a tenth of their diagonal of the default's.
 
 The kit's triangle ceiling holds at the default detail and scales by the
 factor above it (`Kit_shape_library::get_triangle_ceiling()`). Parts no

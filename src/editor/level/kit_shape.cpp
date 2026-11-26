@@ -793,7 +793,7 @@ auto get_kit_detail_values(const Kit_parameter_values& values) -> Kit_parameter_
         ERHE_VERIFY(index.has_value() && (shape->parameters[index.value()].type == Kit_parameter_type::int_value));
         const Kit_parameter& parameter = shape->parameters[index.value()];
         const int            own       = values.get_int(count.parameter);
-        ERHE_VERIFY(scaled.set_int(count.parameter, kit_detail_count(values, own, parameter.int_min, parameter.int_max, count.dimensions, count.step)));
+        ERHE_VERIFY(scaled.set_int(count.parameter, kit_detail_count(values, own, std::max(parameter.int_min, count.least), parameter.int_max, count.dimensions, count.step)));
     }
     return scaled;
 }

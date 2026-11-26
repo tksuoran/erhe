@@ -278,6 +278,7 @@ public:
     std::string parameter;
     int         dimensions{1};
     int         step      {1};
+    int         least     {0}; // the fewest the detail lowers it to, above the parameter's minimum: a round part keeps its form
 };
 
 // Whether a shape's mesh follows the detail: fixed shapes build one mesh at every detail.

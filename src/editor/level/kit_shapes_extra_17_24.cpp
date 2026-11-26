@@ -1073,7 +1073,7 @@ void add_extra_17_24_shapes(std::vector<Kit_shape_definition>& shapes)
         shape.triangle_budget = 60;
         shape.collision       = Kit_collision::triangle_mesh;
         shape.randomness      = Kit_randomness::seeded;
-        shape.detail_counts   = {{"segments"}};
+        shape.detail_counts   = {{.parameter = "segments", .least = 6}};
         shape.generator       = generate_broken_pillar;
         shape.get_connectors  = [](const Kit_parameter_values&, std::vector<Kit_connector>& out_connectors) {
             out_connectors.push_back(make_base_connector());

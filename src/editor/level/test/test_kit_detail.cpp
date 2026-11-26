@@ -3,6 +3,7 @@
 #include "level/kit_shape.hpp"
 #include "level/kit_shape_checks.hpp"
 
+#include <glm/glm.hpp>
 #include <gtest/gtest.h>
 
 #include <memory>
@@ -120,6 +121,29 @@ TEST(Kit_detail, the_detail_scales_the_counts_of_the_shapes_that_state_them)
             }
         }
         EXPECT_TRUE((shape.detail_response == editor::Kit_detail_response::fixed) || (fewer && more)) << "fewer " << fewer << ", more " << more;
+    }
+}
+
+// The detail keeps a shape's form: at every detail its bounds lie within a tenth of the default's diagonal of the
+// default's bounds (coarser parts reach a little less far), so no part moves, and the seed's layout stays.
+TEST(Kit_detail, the_detail_keeps_the_form)
+{
+    for (const Kit_shape_definition& shape : get_library().get_shapes()) {
+        if (shape.detail_response == editor::Kit_detail_response::fixed) {
+            continue;
+        }
+        SCOPED_TRACE(shape.id);
+        for (Kit_parameter_values values : detail_value_sets(shape)) {
+            const Kit_mesh_report own      = editor::check_kit_shape(values);
+            const float           diagonal = glm::length(own.bounds_max - own.bounds_min);
+            for (const float detail : {editor::c_kit_detail_min, 0.3f, 0.75f, 1.0f}) {
+                ASSERT_TRUE(values.set_float(editor::c_kit_detail_parameter, detail));
+                SCOPED_TRACE(values.to_canonical_text());
+                const Kit_mesh_report report = editor::check_kit_shape(values);
+                EXPECT_LE(glm::length(report.bounds_min - own.bounds_min), 0.1f * diagonal);
+                EXPECT_LE(glm::length(report.bounds_max - own.bounds_max), 0.1f * diagonal);
+            }
+        }
     }
 }
 

@@ -430,7 +430,7 @@ void add_basic_shapes(std::vector<Kit_shape_definition>& shapes)
         shape.normal_style            = Kit_normal_style::smooth_with_hard_edges;
         shape.hard_edge_angle_degrees = 45.0f;
         shape.triangle_budget         = 60;
-        shape.detail_counts           = {{"segments"}};
+        shape.detail_counts           = {{.parameter = "segments", .least = 6}};
         shape.generator               = generate_cylinder;
         shape.mirror_planes           = std::vector<Kit_mirror_plane>{Kit_mirror_plane::z};
         shape.get_connectors          = [](const Kit_parameter_values& values, std::vector<Kit_connector>& out_connectors) {
