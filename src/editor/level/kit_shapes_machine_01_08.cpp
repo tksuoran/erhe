@@ -25,6 +25,8 @@ namespace {
 
 constexpr float pi     = std::numbers::pi_v<float>;
 constexpr float two_pi = 2.0f * pi;
+// Turned surfaces of eight or more segments shade round; hexagons, teeth and steps keep their edges.
+constexpr float machine_hard_edge_degrees = 50.0f;
 constexpr glm::vec3 x_axis{1.0f, 0.0f, 0.0f};
 constexpr glm::vec3 y_axis{0.0f, 1.0f, 0.0f};
 constexpr glm::vec3 z_axis{0.0f, 0.0f, 1.0f};
@@ -126,6 +128,7 @@ public:
     uint32_t                    slot      {0};
     std::span<const uint32_t>   band_slots{};      // when given: the slot of the band after each ring
     std::span<const float>      scales    {};      // when given: each point's share of the ring's radius
+    std::span<const uint32_t>   hard_rings{};      // rings whose loops are hard edges: designed profile corners
 };
 
 // Point i of n of the unit ring as (x, z); mirror images about z = 0 are equal to the bit.
@@ -144,6 +147,11 @@ void add_lathe(Kit_mesh_builder& builder, const Placement& place, const Lathe& l
             const glm::vec2 point  = get_ring_point(static_cast<int>(i), lathe.segments, lathe.phase);
             const float     radius = lathe.scales.empty() ? ring.radius : (ring.radius * lathe.scales[i]);
             builder.add_vertex(place.at(glm::vec3{radius * point.x, ring.y, radius * point.y}));
+        }
+    }
+    for (const uint32_t ring : lathe.hard_rings) {
+        for (uint32_t i = 0; i < n; ++i) {
+            builder.add_hard_edge(first + (ring * n) + i, first + (ring * n) + ((i + 1) % n));
         }
     }
     const auto get_band_slot = [&lathe](const uint32_t band) -> uint32_t {
@@ -573,6 +581,23 @@ void add_helical_shank(Kit_mesh_builder& builder, const float r, const float min
     const std::vector<uint32_t> tip_cap(tip.rbegin(), tip.rend());
     builder.add_polygon(tip_cap);
     builder.add_polygon(top);
+
+    // The thread's root and crest are sharp, and so are the outlines of its start and end faces and the tip.
+    for (std::size_t s = 0; (s + 1) < root.size(); ++s) {
+        builder.add_hard_edge(root[s], root[s + 1]);
+    }
+    for (std::size_t s = 0; (s + 1) < ridge.size(); ++s) {
+        builder.add_hard_edge(ridge[s], ridge[s + 1]);
+    }
+    for (const std::array<uint32_t, 2>& edge : {
+        std::array<uint32_t, 2>{tip[0], root[0]}, {root[0], ridge[0]}, {ridge[0], root[n]}, {root[n], tip[0]},
+        {neck[0], root[steps + n]}, {root[steps + n], ridge[steps]}, {ridge[steps], root[steps]}, {root[steps], neck[0]}
+    }) {
+        builder.add_hard_edge(edge[0], edge[1]);
+    }
+    for (std::size_t i = 0; i < n; ++i) {
+        builder.add_hard_edge(tip[i], tip[(i + 1) % n]);
+    }
 }
 
 void generate_bolt(const Kit_parameter_values& values, GEO::Mesh& mesh)
@@ -600,7 +625,12 @@ void generate_bolt(const Kit_parameter_values& values, GEO::Mesh& mesh)
         rings.push_back(Lathe_ring{minor, thread + (0.15f * turn)});
         rings.push_back(Lathe_ring{r, thread + (0.5f * turn)});
         rings.push_back(Lathe_ring{r, length});
-        add_lathe(builder, Placement{}, Lathe{.rings = rings, .segments = bolt_round, .slot = bolt_steel_slot});
+        // The roots, the crests and the neck where the plain shank starts are sharp.
+        std::vector<uint32_t> hard_rings;
+        for (uint32_t ring = 1; ring <= static_cast<uint32_t>((2 * turns) + 2); ++ring) {
+            hard_rings.push_back(ring);
+        }
+        add_lathe(builder, Placement{}, Lathe{.rings = rings, .segments = bolt_round, .slot = bolt_steel_slot, .hard_rings = hard_rings});
     }
     if (head == Bolt_head::hex) {
         const std::array<Lathe_ring, 3> rings{{{0.9f * d, length}, {0.9f * d, length + (0.55f * d)}, {0.76f * d, length + (0.65f * d)}}};
@@ -1102,10 +1132,12 @@ void add_machine_01_08_shapes(std::vector<Kit_shape_definition>& shapes)
             derive_float(make_length_parameter("bore",       "Diameter of the bore; at most 0.3 of the root circle", 0.08f, Kit_default_scale::meters, 0.01f, 1.0f), 0.06f, 0.1f, 0.02f),
             derive_enum (make_enum_parameter  ("body",       "A solid body, a web, or spokes", {"solid", "web", "spokes"}, 1)),
             derive_int  (make_count_parameter ("spokes",     "Spokes of a spoked body", 5, 3, 8), 4, 6),
-            make_seed_parameter()
+            make_seed_parameter(),
+            make_shading_parameter(Kit_shading::smooth)
         };
         shape.material_slots  = {"metal"};
-        shape.normal_style    = Kit_normal_style::faceted;
+        shape.normal_style            = Kit_normal_style::smooth_with_hard_edges;
+        shape.hard_edge_angle_degrees = machine_hard_edge_degrees;
         shape.triangle_budget = 1100;
         shape.collision       = Kit_collision::triangle_mesh;
         shape.generator       = generate_gear;
@@ -1137,10 +1169,12 @@ void add_machine_01_08_shapes(std::vector<Kit_shape_definition>& shapes)
             derive_float(make_length_parameter("module",     "Pitch over pi: a meshing gear's module", 0.03f, Kit_default_scale::meters, 0.005f, 0.2f), 0.02f, 0.04f, 0.01f),
             derive_float(make_length_parameter("face_width", "Thickness along Y", 0.08f, Kit_default_scale::meters, 0.01f, 1.0f), 0.06f, 0.12f, 0.02f),
             derive_float(make_length_parameter("height",     "Size of the bar behind the teeth, along Z", 0.08f, Kit_default_scale::meters, 0.01f, 1.0f), 0.06f, 0.12f, 0.02f),
-            make_seed_parameter()
+            make_seed_parameter(),
+            make_shading_parameter(Kit_shading::smooth)
         };
         shape.material_slots  = {"metal"};
-        shape.normal_style    = Kit_normal_style::faceted;
+        shape.normal_style            = Kit_normal_style::smooth_with_hard_edges;
+        shape.hard_edge_angle_degrees = machine_hard_edge_degrees;
         shape.triangle_budget = 260;
         shape.collision       = Kit_collision::triangle_mesh;
         shape.origin_rule     = Kit_origin_rule::base_contains_origin; // the bar lies behind the root line
@@ -1173,10 +1207,12 @@ void add_machine_01_08_shapes(std::vector<Kit_shape_definition>& shapes)
             derive_float(make_share_parameter ("thread",   "Share of the length that is threaded", 0.6f, 0.2f, 1.0f), 0.4f, 1.0f, 0.1f),
             derive_int  (make_count_parameter ("turns",    "Ridges of the thread", 10, bolt_turn_min, bolt_turn_max), 8, 16),
             derive_enum (make_enum_parameter  ("thread_style", "A helical thread, or rings", {"helix", "rings"}, 0)),
-            make_seed_parameter()
+            make_seed_parameter(),
+            make_shading_parameter(Kit_shading::smooth)
         };
         shape.material_slots  = {"steel"};
-        shape.normal_style    = Kit_normal_style::faceted;
+        shape.normal_style            = Kit_normal_style::smooth_with_hard_edges;
+        shape.hard_edge_angle_degrees = machine_hard_edge_degrees;
         shape.triangle_budget = 760;
         shape.collision       = Kit_collision::convex_hull;
         shape.generator       = generate_bolt;
@@ -1205,10 +1241,12 @@ void add_machine_01_08_shapes(std::vector<Kit_shape_definition>& shapes)
             derive_enum (make_enum_parameter  ("form",     "Hexagon, square, wing or cap nut", {"hex", "square", "wing", "cap"}, 0)),
             derive_float(make_length_parameter("diameter", "Diameter of the bolt it fits", 0.06f, Kit_default_scale::meters, 0.01f, 0.5f), 0.04f, 0.08f, 0.01f),
             derive_float(make_length_parameter("height",   "Thickness along Y", 0.05f, Kit_default_scale::meters, 0.005f, 0.5f), 0.04f, 0.06f, 0.01f),
-            make_seed_parameter()
+            make_seed_parameter(),
+            make_shading_parameter(Kit_shading::smooth)
         };
         shape.material_slots  = {"steel"};
-        shape.normal_style    = Kit_normal_style::faceted;
+        shape.normal_style            = Kit_normal_style::smooth_with_hard_edges;
+        shape.hard_edge_angle_degrees = machine_hard_edge_degrees;
         shape.triangle_budget = 90;
         shape.collision       = Kit_collision::convex_hull;
         shape.generator       = generate_nut;
@@ -1241,10 +1279,12 @@ void add_machine_01_08_shapes(std::vector<Kit_shape_definition>& shapes)
             derive_float(make_length_parameter("wire",     "Thickness of the wire", 0.02f, Kit_default_scale::meters, 0.004f, 0.1f), 0.015f, 0.03f, 0.005f),
             derive_int  (make_count_parameter ("coils",    "Coils, a compression spring's two end coils among them", 8, spring_coil_min, spring_coil_max), 5, 10),
             derive_float(make_length_parameter("length",   "Height of a compression spring; at least its closed height", 0.4f, Kit_default_scale::meters, 0.05f, 4.0f), 0.3f, 0.6f, 0.05f),
-            make_seed_parameter()
+            make_seed_parameter(),
+            make_shading_parameter(Kit_shading::smooth)
         };
         shape.material_slots  = {"steel"};
-        shape.normal_style    = Kit_normal_style::faceted;
+        shape.normal_style            = Kit_normal_style::smooth_with_hard_edges;
+        shape.hard_edge_angle_degrees = machine_hard_edge_degrees;
         shape.triangle_budget = 780;
         shape.collision       = Kit_collision::convex_hull;
         shape.origin_rule     = Kit_origin_rule::base_contains_origin; // a lying spring rests on two lines, a torsion spring's leg on the ground
@@ -1284,10 +1324,12 @@ void add_machine_01_08_shapes(std::vector<Kit_shape_definition>& shapes)
             derive_float(make_length_parameter("diameter", "Outside diameter", 0.3f, Kit_default_scale::meters, 0.05f, 4.0f), 0.25f, 0.4f, 0.05f),
             derive_float(make_length_parameter("width",    "Thickness along Y", 0.08f, Kit_default_scale::meters, 0.01f, 1.0f), 0.06f, 0.1f, 0.02f),
             derive_int  (make_count_parameter ("elements", "Rolling elements", 10, bearing_element_min, bearing_element_max), 8, 14),
-            make_seed_parameter()
+            make_seed_parameter(),
+            make_shading_parameter(Kit_shading::smooth)
         };
         shape.material_slots  = {"steel", "metal"};
-        shape.normal_style    = Kit_normal_style::faceted;
+        shape.normal_style            = Kit_normal_style::smooth_with_hard_edges;
+        shape.hard_edge_angle_degrees = machine_hard_edge_degrees;
         shape.triangle_budget = 880;
         shape.collision       = Kit_collision::convex_hull;
         shape.generator       = generate_bearing;
@@ -1312,10 +1354,12 @@ void add_machine_01_08_shapes(std::vector<Kit_shape_definition>& shapes)
             derive_float(make_length_parameter("diameter", "Diameter of the piston", 0.3f, Kit_default_scale::meters, 0.05f, 2.0f), 0.2f, 0.4f, 0.05f),
             derive_float(make_length_parameter("height",   "Size along Y", 0.3f, Kit_default_scale::meters, 0.05f, 2.0f), 0.25f, 0.4f, 0.05f),
             derive_int  (make_count_parameter ("rings",    "Piston rings", 3, 1, piston_ring_max), 2, 4),
-            make_seed_parameter()
+            make_seed_parameter(),
+            make_shading_parameter(Kit_shading::smooth)
         };
         shape.material_slots  = {"metal", "steel"};
-        shape.normal_style    = Kit_normal_style::faceted;
+        shape.normal_style            = Kit_normal_style::smooth_with_hard_edges;
+        shape.hard_edge_angle_degrees = machine_hard_edge_degrees;
         shape.triangle_budget = 600;
         shape.collision       = Kit_collision::convex_hull;
         shape.generator       = generate_piston;
@@ -1345,10 +1389,12 @@ void add_machine_01_08_shapes(std::vector<Kit_shape_definition>& shapes)
             derive_float(make_length_parameter("lift",      "How far the profile reaches beyond the base circle", 0.1f, Kit_default_scale::meters, 0.01f, 1.0f), 0.06f, 0.12f, 0.02f),
             derive_float(make_length_parameter("thickness", "Thickness of the plate", 0.06f, Kit_default_scale::meters, 0.01f, 1.0f), 0.04f, 0.08f, 0.02f),
             derive_float(make_length_parameter("bore",      "Diameter of the bore; at most the radius", 0.06f, Kit_default_scale::meters, 0.01f, 1.0f), 0.04f, 0.08f, 0.02f),
-            make_seed_parameter()
+            make_seed_parameter(),
+            make_shading_parameter(Kit_shading::smooth)
         };
         shape.material_slots  = {"metal", "steel"};
-        shape.normal_style    = Kit_normal_style::faceted;
+        shape.normal_style            = Kit_normal_style::smooth_with_hard_edges;
+        shape.hard_edge_angle_degrees = machine_hard_edge_degrees;
         shape.triangle_budget = 400;
         shape.collision       = Kit_collision::triangle_mesh;
         shape.origin_rule     = Kit_origin_rule::base_contains_origin; // the profile reaches further toward +X

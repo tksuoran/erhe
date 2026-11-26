@@ -132,6 +132,15 @@ void add_fan_leaf(
     }
     builder.add_quad(top[0], center_top, center_bottom, bottom[0]);
     builder.add_quad(center_top, top[last], bottom[last], center_bottom);
+    // The pleats and the rim of both faces: each sector is flat across.
+    for (std::size_t i = 0; i <= last; ++i) {
+        builder.add_hard_edge(center_top, top[i]);
+        builder.add_hard_edge(center_bottom, bottom[i]);
+        if (i < last) {
+            builder.add_hard_edge(top[i], top[i + 1]);
+            builder.add_hard_edge(bottom[i], bottom[i + 1]);
+        }
+    }
 }
 
 // One palm of a palm shape: where it stands, its sizes and the detail of its crown (the clump's and the shrub's crowns
@@ -554,6 +563,11 @@ void flatten_above(const std::span<glm::vec3> points, const float pivot_y, const
     }
 }
 
+enum class Ribbon_lines : unsigned int {
+    smooth = 0, // a stalk: round across
+    hard        // a blade: its edges, midrib and keel are folds, each face flat across
+};
+
 // A closed strip along the arc: at each station the two edges, the midrib and the keel under it; pointed at both ends.
 // The lifts raise the edges over the midrib (a V fold) or lower them.
 void add_ribbon(
@@ -562,9 +576,11 @@ void add_ribbon(
     const std::span<const float> at,
     const std::span<const float> half_widths,
     const std::span<const float> lifts,
-    const float                  thickness
+    const float                  thickness,
+    const Ribbon_lines           lines
 )
 {
+    const uint32_t first_vertex = static_cast<uint32_t>(builder.get_positions().size());
     std::vector<glm::vec3> points;
     points.reserve(4 * at.size());
     for (std::size_t k = 0; k < at.size(); ++k) {
@@ -579,6 +595,19 @@ void add_ribbon(
     const Leaf_frame first = arc_frame(arc, at.front());
     const glm::vec3  base  = first.center - ((0.5f * (half_widths.front() + thickness)) * first.along);
     builder.add_ring_solid(points, 4, base, arc_frame(arc, 1.0f).center);
+    if (lines == Ribbon_lines::hard) {
+        // add_ring_solid() adds the rings' points, then the base and the tip point.
+        const uint32_t ring_count = static_cast<uint32_t>(at.size());
+        const uint32_t base_point = first_vertex + (4 * ring_count);
+        const uint32_t tip_point  = base_point + 1;
+        for (uint32_t j = 0; j < 4; ++j) {
+            builder.add_hard_edge(base_point, first_vertex + j);
+            for (uint32_t ring = 0; (ring + 1) < ring_count; ++ring) {
+                builder.add_hard_edge(first_vertex + (4 * ring) + j, first_vertex + (4 * (ring + 1)) + j);
+            }
+            builder.add_hard_edge(first_vertex + (4 * (ring_count - 1)) + j, tip_point);
+        }
+    }
 }
 
 // Stations along a ribbon at the detail factor: its own at its own count, else as many evenly from 0 to its last.
@@ -610,7 +639,7 @@ void add_stalk(Kit_mesh_builder& builder, const Leaf_arc& arc, const float half_
         }
     }
     const std::vector<float> lifts(at.size(), 0.0f);
-    add_ribbon(builder, arc, at, half_widths, lifts, half_width);
+    add_ribbon(builder, arc, at, half_widths, lifts, half_width, Ribbon_lines::smooth);
 }
 
 constexpr int blade_station_max = 24;
@@ -656,7 +685,7 @@ void add_blade(Kit_mesh_builder& builder, const Blade& blade)
     }
     add_ribbon(
         builder, blade.arc, std::span<const float>{at.data(), count}, std::span<const float>{half_widths.data(), count},
-        std::span<const float>{lifts.data(), count}, blade.thickness
+        std::span<const float>{lifts.data(), count}, blade.thickness, Ribbon_lines::hard
     );
 }
 
@@ -666,8 +695,15 @@ enum class Shell_rim : unsigned int {
 };
 
 // A thin closed shell: triangles from top[0] over the rim points top[1 ..], which run counter-clockwise about the
-// upper face's normal, the same moved by offset underneath, and walls between the two.
-void add_shell(Kit_mesh_builder& builder, const std::span<const glm::vec3> top, const glm::vec3& offset, const Shell_rim rim)
+// upper face's normal, the same moved by offset underneath, and walls between the two. The rim is a hard edge of both
+// faces, and so are the spokes from the hub to the rim points the folds name (indices into top).
+void add_shell(
+    Kit_mesh_builder&                builder,
+    const std::span<const glm::vec3> top,
+    const glm::vec3&                 offset,
+    const Shell_rim                  rim,
+    const std::span<const uint32_t>  folds
+)
 {
     const uint32_t count = static_cast<uint32_t>(top.size());
     uint32_t hub = 0;
@@ -696,6 +732,22 @@ void add_shell(Kit_mesh_builder& builder, const std::span<const glm::vec3> top, 
         builder.add_triangle(hub + 1, under, under + 1);
         builder.add_triangle(hub, hub + rim_count, under + rim_count);
         builder.add_triangle(hub, under + rim_count, under);
+    }
+    for (uint32_t i = 0; i < spans; ++i) {
+        const uint32_t a = 1 + i;
+        const uint32_t b = 1 + ((i + 1) % rim_count);
+        builder.add_hard_edge(hub + a, hub + b);
+        builder.add_hard_edge(under + a, under + b);
+    }
+    if (rim == Shell_rim::open) {
+        builder.add_hard_edge(hub, hub + 1);
+        builder.add_hard_edge(hub, hub + rim_count);
+        builder.add_hard_edge(under, under + 1);
+        builder.add_hard_edge(under, under + rim_count);
+    }
+    for (const uint32_t fold : folds) {
+        builder.add_hard_edge(hub, hub + fold);
+        builder.add_hard_edge(under, under + fold);
     }
 }
 
@@ -734,7 +786,11 @@ void add_fan(Kit_mesh_builder& builder, const Fan& fan)
     }
     const std::span<glm::vec3> points{top.data(), static_cast<std::size_t>(rim_count + 1)};
     flatten_above(points, fan.hub.y, fan.floor_y);
-    add_shell(builder, points, -fan.thickness * fan.normal, Shell_rim::open);
+    std::array<uint32_t, (2 * fan_finger_max) + 1> folds{}; // every spoke: the fingers' ridges and the clefts
+    for (int i = 0; i < rim_count; ++i) {
+        folds[static_cast<std::size_t>(i)] = static_cast<uint32_t>(i + 1);
+    }
+    add_shell(builder, points, -fan.thickness * fan.normal, Shell_rim::open, std::span<const uint32_t>{folds.data(), static_cast<std::size_t>(rim_count)});
 }
 
 // A heart-shaped blade hanging from the hub, where its stalk meets it between the two lobes.
@@ -768,7 +824,8 @@ void add_heart(Kit_mesh_builder& builder, const Heart& heart)
         top[i + 1] = heart.hub + (forward * heart.direction) + (lateral * side) + (cup * heart.normal);
     }
     flatten_above(top, heart.hub.y, heart.floor_y);
-    add_shell(builder, top, -heart.thickness * heart.normal, Shell_rim::closed);
+    constexpr std::array<uint32_t, 1> midrib{1}; // the spoke to the tip
+    add_shell(builder, top, -heart.thickness * heart.normal, Shell_rim::closed, midrib);
 }
 
 enum class Frond_outline : unsigned int {
@@ -835,6 +892,10 @@ void add_frond(Kit_mesh_builder& builder, const Frond& frond)
             builder.add_triangle(b, tip, ridge);
             builder.add_triangle(tip, a, ridge);
             builder.add_triangle(a, tip, b);
+            // A leaflet is flat faced: every edge is hard.
+            for (const std::array<uint32_t, 2>& edge : {std::array<uint32_t, 2>{a, b}, {b, tip}, {tip, a}, {a, ridge}, {b, ridge}, {tip, ridge}}) {
+                builder.add_hard_edge(edge[0], edge[1]);
+            }
         }
     }
 }
@@ -850,7 +911,7 @@ void add_crozier(Kit_mesh_builder& builder, const Leaf_arc& arc, const float hal
     for (std::size_t k = 0; k < at.size(); ++k) {
         half_widths[k] = half_width * (1.0f - (0.45f * at[k]));
     }
-    add_ribbon(builder, arc, at, half_widths, lifts, 1.2f * half_width);
+    add_ribbon(builder, arc, at, half_widths, lifts, 1.2f * half_width, Ribbon_lines::smooth);
 }
 
 class Stem_station
@@ -1437,7 +1498,8 @@ void add_nature_plant_shapes(std::vector<Kit_shape_definition>& shapes)
             make_count_parameter ("segments", "Trunk sides", 6, 4, 12)
         };
         shape.material_slots  = {"bark", "leaf"};
-        shape.normal_style    = Kit_normal_style::faceted;
+        shape.normal_style            = Kit_normal_style::smooth_with_hard_edges;
+        shape.hard_edge_angle_degrees = 75.0f;
         shape.triangle_budget = 1600;
         shape.collision       = Kit_collision::triangle_mesh;
         shape.randomness      = Kit_randomness::seeded;
@@ -1470,7 +1532,8 @@ void add_nature_plant_shapes(std::vector<Kit_shape_definition>& shapes)
         shape.parameters[4].float_min = 0.1f;
         shape.parameters[4].float_max = 0.6f;
         shape.material_slots  = {"bark", "leaf", "young_leaf"};
-        shape.normal_style    = Kit_normal_style::faceted;
+        shape.normal_style            = Kit_normal_style::smooth_with_hard_edges;
+        shape.hard_edge_angle_degrees = 75.0f;
         shape.triangle_budget = 520;
         shape.collision       = Kit_collision::none;
         shape.randomness      = Kit_randomness::seeded;
@@ -1498,7 +1561,8 @@ void add_nature_plant_shapes(std::vector<Kit_shape_definition>& shapes)
             make_seed_parameter()
         };
         shape.material_slots  = {"bark", "leaf"};
-        shape.normal_style    = Kit_normal_style::faceted;
+        shape.normal_style            = Kit_normal_style::smooth_with_hard_edges;
+        shape.hard_edge_angle_degrees = 75.0f;
         shape.triangle_budget = 1940;
         shape.collision       = Kit_collision::triangle_mesh;
         shape.randomness      = Kit_randomness::seeded;
@@ -1526,7 +1590,8 @@ void add_nature_plant_shapes(std::vector<Kit_shape_definition>& shapes)
             make_seed_parameter()
         };
         shape.material_slots  = {"bark", "leaf", "young_leaf"};
-        shape.normal_style    = Kit_normal_style::faceted;
+        shape.normal_style            = Kit_normal_style::smooth_with_hard_edges;
+        shape.hard_edge_angle_degrees = 75.0f;
         shape.triangle_budget = 1300;
         shape.collision       = Kit_collision::convex_hull;
         shape.randomness      = Kit_randomness::seeded;

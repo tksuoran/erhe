@@ -16,7 +16,8 @@ the editor.
 
 - `Kit_shape_definition` (`kit_shape.hpp`): one shape: `id` (`<kit>.<shape>`),
   `former_ids` ("Former shape ids"), kit, display name, description, tags, parameters, its material slots
-  ("Materials"), normal style (`faceted`, `smooth`, `smooth_with_hard_edges` with its angle),
+  ("Materials"), normal style (`faceted`, `smooth`, `smooth_with_hard_edges` with its angle; with a
+  `shading` parameter, the style its `smooth` value takes, `doc/editor/level_kit_shapes.md` "Shading"),
   triangle budget, collision kind (`Kit_collision::convex_hull`,
   `triangle_mesh`, `box` or `none`, "Kit brushes"; optionally per values,
   `get_collision`), mesh kind (`Kit_mesh_kind::solid`,
@@ -26,9 +27,10 @@ the editor.
   mirror planes ("Groups") and the generator.
 - `Kit_parameter`: name, type (`float_value`, `int_value`, `enum_value`), unit,
   range and default, its derive range ("Derive from seed") and whether the
-  canonical text leaves it out at its default (`Kit_text_presence`; the level
-  of detail every shape takes, `doc/editor/level_kit_shapes.md` "Level of
-  detail"). A float
+  canonical text leaves a float or enum parameter out at its default
+  (`Kit_text_presence`; the level of detail every shape takes and the rocks'
+  shading, `doc/editor/level_kit_shapes.md` "Level of detail" and
+  "Shading"). A float
   default is stated in meters, modules or wall heights (`Kit_default_scale`)
   and resolves against the level settings ("Level settings") when a piece is
   placed.
@@ -158,6 +160,11 @@ on for the pieces' light nodes. `--save` writes the scene for the windowed
 editor to open; `--keep-open` leaves the launched editor running with the
 scene.
 
+`scripts/level_shape_contact_sheet.py --tags <left> <right> --out <png>
+[--crop <w> <h>] [--scale <s>] <ids>` puts the images of two tags of each
+shape side by side on one sheet, the middle of each cropped: a before and
+after review of many shapes at once.
+
 ## Pieces
 
 A piece is a mesh node carrying the attached value group `Kit_piece`
@@ -227,7 +234,11 @@ a `Brush`. `get_brush(values)` returns the cached brush or makes it:
   faceted shape renders with polygon normals; a smooth shape with corner
   normals averaged over the facets within 80 degrees of each other, so a base
   rim stays sharp; a shape with hard edges with corner normals averaged
-  within its stated angle.
+  within its stated angle. The style is the values' (`get_kit_shading()`):
+  a `shading` parameter at `faceted` makes the piece faceted. The averages weigh each facet by its angle at the
+  vertex, so a quad split into two triangles counts as the quad. A corner the
+  generator gave a normal at a hard edge keeps it
+  (`doc/editor/level_kit_shapes.md` "Hard edges").
 - Collision: the kind at the values is `get_kit_collision()`: the shape's
   `get_collision` at the values when it states one, else its `collision`. A
   `convex_hull` shape takes the brush's convex hull; a

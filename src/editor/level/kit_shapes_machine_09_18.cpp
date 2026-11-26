@@ -25,6 +25,8 @@ namespace {
 
 constexpr float pi     = std::numbers::pi_v<float>;
 constexpr float two_pi = 2.0f * pi;
+// Turned surfaces of eight or more segments shade round; hexagons, teeth and steps keep their edges.
+constexpr float machine_hard_edge_degrees = 50.0f;
 constexpr glm::vec3 x_axis{1.0f, 0.0f, 0.0f};
 constexpr glm::vec3 y_axis{0.0f, 1.0f, 0.0f};
 constexpr glm::vec3 z_axis{0.0f, 0.0f, 1.0f};
@@ -1016,10 +1018,12 @@ void add_machine_09_18_shapes(std::vector<Kit_shape_definition>& shapes)
             derive_float(make_length_parameter("small_bore", "Diameter of the small end's bore: a piston's wrist pin", 0.05f, Kit_default_scale::meters, 0.01f, 1.0f), 0.04f, 0.06f, 0.01f),
             derive_float(make_length_parameter("big_bore",   "Diameter of the big end's bore: a crank pin", 0.08f, Kit_default_scale::meters, 0.02f, 1.0f), 0.08f, 0.1f, 0.01f),
             derive_float(make_length_parameter("thickness",  "Thickness along Y", 0.06f, Kit_default_scale::meters, 0.01f, 1.0f), 0.04f, 0.08f, 0.02f),
-            make_seed_parameter()
+            make_seed_parameter(),
+            make_shading_parameter(Kit_shading::smooth)
         };
         shape.material_slots  = {"metal", "steel"};
-        shape.normal_style    = Kit_normal_style::faceted;
+        shape.normal_style            = Kit_normal_style::smooth_with_hard_edges;
+        shape.hard_edge_angle_degrees = machine_hard_edge_degrees;
         shape.triangle_budget = 400;
         shape.collision       = Kit_collision::triangle_mesh;
         shape.origin_rule     = Kit_origin_rule::base_contains_origin; // the big end reaches further
@@ -1050,10 +1054,12 @@ void add_machine_09_18_shapes(std::vector<Kit_shape_definition>& shapes)
             derive_float(make_length_parameter("journal", "Diameter of the journals and the pins", 0.08f, Kit_default_scale::meters, 0.02f, 1.0f), 0.08f, 0.1f, 0.01f),
             derive_float(make_length_parameter("web",     "Thickness of a web", 0.04f, Kit_default_scale::meters, 0.01f, 0.5f), 0.03f, 0.05f, 0.01f),
             derive_enum (make_enum_parameter  ("phase",   "Throws half a turn apart, or a quarter turn", {"flat", "cross"}, 0)),
-            make_seed_parameter()
+            make_seed_parameter(),
+            make_shading_parameter(Kit_shading::smooth)
         };
         shape.material_slots  = {"metal", "steel"};
-        shape.normal_style    = Kit_normal_style::faceted;
+        shape.normal_style            = Kit_normal_style::smooth_with_hard_edges;
+        shape.hard_edge_angle_degrees = machine_hard_edge_degrees;
         shape.triangle_budget = 400;
         shape.collision       = Kit_collision::triangle_mesh;
         shape.origin_rule     = Kit_origin_rule::base_contains_origin; // the stands' feet
@@ -1084,10 +1090,12 @@ void add_machine_09_18_shapes(std::vector<Kit_shape_definition>& shapes)
             derive_enum (make_enum_parameter  ("form",     "Knife edge, roller or flat face", {"knife", "roller", "flat"}, 1)),
             derive_float(make_length_parameter("stem",     "Length of the stem over the head", 0.4f, Kit_default_scale::meters, 0.05f, 4.0f), 0.3f, 0.5f, 0.1f),
             derive_float(make_length_parameter("diameter", "Diameter of the stem; the roller is twice as wide", 0.04f, Kit_default_scale::meters, 0.01f, 0.5f), 0.03f, 0.05f, 0.01f),
-            make_seed_parameter()
+            make_seed_parameter(),
+            make_shading_parameter(Kit_shading::smooth)
         };
         shape.material_slots  = {"steel", "metal"};
-        shape.normal_style    = Kit_normal_style::faceted;
+        shape.normal_style            = Kit_normal_style::smooth_with_hard_edges;
+        shape.hard_edge_angle_degrees = machine_hard_edge_degrees;
         shape.triangle_budget = 260;
         shape.collision       = Kit_collision::convex_hull;
         shape.origin_rule     = Kit_origin_rule::base_contains_origin; // a knife and a roller stand on a narrow strip
@@ -1116,10 +1124,12 @@ void add_machine_09_18_shapes(std::vector<Kit_shape_definition>& shapes)
             derive_float(make_length_parameter("lift",   "How far a lobe's nose reaches beyond its base circle", 0.04f, Kit_default_scale::meters, 0.005f, 0.5f), 0.03f, 0.05f, 0.01f),
             derive_float(make_length_parameter("radius", "Radius of the lobes' base circle", 0.06f, Kit_default_scale::meters, 0.02f, 1.0f), 0.05f, 0.08f, 0.01f),
             make_angle_parameter("step", "Degrees between a lobe and the next", 90.0f, 0.0f, 180.0f),
-            make_seed_parameter()
+            make_seed_parameter(),
+            make_shading_parameter(Kit_shading::smooth)
         };
         shape.material_slots  = {"metal", "steel"};
-        shape.normal_style    = Kit_normal_style::faceted;
+        shape.normal_style            = Kit_normal_style::smooth_with_hard_edges;
+        shape.hard_edge_angle_degrees = machine_hard_edge_degrees;
         shape.triangle_budget = 620;
         shape.collision       = Kit_collision::triangle_mesh;
         shape.origin_rule     = Kit_origin_rule::base_contains_origin; // the stands' feet
@@ -1149,10 +1159,12 @@ void add_machine_09_18_shapes(std::vector<Kit_shape_definition>& shapes)
             derive_float(make_length_parameter("face_width", "Length of the teeth along the cone", 0.08f, Kit_default_scale::meters, 0.01f, 1.0f), 0.06f, 0.12f, 0.02f),
             make_angle_parameter("cone", "Degrees between the axis and the pitch cone", 45.0f, 30.0f, 60.0f),
             derive_float(make_length_parameter("bore",       "Diameter of the bore; at most half the small end", 0.08f, Kit_default_scale::meters, 0.01f, 1.0f), 0.06f, 0.1f, 0.02f),
-            make_seed_parameter()
+            make_seed_parameter(),
+            make_shading_parameter(Kit_shading::smooth)
         };
         shape.material_slots  = {"metal"};
-        shape.normal_style    = Kit_normal_style::faceted;
+        shape.normal_style            = Kit_normal_style::smooth_with_hard_edges;
+        shape.hard_edge_angle_degrees = machine_hard_edge_degrees;
         shape.triangle_budget = 520;
         shape.collision       = Kit_collision::triangle_mesh;
         shape.generator       = generate_bevel_gear;
@@ -1197,10 +1209,12 @@ void add_machine_09_18_shapes(std::vector<Kit_shape_definition>& shapes)
             derive_int  (make_count_parameter ("starts",   "Threads of the worm", 1, 1, worm_start_max), 1, 2),
             derive_int  (make_count_parameter ("turns",    "Turns of each thread", 4, worm_turn_min, worm_turn_max), 3, 5),
             derive_int  (make_count_parameter ("teeth",    "Teeth of the wheel", 24, worm_tooth_min, worm_tooth_max), 20, 30),
-            make_seed_parameter()
+            make_seed_parameter(),
+            make_shading_parameter(Kit_shading::smooth)
         };
         shape.material_slots  = {"metal", "steel"};
-        shape.normal_style    = Kit_normal_style::faceted;
+        shape.normal_style            = Kit_normal_style::smooth_with_hard_edges;
+        shape.hard_edge_angle_degrees = machine_hard_edge_degrees;
         shape.triangle_budget = 800;
         shape.collision       = Kit_collision::triangle_mesh;
         shape.origin_rule     = Kit_origin_rule::base_contains_origin; // a lying worm rests on two lines
@@ -1240,10 +1254,12 @@ void add_machine_09_18_shapes(std::vector<Kit_shape_definition>& shapes)
             derive_int  (make_count_parameter ("grooves",  "Grooves of a pulley", 1, 1, pulley_groove_max), 1, 3),
             derive_int  (make_count_parameter ("teeth",    "Teeth of a sprocket", 16, pulley_tooth_min, pulley_tooth_max), 12, 24),
             derive_float(make_length_parameter("bore",     "Diameter of the bore", 0.05f, Kit_default_scale::meters, 0.01f, 1.0f), 0.04f, 0.08f, 0.01f),
-            make_seed_parameter()
+            make_seed_parameter(),
+            make_shading_parameter(Kit_shading::smooth)
         };
         shape.material_slots  = {"metal"};
-        shape.normal_style    = Kit_normal_style::faceted;
+        shape.normal_style            = Kit_normal_style::smooth_with_hard_edges;
+        shape.hard_edge_angle_degrees = machine_hard_edge_degrees;
         shape.triangle_budget = 700;
         shape.collision       = Kit_collision::triangle_mesh;
         shape.generator       = generate_pulley;
@@ -1267,10 +1283,12 @@ void add_machine_09_18_shapes(std::vector<Kit_shape_definition>& shapes)
             derive_float(make_length_parameter("diameter",  "Diameter of the bolt it fits", 0.06f, Kit_default_scale::meters, 0.01f, 0.5f), 0.04f, 0.08f, 0.01f),
             derive_float(make_length_parameter("thickness", "Thickness of a flat washer", 0.01f, Kit_default_scale::meters, 0.002f, 0.1f), 0.008f, 0.012f, 0.002f),
             derive_int  (make_count_parameter ("teeth",     "Teeth of a toothed washer", 10, washer_tooth_min, washer_tooth_max), 8, 12),
-            make_seed_parameter()
+            make_seed_parameter(),
+            make_shading_parameter(Kit_shading::smooth)
         };
         shape.material_slots  = {"steel"};
-        shape.normal_style    = Kit_normal_style::faceted;
+        shape.normal_style            = Kit_normal_style::smooth_with_hard_edges;
+        shape.hard_edge_angle_degrees = machine_hard_edge_degrees;
         shape.triangle_budget = 260;
         shape.collision       = Kit_collision::convex_hull;
         shape.origin_rule     = Kit_origin_rule::base_contains_origin; // a lock washer rests on part of its turn
@@ -1294,10 +1312,12 @@ void add_machine_09_18_shapes(std::vector<Kit_shape_definition>& shapes)
             derive_float(make_length_parameter("height", "Size along Y", 0.5f, Kit_default_scale::meters, 0.1f, 4.0f), 0.4f, 0.7f, 0.1f),
             derive_int  (make_count_parameter ("fins",   "Cooling fins", 6, 0, cylinder_fin_max), 4, 8),
             derive_float(make_length_parameter("wall",   "Thickness of the wall", 0.03f, Kit_default_scale::meters, 0.01f, 0.5f), 0.02f, 0.04f, 0.01f),
-            make_seed_parameter()
+            make_seed_parameter(),
+            make_shading_parameter(Kit_shading::smooth)
         };
         shape.material_slots  = {"metal", "steel"};
-        shape.normal_style    = Kit_normal_style::faceted;
+        shape.normal_style            = Kit_normal_style::smooth_with_hard_edges;
+        shape.hard_edge_angle_degrees = machine_hard_edge_degrees;
         shape.triangle_budget = 1100;
         shape.collision       = Kit_collision::triangle_mesh;
         shape.mirror_planes   = std::vector<Kit_mirror_plane>{Kit_mirror_plane::x, Kit_mirror_plane::z};
@@ -1322,10 +1342,12 @@ void add_machine_09_18_shapes(std::vector<Kit_shape_definition>& shapes)
             derive_float(make_length_parameter("width",  "Length of the base along X", 0.4f, Kit_default_scale::meters, 0.1f, 4.0f), 0.4f, 0.5f, 0.1f),
             derive_float(make_length_parameter("depth",  "Size along the shaft", 0.1f, Kit_default_scale::meters, 0.03f, 1.0f), 0.08f, 0.12f, 0.02f),
             derive_enum (make_enum_parameter  ("bolts",  "Two bolts, or four", {"two", "four"}, 0)),
-            make_seed_parameter()
+            make_seed_parameter(),
+            make_shading_parameter(Kit_shading::smooth)
         };
         shape.material_slots  = {"metal", "steel"};
-        shape.normal_style    = Kit_normal_style::faceted;
+        shape.normal_style            = Kit_normal_style::smooth_with_hard_edges;
+        shape.hard_edge_angle_degrees = machine_hard_edge_degrees;
         shape.triangle_budget = 320;
         shape.collision       = Kit_collision::triangle_mesh;
         shape.mirror_planes   = std::vector<Kit_mirror_plane>{Kit_mirror_plane::x, Kit_mirror_plane::z};

@@ -87,10 +87,21 @@ the ceiling at its range maxima.
 - Shared points: where two parts of a surface meet (the halves of a folded
   leaf at its midrib and its tip, the two slopes of a ridge, a hull's sides at
   its stem, a hook and the coil it continues), they are one solid that shares
-  the vertices of the join; the corner attributes (normals) stay per facet. A
+  the vertices of the join; a fold along the join is a hard edge ("Hard
+  edges"), so a smooth shaded shape keeps it sharp. A
   concave section is closed by convex pieces that share their edges
   (`Kit_mesh_builder::add_x_prism()`). Parts that only reach into one another
   (a post into a beam) stay separate closed solids.
+- Hard edges: a generator names a designed sharp edge with
+  `Kit_mesh_builder::add_hard_edge(a, b)` (a folded leaf's midrib, a leaf's
+  rim, a fan's pleats). `write()` gives every corner at a vertex of a hard
+  edge its normal: the facets met walking around the vertex both ways from
+  the corner's facet up to a hard edge, weighted by their angles at the
+  vertex. `set_smooth_from(first)` makes the vertices from `first` to the
+  last added shade the same way, split by the hard edges alone whatever the
+  angles between their facets (a lumpy foliage clump, a limb of few sides).
+  The shape's normal style fills the other corners
+  (`doc/editor/level_tools.md` "Kit brushes"); a faceted shape uses neither.
 - Former builds: a shape whose build was fixed keeps its former build for a
   side by side comparison as `<id>_old` ("<name> (old)", `add_former_build()`
   in `kit_shape_library.cpp`, the generator taking `Kit_build::former`), with
@@ -187,6 +198,34 @@ The shapes with detail counts scale their `segments`: `basic.cylinder`,
   plant's form.
 
 The other shapes are converted step by step (`doc/plans/level_kit_detail.md`).
+
+## Shading
+
+The rocks, the tree, bush, succulent, grass tuft and bamboo, and the
+machine parts take the enum parameter `shading` (`c_kit_shading_parameter`,
+`make_shading_parameter()`), the last of their own: `faceted`, or `smooth`,
+the shape's own normal style with its hard edges. It is never derived and
+leaves the mesh as it is; the normals follow it (`get_kit_shading()`). Like
+`detail`, the default is left out of a piece's canonical text and a text
+without it reads as the default (`Kit_text_presence::unless_default`), so
+pieces saved before the parameter read and keep their mesh key.
+
+- Rocks (`nature.rock`, `nature.boulder_cluster`, `nature.stepping_stone`,
+  `nature.rock_spire`, `nature.rock_arch`, `nature.basalt_columns`): smooth
+  with the 80 degree crease, a boulder's or a piece's flat base and flat top
+  outlines hard edges. The chamfered rocks, the boulder cluster and the
+  stepping stone, default to smooth; the others to faceted.
+- Plants (default smooth, the 80 degree crease): the tree's and the bush's
+  trunk, limbs, twigs, clumps and conifer tiers are smooth vertices
+  (`set_smooth_from()`), with hard edges at a flat base on the ground and a
+  tier's drooping rim. A succulent's or grass tuft's blade has its two edges
+  hard from base to tip, a stem its ground ring. The bamboo's node bands are
+  slots of their own, so their rings stay sharp, and a leaf's outline is
+  hard; a cane of three or four sides stays faceted at the crease.
+- Machine parts (default smooth): hard edges above 50 degrees, so a turned
+  surface of eight or more segments shades round while hexagons, teeth and
+  steps keep their edges. A bolt's thread marks its roots and crests hard
+  (a lathe's `hard_rings`, the helix's root and ridge lines).
 
 ## Slots and palette
 
@@ -1389,7 +1428,9 @@ horizontal offset, a share of the height, 0 - 0.5), `fronds` (3 - 24),
 dead leaf reaches the ground and no frond is too small for the mesh checks),
 `droop`, `seed` and `segments` (trunk sides, 4 - 12); slots
 `bark` (trunk, nuts, dead leaves) and `leaf` (fronds, fan leaves,
-crownshaft); a triangle mesh body.
+crownshaft); normals smooth with hard edges at 75 degrees (above the turn of
+a trunk of five sides, below the caps' right angles), the leaves' folds and
+rims hard edges; a triangle mesh body.
 
 - The species sets the trunk's radius per meter of height, how much of the
   bend the trunk takes, the trunk's taper and rings (every second station
@@ -1431,7 +1472,11 @@ the blade on edge), the station count and, for `folded`, the segments across
 each half (`across`): at 1 the halves are straight from the keel to the
 edge; above, the underside drops by (share across) ^ 1.6 to the edge, each
 upper point over the middle of its underside segment, the leaf thinning over
-its outer half, the base cap triangles sharing their edges. Each part is a `make_sweep()` tapered from the base share to
+its outer half, the base cap triangles sharing their edges. The hard edges
+(`add_hard_edge()`) run from the base outline to the tip along the lens's two
+edges, and along a folded leaf's outer edges, keel and the keel's top (arched:
+also the outer points of the upper side), so each half is smooth along the
+leaf and the midrib a sharp fold; `folded_split` has none. Each part is a `make_sweep()` tapered from the base share to
 the widest station and to a point, made in the generator's scratch mesh and taken in by
 `Kit_mesh_builder::add_mesh()`, which adds a generated mesh's facets under
 the current slot and splits each quad into two triangles (a bent sweep's
@@ -1462,7 +1507,9 @@ leaves standing at its origin. Parameters `form` (`banana`, `taro`,
 `strelitzia`, `fern`, `tree_fern`), `height` (0.3 - 8 m), `leaves` (3 - 14),
 `droop` (0 - 1), `leaf_width` (0.1 - 0.6) and `seed`; height, leaves and droop
 in the default mask; slots `bark` (stems and dead leaves), `leaf` and
-`young_leaf` (the youngest leaves); no connectors; no body (`Kit_collision::none`,
+`young_leaf` (the youngest leaves); normals smooth with hard edges at 75
+degrees, the leaves' folds and rims hard edges ("Plant parts"); no
+connectors; no body (`Kit_collision::none`,
 P5 of `doc/plans/level_kit_extra_shapes.md`: soft dressing a walker passes
 through; its pieces carry `pass_through`). It shares its parts with the palm
 shrub ("Plant parts"). By form:
@@ -1495,15 +1542,18 @@ solids:
   drooping leaf rests above the ground at every value;
 - a ribbon (`add_ribbon()`, `add_blade()`): at each station the two edges, the
   midrib and the keel under it, pointed at both ends; the edges' lift over the
-  midrib is the leaf's fold. A blade is a stalk widening into an oblong blade;
+  midrib is the leaf's fold. A blade is a stalk widening into an oblong blade,
+  its edges, midrib and keel hard edges, so each face is flat across and
+  smooth along; a stalk or crozier has none and is round;
 - a shell (`add_shell()`): a fan of triangles from a hub over a rim, its copy
   underneath and walls between. A palm's fan (`add_fan()`) has fingers that
   are ridges from the hub to their tips between dropped clefts; a taro's blade
   (`add_heart()`) is a closed rim of ten points. `flatten_above()` scales a
   shell's heights about its hub (one affine map) where it would reach the
-  ground;
+  ground. The rims of both faces are hard edges, and so are a fan's spokes
+  (its pleats) and a heart's midrib;
 - a frond (`add_frond()`): a three-sided rachis and pairs of leaflets, each a
-  low tetrahedron whose ridge folds it;
+  low tetrahedron whose ridge folds it, every edge a hard edge;
 - a stem (`add_stem()`): rings from the ground up, the base a fan about a
   vertex on the origin.
 
@@ -1580,8 +1630,8 @@ ringed canes and arching feather fronds; `rhapis`: thin canes with fan
 leaves; `nipa`: long erect fronds from short stems at the ground), `stems`
 (1 - 9), `height` (the tallest stem's crown, 1.2 wall heights), `spread`
 (how far the outer stems lean out), `fronds` (per stem, 2 - 10) and `seed`;
-stems and height in the default mask; slots `bark` and `leaf`; a
-triangle mesh body.
+stems and height in the default mask; slots `bark` and `leaf`; normals as
+the palm's; a triangle mesh body.
 
 - Each stem is the palm's trunk and crown (`add_palm_tree()`, shared with
   `nature.palm`) with a lighter crown: five trunk sides, three stations per
@@ -1596,7 +1646,8 @@ triangle mesh body.
 `nature.palm_shrub` is a trunkless crown at the ground at its origin.
 Parameters `species`, `size` (1.2 m), `fronds` (3 - 16) and `seed`; size and
 fronds in the default mask; slots `bark` (the stem and dead leaves),
-`leaf` and `young_leaf` (the youngest leaves); a convex hull body. It shares
+`leaf` and `young_leaf` (the youngest leaves); normals as the leaf plant's;
+a convex hull body. It shares
 its parts with the leaf plant ("Plant parts"). By species:
 
 - `palmetto`: pleated fans of eight pointed fingers on long stalks, the young
@@ -1673,7 +1724,7 @@ the longest leaf: a rosette's width, a yucca's height; 1 m, 0.2 - 4),
 upright, 65 degrees, 10 - 85) and `seed`; size and leaves in the default
 mask; slots `foliage`, `bark` (the leaves' dry points, a yucca's trunk and
 dead leaves) and `shoot` (the youngest fifth of the leaves and the bud);
-faceted; a convex hull body.
+`shading` ("Shading"); a convex hull body.
 
 - A leaf is one closed part: rings of its section along an arc that turns
   from its elevation at the stem to the one at its tip, closed to a point.
@@ -1704,7 +1755,7 @@ Parameters `form` (`grass`, `reed`, `pampas`), `height` (of the tallest
 stalk, 0.6 m, 0.1 - 3), `blades` (16, 4 - 40), `spread` (how far the blades
 lean and arch out, 0.5, 0 - 1) and `seed`; height and blades in the default
 mask; slots `blade` (the blades and the tussock) and `plume` (ears, panicles and plumes; Kit Straw);
-faceted; no body (`Kit_collision::none`): a walker passes through it and it
+`shading` ("Shading"); no body (`Kit_collision::none`): a walker passes through it and it
 is no navigation input.
 
 - A blade is one closed part of three-point rings (its two edges and its
@@ -1731,7 +1782,9 @@ Parameters `radius` (of the footprint, 2 modules, 0.3 - 16), `count` (5,
 2 - 10), `size_spread` (how much smaller the smallest boulder is than the
 largest, 0.5, 0 - 1), `form` (`angular`, `worn`, `mixed`; default mixed),
 `roughness` (0.6, 0 - 1) and `seed`; radius and count in the default mask;
-slot `rock`; faceted; a triangle mesh body.
+slot `rock`; `shading` ("Shading", default smooth: the base outline and a
+flat top's outline hard edges ("Hard edges"), so the sides and chamfers
+shade round); a triangle mesh body.
 
 - The largest boulder stands over the origin; the others follow the golden
   angle around it, each smaller than the last, leaning on its flank out to
@@ -1760,7 +1813,8 @@ most is 1380.
 `diameter` (its width before the outline's variation, 0.9 m, 0.3 - 4),
 `thickness` (the height of its level top, 0.25 m, 0.05 - 0.5), `sides` (of
 the outline, 7, 5 - 9) and `seed`; the diameter in the default mask; slot
-`rock`; faceted; connectors base and top (the top face's height); a convex
+`rock`; `shading` as the boulder cluster's (a boulder's base and level top
+hard edges); connectors base and top (the top face's height); a convex
 hull body; tag `walkable`.
 
 - The boulder's construction with a level top: a convex outline of the
@@ -3020,7 +3074,7 @@ fasteners, the crank train, bearings, a spring and the cam train.
   camshaft, worm) lie along X on stands or on their thread.
 - No generator draws from the seed and no parameter is in the default mask;
   every parameter but the seed and the two angles (`cone`, `step`) is
-  derivable. All shapes are faceted.
+  derivable. Every shape takes `shading` ("Shading").
 - Slots: `metal` (cast iron, Kit Metal) and `steel` (machined surfaces, Kit
   Steel).
 - Construction: a lathe is rings about an axis, each band planar quads

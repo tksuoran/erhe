@@ -136,6 +136,16 @@ auto make_enum_parameter(const char* name, const char* description, std::vector<
     return parameter;
 }
 
+auto make_shading_parameter(const Kit_shading default_shading) -> Kit_parameter
+{
+    Kit_parameter parameter = make_enum_parameter(
+        c_kit_shading_parameter, "Normals: flat faces, or smooth with the shape's hard edges",
+        {c_str(Kit_shading::faceted), c_str(Kit_shading::smooth)}, static_cast<int>(default_shading)
+    );
+    parameter.text_presence = Kit_text_presence::unless_default; // pieces saved before it read as the default
+    return parameter;
+}
+
 auto all_sides() -> std::vector<Kit_side>
 {
     return {Kit_side::x_neg, Kit_side::x_pos, Kit_side::y_neg, Kit_side::y_pos, Kit_side::z_neg, Kit_side::z_pos};

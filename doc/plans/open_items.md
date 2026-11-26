@@ -15,7 +15,7 @@ The tasks a session continuing earlier work picks up, in order (`AGENTS.md`
 decision or hardware (Quest, the external 120 Hz display, an NVIDIA GPU):
 ask the user which to pick. Item 14 starts with writing its plan. Items 15,
 17, 18 and 20 wait for the user's review. Item 21 continues at its final pass. Item 22 waits
-for the user's test.
+for the user's test. Item 26 is the next session's task (user, 2026-11-26).
 
 0. The user rulings on the D8 coder decisions ("Prepared assets" below,
    `doc/plans/prepared_assets_design.md` D8).
@@ -99,6 +99,9 @@ for the user's test.
 25. Level kit level of detail: convert the remaining shapes to the shared
     `detail` parameter, curved ones first, then automatic LOD chains
     (`doc/plans/level_kit_detail.md`).
+26. Level kit normals: smooth the remaining curved shapes, props first
+    (`doc/plans/level_kit_normals.md` "Remaining"; the rocks' default waits
+    for the user).
 
 ## Quest session follow-ups
 

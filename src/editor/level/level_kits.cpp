@@ -96,7 +96,27 @@ constexpr float c_smooth_crease_angle_degrees = 80.0f;
 // How far the placement ray behind a hovered foliage mesh reaches.
 constexpr float c_placement_ray_distance = 10000.0f;
 
-// Corner normals averaged over the facets around each vertex within the crease angle of the corner's facet.
+// The angle of the facet at its corner, radians.
+[[nodiscard]] auto get_corner_angle(const GEO::Mesh& mesh, const GEO::index_t facet, const GEO::index_t local_corner) -> float
+{
+    const GEO::index_t count    = mesh.facets.nb_vertices(facet);
+    const GEO::vec3f   position = erhe::geometry::get_pointf(mesh.vertices, mesh.facets.vertex(facet, local_corner));
+    const GEO::vec3f   previous = erhe::geometry::get_pointf(mesh.vertices, mesh.facets.vertex(facet, (local_corner + count - 1) % count));
+    const GEO::vec3f   next     = erhe::geometry::get_pointf(mesh.vertices, mesh.facets.vertex(facet, (local_corner + 1) % count));
+    return get_kit_corner_angle(
+        glm::vec3{previous.x, previous.y, previous.z}, glm::vec3{position.x, position.y, position.z}, glm::vec3{next.x, next.y, next.z}
+    );
+}
+
+class Vertex_facet
+{
+public:
+    GEO::index_t facet;
+    float        weight; // the facet's angle at the vertex: a quad split into two triangles weighs as the quad
+};
+
+// Corner normals averaged over the facets around each vertex within the crease angle of the corner's facet; a corner
+// the generator gave a normal (at a hard edge, Kit_mesh_builder::add_hard_edge()) keeps it.
 void set_crease_corner_normals(erhe::geometry::Geometry& geometry, const float crease_angle_degrees)
 {
     const GEO::Mesh&                 mesh       = geometry.get_mesh();
@@ -104,20 +124,25 @@ void set_crease_corner_normals(erhe::geometry::Geometry& geometry, const float c
     const float cos_limit = std::cos(glm::radians(crease_angle_degrees));
 
     std::vector<GEO::vec3f>                facet_normals(mesh.facets.nb());
-    std::vector<std::vector<GEO::index_t>> vertex_facets(mesh.vertices.nb());
+    std::vector<std::vector<Vertex_facet>> vertex_facets(mesh.vertices.nb());
     for (const GEO::index_t facet : mesh.facets) {
         facet_normals[facet] = GEO::normalize(erhe::geometry::mesh_facet_normalf(mesh, facet));
-        for (const GEO::index_t corner : mesh.facets.corners(facet)) {
-            vertex_facets[mesh.facet_corners.vertex(corner)].push_back(facet);
+        for (GEO::index_t local_corner = 0, end = mesh.facets.nb_vertices(facet); local_corner < end; ++local_corner) {
+            vertex_facets[mesh.facets.vertex(facet, local_corner)].push_back(
+                Vertex_facet{.facet = facet, .weight = get_corner_angle(mesh, facet, local_corner)}
+            );
         }
     }
     for (const GEO::index_t facet : mesh.facets) {
         const GEO::vec3f facet_normal = facet_normals[facet];
         for (const GEO::index_t corner : mesh.facets.corners(facet)) {
+            if (attributes.corner_normal.has(corner)) {
+                continue;
+            }
             GEO::vec3f sum{0.0f, 0.0f, 0.0f};
-            for (const GEO::index_t other : vertex_facets[mesh.facet_corners.vertex(corner)]) {
-                if (GEO::dot(facet_normal, facet_normals[other]) >= cos_limit) {
-                    sum += facet_normals[other];
+            for (const Vertex_facet& other : vertex_facets[mesh.facet_corners.vertex(corner)]) {
+                if (GEO::dot(facet_normal, facet_normals[other.facet]) >= cos_limit) {
+                    sum += other.weight * facet_normals[other.facet];
                 }
             }
             attributes.corner_normal.set(corner, (GEO::length(sum) > 0.0f) ? GEO::normalize(sum) : facet_normal);
@@ -125,8 +150,9 @@ void set_crease_corner_normals(erhe::geometry::Geometry& geometry, const float c
     }
 }
 
-void process_kit_geometry(const Kit_shape_definition& shape, erhe::geometry::Geometry& geometry)
+void process_kit_geometry(const Kit_parameter_values& values, erhe::geometry::Geometry& geometry)
 {
+    const Kit_normal_style style = get_kit_shading(values);
     geometry.process(
         {
             .flags =
@@ -135,18 +161,18 @@ void process_kit_geometry(const Kit_shape_definition& shape, erhe::geometry::Geo
                 erhe::geometry::Geometry::process_flag_generate_facet_texture_coordinates
         }
     );
-    if (shape.normal_style == Kit_normal_style::smooth) {
+    if (style == Kit_normal_style::smooth) {
         set_crease_corner_normals(geometry, c_smooth_crease_angle_degrees);
-    } else if (shape.normal_style == Kit_normal_style::smooth_with_hard_edges) {
-        set_crease_corner_normals(geometry, shape.hard_edge_angle_degrees);
+    } else if (style == Kit_normal_style::smooth_with_hard_edges) {
+        set_crease_corner_normals(geometry, values.get_shape()->hard_edge_angle_degrees);
     }
 }
 
 } // anonymous namespace
 
-auto get_kit_normal_style(const Kit_shape_definition& shape) -> erhe::primitive::Normal_style
+auto get_kit_normal_style(const Kit_parameter_values& values) -> erhe::primitive::Normal_style
 {
-    switch (shape.normal_style) {
+    switch (get_kit_shading(values)) {
         case Kit_normal_style::smooth:
         case Kit_normal_style::smooth_with_hard_edges: return erhe::primitive::Normal_style::corner_normals;
         case Kit_normal_style::faceted:
@@ -165,7 +191,7 @@ auto make_kit_geometry(const Kit_parameter_values& values) -> std::shared_ptr<er
     if (mesh.facets.attributes().is_defined(c_kit_slot_attribute)) {
         mesh.facets.attributes().delete_attribute_store(c_kit_slot_attribute);
     }
-    process_kit_geometry(shape, *geometry.get());
+    process_kit_geometry(values, *geometry.get());
     return geometry;
 }
 
@@ -193,7 +219,7 @@ auto make_kit_part_geometries(
         if (part->get_mesh().facets.nb() == 0) {
             return fmt::format("slot '{}' has no facets", shape.material_slots[slot]);
         }
-        process_kit_geometry(shape, *part.get());
+        process_kit_geometry(values, *part.get());
         out_parts.push_back(std::move(part));
     }
     return {};
@@ -1192,7 +1218,7 @@ auto Level_kits::make_brush(const Kit_parameter_values& values) -> std::shared_p
             },
             .buffer_info     = m_context.mesh_memory->make_primitive_buffer_info()
         },
-        .normal_style       = get_kit_normal_style(shape),
+        .normal_style       = get_kit_normal_style(values),
         .geometry_generator = [values]() -> std::shared_ptr<erhe::geometry::Geometry> {
             return make_kit_geometry(values);
         },

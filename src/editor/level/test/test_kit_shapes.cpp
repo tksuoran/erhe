@@ -824,6 +824,146 @@ TEST(Kit_shape_checks, surfaces_may_be_open)
     EXPECT_FALSE(editor::check_kit_mesh(mesh, editor::Kit_mesh_kind::surface).is_valid());
 }
 
+// A strip of three quads bending 10 and then 40 degrees: around a vertex of a hard edge the corner normals average the
+// facets up to the hard edges and no further; corners at no hard edge get no normal from the builder.
+TEST(Kit_mesh_builder, hard_edges_split_the_corner_normals)
+{
+    const float     bend = glm::radians(10.0f);
+    const float     fold = glm::radians(50.0f);
+    const glm::vec2 p0{0.0f, 0.0f};
+    const glm::vec2 p1{1.0f, 0.0f};
+    const glm::vec2 p2 = p1 + glm::vec2{std::cos(bend), std::sin(bend)};
+    const glm::vec2 p3 = p2 + glm::vec2{std::cos(fold), std::sin(fold)};
+    editor::Kit_mesh_builder builder;
+    std::array<uint32_t, 4> v{};
+    std::array<uint32_t, 4> w{};
+    std::size_t i = 0;
+    for (const glm::vec2& p : {p0, p1, p2, p3}) {
+        v[i] = builder.add_vertex(glm::vec3{p.x, p.y, 0.0f});
+        w[i] = builder.add_vertex(glm::vec3{p.x, p.y, 1.0f});
+        ++i;
+    }
+    for (std::size_t q = 0; q < 3; ++q) {
+        builder.add_quad(v[q], w[q], w[q + 1], v[q + 1]);
+    }
+    builder.add_hard_edge(v[0], v[1]);
+    builder.add_hard_edge(v[2], w[2]);
+    GEO::Mesh mesh{3, true};
+    builder.write(mesh);
+
+    const erhe::geometry::Attribute_present<GEO::vec3f> corner_normal{
+        mesh.facet_corners.attributes(), erhe::geometry::Attribute_descriptors::s_normal
+    };
+    const auto normal_at = [&mesh, &corner_normal](const GEO::index_t facet, const GEO::index_t local_corner) -> glm::vec3 {
+        const GEO::index_t corner = mesh.facets.corner(facet, local_corner);
+        EXPECT_TRUE(corner_normal.has(corner)) << "facet " << facet << " corner " << local_corner;
+        const GEO::vec3f n = corner_normal.get(corner);
+        return glm::vec3{n.x, n.y, n.z};
+    };
+    const auto facet_normal = [](const glm::vec2 a, const glm::vec2 b) -> glm::vec3 {
+        const glm::vec2 d = glm::normalize(b - a);
+        return glm::vec3{-d.y, d.x, 0.0f};
+    };
+    const glm::vec3 n0 = facet_normal(p0, p1);
+    const glm::vec3 n1 = facet_normal(p1, p2);
+    const glm::vec3 n2 = facet_normal(p2, p3);
+    const auto expect_near = [](const glm::vec3& actual, const glm::vec3& expected) {
+        EXPECT_LT(glm::length(actual - expected), 1.0e-5f) << actual.x << " " << actual.y << " " << actual.z;
+    };
+    // v1 lies on the hard edge v0-v1; its fan crosses the smooth edge v1-w1, both quads at right angles there.
+    expect_near(normal_at(0, 3), glm::normalize(n0 + n1));
+    expect_near(normal_at(1, 0), glm::normalize(n0 + n1));
+    expect_near(normal_at(0, 0), n0);
+    // The hard edge v2-w2 keeps each side's own normal.
+    expect_near(normal_at(1, 3), n1);
+    expect_near(normal_at(2, 0), n2);
+    expect_near(normal_at(1, 2), n1);
+    expect_near(normal_at(2, 1), n2);
+    EXPECT_FALSE(corner_normal.has(mesh.facets.corner(0, 1))); // w0
+    EXPECT_FALSE(corner_normal.has(mesh.facets.corner(2, 2))); // w3
+}
+
+// Smooth vertices average their facets whatever the angle: two quads folded 100 degrees share one normal on their join.
+TEST(Kit_mesh_builder, smooth_vertices_ignore_the_angle)
+{
+    const float fold = glm::radians(100.0f);
+    editor::Kit_mesh_builder builder;
+    const uint32_t first = static_cast<uint32_t>(builder.get_positions().size());
+    const glm::vec2 p0{0.0f, 0.0f};
+    const glm::vec2 p1{1.0f, 0.0f};
+    const glm::vec2 p2 = p1 + glm::vec2{std::cos(fold), std::sin(fold)};
+    std::array<uint32_t, 3> v{};
+    std::array<uint32_t, 3> w{};
+    std::size_t i = 0;
+    for (const glm::vec2& p : {p0, p1, p2}) {
+        v[i] = builder.add_vertex(glm::vec3{p.x, p.y, 0.0f});
+        w[i] = builder.add_vertex(glm::vec3{p.x, p.y, 1.0f});
+        ++i;
+    }
+    builder.add_quad(v[0], w[0], w[1], v[1]);
+    builder.add_quad(v[1], w[1], w[2], v[2]);
+    builder.set_smooth_from(first);
+    GEO::Mesh mesh{3, true};
+    builder.write(mesh);
+    const erhe::geometry::Attribute_present<GEO::vec3f> corner_normal{
+        mesh.facet_corners.attributes(), erhe::geometry::Attribute_descriptors::s_normal
+    };
+    for (GEO::index_t c = 0; c < mesh.facet_corners.nb(); ++c) {
+        EXPECT_TRUE(corner_normal.has(c)) << "corner " << c;
+    }
+    const GEO::vec3f a = corner_normal.get(mesh.facets.corner(0, 3)); // v1 of the first quad
+    const GEO::vec3f b = corner_normal.get(mesh.facets.corner(1, 0)); // v1 of the second
+    EXPECT_LT(GEO::length(a - b), 1.0e-6f);
+    const glm::vec3 expected = glm::normalize(glm::vec3{0.0f, 1.0f, 0.0f} + glm::vec3{-std::sin(fold), std::cos(fold), 0.0f});
+    EXPECT_LT(glm::length(glm::vec3{a.x, a.y, a.z} - expected), 1.0e-5f);
+}
+
+// The rocks' shading parameter: left out of the text at its default, a text without it (a piece saved before it) reads
+// as the default, and its value picks faceted or the shape's smooth style.
+TEST(Kit_shading, shapes_pick_faceted_or_smooth)
+{
+    // The rocks, the plants without leaf helpers and the machine parts take the parameter.
+    const std::set<std::string> expected{
+        "nature.rock", "nature.boulder_cluster", "nature.stepping_stone", "nature.rock_spire", "nature.rock_arch", "nature.basalt_columns",
+        "nature.tree", "nature.bush", "nature.succulent", "nature.grass_tuft", "nature.bamboo",
+        "machine.gear", "machine.rack", "machine.bolt", "machine.nut", "machine.spring", "machine.spring_old", "machine.bearing",
+        "machine.piston", "machine.cam", "machine.connecting_rod", "machine.crankshaft", "machine.follower", "machine.camshaft",
+        "machine.bevel_gear", "machine.worm", "machine.pulley", "machine.washer", "machine.cylinder", "machine.pillow_block"
+    };
+    std::set<std::string> found;
+    for (const Kit_shape_definition& shape : get_library().get_shapes()) {
+        if (shape.find_parameter(editor::c_kit_shading_parameter).has_value()) {
+            found.insert(shape.id);
+        }
+    }
+    EXPECT_EQ(found, expected);
+    for (const std::string& id : expected) {
+        SCOPED_TRACE(id);
+        const Kit_shape_definition& shape = get_shape(id.c_str());
+        ASSERT_TRUE(shape.find_parameter(editor::c_kit_shading_parameter).has_value());
+        EXPECT_NE(shape.normal_style, editor::Kit_normal_style::faceted);
+        Kit_parameter_values values = defaults(shape);
+        const std::string default_text = values.to_canonical_text();
+        EXPECT_EQ(default_text.find("shading"), std::string::npos) << default_text;
+        Kit_parameter_values read_back;
+        ASSERT_EQ(editor::parse_canonical_text(shape, default_text, read_back), "");
+        EXPECT_EQ(read_back.get_enum(editor::c_kit_shading_parameter), values.get_enum(editor::c_kit_shading_parameter));
+        const std::string_view other = (values.get_enum(editor::c_kit_shading_parameter) == "faceted") ? "smooth" : "faceted";
+        ASSERT_TRUE(values.set_enum(editor::c_kit_shading_parameter, other));
+        const std::string other_text = values.to_canonical_text();
+        EXPECT_NE(other_text.find(fmt::format("\"shading\":\"{}\"", other)), std::string::npos) << other_text;
+        ASSERT_EQ(editor::parse_canonical_text(shape, other_text, read_back), "");
+        EXPECT_EQ(read_back.get_enum(editor::c_kit_shading_parameter), other);
+        EXPECT_EQ(editor::get_kit_shading(read_back), (other == "faceted") ? editor::Kit_normal_style::faceted : shape.normal_style);
+    }
+    // The bevelled rocks, the plants and the machine parts are smooth by default, the other rocks faceted.
+    EXPECT_EQ(defaults(get_shape("nature.boulder_cluster")).get_enum(editor::c_kit_shading_parameter), "smooth");
+    EXPECT_EQ(defaults(get_shape("nature.stepping_stone")).get_enum(editor::c_kit_shading_parameter), "smooth");
+    EXPECT_EQ(defaults(get_shape("nature.tree")).get_enum(editor::c_kit_shading_parameter), "smooth");
+    EXPECT_EQ(defaults(get_shape("machine.gear")).get_enum(editor::c_kit_shading_parameter), "smooth");
+    EXPECT_EQ(defaults(get_shape("nature.rock")).get_enum(editor::c_kit_shading_parameter), "faceted");
+}
+
 // P5: the water is an open surface facing up, without a body; its subdivisions make its quads.
 TEST(Kit_water, is_an_open_surface_without_a_body)
 {
