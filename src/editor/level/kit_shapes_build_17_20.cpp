@@ -512,6 +512,10 @@ void add_bamboo_leaf(Kit_mesh_builder& builder, const glm::vec3& base, const glm
     builder.add_triangle(b, k, r);
     builder.add_triangle(t, k, l);
     builder.add_triangle(t, r, k);
+    // The outline is sharp; the top bends across l - r and the underside over its keel.
+    for (const std::array<uint32_t, 2>& edge : {std::array<uint32_t, 2>{b, l}, {l, t}, {t, r}, {r, b}}) {
+        builder.add_hard_edge(edge[0], edge[1]);
+    }
 }
 
 // A twig from the anchor to the tip: a level triangle under a point.
@@ -1435,10 +1439,11 @@ void add_build_17_20_shapes(std::vector<Kit_shape_definition>& shapes)
             derive_float(make_length_parameter("radius", "Radius of the canes' feet", 0.5f, Kit_default_scale::modules, 0.1f, 4.0f), 0.3f, 1.0f, 0.1f),
             from_seed_by_default(derive_float(make_angle_parameter("lean", "Outward lean of the outermost canes", 5.0f, 0.0f, 20.0f), 0.0f, 10.0f, 1.0f)),
             derive_float(make_length_parameter("cane_width", "Width of the thickest cane at its foot", 0.1f, Kit_default_scale::meters, 0.03f, 0.3f), 0.07f, 0.14f, 0.01f),
-            make_seed_parameter()
+            make_seed_parameter(),
+            make_shading_parameter(Kit_shading::smooth)
         };
         shape.material_slots  = {"cane", "bark", "leaf"};
-        shape.normal_style    = Kit_normal_style::faceted;
+        shape.normal_style    = Kit_normal_style::smooth; // round canes; the node bands are slots of their own, the leaf outlines hard edges
         shape.triangle_budget = 1200;
         shape.collision       = Kit_collision::triangle_mesh;
         shape.randomness      = Kit_randomness::seeded;

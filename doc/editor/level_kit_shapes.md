@@ -97,7 +97,10 @@ the ceiling at its range maxima.
   rim, a fan's pleats). `write()` gives every corner at a vertex of a hard
   edge its normal: the facets met walking around the vertex both ways from
   the corner's facet up to a hard edge, weighted by their angles at the
-  vertex. The shape's normal style fills the other corners
+  vertex. `set_smooth_from(first)` makes the vertices from `first` to the
+  last added shade the same way, split by the hard edges alone whatever the
+  angles between their facets (a lumpy foliage clump, a limb of few sides).
+  The shape's normal style fills the other corners
   (`doc/editor/level_tools.md` "Kit brushes"); a faceted shape uses neither.
 - Former builds: a shape whose build was fixed keeps its former build for a
   side by side comparison as `<id>_old` ("<name> (old)", `add_former_build()`
@@ -198,17 +201,31 @@ The other shapes are converted step by step (`doc/plans/level_kit_detail.md`).
 
 ## Shading
 
-The rocks (`nature.rock`, `nature.boulder_cluster`, `nature.stepping_stone`,
-`nature.rock_spire`, `nature.rock_arch`, `nature.basalt_columns`) take the
-enum parameter `shading` (`c_kit_shading_parameter`,
-`make_shading_parameter()`), the last of their own: `faceted`, or `smooth`, the shape's
-own normal style (smooth, with its hard edges). It is never derived and
-leaves the mesh as it is; the normals follow it (`get_kit_shading()`). The
-chamfered rocks, the boulder cluster and the stepping stone, are smooth by
-default; the others faceted. Like `detail`, the default is left out of a
-piece's canonical text and a text without it reads as the default
-(`Kit_text_presence::unless_default`), so rocks saved before the parameter
-read and keep their mesh key.
+The rocks, the tree, bush, succulent, grass tuft and bamboo, and the
+machine parts take the enum parameter `shading` (`c_kit_shading_parameter`,
+`make_shading_parameter()`), the last of their own: `faceted`, or `smooth`,
+the shape's own normal style with its hard edges. It is never derived and
+leaves the mesh as it is; the normals follow it (`get_kit_shading()`). Like
+`detail`, the default is left out of a piece's canonical text and a text
+without it reads as the default (`Kit_text_presence::unless_default`), so
+pieces saved before the parameter read and keep their mesh key.
+
+- Rocks (`nature.rock`, `nature.boulder_cluster`, `nature.stepping_stone`,
+  `nature.rock_spire`, `nature.rock_arch`, `nature.basalt_columns`): smooth
+  with the 80 degree crease, a boulder's or a piece's flat base and flat top
+  outlines hard edges. The chamfered rocks, the boulder cluster and the
+  stepping stone, default to smooth; the others to faceted.
+- Plants (default smooth, the 80 degree crease): the tree's and the bush's
+  trunk, limbs, twigs, clumps and conifer tiers are smooth vertices
+  (`set_smooth_from()`), with hard edges at a flat base on the ground and a
+  tier's drooping rim. A succulent's or grass tuft's blade has its two edges
+  hard from base to tip, a stem its ground ring. The bamboo's node bands are
+  slots of their own, so their rings stay sharp, and a leaf's outline is
+  hard; a cane of three or four sides stays faceted at the crease.
+- Machine parts (default smooth): hard edges above 50 degrees, so a turned
+  surface of eight or more segments shades round while hexagons, teeth and
+  steps keep their edges. A bolt's thread marks its roots and crests hard
+  (a lathe's `hard_rings`, the helix's root and ridge lines).
 
 ## Slots and palette
 
@@ -1707,7 +1724,7 @@ the longest leaf: a rosette's width, a yucca's height; 1 m, 0.2 - 4),
 upright, 65 degrees, 10 - 85) and `seed`; size and leaves in the default
 mask; slots `foliage`, `bark` (the leaves' dry points, a yucca's trunk and
 dead leaves) and `shoot` (the youngest fifth of the leaves and the bud);
-faceted; a convex hull body.
+`shading` ("Shading"); a convex hull body.
 
 - A leaf is one closed part: rings of its section along an arc that turns
   from its elevation at the stem to the one at its tip, closed to a point.
@@ -1738,7 +1755,7 @@ Parameters `form` (`grass`, `reed`, `pampas`), `height` (of the tallest
 stalk, 0.6 m, 0.1 - 3), `blades` (16, 4 - 40), `spread` (how far the blades
 lean and arch out, 0.5, 0 - 1) and `seed`; height and blades in the default
 mask; slots `blade` (the blades and the tussock) and `plume` (ears, panicles and plumes; Kit Straw);
-faceted; no body (`Kit_collision::none`): a walker passes through it and it
+`shading` ("Shading"); no body (`Kit_collision::none`): a walker passes through it and it
 is no navigation input.
 
 - A blade is one closed part of three-point rings (its two edges and its
@@ -3057,7 +3074,7 @@ fasteners, the crank train, bearings, a spring and the cam train.
   camshaft, worm) lie along X on stands or on their thread.
 - No generator draws from the seed and no parameter is in the default mask;
   every parameter but the seed and the two angles (`cone`, `step`) is
-  derivable. All shapes are faceted.
+  derivable. Every shape takes `shading` ("Shading").
 - Slots: `metal` (cast iron, Kit Metal) and `steel` (machined surfaces, Kit
   Steel).
 - Construction: a lathe is rings about an axis, each band planar quads

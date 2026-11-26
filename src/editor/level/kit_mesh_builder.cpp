@@ -315,6 +315,19 @@ void Kit_mesh_builder::add_hard_edge(const uint32_t a, const uint32_t b)
     m_hard_edges.push_back(make_edge_key(a, b));
 }
 
+void Kit_mesh_builder::set_smooth_from(const uint32_t first)
+{
+    ERHE_VERIFY(first <= m_positions.size());
+    m_smooth_ranges.push_back(std::array<uint32_t, 2>{first, static_cast<uint32_t>(m_positions.size())});
+}
+
+void Kit_mesh_builder::add_hard_loop(const uint32_t first, const uint32_t count)
+{
+    for (uint32_t i = 0; i < count; ++i) {
+        add_hard_edge(first + i, first + ((i + 1) % count));
+    }
+}
+
 void Kit_mesh_builder::write(GEO::Mesh& mesh) const
 {
     const GEO::index_t first_facet  = mesh.facets.nb();
@@ -342,21 +355,27 @@ void Kit_mesh_builder::write(GEO::Mesh& mesh) const
         }
         i = run_end;
     }
-    if (m_hard_edges.empty()) {
+    if (m_hard_edges.empty() && m_smooth_ranges.empty()) {
         return;
     }
 
-    // Corner normals around the vertices of the hard edges: each corner averages, weighted by their angles at the
-    // vertex, the facets reached by walking around the vertex both ways from its own facet up to a hard edge.
+    // Corner normals around the vertices of the hard edges and the smooth vertices: each corner averages, weighted by
+    // their angles at the vertex, the facets reached by walking around the vertex both ways from its own facet up to a
+    // hard edge.
     std::vector<uint64_t> hard_edges = m_hard_edges;
     std::sort(hard_edges.begin(), hard_edges.end());
     const auto is_hard = [&hard_edges](const uint32_t a, const uint32_t b) -> bool {
         return std::binary_search(hard_edges.begin(), hard_edges.end(), make_edge_key(a, b));
     };
-    std::vector<bool> on_hard_edge(m_positions.size(), false);
+    std::vector<bool> builder_shaded(m_positions.size(), false);
     for (const uint64_t key : hard_edges) {
-        on_hard_edge[static_cast<std::size_t>(key >> 32)]         = true;
-        on_hard_edge[static_cast<std::size_t>(key & 0xffffffffu)] = true;
+        builder_shaded[static_cast<std::size_t>(key >> 32)]         = true;
+        builder_shaded[static_cast<std::size_t>(key & 0xffffffffu)] = true;
+    }
+    for (const std::array<uint32_t, 2>& range : m_smooth_ranges) {
+        for (uint32_t v = range[0]; v < range[1]; ++v) {
+            builder_shaded[v] = true;
+        }
     }
     std::unordered_map<uint64_t, uint32_t> facet_of_directed_edge;
     std::vector<glm::vec3>                 facet_normals(m_facets.size());
@@ -393,7 +412,7 @@ void Kit_mesh_builder::write(GEO::Mesh& mesh) const
         const std::vector<uint32_t>& corners = m_facets[f];
         for (std::size_t c = 0, count = corners.size(); c < count; ++c) {
             const uint32_t vertex = corners[c];
-            if (!on_hard_edge[vertex]) {
+            if (!builder_shaded[vertex]) {
                 continue;
             }
             glm::vec3 sum    = weighted_normal(static_cast<uint32_t>(f), c);

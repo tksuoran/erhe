@@ -703,7 +703,12 @@ void add_clump(Kit_mesh_builder& builder, Kit_random& random, const glm::vec3& c
     const float     top_z  = next_signed(random);
     const glm::vec3 top    = center + glm::vec3{0.2f * radii.x * top_x, radii.y, 0.2f * radii.z * top_z};
     const glm::vec3 bottom = center + glm::vec3{0.0f, flat ? 0.0f : (-0.8f * radii.y), 0.0f};
+    const uint32_t  first  = static_cast<uint32_t>(builder.get_positions().size());
     builder.add_ring_solid(points, sides, bottom, top);
+    builder.set_smooth_from(first); // a lump of leaves: round all over
+    if (flat) {
+        builder.add_hard_loop(first, static_cast<uint32_t>(sides)); // the flat base on the ground
+    }
 }
 
 // A tapered closed tube through the centers in the vertical plane whose horizontal normal is side; pointed at its end.
@@ -723,7 +728,9 @@ void add_limb(Kit_mesh_builder& builder, const std::span<const glm::vec3> center
     }
     const glm::vec3 start_along = glm::normalize(centers[1] - centers[0]);
     const glm::vec3 end_along   = glm::normalize(centers[last] - centers[last - 1]);
+    const uint32_t  first       = static_cast<uint32_t>(builder.get_positions().size());
     builder.add_ring_solid(points, sides, centers[0] - (radii[0] * start_along), centers[last] + ((2.0f * radii[last]) * end_along));
+    builder.set_smooth_from(first); // round however few its sides
 }
 
 constexpr uint32_t tree_bark_slot    = 0;
@@ -766,8 +773,11 @@ void add_trunk(Kit_mesh_builder& builder, Kit_random& random, const Tree_trunk& 
             points.push_back(center + glm::vec3{reach * circle.x, 0.0f, reach * circle.y});
         }
     }
-    const glm::vec3 top = trunk.center(1.0f) + glm::vec3{0.0f, trunk.radius, 0.0f};
+    const glm::vec3 top   = trunk.center(1.0f) + glm::vec3{0.0f, trunk.radius, 0.0f};
+    const uint32_t  first = static_cast<uint32_t>(builder.get_positions().size());
     builder.add_ring_solid(points, sides, glm::vec3{0.0f}, top);
+    builder.set_smooth_from(first);
+    builder.add_hard_loop(first, static_cast<uint32_t>(sides)); // the flat base on the ground
 }
 
 // A limb from the trunk at the share t of its height out to the end, with an elbow lifted above the straight line.
@@ -862,7 +872,10 @@ void add_conifer_tier(Kit_mesh_builder& builder, Kit_random& random, const glm::
             points.push_back(base + glm::vec3{reach * direction.x, y, reach * direction.z});
         }
     }
+    const uint32_t first = static_cast<uint32_t>(builder.get_positions().size());
     builder.add_ring_solid(points, sides, base + glm::vec3{0.0f, 0.16f * height, 0.0f}, base + glm::vec3{0.0f, height, 0.0f});
+    builder.set_smooth_from(first);
+    builder.add_hard_loop(first + static_cast<uint32_t>(sides), static_cast<uint32_t>(sides)); // the drooping rim
 }
 
 void add_conifer(Kit_mesh_builder& builder, Kit_random& random, const float trunk_height, const float canopy_size, const float detail)
@@ -1120,7 +1133,7 @@ void add_nature_shapes(std::vector<Kit_shape_definition>& shapes)
         shape.display_name    = "Tree";
         shape.tags            = {"obstacle", "decoration", "size:2x2x3"};
         shape.material_slots  = {"bark", "foliage"};
-        shape.normal_style    = Kit_normal_style::faceted;
+        shape.normal_style    = Kit_normal_style::smooth; // round limbs and clumps; hard edges at flat bases and tier rims
         shape.triangle_budget = 480;
         shape.collision       = Kit_collision::triangle_mesh;
         shape.randomness      = Kit_randomness::seeded;
@@ -1134,7 +1147,8 @@ void add_nature_shapes(std::vector<Kit_shape_definition>& shapes)
             from_seed_by_default(derive_float(make_length_parameter("trunk_height", "Height of the canopy's base", 0.6f, Kit_default_scale::wall_heights, 0.1f, 32.0f), 0.4f, 0.8f, 0.05f)),
             from_seed_by_default(derive_float(make_length_parameter("canopy_size",  "Diameter of the canopy",      2.0f, Kit_default_scale::modules,      0.2f, 32.0f), 1.5f, 3.0f, 0.1f)),
             derive_enum(make_enum_parameter("species", "Broadleaf, conifer or bare", {"broadleaf", "conifer", "bare"}, 0)),
-            make_seed_parameter()
+            make_seed_parameter(),
+            make_shading_parameter(Kit_shading::smooth)
         };
         shapes.push_back(std::move(shape));
     }
@@ -1146,7 +1160,7 @@ void add_nature_shapes(std::vector<Kit_shape_definition>& shapes)
         shape.kit             = "nature";
         shape.display_name    = "Bush";
         shape.tags            = {"obstacle", "decoration", "size:1x1"};
-        shape.normal_style    = Kit_normal_style::faceted;
+        shape.normal_style    = Kit_normal_style::smooth; // round limbs and clumps; hard edges at flat bases and tier rims
         shape.triangle_budget = 420;
         shape.randomness      = Kit_randomness::seeded;
         shape.detail_response = Kit_detail_response::scaled;
@@ -1157,7 +1171,8 @@ void add_nature_shapes(std::vector<Kit_shape_definition>& shapes)
         shape.parameters  = {
             from_seed_by_default(derive_float(make_length_parameter("size", "Diameter", 1.0f, Kit_default_scale::modules, 0.1f, 16.0f), 0.6f, 1.4f, 0.05f)),
             derive_int(make_count_parameter("twigs", "Bare twigs reaching past the leaves", 3, 1, bush_twig_max), 2, 4),
-            make_seed_parameter()
+            make_seed_parameter(),
+            make_shading_parameter(Kit_shading::smooth)
         };
         shape.material_slots = {"foliage", "bark"};
         shapes.push_back(std::move(shape));

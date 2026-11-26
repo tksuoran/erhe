@@ -884,6 +884,14 @@ void add_blade(Kit_mesh_builder& builder, const Blade& blade)
     for (uint32_t i = 0; i < n; ++i) {
         builder.add_triangle(last + i, last + ((i + 1) % n), tip);
     }
+    // The blade's two edges are sharp from the base to the tip; its faces shade round between them.
+    for (const uint32_t j : {0u, n - 2u}) {
+        builder.add_hard_edge(base_cap, first + j);
+        for (uint32_t r = 0; (r + 1) < static_cast<uint32_t>(ring_count); ++r) {
+            builder.add_hard_edge(first + (r * n) + j, first + ((r + 1) * n) + j);
+        }
+        builder.add_hard_edge(last + j, tip);
+    }
 }
 
 // A stem of rings around the Y axis from the ground; a ring is (share of the height, share of the radius). The sides
@@ -909,7 +917,9 @@ void add_stem(
             points.push_back(center + glm::vec3{radius * ring.y * circle.x, 0.0f, radius * ring.y * circle.y});
         }
     }
+    const uint32_t first = static_cast<uint32_t>(builder.get_positions().size());
     builder.add_ring_solid(points, sides, glm::vec3{0.0f}, glm::vec3{lean.x, top_y, lean.z});
+    builder.add_hard_loop(first, static_cast<uint32_t>(sides)); // the flat base on the ground
 }
 
 //
@@ -1764,10 +1774,11 @@ void add_build_13_16_shapes(std::vector<Kit_shape_definition>& shapes)
             from_seed_by_default(derive_float(make_length_parameter("size", "Twice the longest leaf: a rosette's width, a yucca's height", 1.0f, Kit_default_scale::meters, 0.2f, 4.0f), 0.4f, 2.5f, 0.1f)),
             from_seed_by_default(derive_int(make_count_parameter("leaves", "Leaves", 16, 6, 32), 8, 24)),
             derive_float(make_angle_parameter("spread", "Angle of the outermost leaves from the upright", 65.0f, 10.0f, 85.0f), 20.0f, 80.0f, 5.0f),
-            make_seed_parameter()
+            make_seed_parameter(),
+            make_shading_parameter(Kit_shading::smooth)
         };
         shape.material_slots  = {"foliage", "bark", "shoot"};
-        shape.normal_style    = Kit_normal_style::faceted;
+        shape.normal_style    = Kit_normal_style::smooth; // round leaves and stems; hard blade edges and flat bases
         shape.triangle_budget = 600;
         shape.collision       = Kit_collision::convex_hull;
         shape.randomness      = Kit_randomness::seeded;
@@ -1791,10 +1802,11 @@ void add_build_13_16_shapes(std::vector<Kit_shape_definition>& shapes)
             from_seed_by_default(derive_float(make_length_parameter("height", "Height of the tallest stalk", 0.6f, Kit_default_scale::meters, 0.1f, 3.0f), 0.2f, 2.0f, 0.05f)),
             from_seed_by_default(derive_int(make_count_parameter("blades", "Blades; a reed has a cane for every three", 16, 4, 40), 8, 24)),
             derive_float(make_ratio_parameter("spread", "How far the blades lean and arch out", 0.5f), 0.2f, 0.8f, 0.05f),
-            make_seed_parameter()
+            make_seed_parameter(),
+            make_shading_parameter(Kit_shading::smooth)
         };
         shape.material_slots  = {"blade", "plume"};
-        shape.normal_style    = Kit_normal_style::faceted;
+        shape.normal_style    = Kit_normal_style::smooth; // round leaves and stems; hard blade edges and flat bases
         shape.triangle_budget = 640;
         shape.collision       = Kit_collision::none;
         shape.randomness      = Kit_randomness::seeded;

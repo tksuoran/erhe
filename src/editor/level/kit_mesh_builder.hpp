@@ -2,6 +2,7 @@
 
 #include <glm/glm.hpp>
 
+#include <array>
 #include <cstdint>
 #include <initializer_list>
 #include <span>
@@ -66,9 +67,14 @@ public:
 
     // A designed sharp edge between two vertices of a facet edge: the normals of the vertices on it do not average across it.
     void add_hard_edge(uint32_t a, uint32_t b);
+    // The hard edges around a ring of count vertices from first: first + i to first + (i + 1) % count.
+    void add_hard_loop(uint32_t first, uint32_t count);
+    // The vertices from first to the last added shade round whatever the angles between their facets: write() gives
+    // their corners normals as at a hard edge's vertex, split by the hard edges alone (a lumpy foliage clump).
+    void set_smooth_from(uint32_t first);
 
     // Writes the facets and their slots (c_kit_slot_attribute), and the corner normals of every corner at a vertex of a
-    // hard edge (doc/editor/level_kit_shapes.md "Hard edges").
+    // hard edge or a smooth vertex (doc/editor/level_kit_shapes.md "Hard edges").
     void write       (GEO::Mesh& mesh) const;
 
     [[nodiscard]] auto get_positions() const -> const std::vector<glm::vec3>&;
@@ -78,6 +84,7 @@ private:
     std::vector<std::vector<uint32_t>> m_facets;
     std::vector<uint32_t>              m_facet_slots;
     std::vector<uint64_t>              m_hard_edges; // (min vertex << 32) | max vertex
+    std::vector<std::array<uint32_t, 2>> m_smooth_ranges; // [first, end) vertex ranges of set_smooth_from()
     uint32_t                           m_slot{0};
 };
 
