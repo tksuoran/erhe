@@ -761,7 +761,7 @@ public:
     float       axis_y{0.0f};
 };
 
-void generate_spring(const Kit_parameter_values& values, GEO::Mesh& mesh)
+void generate_spring_build(const Kit_parameter_values& values, GEO::Mesh& mesh, const Kit_build build)
 {
     const Spring_values spring{values};
     const float half  = 0.5f * spring.wire;
@@ -780,12 +780,35 @@ void generate_spring(const Kit_parameter_values& values, GEO::Mesh& mesh)
             const glm::vec3 out{0.0f, -std::cos(angle), -std::sin(angle)};
             points.push_back(Wire_point{.center = glm::vec3{start + (pitch * turn), spring.axis_y, 0.0f} + (r * out), .up = x_axis, .side = out});
         }
-        add_wire(builder, points, half);
         // A hook at each end: half a ring of the coil's radius from the coil's end point, in the plane through the
         // axis and that point, so it rises from the coil's lowest side.
         const float     end_angle = pi / static_cast<float>(spring_stretches);
         const glm::vec3 rise{0.0f, std::cos(end_angle), std::sin(end_angle)};
         const glm::vec3 normal = glm::cross(x_axis, rise);
+        if (build == Kit_build::current) {
+            // One wire: the hooks continue the coil, the joints mitred between the coil's frame and the hook's.
+            const auto hook_point = [&](const float side, const int k) -> Wire_point {
+                const float     angle = pi * ((static_cast<float>(k) / static_cast<float>(spring_hook)) - 0.5f);
+                const glm::vec3 out   = ((side * std::cos(angle)) * x_axis) + (std::sin(angle) * rise);
+                const glm::vec3 center{side * (-start), spring.axis_y, 0.0f};
+                // Toward the coil at the start, away from it at the end: `up` keeps the travel crossed with it `out`.
+                return Wire_point{.center = center + (r * out), .up = normal, .side = out};
+            };
+            std::vector<Wire_point> wire;
+            for (int k = spring_hook; k > 0; --k) {
+                wire.push_back(hook_point(-1.0f, k));
+            }
+            wire.insert(wire.end(), points.begin(), points.end());
+            for (int k = 1; k <= spring_hook; ++k) {
+                wire.push_back(hook_point(1.0f, k));
+            }
+            wire[spring_hook].up                        = x_axis + normal;
+            wire[wire.size() - 1 - spring_hook].up      = x_axis + normal;
+            add_wire(builder, wire, half);
+            builder.write(mesh);
+            return;
+        }
+        add_wire(builder, points, half);
         for (const float side : {-1.0f, 1.0f}) {
             const glm::vec3 center{side * (-start), spring.axis_y, 0.0f};
             std::vector<Wire_point> hook;
@@ -820,15 +843,30 @@ void generate_spring(const Kit_parameter_values& values, GEO::Mesh& mesh)
             }
             points.push_back(Wire_point{.center = (r * out) + (y * y_axis), .up = y_axis, .side = out});
         }
+        const float leg = spring_leg * 2.0f * r;
+        if (!compression && (build == Kit_build::current)) {
+            // A leg from each end along the wire's tangent, the wire's own first and last stretch: toward +Z on the
+            // ground, toward -Z at the top.
+            points.insert(points.begin(), Wire_point{.center = glm::vec3{r, half, leg}, .up = y_axis, .side = x_axis});
+            points.push_back(Wire_point{.center = glm::vec3{r, top, -leg}, .up = y_axis, .side = x_axis});
+        }
         add_wire(builder, points, half);
-        if (!compression) {
-            // A leg from each end along the wire's tangent: toward +Z on the ground, toward -Z at the top.
-            const float leg = spring_leg * 2.0f * r;
+        if (!compression && (build == Kit_build::former)) {
             builder.add_box(glm::vec3{r - half, 0.0f, -0.4f * half}, glm::vec3{r + half, spring.wire, leg});
             builder.add_box(glm::vec3{r - half, top - half, -leg}, glm::vec3{r + half, top + half, 0.4f * half});
         }
     }
     builder.write(mesh);
+}
+
+void generate_spring(const Kit_parameter_values& values, GEO::Mesh& mesh)
+{
+    generate_spring_build(values, mesh, Kit_build::current);
+}
+
+void generate_spring_old(const Kit_parameter_values& values, GEO::Mesh& mesh)
+{
+    generate_spring_build(values, mesh, Kit_build::former);
 }
 
 //
@@ -1323,6 +1361,7 @@ void add_machine_01_08_shapes(std::vector<Kit_shape_definition>& shapes)
         };
         shapes.push_back(std::move(shape));
     }
+    add_former_build(shapes, "machine.spring", generate_spring_old);
 }
 
 } // namespace editor

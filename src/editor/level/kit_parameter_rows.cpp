@@ -106,6 +106,8 @@ auto kit_parameter_row(Kit_parameter_values& values, const std::size_t index, co
     const bool  beside      = (label == Kit_row_label::beside);
     const bool  is_seed     = (parameter.name == "seed");
     const bool  masked      = (values.get_value_source(index) == Kit_value_source::seed);
+    // A shape without detail counts ignores the detail (doc/editor/level_kit_shapes.md "Level of detail").
+    const bool  one_detail  = (parameter.name == c_kit_detail_parameter) && (shape->detail_response == Kit_detail_response::fixed);
     const char* widget_name = beside ? parameter.name.c_str() : "##value";
     ImGui::PushID(parameter.name.c_str());
     Kit_row_edit edit    = Kit_row_edit::none;
@@ -127,7 +129,7 @@ auto kit_parameter_row(Kit_parameter_values& values, const std::size_t index, co
     if (!beside) {
         ImGui::SetNextItemWidth(is_seed ? -(ImGui::CalcTextSize("New").x + (3.0f * ImGui::GetStyle().FramePadding.x) + ImGui::GetStyle().ItemSpacing.x) : -FLT_MIN);
     }
-    ImGui::BeginDisabled(masked);
+    ImGui::BeginDisabled(masked || one_detail);
     switch (parameter.type) {
         case Kit_parameter_type::float_value: {
             const float speed = std::max(0.001f, (parameter.float_max - parameter.float_min) / 1000.0f);
@@ -138,7 +140,10 @@ auto kit_parameter_row(Kit_parameter_values& values, const std::size_t index, co
             );
             edit = item_edit();
             if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
-                ImGui::SetTooltip("%s\nRange %g - %g %s", parameter.description.c_str(), parameter.float_min, parameter.float_max, c_str(parameter.unit));
+                ImGui::SetTooltip(
+                    "%s\nRange %g - %g %s%s", parameter.description.c_str(), parameter.float_min, parameter.float_max, c_str(parameter.unit),
+                    one_detail ? "\nThis shape has one level of detail" : ""
+                );
             }
             break;
         }

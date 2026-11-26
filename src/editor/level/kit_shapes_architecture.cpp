@@ -702,6 +702,7 @@ void add_architecture_shapes(std::vector<Kit_shape_definition>& shapes)
         shape.normal_style            = Kit_normal_style::smooth_with_hard_edges;
         shape.hard_edge_angle_degrees = 45.0f;
         shape.triangle_budget         = 100;
+        shape.detail_counts           = {{.parameter = "segments", .least = 6}};
         shape.generator               = generate_pillar;
         // The pier's plinth and abacus fill its bounds, so its hull is its box (U54).
         shape.get_collision           = [](const Kit_parameter_values& values) {

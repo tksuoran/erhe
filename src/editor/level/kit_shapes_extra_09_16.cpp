@@ -308,7 +308,7 @@ public:
     float foot   {0.0f}; // z of the water face at the base
 };
 
-void generate_quay_wall(const Kit_parameter_values& values, GEO::Mesh& mesh)
+void generate_quay_wall_build(const Kit_parameter_values& values, GEO::Mesh& mesh, const Kit_build build)
 {
     const Quay_form form{values};
     const float hl  = form.half_l;
@@ -316,17 +316,28 @@ void generate_quay_wall(const Kit_parameter_values& values, GEO::Mesh& mesh)
     const float top = form.height - form.coping;
     Kit_mesh_builder builder;
     builder.set_slot(quay_stone_slot);
-    {
+    const float plinth = std::clamp(0.1f * form.height, 0.08f, 0.3f);
+    if (build == Kit_build::current) {
+        // The wall and the coping, one solid seen from +X: the land face upright to the walking surface, the water
+        // face leaning out to its foot under the coping's overhang.
+        const float face  = ht + (form.coping * form.slope);
+        const float front = ht + 0.06f;
+        const std::array<glm::vec2, 8> section{{
+            {form.foot, 0.0f}, {-ht, 0.0f}, {-ht, top}, {-ht, form.height}, {face, form.height}, {front, form.height}, {front, top}, {face, top}
+        }};
+        const std::array<std::vector<uint32_t>, 3> pieces{{{0, 1, 2, 7}, {7, 2, 3, 4}, {6, 7, 4, 5}}};
+        builder.add_x_prism(-hl, hl, section, pieces);
+        builder.add_box(glm::vec3{-hl, 0.0f, ht - 0.05f}, glm::vec3{hl, plinth, form.foot + 0.06f});
+    } else {
         // The wall's section, seen from +X: the land face upright, the water face leaning out to its foot.
         const float face = ht + (form.coping * form.slope);
         const std::array<glm::vec3, 4> section{{
             {hl, 0.0f, -ht}, {hl, top + (0.1f * form.coping), -ht}, {hl, top + (0.1f * form.coping), face - (0.1f * form.coping * form.slope)}, {hl, 0.0f, form.foot}
         }};
         add_prism_between(builder, section, glm::vec3{-2.0f * hl, 0.0f, 0.0f});
+        builder.add_box(glm::vec3{-hl, 0.0f, ht - 0.05f}, glm::vec3{hl, plinth, form.foot + 0.06f});
+        builder.add_box(glm::vec3{-hl, top, -(ht - 0.01f)}, glm::vec3{hl, form.height, ht + 0.06f});
     }
-    const float plinth = std::clamp(0.1f * form.height, 0.08f, 0.3f);
-    builder.add_box(glm::vec3{-hl, 0.0f, ht - 0.05f}, glm::vec3{hl, plinth, form.foot + 0.06f});
-    builder.add_box(glm::vec3{-hl, top, -(ht - 0.01f)}, glm::vec3{hl, form.height, ht + 0.06f});
     builder.set_slot(quay_wood_slot);
     builder.add_box(glm::vec3{-hl, form.height - 0.01f, ht - form.kerb}, glm::vec3{hl, form.height + std::min(0.12f, 0.8f * form.kerb), ht + 0.03f});
     // The fenders lean with the water face, from over the plinth to under the coping.
@@ -337,6 +348,16 @@ void generate_quay_wall(const Kit_parameter_values& values, GEO::Mesh& mesh)
         add_placed_box(builder, leaning, glm::vec3{x - half, 0.6f * plinth, -0.02f}, glm::vec3{x + half, top - (0.3f * form.coping), 0.13f});
     }
     builder.write(mesh);
+}
+
+void generate_quay_wall(const Kit_parameter_values& values, GEO::Mesh& mesh)
+{
+    generate_quay_wall_build(values, mesh, Kit_build::current);
+}
+
+void generate_quay_wall_old(const Kit_parameter_values& values, GEO::Mesh& mesh)
+{
+    generate_quay_wall_build(values, mesh, Kit_build::former);
 }
 
 [[nodiscard]] auto check_quay_walkability(const Kit_parameter_values& values, const Kit_agent& agent) -> std::string
@@ -814,7 +835,7 @@ public:
     float        fall    {0.0f};
 };
 
-void generate_market_stall(const Kit_parameter_values& values, GEO::Mesh& mesh)
+void generate_market_stall_build(const Kit_parameter_values& values, GEO::Mesh& mesh, const Kit_build build)
 {
     const Stall_form form{values};
     const float hw = form.half_w;
@@ -850,8 +871,30 @@ void generate_market_stall(const Kit_parameter_values& values, GEO::Mesh& mesh)
             builder.add_box(glm::vec3{std::min(x0, x1), 0.08f, hd - (0.92f * deep)}, glm::vec3{std::max(x0, x1), form.counter - 0.04f, hd - (0.8f * form.post)});
         }
     }
-    // The cloth: a level slab, a slab falling toward the front, or two falling from a ridge along X.
     builder.set_slot(stall_cloth_slot);
+    if (build == Kit_build::current) {
+        // The cloth and the valance hanging flush from its front edge, one solid: a level slab, a slab falling toward
+        // the front, or two slopes sharing a ridge along X.
+        const float     edge     = form.get_cloth_top(form.reach);
+        const float     valance  = edge - std::min(0.22f, 0.1f * form.height);
+        constexpr float hem      = 0.016f; // the valance's depth
+        const auto      under    = [&form](const float z) -> glm::vec2 { return glm::vec2{z, form.get_cloth_top(z) - form.cloth}; };
+        const auto      over     = [&form](const float z) -> glm::vec2 { return glm::vec2{z, form.get_cloth_top(z)}; };
+        const float     r        = form.reach;
+        std::vector<glm::vec2>             section{glm::vec2{r, valance}, glm::vec2{r - hem, valance}, under(r - hem)};
+        std::vector<std::vector<uint32_t>> pieces;
+        if (form.awning == Stall_awning::peaked) {
+            section.insert(section.end(), {under(0.0f), under(-r), over(-r), over(0.0f), over(r)});
+            pieces = {{0, 1, 2, 7}, {2, 3, 6, 7}, {3, 4, 5, 6}};
+        } else {
+            section.insert(section.end(), {under(-r), over(-r), over(r)});
+            pieces = {{0, 1, 2, 5}, {2, 3, 4, 5}};
+        }
+        builder.add_x_prism(-hw, hw, section, pieces);
+        builder.write(mesh);
+        return;
+    }
+    // The cloth: a level slab, a slab falling toward the front, or two falling from a ridge along X.
     const float slope = form.fall / ((form.awning == Stall_awning::sloped) ? (2.0f * form.reach) : form.reach);
     if (form.awning == Stall_awning::peaked) {
         const Placement front = make_sloping_placement(glm::vec3{0.0f, form.height - form.cloth, 0.0f}, -slope);
@@ -869,6 +912,16 @@ void generate_market_stall(const Kit_parameter_values& values, GEO::Mesh& mesh)
         builder.add_box(glm::vec3{-(hw - 0.006f), edge - drop, form.reach - 0.02f}, glm::vec3{hw - 0.006f, edge - (0.4f * form.cloth), form.reach - 0.004f});
     }
     builder.write(mesh);
+}
+
+void generate_market_stall(const Kit_parameter_values& values, GEO::Mesh& mesh)
+{
+    generate_market_stall_build(values, mesh, Kit_build::current);
+}
+
+void generate_market_stall_old(const Kit_parameter_values& values, GEO::Mesh& mesh)
+{
+    generate_market_stall_build(values, mesh, Kit_build::former);
 }
 
 //
@@ -1062,7 +1115,7 @@ public:
     float     beam_y  {0.0f}; // the top of the posts' beam
 };
 
-void generate_well(const Kit_parameter_values& values, GEO::Mesh& mesh)
+void generate_well_build(const Kit_parameter_values& values, GEO::Mesh& mesh, const Kit_build build)
 {
     const Well_form form{values};
     const float r      = form.radius;
@@ -1109,14 +1162,22 @@ void generate_well(const Kit_parameter_values& values, GEO::Mesh& mesh)
             builder.add_box(glm::vec3{reach - (0.1f * p), axle_y + (1.8f * p), -0.2f * p}, glm::vec3{reach + (1.4f * p), axle_y + (2.15f * p), 0.2f * p});
         }
         if (form.roof == Well_roof::gable) {
-            // Two slabs from a ridge along X, and a ridge piece.
             const float rise  = form.get_roof_rise();
             const float run   = 1.15f * (r + p);
             const float slab  = 0.35f * p;
             const float half  = form.post_x + (2.0f * p);
             const float ridge = form.beam_y + rise - slab;
-            add_placed_box(builder, make_sloping_placement(glm::vec3{0.0f, ridge, 0.0f}, -rise / run), glm::vec3{-half, 0.0f, 0.0f}, glm::vec3{half, slab, run});
-            add_placed_box(builder, make_sloping_placement(glm::vec3{0.0f, ridge, 0.0f},  rise / run), glm::vec3{-(half - 0.004f), -0.002f, -run}, glm::vec3{half - 0.004f, slab - 0.002f, 0.002f});
+            if (build == Kit_build::current) {
+                // Two slopes sharing the ridge along X, one solid.
+                const std::array<glm::vec2, 6> section{{
+                    {run, ridge - rise}, {0.0f, ridge}, {-run, ridge - rise}, {-run, ridge - rise + slab}, {0.0f, ridge + slab}, {run, ridge - rise + slab}
+                }};
+                const std::array<std::vector<uint32_t>, 2> pieces{{{0, 1, 4, 5}, {1, 2, 3, 4}}};
+                builder.add_x_prism(-half, half, section, pieces);
+            } else {
+                add_placed_box(builder, make_sloping_placement(glm::vec3{0.0f, ridge, 0.0f}, -rise / run), glm::vec3{-half, 0.0f, 0.0f}, glm::vec3{half, slab, run});
+                add_placed_box(builder, make_sloping_placement(glm::vec3{0.0f, ridge, 0.0f},  rise / run), glm::vec3{-(half - 0.004f), -0.002f, -run}, glm::vec3{half - 0.004f, slab - 0.002f, 0.002f});
+            }
             // A king post on the beam under the ridge at each end.
             for (const float side : {-1.0f, 1.0f}) {
                 const float x = side * form.post_x;
@@ -1125,6 +1186,16 @@ void generate_well(const Kit_parameter_values& values, GEO::Mesh& mesh)
         }
     }
     builder.write(mesh);
+}
+
+void generate_well(const Kit_parameter_values& values, GEO::Mesh& mesh)
+{
+    generate_well_build(values, mesh, Kit_build::current);
+}
+
+void generate_well_old(const Kit_parameter_values& values, GEO::Mesh& mesh)
+{
+    generate_well_build(values, mesh, Kit_build::former);
 }
 
 //
@@ -1246,6 +1317,7 @@ void add_extra_09_16_shapes(std::vector<Kit_shape_definition>& shapes)
         shape.triangle_budget = 210;
         shape.collision       = Kit_collision::triangle_mesh;
         shape.origin_rule     = Kit_origin_rule::base_contains_origin;
+        shape.detail_counts   = {{"segments"}};
         shape.generator       = generate_pipe;
         shape.get_connectors  = [](const Kit_parameter_values& values, std::vector<Kit_connector>& out_connectors) {
             const Pipe_form form{values};
@@ -1286,6 +1358,7 @@ void add_extra_09_16_shapes(std::vector<Kit_shape_definition>& shapes)
         shape.normal_style    = Kit_normal_style::faceted;
         shape.triangle_budget = 250;
         shape.collision       = Kit_collision::convex_hull;
+        shape.detail_counts   = {{"segments"}};
         shape.generator       = generate_pot;
         shape.mirror_planes   = std::vector<Kit_mirror_plane>{Kit_mirror_plane::z};
         shape.get_connectors  = [](const Kit_parameter_values& values, std::vector<Kit_connector>& out_connectors) {
@@ -1382,6 +1455,7 @@ void add_extra_09_16_shapes(std::vector<Kit_shape_definition>& shapes)
         shape.triangle_budget = 540;
         shape.collision       = Kit_collision::triangle_mesh;
         shape.origin_rule     = Kit_origin_rule::base_contains_origin;
+        shape.detail_counts   = {{"segments"}};
         shape.generator       = generate_cart;
         shape.mirror_planes   = std::vector<Kit_mirror_plane>{Kit_mirror_plane::x};
         shape.get_connectors  = [](const Kit_parameter_values&, std::vector<Kit_connector>& out_connectors) {
@@ -1411,6 +1485,7 @@ void add_extra_09_16_shapes(std::vector<Kit_shape_definition>& shapes)
         shape.triangle_budget = 400;
         shape.collision       = Kit_collision::triangle_mesh;
         shape.origin_rule     = Kit_origin_rule::base_contains_origin;
+        shape.detail_counts   = {{"segments"}};
         shape.generator       = generate_well;
         shape.get_connectors  = [](const Kit_parameter_values&, std::vector<Kit_connector>& out_connectors) {
             out_connectors.push_back(make_base_connector());
@@ -1444,6 +1519,9 @@ void add_extra_09_16_shapes(std::vector<Kit_shape_definition>& shapes)
         };
         shapes.push_back(std::move(shape));
     }
+    add_former_build(shapes, "harbour.quay_wall", generate_quay_wall_old);
+    add_former_build(shapes, "prop.market_stall", generate_market_stall_old);
+    add_former_build(shapes, "prop.well",         generate_well_old);
 }
 
 } // namespace editor

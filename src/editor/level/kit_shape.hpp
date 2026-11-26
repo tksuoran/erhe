@@ -136,6 +136,12 @@ public:
 };
 
 // Minimum and maximum are in the parameter's unit (lengths in meters); float defaults and float derive ranges are in default_scale.
+// Whether a parameter's value is written in a piece's canonical text (Kit_parameter_values::to_canonical_text()).
+enum class Kit_text_presence : unsigned int {
+    always = 0,
+    unless_default // left out at its default, and a text without it reads as the default: a parameter added to every shape
+};
+
 class Kit_parameter
 {
 public:
@@ -158,6 +164,7 @@ public:
     int                      derive_int_min   {0};
     int                      derive_int_max   {0};
     Kit_value_source         default_source   {Kit_value_source::explicit_value}; // seed: in the shape's default mask
+    Kit_text_presence        text_presence    {Kit_text_presence::always};
 
     [[nodiscard]] auto resolve_float_default(float module, float wall_height) const -> float;
     [[nodiscard]] auto resolve_derive_range (float module, float wall_height) const -> Kit_derive_range;
@@ -255,6 +262,31 @@ using Kit_collision_function    = std::function<Kit_collision(const Kit_paramete
 using Kit_ceiling_scale_function = std::function<float(const Kit_parameter_values& values)>;
 using Kit_supply_function       = std::function<void(const Kit_piece_view& piece, std::string_view connector_name, Kit_supply_list& out_supply)>;
 
+// The shared parameter every shape has, its last: the level of detail (doc/editor/level_kit_shapes.md "Level of
+// detail"). At the default the counts are the shape's own; the counts' triangles scale by detail / default, so the
+// maximum doubles them.
+inline constexpr const char* c_kit_detail_parameter = "detail";
+inline constexpr float       c_kit_detail_min       = 0.1f;
+inline constexpr float       c_kit_detail_default   = 0.5f;
+
+// A count parameter the detail scales: by detail^(1 / dimensions), the count resolving that many of the mesh's
+// dimensions (a ring's points 1, a grid's columns whose rows follow them 2), in whole steps from its full value (a
+// step of 2 keeps a count's parity where an odd count builds differently).
+class Kit_detail_count
+{
+public:
+    std::string parameter;
+    int         dimensions{1};
+    int         step      {1};
+    int         least     {0}; // the fewest the detail lowers it to, above the parameter's minimum: a round part keeps its form
+};
+
+// Whether a shape's mesh follows the detail: fixed shapes build one mesh at every detail.
+enum class Kit_detail_response : unsigned int {
+    fixed = 0,
+    scaled     // detail counts, or a generator scaling counts of its own with kit_detail_count()
+};
+
 class Kit_shape_definition
 {
 public:
@@ -285,10 +317,25 @@ public:
     std::vector<Kit_property_mapping> property_mappings; // C2.2: the standard properties the shape takes, onto parameters or slots
     Kit_supply_function        get_supply;             // optional (C3.3): the values a piece supplies over one of its connectors
     std::optional<float>       foliage_radius;         // meters; set: a foliage shape, the default radius of its items (doc/editor/level_tools.md "Foliage paint")
+    std::vector<Kit_detail_count> detail_counts;       // count parameters the detail scales; Kit_shape_library makes such a shape scaled
+    Kit_detail_response        detail_response        {Kit_detail_response::fixed};
 
     [[nodiscard]] auto find_parameter(std::string_view name) const -> std::optional<std::size_t>;
     [[nodiscard]] auto has_tag       (std::string_view tag) const -> bool;
 };
+
+// The detail over its default, 1 for a fixed shape: the factor the counts' triangles take.
+[[nodiscard]] auto get_kit_detail_factor(const Kit_parameter_values& values) -> float;
+
+// A count of the generator's own at the values' detail: own * factor ^ (1 / dimensions) in whole steps from own, within
+// least and most (own at the default detail).
+[[nodiscard]] auto kit_detail_count(const Kit_parameter_values& values, int own, int least, int most, int dimensions = 1, int step = 1) -> int;
+// The same at a detail factor (get_kit_detail_factor()), for generator parts that do not hold the values.
+[[nodiscard]] auto kit_detail_count(float factor, int own, int least, int most, int dimensions = 1, int step = 1) -> int;
+
+// The values the generator and the other callbacks describing the mesh take: each detail count scaled by the detail,
+// within its parameter's range; the values themselves for a shape without detail counts or at the default detail.
+[[nodiscard]] auto get_kit_detail_values(const Kit_parameter_values& values) -> Kit_parameter_values;
 
 // The collision kind of the values' pieces: the shape's get_collision at the values, else its collision.
 [[nodiscard]] auto get_kit_collision(const Kit_parameter_values& values) -> Kit_collision;

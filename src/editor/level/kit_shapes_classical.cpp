@@ -447,6 +447,7 @@ void add_classical_shapes(std::vector<Kit_shape_definition>& shapes)
         shape.normal_style            = Kit_normal_style::smooth_with_hard_edges;
         shape.hard_edge_angle_degrees = 50.0f;
         shape.triangle_budget         = 760;
+        shape.detail_counts           = {{"segments"}};
         shape.generator               = generate_column;
         shape.get_connectors          = [](const Kit_parameter_values& values, std::vector<Kit_connector>& out_connectors) {
             add_base_and_top_connectors(out_connectors, values.get_float("height"));

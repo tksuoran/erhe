@@ -436,7 +436,7 @@ constexpr int   dune_rings        = 9;
 constexpr float dune_outline      = 0.06f; // the most the seeded outline scales a ring's radius at an angle
 constexpr float dune_horn         = 0.1f;  // the most the crest shifts along X, a share of the half width
 constexpr float dune_least_length = 1.04f; // times the width: the stadium keeps straight sides
-constexpr float dune_facets       = 0.95f; // the rings' chords and triangles against the smooth surface
+constexpr float dune_facets       = 0.974f; // the rings' triangles against their chords; the chords' own share follows the points
 
 [[nodiscard]] auto dune_profile(const float t) -> float
 {
@@ -457,7 +457,10 @@ constexpr float dune_facets       = 0.95f; // the rings' chords and triangles ag
 {
     const float asymmetry = values.get_float("asymmetry");
     const float distance  = 0.5f * values.get_float("width") * ((1.0f - dune_outline) - std::sqrt((asymmetry * asymmetry) + (dune_horn * dune_horn)));
-    const float rate      = dune_profile_rate * values.get_float("height") / (dune_facets * distance);
+    // A ring's chord between points pi / (half - 1) apart reaches in to the cosine of half that angle.
+    const int   half      = values.get_int("segments") / 2;
+    const float chords    = std::cos(std::numbers::pi_v<float> / static_cast<float>(2 * std::max(half - 1, 1)));
+    const float rate      = dune_profile_rate * values.get_float("height") / (dune_facets * chords * distance);
     return glm::degrees(std::atan(rate));
 }
 
@@ -742,6 +745,7 @@ void add_nature_terrain_shapes(std::vector<Kit_shape_definition>& shapes)
         shape.hard_edge_angle_degrees = 30.0f; // the brink of the lee stays sharp
         shape.triangle_budget = 290;
         shape.randomness      = Kit_randomness::seeded;
+        shape.detail_counts   = {{"segments"}};
         shape.generator       = generate_dune;
         shape.check_combination = [](const Kit_parameter_values& values) -> std::string {
             if (values.get_float("length") < dune_least_length * values.get_float("width")) {
@@ -784,6 +788,7 @@ void add_nature_terrain_shapes(std::vector<Kit_shape_definition>& shapes)
         shape.normal_style    = Kit_normal_style::smooth;
         shape.triangle_budget = 150;
         shape.randomness      = Kit_randomness::seeded;
+        shape.detail_counts   = {{"segments"}};
         shape.generator       = generate_ground_patch;
         shape.check_walkability = [](const Kit_parameter_values& values, const Kit_agent& agent) -> std::string {
             // The outline varies between neighbouring points, so the slope is measured on the patch's own triangles.

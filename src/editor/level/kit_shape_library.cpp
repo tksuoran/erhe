@@ -34,6 +34,25 @@ auto make_length_parameter(
     return parameter;
 }
 
+void add_former_build(std::vector<Kit_shape_definition>& shapes, const std::string_view id, Kit_generator former_generator)
+{
+    const std::vector<Kit_shape_definition>::const_iterator current = std::find_if(
+        shapes.begin(), shapes.end(), [id](const Kit_shape_definition& shape) { return shape.id == id; }
+    );
+    ERHE_VERIFY(current != shapes.end());
+    Kit_shape_definition former = *current;
+    former.id           = fmt::format("{}_old", id);
+    former.display_name = fmt::format("{} (old)", current->display_name);
+    former.description  = fmt::format("The former build of {}, kept for comparison. {}", id, current->description);
+    former.former_ids.clear();
+    former.foliage_radius.reset();
+    // A snapshot for comparison: one level of detail.
+    former.detail_counts.clear();
+    former.detail_response = Kit_detail_response::fixed;
+    former.generator    = std::move(former_generator);
+    shapes.push_back(std::move(former));
+}
+
 auto make_ratio_parameter(const char* name, const char* description, const float default_value) -> Kit_parameter
 {
     Kit_parameter parameter;
@@ -85,6 +104,21 @@ auto make_seed_parameter() -> Kit_parameter
     parameter.int_default = 1;
     parameter.int_min     = 0;
     parameter.int_max     = kit_seed_max;
+    return parameter;
+}
+
+auto make_detail_parameter() -> Kit_parameter
+{
+    Kit_parameter parameter;
+    parameter.name          = c_kit_detail_parameter;
+    parameter.description   = "Level of detail: the default is the shape's own, lower values fewer triangles, higher more";
+    parameter.type          = Kit_parameter_type::float_value;
+    parameter.unit          = Kit_unit::ratio;
+    parameter.default_scale = Kit_default_scale::meters;
+    parameter.float_default = c_kit_detail_default;
+    parameter.float_min     = c_kit_detail_min;
+    parameter.float_max     = 1.0f;
+    parameter.text_presence = Kit_text_presence::unless_default;
     return parameter;
 }
 
@@ -165,6 +199,44 @@ Kit_shape_library::Kit_shape_library()
     add_extra_33_36_shapes     (m_shapes);
     add_machine_01_08_shapes   (m_shapes);
     add_machine_09_18_shapes   (m_shapes);
+    // Every shape takes the level of detail as its last parameter. A shape with detail counts builds from the counts
+    // it scales, and every callback describing its mesh takes the same values.
+    for (Kit_shape_definition& shape : m_shapes) {
+        ERHE_VERIFY(!shape.find_parameter(c_kit_detail_parameter).has_value());
+        shape.parameters.push_back(make_detail_parameter());
+        if (shape.detail_counts.empty()) {
+            continue;
+        }
+        shape.detail_response = Kit_detail_response::scaled;
+        shape.generator = [f = std::move(shape.generator)](const Kit_parameter_values& values, GEO::Mesh& mesh) {
+            f(get_kit_detail_values(values), mesh);
+        };
+        if (shape.check_walkability) {
+            shape.check_walkability = [f = std::move(shape.check_walkability)](const Kit_parameter_values& values, const Kit_agent& agent) {
+                return f(get_kit_detail_values(values), agent);
+            };
+        }
+        if (shape.get_seam_sides) {
+            shape.get_seam_sides = [f = std::move(shape.get_seam_sides)](const Kit_parameter_values& values) {
+                return f(get_kit_detail_values(values));
+            };
+        }
+        if (shape.get_connectors) {
+            shape.get_connectors = [f = std::move(shape.get_connectors)](const Kit_parameter_values& values, std::vector<Kit_connector>& out_connectors) {
+                f(get_kit_detail_values(values), out_connectors);
+            };
+        }
+        if (shape.get_light_frames) {
+            shape.get_light_frames = [f = std::move(shape.get_light_frames)](const Kit_parameter_values& values, std::vector<Kit_light_frame>& out_frames) {
+                f(get_kit_detail_values(values), out_frames);
+            };
+        }
+        if (shape.get_collision) {
+            shape.get_collision = [f = std::move(shape.get_collision)](const Kit_parameter_values& values) {
+                return f(get_kit_detail_values(values));
+            };
+        }
+    }
     // Every id and former id names one shape.
     std::vector<std::string_view> names;
     for (const Kit_shape_definition& shape : m_shapes) {
@@ -323,8 +395,9 @@ auto Kit_shape_library::get_triangle_ceiling(const Kit_parameter_values& values)
     if (kit == nullptr) {
         return 0;
     }
+    // The ceiling holds at the default detail; a higher detail asks for its share more.
     const float scale = shape->get_ceiling_scale ? std::max(shape->get_ceiling_scale(values), 1.0f) : 1.0f;
-    return static_cast<unsigned int>(static_cast<float>(kit->triangle_ceiling) * scale);
+    return static_cast<unsigned int>(static_cast<float>(kit->triangle_ceiling) * scale * std::max(get_kit_detail_factor(values), 1.0f));
 }
 
 auto Kit_shape_library::get_palette() const -> const std::vector<Kit_palette_material>&

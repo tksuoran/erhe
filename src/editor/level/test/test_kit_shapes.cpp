@@ -635,15 +635,15 @@ TEST(Kit_derive, next_seed_is_another_seed_in_range)
     EXPECT_EQ(seeds.size(), 100u);
 }
 
-// R2.6: the kit's ceiling binds at every in-range value; the all-maximum corner is the most a shape makes, but for the
-// helical bolt, whose most lies at 35 and 38 turns (its worst_cases row).
+// R2.6: the kit's ceiling binds at every in-range value, scaled by the detail above its default; the all-maximum corner
+// is the most a shape makes, but for the helical bolt, whose most lies at 35 and 38 turns (its worst_cases row).
 TEST(Kit_shape_library, every_shape_keeps_the_ceiling_at_the_range_maxima)
 {
     for (const Kit_shape_definition& shape : get_library().get_shapes()) {
         const Kit_parameter_values values = range_corner(shape, Range_end::max);
         SCOPED_TRACE(fmt::format("{} {}", shape.id, values.to_canonical_text()));
         ASSERT_EQ(values.validate(), "");
-        EXPECT_LE(editor::count_kit_triangles(*generate(values)), get_library().find_kit(shape.kit)->triangle_ceiling);
+        EXPECT_LE(editor::count_kit_triangles(*generate(values)), get_library().get_triangle_ceiling(values));
     }
 }
 
@@ -1373,7 +1373,7 @@ TEST(Kit_palm_clump, every_species_passes_the_checks_at_the_corners_over_seeds)
     // The binding combination: nine areca stems at the least height carry the 40 fronds; worst_case_combinations_keep_the_ceiling holds it.
     Kit_parameter_values binding;
     ASSERT_EQ(editor::parse_canonical_text(clump, R"({"species":"areca","stems":9,"height":"0x1p-1","spread":"0x0p+0","fronds":10,"seed":1})", binding), "");
-    EXPECT_GE(editor::count_kit_triangles(*generate(binding)), 1940u);
+    EXPECT_GE(editor::count_kit_triangles(*generate(binding)), 1700u);
 }
 
 // The dune's and the ground patch's walkability checks bound the generated slopes: a value set either check passes

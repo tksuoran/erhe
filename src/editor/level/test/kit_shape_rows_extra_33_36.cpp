@@ -15,7 +15,7 @@ auto get_extra_33_36_rows() -> Kit_shape_rows
     };
     rows.walkability_open    = {};
     rows.triangle_counts     = {
-        {"light.garland", 492}, {"traversal.rope_bridge", 1000}, {"ruin.cracked_floor", 108}, {"harbour.boat", 504}
+        {"light.garland", 492}, {"traversal.rope_bridge", 1000}, {"ruin.cracked_floor", 108}, {"harbour.boat", 488}
     };
     // R2.6 where the triangle maxima lie: 24 paper lanterns, the longest bridge of the narrowest planks, 24
     // fragments, a rowboat with four thwarts.
@@ -33,7 +33,7 @@ auto get_extra_33_36_rows() -> Kit_shape_rows
         {"ruin.cracked_floor 1", 72, 54, 216, 0x0d855de98e06d1c3ull, {-1.00000f, 0.00000f, -1.00000f}, {1.00000f, 0.19589f, 1.00000f}, {-0.01658f, 0.07772f, 0.04068f}, 11.38881f},
         {"ruin.cracked_floor 3", 72, 54, 216, 0x0d855de98e06d1c3ull, {-1.00000f, 0.00000f, -1.00000f}, {1.00000f, 0.19717f, 1.00000f}, {-0.01845f, 0.07312f, 0.00215f}, 11.18603f},
         {"ruin.cracked_floor 17", 72, 54, 216, 0x0d855de98e06d1c3ull, {-1.00000f, 0.00000f, -1.00000f}, {1.00000f, 0.19897f, 1.00000f}, {0.02424f, 0.05938f, 0.02474f}, 10.54510f},
-        {"harbour.boat 1", 266, 438, 1380, 0x65dbee3d8b6f6d98ull, {-4.00000f, 0.00000f, -0.58800f}, {4.00000f, 1.01794f, 0.83815f}, {-0.00000f, 0.42549f, 0.10671f}, 34.40163f}
+        {"harbour.boat 1", 258, 422, 1332, 0x66312db82813a488ull, {-4.00000f, 0.00000f, -0.58800f}, {4.00000f, 1.00762f, 0.83815f}, {-0.12338f, 0.41633f, 0.10344f}, 34.34060f}
     };
     return rows;
 }

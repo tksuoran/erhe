@@ -35,7 +35,8 @@ the ceiling at its range maxima.
 
 ## Shared construction
 
-- Topology from integers (R3.7): the basic shapes, the door wall, pillar,
+- Topology from integers (R3.7), but for the level of detail ("Level of
+  detail"), the one float that sets counts: the basic shapes, the door wall, pillar,
   arch, battlement, tower, rock, land mass, hill, tree, bush, rock spire, leaf
   plant and palm shrub, every shape of the prop, ruin, traversal, harbour, light, industrial and machine kits, and the
   succulent, grass tuft, boulder cluster, stepping stone, timber bay,
@@ -83,8 +84,109 @@ the ceiling at its range maxima.
   (`doc/editor/level_tools.md` "Lights on pieces"). "The kit's starting
   values" of a light are a warm white point light of 40 cd with a range of
   8 m.
+- Shared points: where two parts of a surface meet (the halves of a folded
+  leaf at its midrib and its tip, the two slopes of a ridge, a hull's sides at
+  its stem, a hook and the coil it continues), they are one solid that shares
+  the vertices of the join; the corner attributes (normals) stay per facet. A
+  concave section is closed by convex pieces that share their edges
+  (`Kit_mesh_builder::add_x_prism()`). Parts that only reach into one another
+  (a post into a beam) stay separate closed solids.
+- Former builds: a shape whose build was fixed keeps its former build for a
+  side by side comparison as `<id>_old` ("<name> (old)", `add_former_build()`
+  in `kit_shape_library.cpp`, the generator taking `Kit_build::former`), with
+  no former ids and no foliage radius. `editor_level_tests` holds each to its
+  shape's rows and to the triangle count and pins of the build before the fix
+  (`kit_shape_rows_former_builds.cpp`).
+  `scripts/level_kit_former_builds_gallery.py` builds a scene of every pair,
+  the former build at -X beside the current one. The former builds are
+  `nature.palm`, `nature.palm_clump` (fronds: two wedges crossing at the
+  midrib, capped short of the tip), `harbour.quay_wall` (coping set in from
+  the land face), `prop.market_stall` (a peaked awning of two boxes, an inset
+  valance), `prop.well` (a gable of two boxes), `light.fire` (tripod heads
+  apart), `industrial.vent` (a duct elbow of two boxes), `harbour.boat` (a
+  rowboat's and a skiff's bow a narrow board wide) and `machine.spring` (hooks
+  and legs separate from the coil). They are removed once compared
+  (`doc/plans/open_items.md` "Work order").
 - Water is no snap to surface target (`doc/editor/level_tools.md` "Surface
   placement"): a buoy and a boat stand on their base and are sunk by hand.
+
+## Level of detail
+
+Every shape takes the float parameter `detail` (`c_kit_detail_parameter`),
+its last, which `Kit_shape_library` adds to every definition
+(`make_detail_parameter()`): a ratio from 0.1 to 1, default 0.5, never
+derived. At the default a shape builds with its own counts, so a piece's
+mesh is the one it had before the parameter existed; lower values make fewer
+triangles, higher values more. The default is left out of a piece's
+canonical text, and a text without `detail` reads as the default
+(`Kit_text_presence::unless_default`), so records written before the
+parameter read and keep their mesh key.
+
+A shape whose mesh follows the detail is `Kit_detail_response::scaled`; a
+`fixed` shape builds one mesh at every value and its row is disabled ("This
+shape has one level of detail"). A count follows the detail factor (detail
+/ 0.5, `get_kit_detail_factor()`, 1 for a fixed shape) by
+`kit_detail_count()`: its own value times factor ^ (1 / dimensions) (1 for a
+ring's points, 2 for each of two counts that multiply, such as a grid's
+columns and rows), rounded to whole steps from its own value (a step of 2
+keeps the parity of a count whose odd values build differently) and kept
+between a least and a most. Two ways use it:
+
+- Detail counts: `Kit_shape_definition::detail_counts` names int parameters
+  (`Kit_detail_count`: parameter, dimensions, step, and the fewest the
+  detail lowers it to: the cylinder's and the pillars' round sides keep 6),
+  scaled within the parameter's range (`get_kit_detail_values()`); the library makes such a
+  shape scaled and wraps its generator and its other callbacks describing
+  the mesh (walkability check, seam sides, connectors, light frames,
+  collision kind), so all of them see the scaled counts.
+- Counts of the generator's own: the generator reads the factor and scales
+  its fixed counts (stations, sides, points across); its definition states
+  `detail_response = scaled`. Where a count's points take random draws, the
+  generator draws the default count's values and samples them at the scaled
+  count, so the detail moves no draw and the plant or the piece keeps its
+  layout at every detail.
+
+The detail keeps a shape's form: the same parts in the same places, coarser
+or finer. `Kit_detail` checks that a shape's bounds at every detail lie
+within a tenth of their diagonal of the default's.
+
+The kit's triangle ceiling holds at the default detail and scales by the
+factor above it (`Kit_shape_library::get_triangle_ceiling()`). Parts no
+count reaches keep their triangles: the share is the counts' share. A former
+build (`<id>_old`) is fixed.
+
+The shapes with detail counts scale their `segments`: `basic.cylinder`,
+`architecture.pillar`, `architecture.column`, `architecture.torii`,
+`architecture.window_wall`, `architecture.tunnel`, `nature.land_mass`,
+`nature.hill` (two dimensions), `nature.rock_spire` (step 2),
+`nature.rock_arch`, `nature.log`, `nature.dune`, `nature.ground_patch`,
+`prop.barrel`, `prop.pot`, `prop.cart`, `prop.well`, `harbour.pier`,
+`harbour.mooring`, `harbour.buoy`, `harbour.lighthouse`, `light.lamp_post`,
+`industrial.pipe`, `industrial.tank`, `ruin.broken_pillar` and
+`ruin.broken_arch`. The vegetation scales counts of its own:
+
+- `nature.palm` and `nature.palm_clump` (and the trunk sides, `segments`,
+  of the palm): a feather frond's steps follow the factor; from 5/3 of the
+  default a palm's fronds take two segments across each half, their
+  undersides arching down to the edges ("Leaf helper"), and their steps the
+  rest of the factor. A fan leaf's sectors and the nuts' points follow the
+  factor, the trunk's stations (in pairs, so the rings keep alternating) and
+  sides its square root each.
+- `nature.palm_shrub` and `nature.leaf_plant`: the blades' and spears'
+  stations, the stalks' and the croziers' stations (their own at the
+  default, evenly spaced otherwise), the pinnate fronds' leaflet pairs and
+  the stems' sides; the fans' fingers and the hearts' outlines are the
+  leaves' form and stay.
+- `nature.succulent` and `nature.grass_tuft`: a blade's station table is
+  interpolated between its stations, or thinned to its first, its last and
+  evenly spaced others (`get_blade_stations()`; an ear, a plume and a
+  panicle keep at least their own); the stems' and the bud's sides.
+- `nature.tree` and `nature.bush`: the foliage clumps' and the conifer
+  tiers' points around, the trunk's and the limbs' sides.
+- `nature.bamboo`: the canes' sides; the nodes, sprays and leaves are the
+  plant's form.
+
+The other shapes are converted step by step (`doc/plans/level_kit_detail.md`).
 
 ## Slots and palette
 
@@ -1310,7 +1412,7 @@ crownshaft); a triangle mesh body.
   opposite corners) over four seeds: the base is the lowest point.
 
 At the defaults (seed 1 derives height 11.1 m, bend 0.1, 20 fronds, droop
-0.69) it has 1510 triangles (budget 1600); over derived seeds every species
+0.69) it has 1390 triangles (budget 1600); over derived seeds every species
 keeps within the kit's ceiling (`editor_level_tests` records the counts).
 
 #### Leaf helper
@@ -1319,14 +1421,18 @@ keeps within the kit's ceiling (`editor_level_tests` records the counts).
 `doc/plans/level_kit_more_shapes.md`) adds one leaf, frond or blade: a
 `Kit_leaf` holds the spine (four cubic Bezier points, base to tip), the
 section (`Kit_leaf_section::flat`, a thin lens; `thick`, a lens a third of its
-width; `folded`, two thin wedges meeting at the midrib in an inverted V, the
-leaflet rows of a feather frond), the width, thickness, fold, the spine
+width; `folded`, two thin halves sharing the midrib in an inverted V, the
+leaflet rows of a feather frond; `folded_split`, the former build of
+`folded`), the width, thickness, fold, the spine
 parameters of the widest station and of the end of the widest stretch
 (`widest_end`: an oblong blade; at most `widest_at`, one station), the base's
 share of the width, the section's roll about the spine (`roll`: pi / 2 stands
-the blade on edge) and the station count. Each part is a `make_sweep()` tapered from the base share to
-the widest station and to a point (folded: to a small cap, so the halves
-share no vertex), made in the generator's scratch mesh and taken in by
+the blade on edge), the station count and, for `folded`, the segments across
+each half (`across`): at 1 the halves are straight from the keel to the
+edge; above, the underside drops by (share across) ^ 1.6 to the edge, each
+upper point over the middle of its underside segment, the leaf thinning over
+its outer half, the base cap triangles sharing their edges. Each part is a `make_sweep()` tapered from the base share to
+the widest station and to a point, made in the generator's scratch mesh and taken in by
 `Kit_mesh_builder::add_mesh()`, which adds a generated mesh's facets under
 the current slot and splits each quad into two triangles (a bent sweep's
 quads are not planar). `add_kit_sweep()` is the same for a sweep a generator
@@ -1505,8 +1611,8 @@ its parts with the leaf plant ("Plant parts"). By species:
 - Replace carries `height` and `fronds` (clamped) between the palm and the
   clump; the species take their default.
 
-At the defaults the clump (seed 1: eight areca stems of 3.9 m) has 1912
-triangles (budget 1940), about 4 - 6.5 ms, the most 1948; the shrub 1246,
+At the defaults the clump (seed 1: eight areca stems of 3.9 m) has 1672
+triangles (budget 1940), about 4 - 6.5 ms, the most 1708; the shrub 1246,
 at most 1778 (a cycad with every parameter at its maximum).
 
 ### Dune and ground patch
@@ -1968,16 +2074,18 @@ and `stall`.
 - The awning (slot `cloth`) is a slab the width wide that reaches `overhang`
   beyond the posts at the front and the back: `flat` level at the height;
   `sloped` falling from the height at the back by 0.2 of the height to the
-  front; `peaked` two slabs falling by 0.18 of the height from a ridge along X
-  at the height. A valance hangs from its front edge.
+  front; `peaked` two slopes falling by 0.18 of the height from a ridge along X
+  at the height. A valance hangs flush from its front edge. The cloth and the
+  valance are one solid: a prism along X whose section's end caps are convex
+  quads sharing their edges (`Kit_mesh_builder::add_x_prism()`).
 - The sides are the width apart: stalls join side to side by end and start.
-- The parts are 12 boxes, 13 with a peaked awning.
+- The parts are 10 boxes and the awning.
 
 Derive ranges: `width` 2 - 3 modules (step 0.5), `depth` 1 - 1.5 modules
 (0.25), `height` 0.75 - 0.9 wall heights (0.05), `awning` all values,
 `overhang` 0.2 - 0.5 m (0.1). `overhang` is in the default mask.
 
-At the defaults it has 144 triangles (budget 150); the most is 156 (a peaked
+At the defaults it has 140 triangles (budget 150); the most is 148 (a peaked
 awning).
 
 ### Cart
@@ -2021,9 +2129,9 @@ connector base; a triangle mesh body; tags `prop` and `well`.
   height. A wooden bucket stands on the coping toward +Z at every roof.
 - `crossbar`: two posts beside the wall at +X and -X carry a beam, 1.4 radii
   (0.9 - 2.2 m) over the wall, over a windlass with a crank beyond the post at
-  +X. `gable`: the same under a roof of two slabs from a ridge along X, half
-  the radius and a post over the beam, on two king posts.
-- The parts are 2, 8 with a crossbar and 12 with a gable.
+  +X. `gable`: the same under a roof of two slopes sharing a ridge along X
+  (one prism), half the radius and a post over the beam, on two king posts.
+- The parts are 2, 8 with a crossbar and 11 with a gable.
 
 Derive ranges: `radius` 0.6 - 1 modules (step 0.05), `wall_height` 0.7 - 1 m
 (0.1), `roof` all values. No parameter is in the default mask.
@@ -2421,20 +2529,23 @@ mirror plane x; tags `walkable`, `quay`, `harbour`, `wall` and `tiles`.
   thickness, so the top is the thickness wide at every batter. The origin is
   under the middle of the top.
 - The wall stands on a plinth at the water's foot under a coping, whose top is
-  the walking surface. A timber kerb (slot `wood`) runs along the water's edge
+  the walking surface. The wall and the coping are one prism along X: the land
+  face rises upright to the walking surface, the coping overhangs the water
+  face. A timber kerb (slot `wood`) runs along the water's edge
   on the coping, up to 0.12 m high, and `fenders` timbers lean on the water
   face from over the plinth to under the coping, evenly along the length.
 - The ends are the length apart, so segments join end to start.
 - Walkability (R2.10): the clear width is the thickness less the kerb (at most
   0.15 m); the check refuses a top narrower than the agent's width plus the
   opening margin. The least thickness, 1 m, leaves 0.88 m.
-- The parts are four boxes and one to a fender.
+- The parts are the wall with its coping, the plinth, the kerb and one box to
+  a fender.
 
 Derive ranges: `length` 2 - 6 modules (step 1), `height` 0.5 - 1.25 wall
 heights (0.25), `thickness` 1 - 2 modules (0.5), `batter` 0 - 10 degrees (2.5),
 `fenders` 1 - 3. No parameter is in the default mask.
 
-At the defaults it has 72 triangles (budget 80); the most is 96 (four fenders).
+At the defaults it has 76 triangles (budget 80); the most is 100 (four fenders).
 
 ### Buoy
 
@@ -2569,9 +2680,10 @@ rises toward the ends, 0 - 0.3, default 0.15), `thwarts` (0 - 4, default 2),
   inner skin a skin's thickness inside it, joined by a rim along both gunwales
   and across both ends. Its facets are triangles. The rim and the top strake
   of both sides are slot `trim`.
-- `rowboat`: a round section, a transom at the stern and a narrow stem at the
-  bow, the keel rising toward the bow. `skiff`: a flat bottom out to a chine
-  under flared sides. `barge`: a flat bottom under nearly upright sides, the
+- `rowboat`: a round section, a transom at the stern and a stem at the bow,
+  where the two sides share their points, the keel rising toward the bow.
+  `skiff`: a flat bottom out to a chine under flared sides, closing to a stem
+  the same way. `barge`: a flat bottom under nearly upright sides, the
   ends square and raked. The hull is 0.36 beams deep (a barge 0.3).
 - `sheer` lifts the gunwale toward the ends by up to 0.25 of it times the
   length, the bow more than the stern.
@@ -2590,7 +2702,7 @@ Derive ranges: `form` all values, `length` 3 - 8 m (step 0.5), `beam`
 1.2 - 1.8 m (0.1), `sheer` 0 - 0.3 (0.05), `thwarts` 0 - 4, `heel` 0 - 25
 degrees (5). `length` and `heel` are in the default mask.
 
-At the default seed it has 504 triangles (budget 520); the most is 528 (a
+At the default seed it has 488 triangles (budget 520); the most is 512 (a
 rowboat with four thwarts).
 
 ## Light kit
@@ -2681,7 +2793,8 @@ and `fire`.
   on an arm from a stone on the wall behind it (0.12 sizes toward -Z), under a
   cup; the back connector is on that wall.
 - `campfire`: embers in a ring of seven stones 1.5 sizes wide, under a tripod
-  of three rods (slot `metal`) that meet over the flame.
+  of three rods (slot `metal`) that cross on the axis over the flame, at 0.85
+  of their height.
 - The flame (slot `glow`) is rings of six points up to a point, `flame` high
   over its foot; the seed sets each point's reach and where the tip stands.
   The campfire's stones take their sizes and places from the seed too.
@@ -2855,8 +2968,10 @@ body for the louvre box, a convex hull body for the other forms; tags
 - `stack`: a pipe on a flange under a rain cap the width wide, on `slats`
   struts around the pipe's mouth.
 - `duct_elbow`: a duct up from a curb at the back, turning toward +Z to a
-  mouth of `slats` slats.
-- The parts are three and the slats (on two faces of a louvre box).
+  mouth of `slats` slats; the riser and the arm are one prism of an L
+  section.
+- The parts are three (two of a duct elbow) and the slats (on two faces of a
+  louvre box).
 
 Derive ranges: `form` all values, `width` and `height` 0.5 - 1.5 modules (step
 0.25), `slats` 3 - 8. `width` and `height` are in the default mask.
@@ -3188,14 +3303,14 @@ convex hull body; origin rule `base_contains_origin`; tags `decoration`,
   up.
 - `extension`: lying along X, wound tight (a coil's pitch 1.08 wires), with
   a hook at each end: half a ring of the coil's radius from the coil's end
-  point (its first point a quarter wire back into the coil), in the plane
+  point, the same wire as the coil through a mitred joint, in the plane
   through the axis and that point, so it rises from the coil's lowest side
   and reaches no lower than the coils. No point of a coil lies straight
   under the axis, so it rests on two lines. Start and end are the hooks' far
   points.
 - `torsion`: standing, wound tight, with a leg 1.5 coil diameters long from
-  each end along the wire's tangent: toward +Z on the ground and toward -Z
-  at the top. Start and end are the legs' ends.
+  each end along the wire's tangent, the wire's own first and last stretch:
+  toward +Z on the ground and toward -Z at the top. Start and end are the legs' ends.
 
 Budget 780 triangles.
 
