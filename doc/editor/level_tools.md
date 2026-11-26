@@ -160,6 +160,11 @@ on for the pieces' light nodes. `--save` writes the scene for the windowed
 editor to open; `--keep-open` leaves the launched editor running with the
 scene.
 
+`scripts/level_shape_contact_sheet.py --tags <left> <right> --out <png>
+[--crop <w> <h>] [--scale <s>] <ids>` puts the images of two tags of each
+shape side by side on one sheet, the middle of each cropped: a before and
+after review of many shapes at once.
+
 ## Pieces
 
 A piece is a mesh node carrying the attached value group `Kit_piece`
