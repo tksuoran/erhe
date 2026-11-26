@@ -1333,7 +1333,7 @@ crownshaft); a triangle mesh body.
   opposite corners) over four seeds: the base is the lowest point.
 
 At the defaults (seed 1 derives height 11.1 m, bend 0.1, 20 fronds, droop
-0.69) it has 1510 triangles (budget 1600); over derived seeds every species
+0.69) it has 1390 triangles (budget 1600); over derived seeds every species
 keeps within the kit's ceiling (`editor_level_tests` records the counts).
 
 #### Leaf helper
@@ -1528,8 +1528,8 @@ its parts with the leaf plant ("Plant parts"). By species:
 - Replace carries `height` and `fronds` (clamped) between the palm and the
   clump; the species take their default.
 
-At the defaults the clump (seed 1: eight areca stems of 3.9 m) has 1912
-triangles (budget 1940), about 4 - 6.5 ms, the most 1948; the shrub 1246,
+At the defaults the clump (seed 1: eight areca stems of 3.9 m) has 1672
+triangles (budget 1940), about 4 - 6.5 ms, the most 1708; the shrub 1246,
 at most 1778 (a cycad with every parameter at its maximum).
 
 ### Dune and ground patch
@@ -2002,7 +2002,7 @@ Derive ranges: `width` 2 - 3 modules (step 0.5), `depth` 1 - 1.5 modules
 (0.25), `height` 0.75 - 0.9 wall heights (0.05), `awning` all values,
 `overhang` 0.2 - 0.5 m (0.1). `overhang` is in the default mask.
 
-At the defaults it has 144 triangles (budget 150); the most is 156 (a peaked
+At the defaults it has 140 triangles (budget 150); the most is 148 (a peaked
 awning).
 
 ### Cart
@@ -2048,7 +2048,7 @@ connector base; a triangle mesh body; tags `prop` and `well`.
   (0.9 - 2.2 m) over the wall, over a windlass with a crank beyond the post at
   +X. `gable`: the same under a roof of two slopes sharing a ridge along X
   (one prism), half the radius and a post over the beam, on two king posts.
-- The parts are 2, 8 with a crossbar and 12 with a gable.
+- The parts are 2, 8 with a crossbar and 11 with a gable.
 
 Derive ranges: `radius` 0.6 - 1 modules (step 0.05), `wall_height` 0.7 - 1 m
 (0.1), `roof` all values. No parameter is in the default mask.
@@ -2455,13 +2455,14 @@ mirror plane x; tags `walkable`, `quay`, `harbour`, `wall` and `tiles`.
 - Walkability (R2.10): the clear width is the thickness less the kerb (at most
   0.15 m); the check refuses a top narrower than the agent's width plus the
   opening margin. The least thickness, 1 m, leaves 0.88 m.
-- The parts are four boxes and one to a fender.
+- The parts are the wall with its coping, the plinth, the kerb and one box to
+  a fender.
 
 Derive ranges: `length` 2 - 6 modules (step 1), `height` 0.5 - 1.25 wall
 heights (0.25), `thickness` 1 - 2 modules (0.5), `batter` 0 - 10 degrees (2.5),
 `fenders` 1 - 3. No parameter is in the default mask.
 
-At the defaults it has 72 triangles (budget 80); the most is 96 (four fenders).
+At the defaults it has 76 triangles (budget 80); the most is 100 (four fenders).
 
 ### Buoy
 
@@ -2618,7 +2619,7 @@ Derive ranges: `form` all values, `length` 3 - 8 m (step 0.5), `beam`
 1.2 - 1.8 m (0.1), `sheer` 0 - 0.3 (0.05), `thwarts` 0 - 4, `heel` 0 - 25
 degrees (5). `length` and `heel` are in the default mask.
 
-At the default seed it has 504 triangles (budget 520); the most is 528 (a
+At the default seed it has 488 triangles (budget 520); the most is 512 (a
 rowboat with four thwarts).
 
 ## Light kit
@@ -2886,7 +2887,8 @@ body for the louvre box, a convex hull body for the other forms; tags
 - `duct_elbow`: a duct up from a curb at the back, turning toward +Z to a
   mouth of `slats` slats; the riser and the arm are one prism of an L
   section.
-- The parts are three and the slats (on two faces of a louvre box).
+- The parts are three (two of a duct elbow) and the slats (on two faces of a
+  louvre box).
 
 Derive ranges: `form` all values, `width` and `height` 0.5 - 1.5 modules (step
 0.25), `slats` 3 - 8. `width` and `height` are in the default mask.

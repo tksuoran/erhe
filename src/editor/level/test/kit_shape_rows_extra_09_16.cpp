@@ -12,14 +12,14 @@ auto get_extra_09_16_rows() -> Kit_shape_rows
     rows.seeded_shapes       = {"prop.signpost"};
     rows.enum_shapes         = {"industrial.pipe", "prop.pot", "prop.table", "prop.market_stall", "prop.cart", "prop.well"};
     rows.components          = {
-        {"harbour.quay_wall", Kit_component_rule::exactly, 6}, {"prop.table", Kit_component_rule::exactly, 9},
-        {"prop.market_stall", Kit_component_rule::exactly, 12}, {"prop.cart", Kit_component_rule::exactly, 14},
+        {"harbour.quay_wall", Kit_component_rule::exactly, 5}, {"prop.table", Kit_component_rule::exactly, 9},
+        {"prop.market_stall", Kit_component_rule::exactly, 11}, {"prop.cart", Kit_component_rule::exactly, 14},
         {"prop.well", Kit_component_rule::exactly, 8}, {"prop.signpost", Kit_component_rule::exactly, 5}
     };
     rows.walkability_open    = {};
     rows.triangle_counts     = {
-        {"harbour.quay_wall", 72}, {"industrial.pipe", 196}, {"prop.pot", 236}, {"prop.table", 108},
-        {"prop.market_stall", 144}, {"prop.cart", 520}, {"prop.well", 392}, {"prop.signpost", 74}
+        {"harbour.quay_wall", 76}, {"industrial.pipe", 196}, {"prop.pot", 236}, {"prop.table", 108},
+        {"prop.market_stall", 140}, {"prop.cart", 520}, {"prop.well", 392}, {"prop.signpost", 74}
     };
     // R2.6 where the triangle maxima lie: four fenders, a flanged tee of 16 points, an amphora of 20 points, a bench
     // on posts, a peaked awning, rails on a cart with wheels of 16 points, a gable over a well of 20 points, four arms.
@@ -34,11 +34,11 @@ auto get_extra_09_16_rows() -> Kit_shape_rows
         {"prop.signpost",     R"({"height":"0x1p+0","arms":4,"arm_length":"0x1.333334p-2","lean":"0x0p+0","seed":0})"}
     };
     rows.pins                = {
-        {"harbour.quay_wall 1", 48, 36, 144, 0x961f5f49a3ddc005ull, {-1.00000f, 0.00000f, -0.50000f}, {1.00000f, 3.09600f, 0.87672f}, {0.00000f, 1.75592f, 0.42810f}, 34.98780f},
+        {"harbour.quay_wall 1", 48, 38, 152, 0x5c296534bb18f583ull, {-1.00000f, 0.00000f, -0.50000f}, {1.00000f, 3.09600f, 0.87672f}, {0.00000f, 1.76092f, 0.46953f}, 30.89045f},
         {"industrial.pipe 1", 100, 92, 380, 0xcb65e93be76ff389ull, {-1.00000f, 0.00000f, -0.27000f}, {1.00000f, 0.51357f, 0.27000f}, {0.00000f, 0.25679f, 0.00000f}, 3.48461f},
         {"prop.pot 1", 120, 110, 456, 0x0c5affbc69c8117bull, {-0.35000f, 0.00000f, -0.35000f}, {0.35000f, 1.20000f, 0.35000f}, {0.00000f, 0.78120f, 0.00000f}, 2.95974f},
         {"prop.table 1", 72, 54, 216, 0x0d855de98e06d1c3ull, {-0.70000f, 0.00000f, -0.40000f}, {0.70000f, 0.75000f, 0.40000f}, {0.00000f, 0.53375f, 0.00000f}, 4.35298f},
-        {"prop.market_stall 1", 96, 72, 288, 0xb51bf3a44c0bcdf5ull, {-1.00000f, 0.00000f, -0.70000f}, {1.00000f, 2.40000f, 0.70000f}, {0.00000f, 1.21045f, 0.16283f}, 18.29421f},
+        {"prop.market_stall 1", 92, 70, 280, 0x75269b939fa054d3ull, {-1.00000f, 0.00000f, -0.70000f}, {1.00000f, 2.40000f, 0.70000f}, {0.00000f, 1.18024f, 0.13983f}, 18.17224f},
         {"prop.cart 1", 288, 244, 1008, 0x73238410b9498395ull, {-0.50000f, 0.00000f, -0.43663f}, {0.50000f, 0.95226f, 1.03333f}, {0.00000f, 0.42802f, 0.05214f}, 5.41798f},
         {"prop.well 1", 212, 180, 752, 0x5e2547712c74b785ull, {-0.95400f, 0.00000f, -0.78600f}, {1.10100f, 1.95000f, 0.78600f}, {0.11668f, 1.04033f, 0.11698f}, 14.01414f},
         {"prop.signpost 1", 47, 36, 146, 0xcde545537e3f8f91ull, {-0.16947f, 0.00000f, -0.18976f}, {0.11626f, 2.40000f, 0.43415f}, {-0.01581f, 1.48226f, 0.07460f}, 1.82796f},

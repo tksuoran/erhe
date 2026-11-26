@@ -246,8 +246,8 @@ TEST(Kit_shape_library, declared_mirror_planes_hold_for_the_generated_meshes)
     // the market stall, the cart, the trestle, the tunnel and the garland declare x, the barrel, the lamp post, the
     // pot, the lighthouse, the tank and the truss z. Of the machine elements the nut, the piston, the follower, the
     // cylinder and the pillow block declare x and z, the rack x, the bearing and the connecting rod z (a helical
-    // bolt has no mirror image).
-    EXPECT_EQ(declaring, 45u);
+    // bolt has no mirror image). The former builds of the quay wall and the market stall declare theirs.
+    EXPECT_EQ(declaring, 47u);
 }
 
 TEST(Kit_shape_library, seeded_shapes_declare_no_mirror_plane)

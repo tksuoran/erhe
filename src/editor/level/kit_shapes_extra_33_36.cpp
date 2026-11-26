@@ -842,15 +842,31 @@ void generate_boat_build(const Kit_parameter_values& values, GEO::Mesh& mesh, co
     for (std::size_t k = 0; k < outer.size(); ++k) {
         const int i = static_cast<int>(k) / across;
         const int j = static_cast<int>(k) % across;
-        if (lines.has_stem() && (i == boat_bands) && (j > (boat_strakes / 2))) {
-            // The stem: both sides share the bow's points.
-            out.push_back(out[at(i, boat_strakes - j)]);
-            in .push_back(in [at(i, boat_strakes - j)]);
-            continue;
+        const glm::vec3 outer_point = place.at(outer[k]);
+        const glm::vec3 inner_point = place.at(inner[k]);
+        uint32_t outer_vertex = std::numeric_limits<uint32_t>::max();
+        uint32_t inner_vertex = std::numeric_limits<uint32_t>::max();
+        if (lines.has_stem() && (i == boat_bands)) {
+            // The stem: the bow's points of both sides, and a flat bottom's, are one where they meet.
+            for (int earlier = 0; earlier < j; ++earlier) {
+                const std::size_t e = at(i, earlier);
+                if ((outer_vertex == std::numeric_limits<uint32_t>::max()) && (builder.get_positions()[out[e]] == outer_point)) {
+                    outer_vertex = out[e];
+                }
+                if ((inner_vertex == std::numeric_limits<uint32_t>::max()) && (builder.get_positions()[in[e]] == inner_point)) {
+                    inner_vertex = in[e];
+                }
+            }
         }
-        out.push_back(builder.add_vertex(place.at(outer[k])));
-        in .push_back(builder.add_vertex(place.at(inner[k])));
+        out.push_back((outer_vertex != std::numeric_limits<uint32_t>::max()) ? outer_vertex : builder.add_vertex(outer_point));
+        in .push_back((inner_vertex != std::numeric_limits<uint32_t>::max()) ? inner_vertex : builder.add_vertex(inner_point));
     }
+    // A band's triangle whose corners meet at the stem is left out.
+    const auto add_triangle = [&builder](const uint32_t a, const uint32_t b, const uint32_t c) {
+        if ((a != b) && (b != c) && (c != a)) {
+            builder.add_triangle(a, b, c);
+        }
+    };
     for (int i = 0; i < boat_bands; ++i) {
         for (int j = 0; j < boat_strakes; ++j) {
             const std::size_t a = at(i, j);
@@ -859,11 +875,11 @@ void generate_boat_build(const Kit_parameter_values& values, GEO::Mesh& mesh, co
             const std::size_t e = at(i + 1, j + 1);
             // The top strake of both sides is trim.
             builder.set_slot(((j == 0) || ((j + 1) == boat_strakes)) ? boat_trim_slot : boat_wood_slot);
-            builder.add_triangle(out[a], out[b], out[e]);
-            builder.add_triangle(out[a], out[e], out[d]);
+            add_triangle(out[a], out[b], out[e]);
+            add_triangle(out[a], out[e], out[d]);
             builder.set_slot(boat_wood_slot);
-            builder.add_triangle(in[a], in[e], in[b]);
-            builder.add_triangle(in[a], in[d], in[e]);
+            add_triangle(in[a], in[e], in[b]);
+            add_triangle(in[a], in[d], in[e]);
         }
     }
     // The rim between the two skins: along both gunwales and across the stern and a bow without a stem.

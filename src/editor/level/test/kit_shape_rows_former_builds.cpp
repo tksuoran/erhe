@@ -14,7 +14,8 @@ class Former_build
 public:
     std::string           id;
     unsigned int          triangle_count{0};
-    std::vector<Mesh_pin> pins; // named "<id> <seed>", renamed here
+    std::vector<Mesh_pin> pins;          // named "<id> <seed>", renamed here
+    unsigned int          components{0}; // the former build's exact part count where it differs from the shape's row
 };
 
 [[nodiscard]] auto get_former_builds() -> std::vector<Former_build>
@@ -32,10 +33,10 @@ public:
         }},
         Former_build{"harbour.quay_wall", 72, {
             {"harbour.quay_wall 1", 48, 36, 144, 0x961f5f49a3ddc005ull, {-1.00000f, 0.00000f, -0.50000f}, {1.00000f, 3.09600f, 0.87672f}, {0.00000f, 1.75592f, 0.42810f}, 34.98780f}
-        }},
+        }, 6},
         Former_build{"prop.market_stall", 144, {
             {"prop.market_stall 1", 96, 72, 288, 0xb51bf3a44c0bcdf5ull, {-1.00000f, 0.00000f, -0.70000f}, {1.00000f, 2.40000f, 0.70000f}, {0.00000f, 1.21045f, 0.16283f}, 18.29421f}
-        }},
+        }, 12},
         Former_build{"prop.well", 392, {
             {"prop.well 1", 212, 180, 752, 0x5e2547712c74b785ull, {-0.95400f, 0.00000f, -0.78600f}, {1.10100f, 1.95000f, 0.78600f}, {0.11668f, 1.04033f, 0.11698f}, 14.01414f}
         }},
@@ -82,7 +83,11 @@ auto get_former_build_rows(const std::vector<Kit_shape_rows>& batches) -> Kit_sh
             copy_ids(batch.walkability_open, id, rows.walkability_open);
             for (const Kit_component_row& row : batch.components) {
                 if (row.id == id) {
-                    rows.components.push_back(Kit_component_row{.id = renamed(id), .rule = row.rule, .count = row.count});
+                    rows.components.push_back(
+                        (former.components != 0)
+                            ? Kit_component_row{.id = renamed(id), .rule = Kit_component_rule::exactly, .count = former.components}
+                            : Kit_component_row{.id = renamed(id), .rule = row.rule, .count = row.count}
+                    );
                 }
             }
             for (const std::pair<std::string, std::string>& row : batch.worst_cases) {

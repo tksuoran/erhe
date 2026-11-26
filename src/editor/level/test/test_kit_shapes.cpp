@@ -1373,7 +1373,7 @@ TEST(Kit_palm_clump, every_species_passes_the_checks_at_the_corners_over_seeds)
     // The binding combination: nine areca stems at the least height carry the 40 fronds; worst_case_combinations_keep_the_ceiling holds it.
     Kit_parameter_values binding;
     ASSERT_EQ(editor::parse_canonical_text(clump, R"({"species":"areca","stems":9,"height":"0x1p-1","spread":"0x0p+0","fronds":10,"seed":1})", binding), "");
-    EXPECT_GE(editor::count_kit_triangles(*generate(binding)), 1940u);
+    EXPECT_GE(editor::count_kit_triangles(*generate(binding)), 1700u);
 }
 
 // The dune's and the ground patch's walkability checks bound the generated slopes: a value set either check passes
