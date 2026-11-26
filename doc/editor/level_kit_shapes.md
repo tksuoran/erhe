@@ -87,10 +87,18 @@ the ceiling at its range maxima.
 - Shared points: where two parts of a surface meet (the halves of a folded
   leaf at its midrib and its tip, the two slopes of a ridge, a hull's sides at
   its stem, a hook and the coil it continues), they are one solid that shares
-  the vertices of the join; the corner attributes (normals) stay per facet. A
+  the vertices of the join; a fold along the join is a hard edge ("Hard
+  edges"), so a smooth shaded shape keeps it sharp. A
   concave section is closed by convex pieces that share their edges
   (`Kit_mesh_builder::add_x_prism()`). Parts that only reach into one another
   (a post into a beam) stay separate closed solids.
+- Hard edges: a generator names a designed sharp edge with
+  `Kit_mesh_builder::add_hard_edge(a, b)` (a folded leaf's midrib, a leaf's
+  rim, a fan's pleats). `write()` gives every corner at a vertex of a hard
+  edge its normal: the facets met walking around the vertex both ways from
+  the corner's facet up to a hard edge, weighted by their angles at the
+  vertex. The shape's normal style fills the other corners
+  (`doc/editor/level_tools.md` "Kit brushes"); a faceted shape uses neither.
 - Former builds: a shape whose build was fixed keeps its former build for a
   side by side comparison as `<id>_old` ("<name> (old)", `add_former_build()`
   in `kit_shape_library.cpp`, the generator taking `Kit_build::former`), with
@@ -1389,7 +1397,9 @@ horizontal offset, a share of the height, 0 - 0.5), `fronds` (3 - 24),
 dead leaf reaches the ground and no frond is too small for the mesh checks),
 `droop`, `seed` and `segments` (trunk sides, 4 - 12); slots
 `bark` (trunk, nuts, dead leaves) and `leaf` (fronds, fan leaves,
-crownshaft); a triangle mesh body.
+crownshaft); normals smooth with hard edges at 75 degrees (above the turn of
+a trunk of five sides, below the caps' right angles), the leaves' folds and
+rims hard edges; a triangle mesh body.
 
 - The species sets the trunk's radius per meter of height, how much of the
   bend the trunk takes, the trunk's taper and rings (every second station
@@ -1431,7 +1441,11 @@ the blade on edge), the station count and, for `folded`, the segments across
 each half (`across`): at 1 the halves are straight from the keel to the
 edge; above, the underside drops by (share across) ^ 1.6 to the edge, each
 upper point over the middle of its underside segment, the leaf thinning over
-its outer half, the base cap triangles sharing their edges. Each part is a `make_sweep()` tapered from the base share to
+its outer half, the base cap triangles sharing their edges. The hard edges
+(`add_hard_edge()`) run from the base outline to the tip along the lens's two
+edges, and along a folded leaf's outer edges, keel and the keel's top (arched:
+also the outer points of the upper side), so each half is smooth along the
+leaf and the midrib a sharp fold; `folded_split` has none. Each part is a `make_sweep()` tapered from the base share to
 the widest station and to a point, made in the generator's scratch mesh and taken in by
 `Kit_mesh_builder::add_mesh()`, which adds a generated mesh's facets under
 the current slot and splits each quad into two triangles (a bent sweep's
@@ -1462,7 +1476,9 @@ leaves standing at its origin. Parameters `form` (`banana`, `taro`,
 `strelitzia`, `fern`, `tree_fern`), `height` (0.3 - 8 m), `leaves` (3 - 14),
 `droop` (0 - 1), `leaf_width` (0.1 - 0.6) and `seed`; height, leaves and droop
 in the default mask; slots `bark` (stems and dead leaves), `leaf` and
-`young_leaf` (the youngest leaves); no connectors; no body (`Kit_collision::none`,
+`young_leaf` (the youngest leaves); normals smooth with hard edges at 75
+degrees, the leaves' folds and rims hard edges ("Plant parts"); no
+connectors; no body (`Kit_collision::none`,
 P5 of `doc/plans/level_kit_extra_shapes.md`: soft dressing a walker passes
 through; its pieces carry `pass_through`). It shares its parts with the palm
 shrub ("Plant parts"). By form:
@@ -1495,15 +1511,18 @@ solids:
   drooping leaf rests above the ground at every value;
 - a ribbon (`add_ribbon()`, `add_blade()`): at each station the two edges, the
   midrib and the keel under it, pointed at both ends; the edges' lift over the
-  midrib is the leaf's fold. A blade is a stalk widening into an oblong blade;
+  midrib is the leaf's fold. A blade is a stalk widening into an oblong blade,
+  its edges, midrib and keel hard edges, so each face is flat across and
+  smooth along; a stalk or crozier has none and is round;
 - a shell (`add_shell()`): a fan of triangles from a hub over a rim, its copy
   underneath and walls between. A palm's fan (`add_fan()`) has fingers that
   are ridges from the hub to their tips between dropped clefts; a taro's blade
   (`add_heart()`) is a closed rim of ten points. `flatten_above()` scales a
   shell's heights about its hub (one affine map) where it would reach the
-  ground;
+  ground. The rims of both faces are hard edges, and so are a fan's spokes
+  (its pleats) and a heart's midrib;
 - a frond (`add_frond()`): a three-sided rachis and pairs of leaflets, each a
-  low tetrahedron whose ridge folds it;
+  low tetrahedron whose ridge folds it, every edge a hard edge;
 - a stem (`add_stem()`): rings from the ground up, the base a fan about a
   vertex on the origin.
 
@@ -1580,8 +1599,8 @@ ringed canes and arching feather fronds; `rhapis`: thin canes with fan
 leaves; `nipa`: long erect fronds from short stems at the ground), `stems`
 (1 - 9), `height` (the tallest stem's crown, 1.2 wall heights), `spread`
 (how far the outer stems lean out), `fronds` (per stem, 2 - 10) and `seed`;
-stems and height in the default mask; slots `bark` and `leaf`; a
-triangle mesh body.
+stems and height in the default mask; slots `bark` and `leaf`; normals as
+the palm's; a triangle mesh body.
 
 - Each stem is the palm's trunk and crown (`add_palm_tree()`, shared with
   `nature.palm`) with a lighter crown: five trunk sides, three stations per
@@ -1596,7 +1615,8 @@ triangle mesh body.
 `nature.palm_shrub` is a trunkless crown at the ground at its origin.
 Parameters `species`, `size` (1.2 m), `fronds` (3 - 16) and `seed`; size and
 fronds in the default mask; slots `bark` (the stem and dead leaves),
-`leaf` and `young_leaf` (the youngest leaves); a convex hull body. It shares
+`leaf` and `young_leaf` (the youngest leaves); normals as the leaf plant's;
+a convex hull body. It shares
 its parts with the leaf plant ("Plant parts"). By species:
 
 - `palmetto`: pleated fans of eight pointed fingers on long stalks, the young

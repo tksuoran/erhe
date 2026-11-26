@@ -5,9 +5,13 @@
 
 #include <geogram/mesh/mesh.h>
 
+#include "erhe_verify/verify.hpp"
+
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstdint>
+#include <span>
 
 namespace editor {
 
@@ -47,8 +51,38 @@ enum class Base_cap : unsigned int {
     none       // the caller caps the base ring
 };
 
-void add_sweep(Kit_mesh_builder& builder, const Kit_leaf& leaf, std::vector<glm::vec2>&& profile, const float tip_scale, const Base_cap base_cap, GEO::Mesh& scratch)
+// The hard edges of a leaf swept from base_vertex with its tip collapsed to one vertex: along each line (a profile
+// index) from the base to the tip, and around the base ring, where the cap meets the walls.
+void add_leaf_hard_edges(Kit_mesh_builder& builder, const uint32_t base_vertex, const uint32_t profile_count, const uint32_t ring_count, const std::span<const uint32_t> lines)
 {
+    const auto ring_vertex = [base_vertex, profile_count](const uint32_t ring, const uint32_t j) -> uint32_t {
+        return base_vertex + (ring * profile_count) + j;
+    };
+    const uint32_t tip = base_vertex + (ring_count * profile_count);
+    for (const uint32_t j : lines) {
+        for (uint32_t ring = 0; (ring + 1) < ring_count; ++ring) {
+            builder.add_hard_edge(ring_vertex(ring, j), ring_vertex(ring + 1, j));
+        }
+        builder.add_hard_edge(ring_vertex(ring_count - 1, j), tip);
+    }
+    for (uint32_t j = 0; j < profile_count; ++j) {
+        builder.add_hard_edge(ring_vertex(0, j), ring_vertex(0, (j + 1) % profile_count));
+    }
+}
+
+// lines: the profile indices of the leaf's hard edges (add_leaf_hard_edges()), for a tip_scale of 0.
+void add_sweep(
+    Kit_mesh_builder&              builder,
+    const Kit_leaf&                leaf,
+    std::vector<glm::vec2>&&       profile,
+    const float                    tip_scale,
+    const Base_cap                 base_cap,
+    const std::span<const uint32_t> lines,
+    GEO::Mesh&                     scratch
+)
+{
+    const uint32_t base_vertex   = static_cast<uint32_t>(builder.get_positions().size());
+    const uint32_t profile_count = static_cast<uint32_t>(profile.size());
     if (leaf.roll != 0.0f) {
         const float c = std::cos(leaf.roll);
         const float s = std::sin(leaf.roll);
@@ -67,7 +101,12 @@ void add_sweep(Kit_mesh_builder& builder, const Kit_leaf& leaf, std::vector<glm:
         parameters.taper.emplace_back(std::min(leaf.widest_end, 0.95f), 1.0f);
     }
     parameters.taper.emplace_back(1.0f, tip_scale);
+    const uint32_t ring_count = static_cast<uint32_t>(parameters.spine_steps); // the last station is the tip
     add_kit_sweep(builder, parameters, scratch);
+    if (!lines.empty()) {
+        ERHE_VERIFY(tip_scale == 0.0f);
+        add_leaf_hard_edges(builder, base_vertex, profile_count, ring_count, lines);
+    }
 }
 
 constexpr float folded_arch_power = 1.6f; // a folded half's underside drops by (share across) ^ this: the leaflet rows arch down
@@ -113,8 +152,11 @@ void add_arched_folded_leaf(Kit_mesh_builder& builder, const Kit_leaf& leaf, GEO
     for (int i = 0; i < k; ++i) {
         profile.push_back(upper(-1.0f, i));
     }
+    // The hard lines: the outer edges of both sides, the keel and its top.
+    const uint32_t ku_lines = static_cast<uint32_t>(k);
+    const std::array<uint32_t, 6> lines{0, ku_lines, 2 * ku_lines, (2 * ku_lines) + 1, (3 * ku_lines) + 1, (4 * ku_lines) + 1};
     const uint32_t base = static_cast<uint32_t>(builder.get_positions().size());
-    add_sweep(builder, leaf, std::move(profile), 0.0f, Base_cap::none, scratch);
+    add_sweep(builder, leaf, std::move(profile), 0.0f, Base_cap::none, lines, scratch);
 
     // The base cap in triangles sharing their edges, wound to face back along the spine (the profile's
     // counter-clockwise triangles reversed).
@@ -153,15 +195,17 @@ void add_leaf(Kit_mesh_builder& builder, const Kit_leaf& leaf, GEO::Mesh& scratc
 {
     const float half = 0.5f * leaf.width;
     std::vector<glm::vec2> profile;
+    constexpr std::array<uint32_t, 2> lens_lines{0, 2};      // the lens's two edges
+    constexpr std::array<uint32_t, 4> folded_lines{0, 1, 2, 4}; // the outer edges, the keel and its top
     switch (leaf.section) {
         case Kit_leaf_section::flat: {
             make_lens(glm::vec2{-half, 0.0f}, glm::vec2{half, 0.0f}, leaf.thickness, profile);
-            add_sweep(builder, leaf, std::move(profile), 0.0f, Base_cap::sweep, scratch);
+            add_sweep(builder, leaf, std::move(profile), 0.0f, Base_cap::sweep, lens_lines, scratch);
             break;
         }
         case Kit_leaf_section::thick: {
             make_lens(glm::vec2{-half, 0.0f}, glm::vec2{half, 0.0f}, std::max(leaf.thickness, 0.33f * leaf.width), profile);
-            add_sweep(builder, leaf, std::move(profile), 0.0f, Base_cap::sweep, scratch);
+            add_sweep(builder, leaf, std::move(profile), 0.0f, Base_cap::sweep, lens_lines, scratch);
             break;
         }
         case Kit_leaf_section::folded: {
@@ -177,7 +221,7 @@ void add_leaf(Kit_mesh_builder& builder, const Kit_leaf& leaf, GEO::Mesh& scratc
             const glm::vec2 top       {0.0f, leaf.thickness};
             profile = {left_edge, keel, right_edge, get_ridge(keel, right_edge, leaf.thickness), top, get_ridge(keel, left_edge, leaf.thickness)};
             const uint32_t base = static_cast<uint32_t>(builder.get_positions().size());
-            add_sweep(builder, leaf, std::move(profile), 0.0f, Base_cap::none, scratch);
+            add_sweep(builder, leaf, std::move(profile), 0.0f, Base_cap::none, folded_lines, scratch);
             // The V profile is concave: its base cap is one convex quad per half, the two sharing the midrib.
             builder.add_quad(base + 5, base + 4, base + 1, base + 0);
             builder.add_quad(base + 4, base + 3, base + 2, base + 1);
@@ -188,9 +232,9 @@ void add_leaf(Kit_mesh_builder& builder, const Kit_leaf& leaf, GEO::Mesh& scratc
             const float overlap = 0.03f * leaf.width;
             const float drop    = leaf.fold * half;
             make_wedge(glm::vec2{-overlap, 0.0f}, glm::vec2{half, -drop}, leaf.thickness, profile);
-            add_sweep(builder, leaf, std::move(profile), 0.04f, Base_cap::sweep, scratch);
+            add_sweep(builder, leaf, std::move(profile), 0.04f, Base_cap::sweep, {}, scratch);
             make_wedge(glm::vec2{overlap, 0.0f}, glm::vec2{-half, -drop}, leaf.thickness, profile);
-            add_sweep(builder, leaf, std::move(profile), 0.04f, Base_cap::sweep, scratch);
+            add_sweep(builder, leaf, std::move(profile), 0.04f, Base_cap::sweep, {}, scratch);
             break;
         }
         default: {

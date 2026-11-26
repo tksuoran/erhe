@@ -824,6 +824,65 @@ TEST(Kit_shape_checks, surfaces_may_be_open)
     EXPECT_FALSE(editor::check_kit_mesh(mesh, editor::Kit_mesh_kind::surface).is_valid());
 }
 
+// A strip of three quads bending 10 and then 40 degrees: around a vertex of a hard edge the corner normals average the
+// facets up to the hard edges and no further; corners at no hard edge get no normal from the builder.
+TEST(Kit_mesh_builder, hard_edges_split_the_corner_normals)
+{
+    const float     bend = glm::radians(10.0f);
+    const float     fold = glm::radians(50.0f);
+    const glm::vec2 p0{0.0f, 0.0f};
+    const glm::vec2 p1{1.0f, 0.0f};
+    const glm::vec2 p2 = p1 + glm::vec2{std::cos(bend), std::sin(bend)};
+    const glm::vec2 p3 = p2 + glm::vec2{std::cos(fold), std::sin(fold)};
+    editor::Kit_mesh_builder builder;
+    std::array<uint32_t, 4> v{};
+    std::array<uint32_t, 4> w{};
+    std::size_t i = 0;
+    for (const glm::vec2& p : {p0, p1, p2, p3}) {
+        v[i] = builder.add_vertex(glm::vec3{p.x, p.y, 0.0f});
+        w[i] = builder.add_vertex(glm::vec3{p.x, p.y, 1.0f});
+        ++i;
+    }
+    for (std::size_t q = 0; q < 3; ++q) {
+        builder.add_quad(v[q], w[q], w[q + 1], v[q + 1]);
+    }
+    builder.add_hard_edge(v[0], v[1]);
+    builder.add_hard_edge(v[2], w[2]);
+    GEO::Mesh mesh{3, true};
+    builder.write(mesh);
+
+    const erhe::geometry::Attribute_present<GEO::vec3f> corner_normal{
+        mesh.facet_corners.attributes(), erhe::geometry::Attribute_descriptors::s_normal
+    };
+    const auto normal_at = [&mesh, &corner_normal](const GEO::index_t facet, const GEO::index_t local_corner) -> glm::vec3 {
+        const GEO::index_t corner = mesh.facets.corner(facet, local_corner);
+        EXPECT_TRUE(corner_normal.has(corner)) << "facet " << facet << " corner " << local_corner;
+        const GEO::vec3f n = corner_normal.get(corner);
+        return glm::vec3{n.x, n.y, n.z};
+    };
+    const auto facet_normal = [](const glm::vec2 a, const glm::vec2 b) -> glm::vec3 {
+        const glm::vec2 d = glm::normalize(b - a);
+        return glm::vec3{-d.y, d.x, 0.0f};
+    };
+    const glm::vec3 n0 = facet_normal(p0, p1);
+    const glm::vec3 n1 = facet_normal(p1, p2);
+    const glm::vec3 n2 = facet_normal(p2, p3);
+    const auto expect_near = [](const glm::vec3& actual, const glm::vec3& expected) {
+        EXPECT_LT(glm::length(actual - expected), 1.0e-5f) << actual.x << " " << actual.y << " " << actual.z;
+    };
+    // v1 lies on the hard edge v0-v1; its fan crosses the smooth edge v1-w1, both quads at right angles there.
+    expect_near(normal_at(0, 3), glm::normalize(n0 + n1));
+    expect_near(normal_at(1, 0), glm::normalize(n0 + n1));
+    expect_near(normal_at(0, 0), n0);
+    // The hard edge v2-w2 keeps each side's own normal.
+    expect_near(normal_at(1, 3), n1);
+    expect_near(normal_at(2, 0), n2);
+    expect_near(normal_at(1, 2), n1);
+    expect_near(normal_at(2, 1), n2);
+    EXPECT_FALSE(corner_normal.has(mesh.facets.corner(0, 1))); // w0
+    EXPECT_FALSE(corner_normal.has(mesh.facets.corner(2, 2))); // w3
+}
+
 // P5: the water is an open surface facing up, without a body; its subdivisions make its quads.
 TEST(Kit_water, is_an_open_surface_without_a_body)
 {

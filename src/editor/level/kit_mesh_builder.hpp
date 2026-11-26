@@ -64,7 +64,11 @@ public:
     // (first[i], first[i + 1], second[j]). A closed ring repeats its first vertex at the end with its key plus a turn.
     void add_band    (std::span<const uint32_t> first, std::span<const float> first_keys, std::span<const uint32_t> second, std::span<const float> second_keys);
 
-    // Writes the facets and their slots (c_kit_slot_attribute).
+    // A designed sharp edge between two vertices of a facet edge: the normals of the vertices on it do not average across it.
+    void add_hard_edge(uint32_t a, uint32_t b);
+
+    // Writes the facets and their slots (c_kit_slot_attribute), and the corner normals of every corner at a vertex of a
+    // hard edge (doc/editor/level_kit_shapes.md "Hard edges").
     void write       (GEO::Mesh& mesh) const;
 
     [[nodiscard]] auto get_positions() const -> const std::vector<glm::vec3>&;
@@ -73,8 +77,12 @@ private:
     std::vector<glm::vec3>             m_positions;
     std::vector<std::vector<uint32_t>> m_facets;
     std::vector<uint32_t>              m_facet_slots;
+    std::vector<uint64_t>              m_hard_edges; // (min vertex << 32) | max vertex
     uint32_t                           m_slot{0};
 };
+
+// The angle of a polygon at its corner, radians; 0 for a corner with a zero-length side.
+[[nodiscard]] auto get_kit_corner_angle(const glm::vec3& previous, const glm::vec3& corner, const glm::vec3& next) -> float;
 
 // The slot of every facet of a generated mesh; 0 for every facet of a mesh without c_kit_slot_attribute.
 void read_kit_facet_slots(const GEO::Mesh& mesh, std::vector<uint32_t>& out_slots);

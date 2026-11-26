@@ -8,6 +8,8 @@
 #include <algorithm>
 #include <cmath>
 #include <numbers>
+#include <optional>
+#include <unordered_map>
 
 namespace editor {
 
@@ -285,8 +287,37 @@ void Kit_mesh_builder::add_band(
     }
 }
 
+auto get_kit_corner_angle(const glm::vec3& previous, const glm::vec3& corner, const glm::vec3& next) -> float
+{
+    const glm::vec3 a       = previous - corner;
+    const glm::vec3 b       = next - corner;
+    const float     lengths = glm::length(a) * glm::length(b);
+    return (lengths > 0.0f) ? std::acos(std::clamp(glm::dot(a, b) / lengths, -1.0f, 1.0f)) : 0.0f;
+}
+
+namespace {
+
+[[nodiscard]] auto make_edge_key(const uint32_t a, const uint32_t b) -> uint64_t
+{
+    return (static_cast<uint64_t>(std::min(a, b)) << 32) | static_cast<uint64_t>(std::max(a, b));
+}
+
+[[nodiscard]] auto make_directed_key(const uint32_t from, const uint32_t to) -> uint64_t
+{
+    return (static_cast<uint64_t>(from) << 32) | static_cast<uint64_t>(to);
+}
+
+} // anonymous namespace
+
+void Kit_mesh_builder::add_hard_edge(const uint32_t a, const uint32_t b)
+{
+    ERHE_VERIFY(a != b);
+    m_hard_edges.push_back(make_edge_key(a, b));
+}
+
 void Kit_mesh_builder::write(GEO::Mesh& mesh) const
 {
+    const GEO::index_t first_facet  = mesh.facets.nb();
     const GEO::index_t first_vertex = mesh.vertices.create_vertices(static_cast<GEO::index_t>(m_positions.size()));
     for (std::size_t i = 0, end = m_positions.size(); i < end; ++i) {
         const glm::vec3& p = m_positions[i];
@@ -311,6 +342,95 @@ void Kit_mesh_builder::write(GEO::Mesh& mesh) const
         }
         i = run_end;
     }
+    if (m_hard_edges.empty()) {
+        return;
+    }
+
+    // Corner normals around the vertices of the hard edges: each corner averages, weighted by their angles at the
+    // vertex, the facets reached by walking around the vertex both ways from its own facet up to a hard edge.
+    std::vector<uint64_t> hard_edges = m_hard_edges;
+    std::sort(hard_edges.begin(), hard_edges.end());
+    const auto is_hard = [&hard_edges](const uint32_t a, const uint32_t b) -> bool {
+        return std::binary_search(hard_edges.begin(), hard_edges.end(), make_edge_key(a, b));
+    };
+    std::vector<bool> on_hard_edge(m_positions.size(), false);
+    for (const uint64_t key : hard_edges) {
+        on_hard_edge[static_cast<std::size_t>(key >> 32)]         = true;
+        on_hard_edge[static_cast<std::size_t>(key & 0xffffffffu)] = true;
+    }
+    std::unordered_map<uint64_t, uint32_t> facet_of_directed_edge;
+    std::vector<glm::vec3>                 facet_normals(m_facets.size());
+    for (std::size_t f = 0, end = m_facets.size(); f < end; ++f) {
+        const std::vector<uint32_t>& corners = m_facets[f];
+        glm::vec3 newell{0.0f};
+        for (std::size_t c = 0, count = corners.size(); c < count; ++c) {
+            const glm::vec3& p = m_positions[corners[c]];
+            const glm::vec3& q = m_positions[corners[(c + 1) % count]];
+            newell += glm::vec3{(p.y - q.y) * (p.z + q.z), (p.z - q.z) * (p.x + q.x), (p.x - q.x) * (p.y + q.y)};
+            facet_of_directed_edge[make_directed_key(corners[c], corners[(c + 1) % count])] = static_cast<uint32_t>(f);
+        }
+        const float length = glm::length(newell);
+        facet_normals[f] = (length > 0.0f) ? (newell / length) : glm::vec3{0.0f};
+    }
+    const auto local_corner_of = [this](const uint32_t facet, const uint32_t vertex) -> std::size_t {
+        const std::vector<uint32_t>& corners = m_facets[facet];
+        return static_cast<std::size_t>(std::find(corners.begin(), corners.end(), vertex) - corners.begin());
+    };
+    const auto weighted_normal = [this, &facet_normals](const uint32_t facet, const std::size_t c) -> glm::vec3 {
+        const std::vector<uint32_t>& corners = m_facets[facet];
+        const std::size_t            count   = corners.size();
+        const float angle = get_kit_corner_angle(
+            m_positions[corners[(c + count - 1) % count]], m_positions[corners[c]], m_positions[corners[(c + 1) % count]]
+        );
+        return angle * facet_normals[facet];
+    };
+
+    erhe::geometry::Attribute_present<GEO::vec3f> corner_normal{
+        mesh.facet_corners.attributes(), erhe::geometry::Attribute_descriptors::s_normal
+    };
+    enum class Walk : unsigned int { forward = 0, backward };
+    for (std::size_t f = 0, end = m_facets.size(); f < end; ++f) {
+        const std::vector<uint32_t>& corners = m_facets[f];
+        for (std::size_t c = 0, count = corners.size(); c < count; ++c) {
+            const uint32_t vertex = corners[c];
+            if (!on_hard_edge[vertex]) {
+                continue;
+            }
+            glm::vec3 sum    = weighted_normal(static_cast<uint32_t>(f), c);
+            bool      closed = false;
+            for (const Walk walk : {Walk::forward, Walk::backward}) {
+                if (closed) {
+                    break;
+                }
+                uint32_t    facet = static_cast<uint32_t>(f);
+                std::size_t local = c;
+                for (std::size_t step = 0; step < m_facets.size(); ++step) {
+                    // Forward crosses the facet's edge leaving the vertex, backward the edge arriving at it.
+                    const std::vector<uint32_t>& ring  = m_facets[facet];
+                    const std::size_t            n     = ring.size();
+                    const uint32_t               other = (walk == Walk::forward) ? ring[(local + 1) % n] : ring[(local + n - 1) % n];
+                    if (is_hard(vertex, other)) {
+                        break;
+                    }
+                    const uint64_t across = (walk == Walk::forward) ? make_directed_key(other, vertex) : make_directed_key(vertex, other);
+                    const std::unordered_map<uint64_t, uint32_t>::const_iterator neighbor = facet_of_directed_edge.find(across);
+                    if (neighbor == facet_of_directed_edge.end()) {
+                        break;
+                    }
+                    if (neighbor->second == static_cast<uint32_t>(f)) {
+                        closed = true;
+                        break;
+                    }
+                    facet = neighbor->second;
+                    local = local_corner_of(facet, vertex);
+                    sum += weighted_normal(facet, local);
+                }
+            }
+            const float     length = glm::length(sum);
+            const glm::vec3 normal = (length > 0.0f) ? (sum / length) : facet_normals[f];
+            corner_normal.set(mesh.facets.corner(first_facet + static_cast<GEO::index_t>(f), static_cast<GEO::index_t>(c)), GEO::vec3f{normal.x, normal.y, normal.z});
+        }
+    }
 }
 
 auto Kit_mesh_builder::get_positions() const -> const std::vector<glm::vec3>&
@@ -333,6 +453,15 @@ void read_kit_facet_slots(const GEO::Mesh& mesh, std::vector<uint32_t>& out_slot
 void extract_kit_slot_mesh(const GEO::Mesh& source, const std::span<const uint32_t> facet_slots, const uint32_t slot, GEO::Mesh& out_mesh)
 {
     std::vector<GEO::index_t> vertex_map(source.vertices.nb(), GEO::NO_INDEX);
+    // The corner normals write() set at the hard edges go along; binding reads only, as the attribute is defined.
+    GEO::AttributesManager& source_corner_attributes = const_cast<GEO::Mesh&>(source).facet_corners.attributes();
+    const bool has_corner_normals = source_corner_attributes.is_defined(erhe::geometry::Attribute_descriptors::s_normal.present_name);
+    std::optional<erhe::geometry::Attribute_present<GEO::vec3f>> source_normal;
+    std::optional<erhe::geometry::Attribute_present<GEO::vec3f>> out_normal;
+    if (has_corner_normals) {
+        source_normal.emplace(source_corner_attributes, erhe::geometry::Attribute_descriptors::s_normal);
+        out_normal.emplace(out_mesh.facet_corners.attributes(), erhe::geometry::Attribute_descriptors::s_normal);
+    }
     for (GEO::index_t f = 0, end = source.facets.nb(); f < end; ++f) {
         if (facet_slots[f] != slot) {
             continue;
@@ -346,6 +475,9 @@ void extract_kit_slot_mesh(const GEO::Mesh& source, const std::span<const uint32
                 erhe::geometry::set_pointf(out_mesh.vertices, vertex_map[v], erhe::geometry::get_pointf(source.vertices, v));
             }
             out_mesh.facets.set_vertex(new_facet, c, vertex_map[v]);
+            if (has_corner_normals && source_normal->has(source.facets.corner(f, c))) {
+                out_normal->set(out_mesh.facets.corner(new_facet, c), source_normal->get(source.facets.corner(f, c)));
+            }
         }
     }
 }

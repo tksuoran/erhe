@@ -227,7 +227,10 @@ a `Brush`. `get_brush(values)` returns the cached brush or makes it:
   faceted shape renders with polygon normals; a smooth shape with corner
   normals averaged over the facets within 80 degrees of each other, so a base
   rim stays sharp; a shape with hard edges with corner normals averaged
-  within its stated angle.
+  within its stated angle. The averages weigh each facet by its angle at the
+  vertex, so a quad split into two triangles counts as the quad. A corner the
+  generator gave a normal at a hard edge keeps it
+  (`doc/editor/level_kit_shapes.md` "Hard edges").
 - Collision: the kind at the values is `get_kit_collision()`: the shape's
   `get_collision` at the values when it states one, else its `collision`. A
   `convex_hull` shape takes the brush's convex hull; a

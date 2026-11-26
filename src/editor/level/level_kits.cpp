@@ -96,7 +96,27 @@ constexpr float c_smooth_crease_angle_degrees = 80.0f;
 // How far the placement ray behind a hovered foliage mesh reaches.
 constexpr float c_placement_ray_distance = 10000.0f;
 
-// Corner normals averaged over the facets around each vertex within the crease angle of the corner's facet.
+// The angle of the facet at its corner, radians.
+[[nodiscard]] auto get_corner_angle(const GEO::Mesh& mesh, const GEO::index_t facet, const GEO::index_t local_corner) -> float
+{
+    const GEO::index_t count    = mesh.facets.nb_vertices(facet);
+    const GEO::vec3f   position = erhe::geometry::get_pointf(mesh.vertices, mesh.facets.vertex(facet, local_corner));
+    const GEO::vec3f   previous = erhe::geometry::get_pointf(mesh.vertices, mesh.facets.vertex(facet, (local_corner + count - 1) % count));
+    const GEO::vec3f   next     = erhe::geometry::get_pointf(mesh.vertices, mesh.facets.vertex(facet, (local_corner + 1) % count));
+    return get_kit_corner_angle(
+        glm::vec3{previous.x, previous.y, previous.z}, glm::vec3{position.x, position.y, position.z}, glm::vec3{next.x, next.y, next.z}
+    );
+}
+
+class Vertex_facet
+{
+public:
+    GEO::index_t facet;
+    float        weight; // the facet's angle at the vertex: a quad split into two triangles weighs as the quad
+};
+
+// Corner normals averaged over the facets around each vertex within the crease angle of the corner's facet; a corner
+// the generator gave a normal (at a hard edge, Kit_mesh_builder::add_hard_edge()) keeps it.
 void set_crease_corner_normals(erhe::geometry::Geometry& geometry, const float crease_angle_degrees)
 {
     const GEO::Mesh&                 mesh       = geometry.get_mesh();
@@ -104,20 +124,25 @@ void set_crease_corner_normals(erhe::geometry::Geometry& geometry, const float c
     const float cos_limit = std::cos(glm::radians(crease_angle_degrees));
 
     std::vector<GEO::vec3f>                facet_normals(mesh.facets.nb());
-    std::vector<std::vector<GEO::index_t>> vertex_facets(mesh.vertices.nb());
+    std::vector<std::vector<Vertex_facet>> vertex_facets(mesh.vertices.nb());
     for (const GEO::index_t facet : mesh.facets) {
         facet_normals[facet] = GEO::normalize(erhe::geometry::mesh_facet_normalf(mesh, facet));
-        for (const GEO::index_t corner : mesh.facets.corners(facet)) {
-            vertex_facets[mesh.facet_corners.vertex(corner)].push_back(facet);
+        for (GEO::index_t local_corner = 0, end = mesh.facets.nb_vertices(facet); local_corner < end; ++local_corner) {
+            vertex_facets[mesh.facets.vertex(facet, local_corner)].push_back(
+                Vertex_facet{.facet = facet, .weight = get_corner_angle(mesh, facet, local_corner)}
+            );
         }
     }
     for (const GEO::index_t facet : mesh.facets) {
         const GEO::vec3f facet_normal = facet_normals[facet];
         for (const GEO::index_t corner : mesh.facets.corners(facet)) {
+            if (attributes.corner_normal.has(corner)) {
+                continue;
+            }
             GEO::vec3f sum{0.0f, 0.0f, 0.0f};
-            for (const GEO::index_t other : vertex_facets[mesh.facet_corners.vertex(corner)]) {
-                if (GEO::dot(facet_normal, facet_normals[other]) >= cos_limit) {
-                    sum += facet_normals[other];
+            for (const Vertex_facet& other : vertex_facets[mesh.facet_corners.vertex(corner)]) {
+                if (GEO::dot(facet_normal, facet_normals[other.facet]) >= cos_limit) {
+                    sum += other.weight * facet_normals[other.facet];
                 }
             }
             attributes.corner_normal.set(corner, (GEO::length(sum) > 0.0f) ? GEO::normalize(sum) : facet_normal);
