@@ -1070,6 +1070,7 @@ void add_extra_17_24_shapes(std::vector<Kit_shape_definition>& shapes)
         shape.material_slots  = {"trim"};
         shape.normal_style    = Kit_normal_style::smooth_with_hard_edges;
         shape.hard_edge_angle_degrees = 45.0f;
+        shape.default_shading = Kit_shading::smooth;
         shape.triangle_budget = 60;
         shape.collision       = Kit_collision::triangle_mesh;
         shape.randomness      = Kit_randomness::seeded;
@@ -1102,6 +1103,7 @@ void add_extra_17_24_shapes(std::vector<Kit_shape_definition>& shapes)
         shape.material_slots  = {"trim"};
         shape.normal_style    = Kit_normal_style::smooth_with_hard_edges;
         shape.hard_edge_angle_degrees = 45.0f;
+        shape.default_shading = Kit_shading::smooth;
         shape.triangle_budget = 130;
         shape.collision       = Kit_collision::triangle_mesh;
         shape.origin_rule     = Kit_origin_rule::base_contains_origin; // the two feet stand apart
@@ -1133,7 +1135,7 @@ void add_extra_17_24_shapes(std::vector<Kit_shape_definition>& shapes)
             make_seed_parameter()
         };
         shape.material_slots   = {"metal", "glow"};
-        shape.normal_style     = Kit_normal_style::faceted;
+        shape.default_shading  = Kit_shading::smooth;
         shape.triangle_budget  = 200;
         shape.collision        = Kit_collision::convex_hull;
         shape.generator        = generate_lantern;
@@ -1174,7 +1176,7 @@ void add_extra_17_24_shapes(std::vector<Kit_shape_definition>& shapes)
             make_seed_parameter()
         };
         shape.material_slots   = {"metal", "glow", "stone"};
-        shape.normal_style     = Kit_normal_style::faceted;
+        shape.default_shading  = Kit_shading::smooth;
         shape.triangle_budget  = 240;
         shape.collision        = Kit_collision::convex_hull;
         shape.randomness       = Kit_randomness::seeded;
@@ -1220,7 +1222,7 @@ void add_extra_17_24_shapes(std::vector<Kit_shape_definition>& shapes)
             make_count_parameter("segments", "Points around the float", 10, 8, 16)
         };
         shape.material_slots   = {"metal", "trim", "glow"};
-        shape.normal_style     = Kit_normal_style::faceted;
+        shape.default_shading  = Kit_shading::smooth;
         shape.triangle_budget  = 320;
         shape.collision        = Kit_collision::convex_hull;
         shape.randomness       = Kit_randomness::seeded;
@@ -1256,7 +1258,7 @@ void add_extra_17_24_shapes(std::vector<Kit_shape_definition>& shapes)
             make_seed_parameter()
         };
         shape.material_slots  = {"wood"};
-        shape.normal_style    = Kit_normal_style::faceted;
+        shape.default_shading = Kit_shading::faceted;
         shape.triangle_budget = 80;
         shape.collision       = Kit_collision::triangle_mesh;
         shape.generator       = generate_trestle;
@@ -1287,7 +1289,7 @@ void add_extra_17_24_shapes(std::vector<Kit_shape_definition>& shapes)
             make_seed_parameter()
         };
         shape.material_slots    = {"wood", "metal"};
-        shape.normal_style      = Kit_normal_style::faceted;
+        shape.default_shading   = Kit_shading::faceted;
         shape.triangle_budget   = 400;
         shape.collision         = Kit_collision::triangle_mesh;
         shape.generator         = generate_scaffold;
@@ -1325,6 +1327,7 @@ void add_extra_17_24_shapes(std::vector<Kit_shape_definition>& shapes)
         shape.material_slots    = {"stone", "floor"};
         shape.normal_style      = Kit_normal_style::smooth_with_hard_edges;
         shape.hard_edge_angle_degrees = 45.0f;
+        shape.default_shading   = Kit_shading::smooth;
         shape.triangle_budget   = 100;
         shape.collision         = Kit_collision::triangle_mesh;
         shape.detail_counts     = {{"segments"}};

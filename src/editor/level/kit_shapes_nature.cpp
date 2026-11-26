@@ -1033,6 +1033,7 @@ void add_nature_shapes(std::vector<Kit_shape_definition>& shapes)
         shape.tags            = {"obstacle", "decoration", "size:1x1"};
         shape.material_slots  = {"rock"};
         shape.normal_style    = Kit_normal_style::smooth; // when the shading parameter is smooth; base and flat tops are hard edges
+        shape.default_shading = Kit_shading::faceted;
         shape.triangle_budget = 200;
         shape.randomness      = Kit_randomness::seeded;
         shape.generator       = generate_rock;
@@ -1045,8 +1046,7 @@ void add_nature_shapes(std::vector<Kit_shape_definition>& shapes)
             from_seed_by_default(derive_float(make_length_parameter("size", "Width of the largest piece before roughness", 1.0f, Kit_default_scale::modules, 0.05f, 32.0f), 0.6f, 1.5f, 0.05f)),
             derive_float(make_ratio_parameter("roughness", "Irregular sides, strata dip and lean", 0.5f), 0.25f, 0.8f, 0.01f),
             derive_int(make_count_parameter("pieces", "The largest piece and the smaller ones against its flank", 3, 1, rock_piece_max), 1, rock_piece_max),
-            make_seed_parameter(),
-            make_shading_parameter(Kit_shading::faceted)
+            make_seed_parameter()
         };
         shapes.push_back(std::move(shape));
     }
@@ -1057,7 +1057,8 @@ void add_nature_shapes(std::vector<Kit_shape_definition>& shapes)
         shape.kit             = "nature";
         shape.display_name    = "Land mass";
         shape.tags            = {"walkable", "ground", "size:4x4x1"};
-        shape.normal_style    = Kit_normal_style::faceted;
+        shape.normal_style    = Kit_normal_style::smooth; // when the shading parameter is smooth
+        shape.default_shading = Kit_shading::faceted;
         shape.triangle_budget = 280;
         shape.collision       = Kit_collision::triangle_mesh;
         shape.randomness      = Kit_randomness::seeded;
@@ -1114,6 +1115,7 @@ void add_nature_shapes(std::vector<Kit_shape_definition>& shapes)
         shape.material_slots          = {"grass", "rock"};
         shape.normal_style            = Kit_normal_style::smooth_with_hard_edges;
         shape.hard_edge_angle_degrees = 38.0f;
+        shape.default_shading   = Kit_shading::smooth;
         shape.check_walkability = [](const Kit_parameter_values& values, const Kit_agent& agent) -> std::string {
             Kit_random random{values.get_seed()};
             const float steepest = get_hill_steepest_degrees(make_hill_surface(values, random));
@@ -1134,6 +1136,7 @@ void add_nature_shapes(std::vector<Kit_shape_definition>& shapes)
         shape.tags            = {"obstacle", "decoration", "size:2x2x3"};
         shape.material_slots  = {"bark", "foliage"};
         shape.normal_style    = Kit_normal_style::smooth; // round limbs and clumps; hard edges at flat bases and tier rims
+        shape.default_shading = Kit_shading::smooth;
         shape.triangle_budget = 480;
         shape.collision       = Kit_collision::triangle_mesh;
         shape.randomness      = Kit_randomness::seeded;
@@ -1147,8 +1150,7 @@ void add_nature_shapes(std::vector<Kit_shape_definition>& shapes)
             from_seed_by_default(derive_float(make_length_parameter("trunk_height", "Height of the canopy's base", 0.6f, Kit_default_scale::wall_heights, 0.1f, 32.0f), 0.4f, 0.8f, 0.05f)),
             from_seed_by_default(derive_float(make_length_parameter("canopy_size",  "Diameter of the canopy",      2.0f, Kit_default_scale::modules,      0.2f, 32.0f), 1.5f, 3.0f, 0.1f)),
             derive_enum(make_enum_parameter("species", "Broadleaf, conifer or bare", {"broadleaf", "conifer", "bare"}, 0)),
-            make_seed_parameter(),
-            make_shading_parameter(Kit_shading::smooth)
+            make_seed_parameter()
         };
         shapes.push_back(std::move(shape));
     }
@@ -1161,6 +1163,7 @@ void add_nature_shapes(std::vector<Kit_shape_definition>& shapes)
         shape.display_name    = "Bush";
         shape.tags            = {"obstacle", "decoration", "size:1x1"};
         shape.normal_style    = Kit_normal_style::smooth; // round limbs and clumps; hard edges at flat bases and tier rims
+        shape.default_shading = Kit_shading::smooth;
         shape.triangle_budget = 420;
         shape.randomness      = Kit_randomness::seeded;
         shape.detail_response = Kit_detail_response::scaled;
@@ -1171,8 +1174,7 @@ void add_nature_shapes(std::vector<Kit_shape_definition>& shapes)
         shape.parameters  = {
             from_seed_by_default(derive_float(make_length_parameter("size", "Diameter", 1.0f, Kit_default_scale::modules, 0.1f, 16.0f), 0.6f, 1.4f, 0.05f)),
             derive_int(make_count_parameter("twigs", "Bare twigs reaching past the leaves", 3, 1, bush_twig_max), 2, 4),
-            make_seed_parameter(),
-            make_shading_parameter(Kit_shading::smooth)
+            make_seed_parameter()
         };
         shape.material_slots = {"foliage", "bark"};
         shapes.push_back(std::move(shape));

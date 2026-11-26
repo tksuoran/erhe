@@ -1711,7 +1711,7 @@ void add_build_21_24_shapes(std::vector<Kit_shape_definition>& shapes)
             make_seed_parameter()
         };
         shape.material_slots    = {"stone", "floor", "trim"};
-        shape.normal_style      = Kit_normal_style::faceted;
+        shape.default_shading   = Kit_shading::faceted;
         shape.triangle_budget   = 760;
         shape.collision         = Kit_collision::triangle_mesh;
         shape.generator         = generate_bridge_deck;
@@ -1744,7 +1744,7 @@ void add_build_21_24_shapes(std::vector<Kit_shape_definition>& shapes)
             make_seed_parameter()
         };
         shape.material_slots  = {"stone", "trim"};
-        shape.normal_style    = Kit_normal_style::faceted;
+        shape.default_shading = Kit_shading::faceted;
         shape.triangle_budget = 110;
         shape.collision       = Kit_collision::convex_hull;
         shape.generator       = generate_buttress;
@@ -1776,7 +1776,7 @@ void add_build_21_24_shapes(std::vector<Kit_shape_definition>& shapes)
             make_count_parameter("segments", "Points around the trunk", 10, 6, 14)
         };
         shape.material_slots  = {"bark", "sapwood", "heartwood"};
-        shape.normal_style    = Kit_normal_style::faceted;
+        shape.default_shading = Kit_shading::smooth;
         shape.triangle_budget = 380;
         shape.collision       = Kit_collision::convex_hull;
         shape.randomness      = Kit_randomness::seeded;
@@ -1807,7 +1807,7 @@ void add_build_21_24_shapes(std::vector<Kit_shape_definition>& shapes)
             make_seed_parameter()
         };
         shape.material_slots  = {"shell", "coral"};
-        shape.normal_style    = Kit_normal_style::faceted;
+        shape.default_shading = Kit_shading::smooth;
         shape.triangle_budget = 340;
         shape.collision       = Kit_collision::none;
         shape.randomness      = Kit_randomness::seeded;
@@ -1834,7 +1834,7 @@ void add_build_21_24_shapes(std::vector<Kit_shape_definition>& shapes)
             make_seed_parameter()
         };
         shape.material_slots  = {"bark", "foliage", "shoot"};
-        shape.normal_style    = Kit_normal_style::faceted;
+        shape.default_shading = Kit_shading::faceted;
         shape.triangle_budget = 280;
         shape.collision       = Kit_collision::triangle_mesh;
         shape.randomness      = Kit_randomness::seeded;
@@ -1861,7 +1861,7 @@ void add_build_21_24_shapes(std::vector<Kit_shape_definition>& shapes)
             make_seed_parameter()
         };
         shape.material_slots   = {"stone", "glow"};
-        shape.normal_style     = Kit_normal_style::faceted;
+        shape.default_shading  = Kit_shading::smooth;
         shape.triangle_budget  = 1880;
         shape.collision        = Kit_collision::convex_hull;
         shape.generator        = generate_stone_lantern;

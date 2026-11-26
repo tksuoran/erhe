@@ -617,7 +617,8 @@ void add_nature_terrain_shapes(std::vector<Kit_shape_definition>& shapes)
             make_seed_parameter()
         };
         shape.material_slots  = {"cliff", "grass"};
-        shape.normal_style    = Kit_normal_style::faceted;
+        shape.normal_style    = Kit_normal_style::smooth; // when the shading parameter is smooth
+        shape.default_shading = Kit_shading::faceted;
         shape.triangle_budget = 500;
         shape.collision       = Kit_collision::triangle_mesh;
         shape.randomness      = Kit_randomness::seeded;
@@ -666,6 +667,7 @@ void add_nature_terrain_shapes(std::vector<Kit_shape_definition>& shapes)
         };
         shape.material_slots  = {"sand"};
         shape.normal_style    = Kit_normal_style::smooth;
+        shape.default_shading = Kit_shading::smooth;
         shape.triangle_budget = 260;
         shape.collision       = Kit_collision::triangle_mesh;
         shape.randomness      = Kit_randomness::seeded;
@@ -704,7 +706,7 @@ void add_nature_terrain_shapes(std::vector<Kit_shape_definition>& shapes)
             make_seed_parameter()
         };
         shape.material_slots  = {"water"};
-        shape.normal_style    = Kit_normal_style::faceted;
+        shape.default_shading = Kit_shading::faceted;
         shape.triangle_budget = 2;
         shape.collision       = Kit_collision::none;
         shape.mesh_kind       = Kit_mesh_kind::surface;
@@ -743,6 +745,7 @@ void add_nature_terrain_shapes(std::vector<Kit_shape_definition>& shapes)
         shape.material_slots  = {"sand"};
         shape.normal_style    = Kit_normal_style::smooth_with_hard_edges;
         shape.hard_edge_angle_degrees = 30.0f; // the brink of the lee stays sharp
+        shape.default_shading = Kit_shading::smooth;
         shape.triangle_budget = 290;
         shape.randomness      = Kit_randomness::seeded;
         shape.detail_counts   = {{"segments"}};
@@ -786,6 +789,7 @@ void add_nature_terrain_shapes(std::vector<Kit_shape_definition>& shapes)
         };
         shape.material_slots  = {"earth"};
         shape.normal_style    = Kit_normal_style::smooth;
+        shape.default_shading = Kit_shading::smooth;
         shape.triangle_budget = 150;
         shape.randomness      = Kit_randomness::seeded;
         shape.detail_counts   = {{"segments"}};

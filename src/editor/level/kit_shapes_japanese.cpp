@@ -184,6 +184,7 @@ void add_japanese_shapes(std::vector<Kit_shape_definition>& shapes)
         shape.material_slots  = {"wood"};
         shape.normal_style    = Kit_normal_style::smooth_with_hard_edges;
         shape.hard_edge_angle_degrees = 40.0f;
+        shape.default_shading = Kit_shading::smooth;
         shape.triangle_budget = 420;
         shape.collision       = Kit_collision::triangle_mesh;
         shape.detail_counts   = {{"segments"}};

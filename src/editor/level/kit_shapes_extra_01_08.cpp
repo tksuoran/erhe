@@ -1369,7 +1369,7 @@ void add_extra_01_08_shapes(std::vector<Kit_shape_definition>& shapes)
             make_seed_parameter()
         };
         shape.material_slots  = {"wood"};
-        shape.normal_style    = Kit_normal_style::faceted;
+        shape.default_shading = Kit_shading::faceted;
         shape.triangle_budget = 300;
         shape.collision       = Kit_collision::convex_hull;
         shape.generator       = generate_crate;
@@ -1402,7 +1402,7 @@ void add_extra_01_08_shapes(std::vector<Kit_shape_definition>& shapes)
             make_count_parameter("segments", "Staves around the barrel", 12, 8, 24)
         };
         shape.material_slots  = {"wood", "metal"};
-        shape.normal_style    = Kit_normal_style::faceted;
+        shape.default_shading = Kit_shading::smooth;
         shape.triangle_budget = 620;
         shape.collision       = Kit_collision::convex_hull;
         shape.detail_counts   = {{"segments"}};
@@ -1434,7 +1434,7 @@ void add_extra_01_08_shapes(std::vector<Kit_shape_definition>& shapes)
             make_seed_parameter()
         };
         shape.material_slots  = {"wall"};
-        shape.normal_style    = Kit_normal_style::faceted;
+        shape.default_shading = Kit_shading::faceted;
         shape.triangle_budget = 100;
         shape.collision       = Kit_collision::triangle_mesh;
         shape.randomness      = Kit_randomness::seeded;
@@ -1469,7 +1469,7 @@ void add_extra_01_08_shapes(std::vector<Kit_shape_definition>& shapes)
             make_seed_parameter()
         };
         shape.material_slots  = {"stone"};
-        shape.normal_style    = Kit_normal_style::faceted;
+        shape.default_shading = Kit_shading::faceted;
         shape.triangle_budget = 240;
         shape.collision       = Kit_collision::convex_hull;
         shape.randomness      = Kit_randomness::seeded;
@@ -1494,7 +1494,7 @@ void add_extra_01_08_shapes(std::vector<Kit_shape_definition>& shapes)
             make_seed_parameter()
         };
         shape.material_slots  = {"wood"};
-        shape.normal_style    = Kit_normal_style::faceted;
+        shape.default_shading = Kit_shading::faceted;
         shape.triangle_budget = 140;
         shape.collision       = Kit_collision::triangle_mesh;
         shape.generator       = generate_ladder;
@@ -1529,7 +1529,7 @@ void add_extra_01_08_shapes(std::vector<Kit_shape_definition>& shapes)
             make_count_parameter("segments", "Points around a pile", 8, 6, 12)
         };
         shape.material_slots    = {"wood"};
-        shape.normal_style      = Kit_normal_style::faceted;
+        shape.default_shading   = Kit_shading::smooth;
         shape.triangle_budget   = 220;
         shape.collision         = Kit_collision::triangle_mesh;
         shape.randomness        = Kit_randomness::seeded;
@@ -1565,7 +1565,7 @@ void add_extra_01_08_shapes(std::vector<Kit_shape_definition>& shapes)
             make_count_parameter("segments", "Points around the round parts", 10, 6, 16)
         };
         shape.material_slots  = {"metal", "wood"};
-        shape.normal_style    = Kit_normal_style::faceted;
+        shape.default_shading = Kit_shading::smooth;
         shape.triangle_budget = 200;
         shape.collision       = Kit_collision::convex_hull;
         shape.randomness      = Kit_randomness::seeded;
@@ -1597,7 +1597,7 @@ void add_extra_01_08_shapes(std::vector<Kit_shape_definition>& shapes)
             make_count_parameter("segments", "Points around the post", 8, 6, 16)
         };
         shape.material_slots   = {"metal", "glow"};
-        shape.normal_style     = Kit_normal_style::faceted;
+        shape.default_shading  = Kit_shading::smooth;
         shape.triangle_budget  = 270;
         shape.collision        = Kit_collision::convex_hull;
         shape.detail_counts    = {{"segments"}};

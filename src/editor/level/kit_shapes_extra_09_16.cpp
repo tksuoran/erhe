@@ -1274,7 +1274,7 @@ void add_extra_09_16_shapes(std::vector<Kit_shape_definition>& shapes)
             make_seed_parameter()
         };
         shape.material_slots    = {"stone", "wood"};
-        shape.normal_style      = Kit_normal_style::faceted;
+        shape.default_shading   = Kit_shading::faceted;
         shape.triangle_budget   = 80;
         shape.collision         = Kit_collision::triangle_mesh;
         shape.origin_rule       = Kit_origin_rule::base_contains_origin;
@@ -1313,7 +1313,7 @@ void add_extra_09_16_shapes(std::vector<Kit_shape_definition>& shapes)
             make_count_parameter("segments", "Points around the pipe", 10, 6, 16)
         };
         shape.material_slots  = {"metal"};
-        shape.normal_style    = Kit_normal_style::faceted;
+        shape.default_shading = Kit_shading::smooth;
         shape.triangle_budget = 210;
         shape.collision       = Kit_collision::triangle_mesh;
         shape.origin_rule     = Kit_origin_rule::base_contains_origin;
@@ -1355,7 +1355,7 @@ void add_extra_09_16_shapes(std::vector<Kit_shape_definition>& shapes)
             make_count_parameter("segments", "Points around the vessel", 12, 8, 20)
         };
         shape.material_slots  = {"stone"};
-        shape.normal_style    = Kit_normal_style::faceted;
+        shape.default_shading = Kit_shading::smooth;
         shape.triangle_budget = 250;
         shape.collision       = Kit_collision::convex_hull;
         shape.detail_counts   = {{"segments"}};
@@ -1386,7 +1386,7 @@ void add_extra_09_16_shapes(std::vector<Kit_shape_definition>& shapes)
             make_seed_parameter()
         };
         shape.material_slots  = {"wood"};
-        shape.normal_style    = Kit_normal_style::faceted;
+        shape.default_shading = Kit_shading::faceted;
         shape.triangle_budget = 110;
         shape.collision       = Kit_collision::triangle_mesh;
         shape.origin_rule     = Kit_origin_rule::base_contains_origin; // a bench's back stands behind its legs
@@ -1417,7 +1417,7 @@ void add_extra_09_16_shapes(std::vector<Kit_shape_definition>& shapes)
             make_seed_parameter()
         };
         shape.material_slots  = {"wood", "cloth"};
-        shape.normal_style    = Kit_normal_style::faceted;
+        shape.default_shading = Kit_shading::faceted;
         shape.triangle_budget = 150;
         shape.collision       = Kit_collision::triangle_mesh;
         shape.generator       = generate_market_stall;
@@ -1451,7 +1451,7 @@ void add_extra_09_16_shapes(std::vector<Kit_shape_definition>& shapes)
             make_count_parameter("segments", "Points around a wheel", 12, 8, 16)
         };
         shape.material_slots  = {"wood", "metal"};
-        shape.normal_style    = Kit_normal_style::faceted;
+        shape.default_shading = Kit_shading::smooth;
         shape.triangle_budget = 540;
         shape.collision       = Kit_collision::triangle_mesh;
         shape.origin_rule     = Kit_origin_rule::base_contains_origin;
@@ -1481,7 +1481,7 @@ void add_extra_09_16_shapes(std::vector<Kit_shape_definition>& shapes)
             make_count_parameter("segments", "Points around the wall", 12, 8, 20)
         };
         shape.material_slots  = {"stone", "wood"};
-        shape.normal_style    = Kit_normal_style::faceted;
+        shape.default_shading = Kit_shading::smooth;
         shape.triangle_budget = 400;
         shape.collision       = Kit_collision::triangle_mesh;
         shape.origin_rule     = Kit_origin_rule::base_contains_origin;
@@ -1509,7 +1509,7 @@ void add_extra_09_16_shapes(std::vector<Kit_shape_definition>& shapes)
             make_seed_parameter()
         };
         shape.material_slots  = {"wood"};
-        shape.normal_style    = Kit_normal_style::faceted;
+        shape.default_shading = Kit_shading::faceted;
         shape.triangle_budget = 100;
         shape.collision       = Kit_collision::triangle_mesh;
         shape.randomness      = Kit_randomness::seeded;

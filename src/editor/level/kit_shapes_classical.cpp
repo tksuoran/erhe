@@ -446,6 +446,7 @@ void add_classical_shapes(std::vector<Kit_shape_definition>& shapes)
         shape.material_slots          = {"trim"};
         shape.normal_style            = Kit_normal_style::smooth_with_hard_edges;
         shape.hard_edge_angle_degrees = 50.0f;
+        shape.default_shading         = Kit_shading::smooth;
         shape.triangle_budget         = 760;
         shape.detail_counts           = {{"segments"}};
         shape.generator               = generate_column;
@@ -472,7 +473,7 @@ void add_classical_shapes(std::vector<Kit_shape_definition>& shapes)
             make_seed_parameter()
         };
         shape.material_slots  = {"trim"};
-        shape.normal_style    = Kit_normal_style::faceted;
+        shape.default_shading = Kit_shading::faceted;
         shape.triangle_budget = 560;
         // A triangle mesh: a hull would fill the space under the cornice and before the recessed frieze.
         shape.collision       = Kit_collision::triangle_mesh;

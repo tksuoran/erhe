@@ -626,7 +626,7 @@ void add_architecture_shapes(std::vector<Kit_shape_definition>& shapes)
             make_seed_parameter()
         };
         shape.material_slots  = {"wall"};
-        shape.normal_style    = Kit_normal_style::faceted;
+        shape.default_shading = Kit_shading::faceted;
         shape.triangle_budget = 12;
         shape.collision       = Kit_collision::box;
         shape.generator       = generate_wall;
@@ -661,7 +661,7 @@ void add_architecture_shapes(std::vector<Kit_shape_definition>& shapes)
             make_seed_parameter()
         };
         shape.material_slots  = {"wall", "trim"}; // the wall, the door frame
-        shape.normal_style    = Kit_normal_style::faceted;
+        shape.default_shading = Kit_shading::faceted;
         shape.triangle_budget = 572;
         shape.collision       = Kit_collision::triangle_mesh;
         shape.generator       = generate_door_wall;
@@ -701,6 +701,7 @@ void add_architecture_shapes(std::vector<Kit_shape_definition>& shapes)
         shape.material_slots          = {"trim"};
         shape.normal_style            = Kit_normal_style::smooth_with_hard_edges;
         shape.hard_edge_angle_degrees = 45.0f;
+        shape.default_shading         = Kit_shading::smooth;
         shape.triangle_budget         = 100;
         shape.detail_counts           = {{.parameter = "segments", .least = 6}};
         shape.generator               = generate_pillar;
@@ -740,6 +741,7 @@ void add_architecture_shapes(std::vector<Kit_shape_definition>& shapes)
         shape.material_slots          = {"trim", "stone"}; // the voussoirs, the keystone and the springers
         shape.normal_style            = Kit_normal_style::smooth_with_hard_edges;
         shape.hard_edge_angle_degrees = 45.0f;
+        shape.default_shading         = Kit_shading::smooth;
         shape.triangle_budget         = 516;
         shape.collision               = Kit_collision::triangle_mesh;
         shape.generator               = generate_arch;

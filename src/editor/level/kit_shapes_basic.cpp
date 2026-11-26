@@ -366,7 +366,7 @@ void add_basic_shapes(std::vector<Kit_shape_definition>& shapes)
             make_seed_parameter()
         };
         shape.material_slots  = {"stone"};
-        shape.normal_style    = Kit_normal_style::faceted;
+        shape.default_shading = Kit_shading::faceted;
         shape.triangle_budget = 12;
         shape.collision       = Kit_collision::box;
         shape.generator       = generate_block;
@@ -394,7 +394,7 @@ void add_basic_shapes(std::vector<Kit_shape_definition>& shapes)
             make_seed_parameter()
         };
         shape.material_slots  = {"stone"};
-        shape.normal_style    = Kit_normal_style::faceted;
+        shape.default_shading = Kit_shading::faceted;
         shape.triangle_budget = 8;
         shape.generator       = generate_wedge;
         shape.mirror_planes   = std::vector<Kit_mirror_plane>{Kit_mirror_plane::x};
@@ -429,6 +429,7 @@ void add_basic_shapes(std::vector<Kit_shape_definition>& shapes)
         shape.material_slots          = {"stone"};
         shape.normal_style            = Kit_normal_style::smooth_with_hard_edges;
         shape.hard_edge_angle_degrees = 45.0f;
+        shape.default_shading         = Kit_shading::smooth;
         shape.triangle_budget         = 60;
         shape.detail_counts           = {{.parameter = "segments", .least = 6}};
         shape.generator               = generate_cylinder;
@@ -456,7 +457,7 @@ void add_basic_shapes(std::vector<Kit_shape_definition>& shapes)
             make_seed_parameter()
         };
         shape.material_slots  = {"stone"};
-        shape.normal_style    = Kit_normal_style::faceted;
+        shape.default_shading = Kit_shading::faceted;
         shape.triangle_budget = 180;
         shape.collision       = Kit_collision::triangle_mesh;
         shape.generator       = generate_stairs;
@@ -496,7 +497,7 @@ void add_basic_shapes(std::vector<Kit_shape_definition>& shapes)
             make_seed_parameter()
         };
         shape.material_slots  = {"floor"};
-        shape.normal_style    = Kit_normal_style::faceted;
+        shape.default_shading = Kit_shading::faceted;
         shape.triangle_budget = 12;
         shape.collision       = Kit_collision::box;
         shape.generator       = generate_floor_slab;

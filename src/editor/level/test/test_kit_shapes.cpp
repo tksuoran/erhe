@@ -918,31 +918,16 @@ TEST(Kit_mesh_builder, smooth_vertices_ignore_the_angle)
     EXPECT_LT(glm::length(glm::vec3{a.x, a.y, a.z} - expected), 1.0e-5f);
 }
 
-// The rocks' shading parameter: left out of the text at its default, a text without it (a piece saved before it) reads
-// as the default, and its value picks faceted or the shape's smooth style.
+// The shading parameter: every shape takes it, left out of the text at its default, a text without it (a piece saved
+// before it) reads as the default, and its value picks faceted or the shape's smooth style.
 TEST(Kit_shading, shapes_pick_faceted_or_smooth)
 {
-    // The rocks, the plants without leaf helpers and the machine parts take the parameter.
-    const std::set<std::string> expected{
-        "nature.rock", "nature.boulder_cluster", "nature.stepping_stone", "nature.rock_spire", "nature.rock_arch", "nature.basalt_columns",
-        "nature.tree", "nature.bush", "nature.succulent", "nature.grass_tuft", "nature.bamboo",
-        "machine.gear", "machine.rack", "machine.bolt", "machine.nut", "machine.spring", "machine.spring_old", "machine.bearing",
-        "machine.piston", "machine.cam", "machine.connecting_rod", "machine.crankshaft", "machine.follower", "machine.camshaft",
-        "machine.bevel_gear", "machine.worm", "machine.pulley", "machine.washer", "machine.cylinder", "machine.pillow_block"
-    };
-    std::set<std::string> found;
     for (const Kit_shape_definition& shape : get_library().get_shapes()) {
-        if (shape.find_parameter(editor::c_kit_shading_parameter).has_value()) {
-            found.insert(shape.id);
-        }
-    }
-    EXPECT_EQ(found, expected);
-    for (const std::string& id : expected) {
-        SCOPED_TRACE(id);
-        const Kit_shape_definition& shape = get_shape(id.c_str());
+        SCOPED_TRACE(shape.id);
         ASSERT_TRUE(shape.find_parameter(editor::c_kit_shading_parameter).has_value());
         EXPECT_NE(shape.normal_style, editor::Kit_normal_style::faceted);
         Kit_parameter_values values = defaults(shape);
+        EXPECT_EQ(values.get_enum(editor::c_kit_shading_parameter), editor::c_str(shape.default_shading));
         const std::string default_text = values.to_canonical_text();
         EXPECT_EQ(default_text.find("shading"), std::string::npos) << default_text;
         Kit_parameter_values read_back;
@@ -956,12 +941,13 @@ TEST(Kit_shading, shapes_pick_faceted_or_smooth)
         EXPECT_EQ(read_back.get_enum(editor::c_kit_shading_parameter), other);
         EXPECT_EQ(editor::get_kit_shading(read_back), (other == "faceted") ? editor::Kit_normal_style::faceted : shape.normal_style);
     }
-    // The bevelled rocks, the plants and the machine parts are smooth by default, the other rocks faceted.
-    EXPECT_EQ(defaults(get_shape("nature.boulder_cluster")).get_enum(editor::c_kit_shading_parameter), "smooth");
-    EXPECT_EQ(defaults(get_shape("nature.stepping_stone")).get_enum(editor::c_kit_shading_parameter), "smooth");
-    EXPECT_EQ(defaults(get_shape("nature.tree")).get_enum(editor::c_kit_shading_parameter), "smooth");
-    EXPECT_EQ(defaults(get_shape("machine.gear")).get_enum(editor::c_kit_shading_parameter), "smooth");
-    EXPECT_EQ(defaults(get_shape("nature.rock")).get_enum(editor::c_kit_shading_parameter), "faceted");
+    // Round and organic shapes are smooth by default; boxy ones, and the rocks the user has not ruled on, faceted.
+    for (const char* id : {"nature.boulder_cluster", "nature.tree", "nature.palm", "machine.gear", "prop.barrel", "harbour.boat", "light.lamp_post"}) {
+        EXPECT_EQ(defaults(get_shape(id)).get_enum(editor::c_kit_shading_parameter), "smooth") << id;
+    }
+    for (const char* id : {"nature.rock", "nature.cliff", "basic.block", "architecture.wall", "prop.crate"}) {
+        EXPECT_EQ(defaults(get_shape(id)).get_enum(editor::c_kit_shading_parameter), "faceted") << id;
+    }
 }
 
 // P5: the water is an open surface facing up, without a body; its subdivisions make its quads.

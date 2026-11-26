@@ -54,6 +54,8 @@ enum class Kit_shading : unsigned int {
 };
 
 constexpr const char* c_kit_shading_parameter = "shading";
+// A shape's hard edge angle unless it sets its own: an octagon's turns shade round, a box's corners and a cap's rim stay sharp.
+constexpr float c_kit_default_hard_edge_degrees = 50.0f;
 
 // The collision shape of a shape's pieces (R2.11, D2.3); none: no physics body and no navigation input (P5); box: the
 // mesh bounds (U54).
@@ -309,8 +311,9 @@ public:
     std::vector<std::string>   tags;
     std::vector<Kit_parameter> parameters;
     std::vector<std::string>   material_slots;         // named, unique, in order; facets name theirs by index (D1.11)
-    Kit_normal_style           normal_style           {Kit_normal_style::faceted};
-    float                      hard_edge_angle_degrees{0.0f};
+    Kit_normal_style           normal_style           {Kit_normal_style::smooth_with_hard_edges}; // the smooth shading; never faceted
+    float                      hard_edge_angle_degrees{c_kit_default_hard_edge_degrees};
+    Kit_shading                default_shading        {Kit_shading::faceted}; // Kit_shape_library gives every shape the shading parameter
     unsigned int               triangle_budget        {0}; // at default parameters (R2.6)
     Kit_ceiling_scale_function get_ceiling_scale;      // optional: the multiple (>= 1) of its kit's triangle ceiling a long run of repeats may take
     Kit_collision              collision              {Kit_collision::convex_hull};
@@ -351,7 +354,8 @@ public:
 // The collision kind of the values' pieces: the shape's get_collision at the values, else its collision.
 [[nodiscard]] auto get_kit_collision(const Kit_parameter_values& values) -> Kit_collision;
 
-// The normal style of the values' pieces: faceted where the shape's shading parameter says so, else its normal_style.
+// The normal style of the values' pieces: faceted where the shape's shading parameter (or, without one, its default
+// shading) says so, else its normal_style.
 [[nodiscard]] auto get_kit_shading(const Kit_parameter_values& values) -> Kit_normal_style;
 
 // The bounds of the values' mesh from the generator's CPU geometry alone (no renderable mesh, no upload): the min and
