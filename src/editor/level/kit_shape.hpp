@@ -280,6 +280,12 @@ public:
     int         step      {1};
 };
 
+// Whether a shape's mesh follows the detail: fixed shapes build one mesh at every detail.
+enum class Kit_detail_response : unsigned int {
+    fixed = 0,
+    scaled     // detail counts, or a generator scaling counts of its own with kit_detail_count()
+};
+
 class Kit_shape_definition
 {
 public:
@@ -310,11 +316,21 @@ public:
     std::vector<Kit_property_mapping> property_mappings; // C2.2: the standard properties the shape takes, onto parameters or slots
     Kit_supply_function        get_supply;             // optional (C3.3): the values a piece supplies over one of its connectors
     std::optional<float>       foliage_radius;         // meters; set: a foliage shape, the default radius of its items (doc/editor/level_tools.md "Foliage paint")
-    std::vector<Kit_detail_count> detail_counts;       // empty: the shape has one level of detail and ignores `detail`
+    std::vector<Kit_detail_count> detail_counts;       // count parameters the detail scales; Kit_shape_library makes such a shape scaled
+    Kit_detail_response        detail_response        {Kit_detail_response::fixed};
 
     [[nodiscard]] auto find_parameter(std::string_view name) const -> std::optional<std::size_t>;
     [[nodiscard]] auto has_tag       (std::string_view tag) const -> bool;
 };
+
+// The detail over its default, 1 for a fixed shape: the factor the counts' triangles take.
+[[nodiscard]] auto get_kit_detail_factor(const Kit_parameter_values& values) -> float;
+
+// A count of the generator's own at the values' detail: own * factor ^ (1 / dimensions) in whole steps from own, within
+// least and most (own at the default detail).
+[[nodiscard]] auto kit_detail_count(const Kit_parameter_values& values, int own, int least, int most, int dimensions = 1, int step = 1) -> int;
+// The same at a detail factor (get_kit_detail_factor()), for generator parts that do not hold the values.
+[[nodiscard]] auto kit_detail_count(float factor, int own, int least, int most, int dimensions = 1, int step = 1) -> int;
 
 // The values the generator and the other callbacks describing the mesh take: each detail count scaled by the detail,
 // within its parameter's range; the values themselves for a shape without detail counts or at the default detail.

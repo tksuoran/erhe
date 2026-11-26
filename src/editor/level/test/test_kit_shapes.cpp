@@ -635,15 +635,15 @@ TEST(Kit_derive, next_seed_is_another_seed_in_range)
     EXPECT_EQ(seeds.size(), 100u);
 }
 
-// R2.6: the kit's ceiling binds at every in-range value; the all-maximum corner is the most a shape makes, but for the
-// helical bolt, whose most lies at 35 and 38 turns (its worst_cases row).
+// R2.6: the kit's ceiling binds at every in-range value, scaled by the detail above its default; the all-maximum corner
+// is the most a shape makes, but for the helical bolt, whose most lies at 35 and 38 turns (its worst_cases row).
 TEST(Kit_shape_library, every_shape_keeps_the_ceiling_at_the_range_maxima)
 {
     for (const Kit_shape_definition& shape : get_library().get_shapes()) {
         const Kit_parameter_values values = range_corner(shape, Range_end::max);
         SCOPED_TRACE(fmt::format("{} {}", shape.id, values.to_canonical_text()));
         ASSERT_EQ(values.validate(), "");
-        EXPECT_LE(editor::count_kit_triangles(*generate(values)), get_library().find_kit(shape.kit)->triangle_ceiling);
+        EXPECT_LE(editor::count_kit_triangles(*generate(values)), get_library().get_triangle_ceiling(values));
     }
 }
 

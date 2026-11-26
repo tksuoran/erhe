@@ -612,7 +612,9 @@ void generate_bamboo(const Kit_parameter_values& values, GEO::Mesh& mesh)
     const float radius     = values.get_float("radius");
     const float lean       = std::tan(glm::radians(values.get_float("lean")));
     const float cane_width = values.get_float("cane_width");
-    const Bamboo_detail detail = get_bamboo_detail(culms);
+    Bamboo_detail detail = get_bamboo_detail(culms);
+    // The level of detail scales the canes' sides; the nodes, sprays and leaves are the plant's form.
+    detail.sides = kit_detail_count(values, detail.sides, 3, 2 * detail.sides);
     Kit_random random{values.get_seed(), "bamboo"};
     Kit_mesh_builder builder;
     const float first_azimuth = random.next_range(0.0f, two_pi);
@@ -1440,6 +1442,7 @@ void add_build_17_20_shapes(std::vector<Kit_shape_definition>& shapes)
         shape.triangle_budget = 1200;
         shape.collision       = Kit_collision::triangle_mesh;
         shape.randomness      = Kit_randomness::seeded;
+        shape.detail_response = Kit_detail_response::scaled;
         shape.generator       = generate_bamboo;
         shapes.push_back(std::move(shape));
     }

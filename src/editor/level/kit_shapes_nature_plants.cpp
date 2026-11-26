@@ -148,12 +148,41 @@ public:
     float     droop       {0.0f};  // the species' droop factor applied
     int       sides       {6};
     int       frond_steps {5};
+    int       frond_across{1};   // a frond's segments across each half (Kit_leaf::across)
+    int       trunk_steps {0};   // 0: the species'
+    int       nut_sides   {6};
     int       fan_sectors {9};
     bool      skirt       {true};  // a fan crown's dead leaves
     float     lowest      {-1.0e9f}; // no frond control point lies lower: a low crown's fronds rest above the ground
     float     least_radius{0.08f};
     Kit_leaf_section frond_section{Kit_leaf_section::folded}; // folded_split: the former fronds of the *_old shapes
 };
+
+// A frond's segments across each half at a detail factor: two from 1.5 times the default where the palm has them.
+enum class Palm_frond_arch : unsigned int { none = 0, from_high_detail };
+
+// The counts of a palm's crown and trunk at the values' detail (doc/editor/level_kit_shapes.md "Level of detail").
+void set_palm_detail(
+    Palm_tree&                  tree,
+    const Palm_species&         species,
+    const Kit_parameter_values& values,
+    const int                   own_frond_steps,
+    const int                   own_fan_sectors,
+    const Palm_frond_arch       arch
+)
+{
+    // From 5/3 of the default an arched frond takes two segments across (10 profile points for 6) and its steps the
+    // rest of the factor; below, the steps take the factor. Either way the frond's triangles stay within the factor.
+    constexpr float arch_share = 10.0f / 6.0f;
+    const float factor = get_kit_detail_factor(values);
+    const bool  across = (arch == Palm_frond_arch::from_high_detail) && (factor >= (arch_share - 1.0e-4f));
+    tree.frond_across = across ? 2 : 1;
+    const float steps = static_cast<float>(own_frond_steps) * (across ? (factor / arch_share) : factor);
+    tree.frond_steps  = std::clamp(static_cast<int>(std::floor(steps + 1.0e-4f)), 2, 2 * own_frond_steps);
+    tree.fan_sectors  = kit_detail_count(values, own_fan_sectors, 3, 2 * own_fan_sectors);
+    tree.trunk_steps  = kit_detail_count(values, species.trunk_steps, 2, 2 * species.trunk_steps, 2, 2);
+    tree.nut_sides    = kit_detail_count(values, 6, 4, 12);
+}
 
 void add_palm_tree(Kit_mesh_builder& builder, GEO::Mesh& scratch, const Palm_species& species, const Palm_tree& tree, Kit_random& frond_random)
 {
@@ -187,9 +216,10 @@ void add_palm_tree(Kit_mesh_builder& builder, GEO::Mesh& scratch, const Palm_spe
         erhe::geometry::shapes::Sweep_parameters trunk;
         trunk.profile     = regular_profile(sides, radius);
         trunk.spine       = std::vector<glm::vec3>{trunk_spine.begin(), trunk_spine.end()};
-        trunk.spine_steps = species.trunk_steps;
-        for (int i = 0; i <= species.trunk_steps; ++i) {
-            const float t    = static_cast<float>(i) / static_cast<float>(species.trunk_steps);
+        const int trunk_steps = (tree.trunk_steps > 0) ? tree.trunk_steps : species.trunk_steps;
+        trunk.spine_steps = trunk_steps;
+        for (int i = 0; i <= trunk_steps; ++i) {
+            const float t    = static_cast<float>(i) / static_cast<float>(trunk_steps);
             const float ring = ((i % 2) == 1) ? species.ring_amplitude : 0.0f;
             trunk.taper.emplace_back(t, evaluate_keys(species.taper, t) * (1.0f + ring));
         }
@@ -236,6 +266,7 @@ void add_palm_tree(Kit_mesh_builder& builder, GEO::Mesh& scratch, const Palm_spe
             frond.widest_at  = 0.35f;
             frond.base_width = 0.12f;
             frond.steps      = tree.frond_steps;
+            frond.across     = tree.frond_across;
             builder.set_slot(palm_foliage_slot);
             add_leaf(builder, frond, scratch);
         } else {
@@ -281,7 +312,7 @@ void add_palm_tree(Kit_mesh_builder& builder, GEO::Mesh& scratch, const Palm_spe
         const float     size    = std::clamp(0.03f * height, 0.08f, 0.2f);
         const glm::vec3 top     = trunk_top + ((top_radius + (0.6f * size)) * outward) - ((0.2f * size) * up);
         erhe::geometry::shapes::Sweep_parameters nut;
-        nut.profile     = regular_profile(6, size);
+        nut.profile     = regular_profile(tree.nut_sides, size);
         nut.spine       = {top, top - ((2.2f * size) * up)};
         nut.spine_steps = 3;
         nut.taper       = {{0.0f, 0.5f}, {0.45f, 1.0f}, {1.0f, 0.0f}};
@@ -303,6 +334,7 @@ void generate_palm_fronds(const Kit_parameter_values& values, GEO::Mesh& mesh, c
     tree.droop        = values.get_float("droop") * species.droop_factor;
     tree.sides        = values.get_int("segments");
     tree.frond_section = frond_section;
+    set_palm_detail(tree, species, values, 5, 9, Palm_frond_arch::from_high_detail);
     Kit_mesh_builder builder;
     GEO::Mesh        scratch{3, true};
     Kit_random       frond_random{values.get_seed(), "palm fronds"};
@@ -381,9 +413,8 @@ void generate_palm_clump_fronds(const Kit_parameter_values& values, GEO::Mesh& m
         tree.fronds       = std::max(2, (total / stems) + ((i < (total % stems)) ? 1 : 0));
         tree.frond_length = habit.frond_length * stem;
         tree.droop        = habit.species.droop_factor * stem_random.next_range(0.4f, 0.8f);
-        tree.sides        = 5;
-        tree.frond_steps  = 3;
-        tree.fan_sectors  = 5;
+        tree.sides        = kit_detail_count(values, 5, 3, 10, 2);
+        set_palm_detail(tree, habit.species, values, 3, 5, Palm_frond_arch::none);
         tree.skirt        = false;
         tree.lowest       = palm_lowest(habit.species, tree.frond_length);
         tree.least_radius = habit.least_radius;
@@ -550,16 +581,39 @@ void add_ribbon(
     builder.add_ring_solid(points, 4, base, arc_frame(arc, 1.0f).center);
 }
 
-// A stalk: a ribbon tapering to 0.6 of its half width, as thick as wide.
-void add_stalk(Kit_mesh_builder& builder, const Leaf_arc& arc, const float half_width)
+// Stations along a ribbon at the detail factor: its own at its own count, else as many evenly from 0 to its last.
+void get_detail_stations(const std::span<const float> own, const int least, const float detail, std::vector<float>& out_at)
 {
-    constexpr std::array<float, 3> at{0.0f, 0.5f, 0.97f};
-    constexpr std::array<float, 3> lifts{0.0f, 0.0f, 0.0f};
-    const std::array<float, 3> half_widths{half_width, 0.8f * half_width, 0.6f * half_width};
+    const int own_count = static_cast<int>(own.size());
+    const int count     = kit_detail_count(detail, own_count, least, 2 * own_count);
+    out_at.clear();
+    if (count == own_count) {
+        out_at.assign(own.begin(), own.end());
+        return;
+    }
+    for (int k = 0; k < count; ++k) {
+        out_at.push_back(own.back() * static_cast<float>(k) / static_cast<float>(count - 1));
+    }
+}
+
+// A stalk: a ribbon tapering to 0.6 of its half width, as thick as wide.
+void add_stalk(Kit_mesh_builder& builder, const Leaf_arc& arc, const float half_width, const float detail)
+{
+    constexpr std::array<float, 3> own_at{0.0f, 0.5f, 0.97f};
+    std::vector<float> at;
+    get_detail_stations(own_at, 2, detail, at);
+    std::vector<float> half_widths{half_width, 0.8f * half_width, 0.6f * half_width};
+    if (at.size() != own_at.size()) {
+        half_widths.clear();
+        for (const float station : at) {
+            half_widths.push_back(half_width * (1.0f - (0.4f * station / own_at.back())));
+        }
+    }
+    const std::vector<float> lifts(at.size(), 0.0f);
     add_ribbon(builder, arc, at, half_widths, lifts, half_width);
 }
 
-constexpr int blade_station_max = 10;
+constexpr int blade_station_max = 24;
 
 // A stalk and a blade widening from it: widest between two shares of the blade's length, rounded to its tip.
 class Blade
@@ -786,11 +840,13 @@ void add_frond(Kit_mesh_builder& builder, const Frond& frond)
 }
 
 // A fern's unrolling young frond: a stalk curled in at its end.
-void add_crozier(Kit_mesh_builder& builder, const Leaf_arc& arc, const float half_width)
+void add_crozier(Kit_mesh_builder& builder, const Leaf_arc& arc, const float half_width, const float detail)
 {
-    constexpr std::array<float, 7> at{0.0f, 0.22f, 0.42f, 0.58f, 0.72f, 0.84f, 0.94f};
-    constexpr std::array<float, 7> lifts{};
-    std::array<float, 7> half_widths{};
+    constexpr std::array<float, 7> own_at{0.0f, 0.22f, 0.42f, 0.58f, 0.72f, 0.84f, 0.94f};
+    std::vector<float> at;
+    get_detail_stations(own_at, 3, detail, at);
+    const std::vector<float> lifts(at.size(), 0.0f);
+    std::vector<float> half_widths(at.size());
     for (std::size_t k = 0; k < at.size(); ++k) {
         half_widths[k] = half_width * (1.0f - (0.45f * at[k]));
     }
@@ -806,21 +862,28 @@ public:
 };
 
 // Rings from the ground up, the base a fan about a vertex on the origin; scales alternate the ring points in and out.
+// The sides are own_sides at the default detail; the root lobes are drawn for those, so the detail moves no other draw.
 // Returns the top ring's center.
 auto add_stem(
     Kit_mesh_builder&                   builder,
     Kit_random&                         random,
     const std::span<const Stem_station> stations,
-    const int                           sides,
+    const int                           own_sides,
     const float                         radius,
     const float                         height,
     const glm::vec3&                    lean,
-    const float                         scales
+    const float                         scales,
+    const float                         detail
 ) -> glm::vec3
 {
-    std::vector<float> roots(static_cast<std::size_t>(sides));
-    for (float& root : roots) {
+    std::vector<float> own_roots(static_cast<std::size_t>(own_sides));
+    for (float& root : own_roots) {
         root = next_signed(random);
+    }
+    const int sides = kit_detail_count(detail, own_sides, 4, 2 * own_sides);
+    std::vector<float> roots(static_cast<std::size_t>(sides));
+    for (int i = 0; i < sides; ++i) {
+        roots[static_cast<std::size_t>(i)] = own_roots[static_cast<std::size_t>((i * own_sides) / sides)];
     }
     std::vector<glm::vec3> points;
     points.reserve(stations.size() * static_cast<std::size_t>(sides));
@@ -848,7 +911,7 @@ constexpr std::array<Stem_station, 4> shrub_caudex {{{0.0f, 0.95f, 0.1f}, {0.3f,
 constexpr std::array<Stem_station, 3> shrub_stem   {{{0.0f, 1.5f, 0.3f}, {0.2f, 1.0f, 0.0f}, {1.0f, 0.8f, 0.0f}}};
 
 // An unopened spear leaf standing in the crown.
-void add_spear(Kit_mesh_builder& builder, const glm::vec3& base, const glm::vec3& out, const float length, const float half_width)
+void add_spear(Kit_mesh_builder& builder, const glm::vec3& base, const glm::vec3& out, const float length, const float half_width, const float detail)
 {
     Blade spear;
     spear.arc.base        = base;
@@ -859,7 +922,7 @@ void add_spear(Kit_mesh_builder& builder, const glm::vec3& base, const glm::vec3
     spear.half_width      = half_width;
     spear.thickness       = 0.5f * half_width;
     spear.stalk_width     = 0.5f;
-    spear.blade_stations  = 4;
+    spear.blade_stations  = kit_detail_count(detail, 4, 3, 8);
     spear.widest_from     = 0.35f;
     spear.widest_to       = 0.55f;
     spear.fold_base       = 0.9f;
@@ -868,11 +931,11 @@ void add_spear(Kit_mesh_builder& builder, const glm::vec3& base, const glm::vec3
 }
 
 // Palmetto: pleated fans on long stalks, the old ones low and drooping, a spear in the middle, dead fans on the ground.
-void add_palmetto(Kit_mesh_builder& builder, Kit_random& random, Kit_random& cells, const float size, const int fronds)
+void add_palmetto(Kit_mesh_builder& builder, Kit_random& random, Kit_random& cells, const float size, const int fronds, const float detail)
 {
     const float floor_y = 0.03f * size;
     builder.set_slot(plant_bark_slot);
-    static_cast<void>(add_stem(builder, random, shrub_stub, 7, 0.075f * size, 0.14f * size, glm::vec3{0.0f}, 0.06f));
+    static_cast<void>(add_stem(builder, random, shrub_stub, 7, 0.075f * size, 0.14f * size, glm::vec3{0.0f}, 0.06f, detail));
     const float first = random.next_range(0.0f, two_pi);
     builder.set_slot(plant_foliage_slot);
     for (int k = 0; k < fronds; ++k) {
@@ -891,7 +954,7 @@ void add_palmetto(Kit_mesh_builder& builder, Kit_random& random, Kit_random& cel
         stalk.elevation_1 = stalk.elevation_0 - glm::radians(18.0f - (10.0f * rank));
         stalk.power       = 1.5f;
         fit_leaf_arc(stalk, floor_y + (0.3f * radius));
-        add_stalk(builder, stalk, 0.012f * size);
+        add_stalk(builder, stalk, 0.012f * size, detail);
         const Leaf_frame tip  = arc_frame(stalk, 1.0f);
         const float      tilt = glm::radians(20.0f + (30.0f * (1.0f - rank)) + (8.0f * tilt_draw));
         add_fan(builder, Fan{
@@ -910,7 +973,7 @@ void add_palmetto(Kit_mesh_builder& builder, Kit_random& random, Kit_random& cel
     }
     builder.set_slot(plant_shoot_slot);
     const float spear_azimuth = random.next_range(0.0f, two_pi);
-    add_spear(builder, glm::vec3{0.0f, 0.10f * size, 0.0f}, around_y(spear_azimuth), 0.5f * size, 0.035f * size);
+    add_spear(builder, glm::vec3{0.0f, 0.10f * size, 0.0f}, around_y(spear_azimuth), 0.5f * size, 0.035f * size, detail);
     builder.set_slot(plant_bark_slot);
     const int dead_count = 1 + static_cast<int>(cells.next_u32() % 2u);
     for (int k = 0; k < dead_count; ++k) {
@@ -923,7 +986,7 @@ void add_palmetto(Kit_mesh_builder& builder, Kit_random& random, Kit_random& cel
         stalk.elevation_0 = glm::radians(-5.0f - (10.0f * droop_draw));
         stalk.elevation_1 = stalk.elevation_0 - glm::radians(15.0f);
         fit_leaf_arc(stalk, 1.6f * floor_y);
-        add_stalk(builder, stalk, 0.011f * size);
+        add_stalk(builder, stalk, 0.011f * size, detail);
         const Leaf_frame tip  = arc_frame(stalk, 1.0f);
         const float      tilt = glm::radians(30.0f);
         add_fan(builder, Fan{
@@ -943,11 +1006,11 @@ void add_palmetto(Kit_mesh_builder& builder, Kit_random& random, Kit_random& cel
 }
 
 // Cycad: a scaly barrel carrying a rosette of stiff feather fronds and a flush of new ones standing in the middle.
-void add_cycad(Kit_mesh_builder& builder, Kit_random& random, Kit_random& cells, const float size, const int fronds)
+void add_cycad(Kit_mesh_builder& builder, Kit_random& random, Kit_random& cells, const float size, const int fronds, const float detail)
 {
     const float floor_y = 0.03f * size;
     builder.set_slot(plant_bark_slot);
-    const glm::vec3 crown = add_stem(builder, random, shrub_caudex, 8, 0.11f * size, 0.24f * size, glm::vec3{0.0f}, 0.08f);
+    const glm::vec3 crown = add_stem(builder, random, shrub_caudex, 8, 0.11f * size, 0.24f * size, glm::vec3{0.0f}, 0.08f, detail);
     const float first = random.next_range(0.0f, two_pi);
     const int   pairs = (fronds > 12) ? 8 : 11;
     builder.set_slot(plant_foliage_slot);
@@ -963,7 +1026,7 @@ void add_cycad(Kit_mesh_builder& builder, Kit_random& random, Kit_random& cells,
         frond.arc.elevation_0 = glm::radians(14.0f + (56.0f * rank) + (5.0f * elevation_draw));
         frond.arc.elevation_1 = frond.arc.elevation_0 - glm::radians(58.0f - (22.0f * rank));
         frond.arc.power       = 1.3f;
-        frond.pairs           = pairs;
+        frond.pairs           = kit_detail_count(detail, pairs, 3, 2 * pairs);
         frond.rachis_width    = 0.011f * size;
         frond.leaflet_length  = 0.2f * frond.arc.length;
         frond.leaflet_width   = 0.78f;
@@ -985,7 +1048,7 @@ void add_cycad(Kit_mesh_builder& builder, Kit_random& random, Kit_random& cells,
         frond.arc.length      = size * (0.36f + (0.1f * length_draw));
         frond.arc.elevation_0 = glm::radians(84.0f);
         frond.arc.elevation_1 = glm::radians(62.0f);
-        frond.pairs           = 5;
+        frond.pairs           = kit_detail_count(detail, 5, 3, 10);
         frond.rachis_width    = 0.009f * size;
         frond.leaflet_length  = 0.17f * frond.arc.length;
         frond.leaflet_width   = 0.6f;
@@ -997,11 +1060,11 @@ void add_cycad(Kit_mesh_builder& builder, Kit_random& random, Kit_random& cells,
 }
 
 // Seedling: a young palm, a few pleated undivided leaves standing on a thin stem.
-void add_seedling(Kit_mesh_builder& builder, Kit_random& random, const float size, const int fronds)
+void add_seedling(Kit_mesh_builder& builder, Kit_random& random, const float size, const int fronds, const float detail)
 {
     const float floor_y = 0.03f * size;
     builder.set_slot(plant_bark_slot);
-    const glm::vec3 crown = add_stem(builder, random, shrub_stem, 6, 0.035f * size, 0.16f * size, glm::vec3{0.0f}, 0.0f);
+    const glm::vec3 crown = add_stem(builder, random, shrub_stem, 6, 0.035f * size, 0.16f * size, glm::vec3{0.0f}, 0.0f, detail);
     const float first = random.next_range(0.0f, two_pi);
     builder.set_slot(plant_foliage_slot);
     for (int k = 0; k < fronds; ++k) {
@@ -1018,7 +1081,7 @@ void add_seedling(Kit_mesh_builder& builder, Kit_random& random, const float siz
         stalk.elevation_0 = glm::radians(50.0f + (34.0f * rank) + (5.0f * elevation_draw));
         stalk.elevation_1 = stalk.elevation_0 - glm::radians(10.0f);
         fit_leaf_arc(stalk, floor_y + (0.2f * radius));
-        add_stalk(builder, stalk, 0.011f * size);
+        add_stalk(builder, stalk, 0.011f * size, detail);
         const Leaf_frame tip  = arc_frame(stalk, 1.0f);
         const float      tilt = glm::radians(6.0f + (16.0f * (1.0f - rank)) + (4.0f * tilt_draw));
         add_fan(builder, Fan{
@@ -1037,7 +1100,7 @@ void add_seedling(Kit_mesh_builder& builder, Kit_random& random, const float siz
     }
     builder.set_slot(plant_shoot_slot);
     const float spear_azimuth = random.next_range(0.0f, two_pi);
-    add_spear(builder, crown - glm::vec3{0.0f, 0.03f * size, 0.0f}, around_y(spear_azimuth), 0.5f * size, 0.028f * size);
+    add_spear(builder, crown - glm::vec3{0.0f, 0.03f * size, 0.0f}, around_y(spear_azimuth), 0.5f * size, 0.028f * size, detail);
 }
 
 void generate_palm_shrub(const Kit_parameter_values& values, GEO::Mesh& mesh)
@@ -1045,15 +1108,16 @@ void generate_palm_shrub(const Kit_parameter_values& values, GEO::Mesh& mesh)
     const std::string_view species = values.get_enum("species");
     const float            size    = values.get_float("size");
     const int              fronds  = values.get_int("fronds");
+    const float            detail  = get_kit_detail_factor(values);
     Kit_random random{values.get_seed(), "palm shrub v2"};       // moves vertices
     Kit_random cells {values.get_seed(), "palm shrub v2 cells"}; // decides the topology: integer draws only
     Kit_mesh_builder builder;
     if (species == "cycad") {
-        add_cycad(builder, random, cells, size, fronds);
+        add_cycad(builder, random, cells, size, fronds, detail);
     } else if (species == "seedling") {
-        add_seedling(builder, random, size, fronds);
+        add_seedling(builder, random, size, fronds, detail);
     } else {
-        add_palmetto(builder, random, cells, size, fronds);
+        add_palmetto(builder, random, cells, size, fronds, detail);
     }
     builder.write(mesh);
 }
@@ -1075,14 +1139,15 @@ public:
     float droop;
     float leaf_width;
     float floor_y;
+    float detail; // the detail factor (get_kit_detail_factor())
 };
 
 // A young leaf still rolled up, standing at the crown.
-void add_rolled_leaf(Kit_mesh_builder& builder, Kit_random& random, const glm::vec3& base, const float length, const float half_width)
+void add_rolled_leaf(Kit_mesh_builder& builder, Kit_random& random, const glm::vec3& base, const float length, const float half_width, const float detail)
 {
     const float azimuth = random.next_range(0.0f, two_pi);
     builder.set_slot(plant_shoot_slot);
-    add_spear(builder, base, around_y(azimuth), length, half_width);
+    add_spear(builder, base, around_y(azimuth), length, half_width, detail);
 }
 
 // Banana: broad oblong leaves arching from a stout stem, a rolled new leaf, dry leaves hanging down the stem.
@@ -1093,7 +1158,7 @@ void add_banana(Kit_mesh_builder& builder, Kit_random& random, Kit_random& cells
     const float     lean_heading = random.next_range(0.0f, two_pi);
     const float     lean_draw    = random.next_range(0.0f, 0.08f);
     builder.set_slot(plant_bark_slot);
-    const glm::vec3 crown = add_stem(builder, random, plant_pseudostem, 7, 0.055f * height, stem_height, (lean_draw * stem_height) * around_y(lean_heading), 0.0f);
+    const glm::vec3 crown = add_stem(builder, random, plant_pseudostem, 7, 0.055f * height, stem_height, (lean_draw * stem_height) * around_y(lean_heading), 0.0f, plant.detail);
     const float first = random.next_range(0.0f, two_pi);
     builder.set_slot(plant_foliage_slot);
     for (int k = 0; k < plant.leaves; ++k) {
@@ -1114,8 +1179,8 @@ void add_banana(Kit_mesh_builder& builder, Kit_random& random, Kit_random& cells
         blade.thickness       = 0.014f * blade.arc.length;
         blade.stalk           = 0.14f;
         blade.stalk_width     = 0.14f;
-        blade.stalk_stations  = 1;
-        blade.blade_stations  = 6;
+        blade.stalk_stations  = kit_detail_count(plant.detail, 1, 1, 2);
+        blade.blade_stations  = kit_detail_count(plant.detail, 6, 3, 12);
         blade.widest_from     = 0.28f;
         blade.widest_to       = 0.72f;
         blade.fold_base       = 0.45f;
@@ -1123,7 +1188,7 @@ void add_banana(Kit_mesh_builder& builder, Kit_random& random, Kit_random& cells
         fit_leaf_arc(blade.arc, plant.floor_y + (0.5f * blade.half_width));
         add_blade(builder, blade);
     }
-    add_rolled_leaf(builder, random, crown - glm::vec3{0.0f, 0.03f * height, 0.0f}, 0.5f * height, 0.04f * height);
+    add_rolled_leaf(builder, random, crown - glm::vec3{0.0f, 0.03f * height, 0.0f}, 0.5f * height, 0.04f * height, plant.detail);
     builder.set_slot(plant_bark_slot);
     const int dead_count = 1 + static_cast<int>(cells.next_u32() % 2u);
     for (int k = 0; k < dead_count; ++k) {
@@ -1138,7 +1203,7 @@ void add_banana(Kit_mesh_builder& builder, Kit_random& random, Kit_random& cells
         blade.half_width      = 0.055f * height;
         blade.thickness       = 0.012f * blade.arc.length;
         blade.stalk_width     = 0.25f;
-        blade.blade_stations  = 4;
+        blade.blade_stations  = kit_detail_count(plant.detail, 4, 3, 8);
         blade.fold_base       = -0.3f;
         blade.fold_tip        = -0.5f;
         fit_leaf_arc(blade.arc, plant.floor_y + (0.06f * height));
@@ -1151,7 +1216,7 @@ void add_taro(Kit_mesh_builder& builder, Kit_random& random, const Leaf_plant& p
 {
     const float height = plant.height;
     builder.set_slot(plant_bark_slot);
-    static_cast<void>(add_stem(builder, random, plant_mound, 6, 0.06f * height, 0.07f * height, glm::vec3{0.0f}, 0.0f));
+    static_cast<void>(add_stem(builder, random, plant_mound, 6, 0.06f * height, 0.07f * height, glm::vec3{0.0f}, 0.0f, plant.detail));
     const float first = random.next_range(0.0f, two_pi);
     builder.set_slot(plant_foliage_slot);
     for (int k = 0; k < plant.leaves; ++k) {
@@ -1170,7 +1235,7 @@ void add_taro(Kit_mesh_builder& builder, Kit_random& random, const Leaf_plant& p
         stalk.elevation_1 = stalk.elevation_0 - glm::radians(22.0f + (30.0f * plant.droop * (1.0f - (0.5f * rank))));
         stalk.power       = 1.5f;
         fit_leaf_arc(stalk, plant.floor_y + (0.3f * blade_length));
-        add_stalk(builder, stalk, 0.011f * height);
+        add_stalk(builder, stalk, 0.011f * height, plant.detail);
         const float hang = glm::radians(38.0f + (28.0f * plant.droop) + (8.0f * hang_draw));
         add_heart(builder, Heart{
             .hub       = arc_frame(stalk, 1.0f).center + ((0.03f * blade_length) * y_axis),
@@ -1182,7 +1247,7 @@ void add_taro(Kit_mesh_builder& builder, Kit_random& random, const Leaf_plant& p
             .floor_y   = plant.floor_y
         });
     }
-    add_rolled_leaf(builder, random, glm::vec3{0.0f, 0.045f * height, 0.0f}, 0.55f * height, 0.03f * height);
+    add_rolled_leaf(builder, random, glm::vec3{0.0f, 0.045f * height, 0.0f}, 0.55f * height, 0.03f * height, plant.detail);
 }
 
 // Strelitzia: paddle leaves on long stalks standing in one fan, alternately to either side.
@@ -1190,7 +1255,7 @@ void add_strelitzia(Kit_mesh_builder& builder, Kit_random& random, const Leaf_pl
 {
     const float height = plant.height;
     builder.set_slot(plant_bark_slot);
-    static_cast<void>(add_stem(builder, random, plant_mound, 6, 0.08f * height, 0.08f * height, glm::vec3{0.0f}, 0.0f));
+    static_cast<void>(add_stem(builder, random, plant_mound, 6, 0.08f * height, 0.08f * height, glm::vec3{0.0f}, 0.0f, plant.detail));
     const float fan_heading = random.next_range(0.0f, two_pi);
     builder.set_slot(plant_foliage_slot);
     for (int k = 0; k < plant.leaves; ++k) {
@@ -1213,8 +1278,8 @@ void add_strelitzia(Kit_mesh_builder& builder, Kit_random& random, const Leaf_pl
         blade.thickness       = 0.011f * blade.arc.length;
         blade.stalk           = 0.52f;
         blade.stalk_width     = 0.16f;
-        blade.stalk_stations  = 2;
-        blade.blade_stations  = 5;
+        blade.stalk_stations  = kit_detail_count(plant.detail, 2, 1, 4);
+        blade.blade_stations  = kit_detail_count(plant.detail, 5, 3, 10);
         blade.widest_from     = 0.3f;
         blade.widest_to       = 0.62f;
         blade.fold_base       = 0.55f;
@@ -1222,7 +1287,7 @@ void add_strelitzia(Kit_mesh_builder& builder, Kit_random& random, const Leaf_pl
         fit_leaf_arc(blade.arc, plant.floor_y + blade.half_width);
         add_blade(builder, blade);
     }
-    add_rolled_leaf(builder, random, glm::vec3{0.0f, 0.05f * height, 0.0f}, 0.6f * height, 0.028f * height);
+    add_rolled_leaf(builder, random, glm::vec3{0.0f, 0.05f * height, 0.0f}, 0.6f * height, 0.028f * height, plant.detail);
 }
 
 // The fronds of a fern's crown at the base point, and its croziers.
@@ -1245,7 +1310,7 @@ void add_fern_crown(Kit_mesh_builder& builder, Kit_random& random, Kit_random& c
         frond.arc.elevation_1 = frond.arc.elevation_0 - glm::radians(50.0f + (75.0f * plant.droop * (1.2f - (0.5f * rank))));
         frond.arc.power       = 1.4f;
         frond.outline         = Frond_outline::fern;
-        frond.pairs           = pairs;
+        frond.pairs           = kit_detail_count(plant.detail, pairs, 3, 2 * pairs);
         frond.rachis_width    = 0.009f * height;
         frond.leaflet_length  = 0.8f * plant.leaf_width * frond.arc.length;
         frond.leaflet_width   = 0.8f;
@@ -1270,7 +1335,7 @@ void add_fern_crown(Kit_mesh_builder& builder, Kit_random& random, Kit_random& c
         arc.elevation_0 = glm::radians(80.0f);
         arc.elevation_1 = arc.elevation_0 + glm::radians(330.0f + (60.0f * curl_draw));
         arc.power       = 2.4f;
-        add_crozier(builder, arc, 0.016f * height);
+        add_crozier(builder, arc, 0.016f * height, plant.detail);
     }
 }
 
@@ -1278,7 +1343,7 @@ void add_fern(Kit_mesh_builder& builder, Kit_random& random, Kit_random& cells, 
 {
     const float height = plant.height;
     builder.set_slot(plant_bark_slot);
-    static_cast<void>(add_stem(builder, random, plant_mound, 6, 0.07f * height, 0.06f * height, glm::vec3{0.0f}, 0.0f));
+    static_cast<void>(add_stem(builder, random, plant_mound, 6, 0.07f * height, 0.06f * height, glm::vec3{0.0f}, 0.0f, plant.detail));
     add_fern_crown(builder, random, cells, plant, glm::vec3{0.0f, 0.045f * height, 0.0f}, 0.95f * height, 36.0f);
 }
 
@@ -1290,7 +1355,7 @@ void add_tree_fern(Kit_mesh_builder& builder, Kit_random& random, Kit_random& ce
     const float     lean_heading = random.next_range(0.0f, two_pi);
     const float     lean_draw    = random.next_range(0.0f, 0.08f);
     builder.set_slot(plant_bark_slot);
-    const glm::vec3 crown = add_stem(builder, random, plant_fern_trunk, 7, 0.045f * height, trunk_height, (lean_draw * trunk_height) * around_y(lean_heading), 0.05f);
+    const glm::vec3 crown = add_stem(builder, random, plant_fern_trunk, 7, 0.045f * height, trunk_height, (lean_draw * trunk_height) * around_y(lean_heading), 0.05f, plant.detail);
     const int dead_count = 2 + static_cast<int>(cells.next_u32() % 2u);
     const float dead_first = random.next_range(0.0f, two_pi);
     for (int k = 0; k < dead_count; ++k) {
@@ -1302,7 +1367,7 @@ void add_tree_fern(Kit_mesh_builder& builder, Kit_random& random, Kit_random& ce
         frond.arc.elevation_0 = glm::radians(-45.0f);
         frond.arc.elevation_1 = glm::radians(-84.0f);
         frond.outline         = Frond_outline::fern;
-        frond.pairs           = 5;
+        frond.pairs           = kit_detail_count(plant.detail, 5, 3, 10);
         frond.rachis_width    = 0.008f * height;
         frond.leaflet_length  = 0.07f * height;
         frond.leaflet_width   = 0.7f;
@@ -1322,7 +1387,8 @@ void generate_leaf_plant(const Kit_parameter_values& values, GEO::Mesh& mesh)
         .leaves     = values.get_int("leaves"),
         .droop      = values.get_float("droop"),
         .leaf_width = values.get_float("leaf_width"),
-        .floor_y    = 0.03f * values.get_float("height")
+        .floor_y    = 0.03f * values.get_float("height"),
+        .detail     = get_kit_detail_factor(values)
     };
     Kit_random random{values.get_seed(), "leaf plant v2"};       // moves vertices
     Kit_random cells {values.get_seed(), "leaf plant v2 cells"}; // decides the topology: integer draws only
@@ -1375,6 +1441,7 @@ void add_nature_plant_shapes(std::vector<Kit_shape_definition>& shapes)
         shape.triangle_budget = 1600;
         shape.collision       = Kit_collision::triangle_mesh;
         shape.randomness      = Kit_randomness::seeded;
+        shape.detail_counts   = {{"segments", 2}}; // the trunk's sides; its stations (set_palm_detail()) are the other dimension
         shape.generator       = generate_palm;
         shapes.push_back(std::move(shape));
     }
@@ -1407,6 +1474,7 @@ void add_nature_plant_shapes(std::vector<Kit_shape_definition>& shapes)
         shape.triangle_budget = 520;
         shape.collision       = Kit_collision::none;
         shape.randomness      = Kit_randomness::seeded;
+        shape.detail_response = Kit_detail_response::scaled;
         shape.generator       = generate_leaf_plant;
         shapes.push_back(std::move(shape));
     }
@@ -1434,6 +1502,7 @@ void add_nature_plant_shapes(std::vector<Kit_shape_definition>& shapes)
         shape.triangle_budget = 1940;
         shape.collision       = Kit_collision::triangle_mesh;
         shape.randomness      = Kit_randomness::seeded;
+        shape.detail_response = Kit_detail_response::scaled;
         shape.generator       = generate_palm_clump;
         shapes.push_back(std::move(shape));
     }
@@ -1461,6 +1530,7 @@ void add_nature_plant_shapes(std::vector<Kit_shape_definition>& shapes)
         shape.triangle_budget = 1300;
         shape.collision       = Kit_collision::convex_hull;
         shape.randomness      = Kit_randomness::seeded;
+        shape.detail_response = Kit_detail_response::scaled;
         shape.generator       = generate_palm_shrub;
         shapes.push_back(std::move(shape));
     }

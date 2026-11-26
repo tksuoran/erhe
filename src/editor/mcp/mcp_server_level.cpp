@@ -733,6 +733,7 @@ auto Mcp_server::query_level_kits(const json& args) -> std::string
             {"former_ids",      shape.former_ids},
             {"default_derive",  default_derive},
             {"detail_counts",   detail_counts},
+            {"detail_scaled",   shape.detail_response == editor::Kit_detail_response::scaled},
             {"kit",             shape.kit},
             {"name",            shape.display_name},
             {"kind",            shape.parameters.empty() ? "basic" : "parametric"},

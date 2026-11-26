@@ -107,7 +107,7 @@ auto kit_parameter_row(Kit_parameter_values& values, const std::size_t index, co
     const bool  is_seed     = (parameter.name == "seed");
     const bool  masked      = (values.get_value_source(index) == Kit_value_source::seed);
     // A shape without detail counts ignores the detail (doc/editor/level_kit_shapes.md "Level of detail").
-    const bool  one_detail  = (parameter.name == c_kit_detail_parameter) && shape->detail_counts.empty();
+    const bool  one_detail  = (parameter.name == c_kit_detail_parameter) && (shape->detail_response == Kit_detail_response::fixed);
     const char* widget_name = beside ? parameter.name.c_str() : "##value";
     ImGui::PushID(parameter.name.c_str());
     Kit_row_edit edit    = Kit_row_edit::none;

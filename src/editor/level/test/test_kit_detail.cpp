@@ -39,6 +39,7 @@ TEST(Kit_detail, every_shape_takes_the_detail_last)
         EXPECT_EQ(detail.float_max, 1.0f);
         EXPECT_EQ(detail.derive, editor::Kit_derive::fixed);
         EXPECT_EQ(detail.text_presence, editor::Kit_text_presence::unless_default);
+        EXPECT_TRUE(shape.detail_counts.empty() || (shape.detail_response == editor::Kit_detail_response::scaled));
         for (const editor::Kit_detail_count& count : shape.detail_counts) {
             const std::optional<std::size_t> index = shape.find_parameter(count.parameter);
             ASSERT_TRUE(index.has_value()) << count.parameter;
@@ -97,7 +98,7 @@ TEST(Kit_detail, the_detail_scales_the_counts_of_the_shapes_that_state_them)
         bool more  = false;
         for (Kit_parameter_values values : detail_value_sets(shape)) {
             const unsigned int own = editor::count_kit_triangles(*generate(values));
-            if (shape.detail_counts.empty()) {
+            if (shape.detail_response == editor::Kit_detail_response::fixed) {
                 const std::unique_ptr<GEO::Mesh> mesh = generate(values);
                 for (const float detail : {editor::c_kit_detail_min, 1.0f}) {
                     ASSERT_TRUE(values.set_float(editor::c_kit_detail_parameter, detail));
@@ -111,13 +112,14 @@ TEST(Kit_detail, the_detail_scales_the_counts_of_the_shapes_that_state_them)
                 SCOPED_TRACE(values.to_canonical_text());
                 const Kit_mesh_report report = editor::check_kit_shape(values);
                 EXPECT_TRUE(report.is_valid()) << describe(report);
+                EXPECT_LE(report.triangle_count, get_library().get_triangle_ceiling(values));
                 EXPECT_GE(report.triangle_count, previous);
                 fewer = fewer || ((step == 1) && (report.triangle_count < own));
                 more  = more  || ((step == 10) && (report.triangle_count > own));
                 previous = report.triangle_count;
             }
         }
-        EXPECT_TRUE(shape.detail_counts.empty() || (fewer && more)) << "fewer " << fewer << ", more " << more;
+        EXPECT_TRUE((shape.detail_response == editor::Kit_detail_response::fixed) || (fewer && more)) << "fewer " << fewer << ", more " << more;
     }
 }
 

@@ -34,6 +34,7 @@ public:
     float                    base_width{0.15f}; // share of the width at the base
     float                    roll      {0.0f}; // radians the section turns about the spine: pi / 2 stands the blade on edge
     int                      steps     {5};
+    int                      across    {1};    // folded: segments across each half; above 1 the halves arch down toward their edges
 };
 
 // Adds the leaf's closed parts to the builder under its current slot (Kit_mesh_builder::add_mesh()); scratch is the

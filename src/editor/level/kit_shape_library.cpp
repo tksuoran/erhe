@@ -46,6 +46,9 @@ void add_former_build(std::vector<Kit_shape_definition>& shapes, const std::stri
     former.description  = fmt::format("The former build of {}, kept for comparison. {}", id, current->description);
     former.former_ids.clear();
     former.foliage_radius.reset();
+    // A snapshot for comparison: one level of detail.
+    former.detail_counts.clear();
+    former.detail_response = Kit_detail_response::fixed;
     former.generator    = std::move(former_generator);
     shapes.push_back(std::move(former));
 }
@@ -204,6 +207,7 @@ Kit_shape_library::Kit_shape_library()
         if (shape.detail_counts.empty()) {
             continue;
         }
+        shape.detail_response = Kit_detail_response::scaled;
         shape.generator = [f = std::move(shape.generator)](const Kit_parameter_values& values, GEO::Mesh& mesh) {
             f(get_kit_detail_values(values), mesh);
         };
@@ -391,8 +395,9 @@ auto Kit_shape_library::get_triangle_ceiling(const Kit_parameter_values& values)
     if (kit == nullptr) {
         return 0;
     }
+    // The ceiling holds at the default detail; a higher detail asks for its share more.
     const float scale = shape->get_ceiling_scale ? std::max(shape->get_ceiling_scale(values), 1.0f) : 1.0f;
-    return static_cast<unsigned int>(static_cast<float>(kit->triangle_ceiling) * scale);
+    return static_cast<unsigned int>(static_cast<float>(kit->triangle_ceiling) * scale * std::max(get_kit_detail_factor(values), 1.0f));
 }
 
 auto Kit_shape_library::get_palette() const -> const std::vector<Kit_palette_material>&

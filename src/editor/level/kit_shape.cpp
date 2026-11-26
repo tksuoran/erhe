@@ -753,14 +753,38 @@ auto parse_canonical_text(const Kit_shape_definition& shape, const std::string_v
     return {};
 }
 
+auto get_kit_detail_factor(const Kit_parameter_values& values) -> float
+{
+    const Kit_shape_definition* const shape = values.get_shape();
+    if ((shape == nullptr) || (shape->detail_response != Kit_detail_response::scaled)) {
+        return 1.0f;
+    }
+    return std::clamp(values.get_float(c_kit_detail_parameter), c_kit_detail_min, 1.0f) / c_kit_detail_default;
+}
+
+auto kit_detail_count(const Kit_parameter_values& values, const int own, const int least, const int most, const int dimensions, const int step) -> int
+{
+    return kit_detail_count(get_kit_detail_factor(values), own, least, most, dimensions, step);
+}
+
+auto kit_detail_count(const float detail_factor, const int own, const int least, const int most, const int dimensions, const int step) -> int
+{
+    const float factor = std::pow(detail_factor, 1.0f / static_cast<float>(std::max(dimensions, 1)));
+    const int   unit   = std::max(step, 1);
+    int count = own + (unit * static_cast<int>(std::lround((factor - 1.0f) * static_cast<float>(own) / static_cast<float>(unit))));
+    while ((count > most) && ((count - unit) >= own)) {
+        count -= unit;
+    }
+    while ((count < least) && ((count + unit) <= own)) {
+        count += unit;
+    }
+    return std::clamp(count, std::min(least, own), std::max(most, own));
+}
+
 auto get_kit_detail_values(const Kit_parameter_values& values) -> Kit_parameter_values
 {
     const Kit_shape_definition* const shape = values.get_shape();
-    if ((shape == nullptr) || shape->detail_counts.empty()) {
-        return values;
-    }
-    const float detail = std::clamp(values.get_float(c_kit_detail_parameter), c_kit_detail_min, 1.0f);
-    if (detail == c_kit_detail_default) {
+    if ((shape == nullptr) || shape->detail_counts.empty() || (get_kit_detail_factor(values) == 1.0f)) {
         return values;
     }
     Kit_parameter_values scaled = values;
@@ -769,16 +793,7 @@ auto get_kit_detail_values(const Kit_parameter_values& values) -> Kit_parameter_
         ERHE_VERIFY(index.has_value() && (shape->parameters[index.value()].type == Kit_parameter_type::int_value));
         const Kit_parameter& parameter = shape->parameters[index.value()];
         const int            own       = values.get_int(count.parameter);
-        const float          factor    = std::pow(detail / c_kit_detail_default, 1.0f / static_cast<float>(std::max(count.dimensions, 1)));
-        const int            step      = std::max(count.step, 1);
-        int                  scaled_count = own + (step * static_cast<int>(std::lround((factor - 1.0f) * static_cast<float>(own) / static_cast<float>(step))));
-        while ((scaled_count > parameter.int_max) && (scaled_count - step >= own)) {
-            scaled_count -= step;
-        }
-        while ((scaled_count < parameter.int_min) && (scaled_count + step <= own)) {
-            scaled_count += step;
-        }
-        ERHE_VERIFY(scaled.set_int(count.parameter, std::clamp(scaled_count, std::min(parameter.int_min, own), std::max(parameter.int_max, own))));
+        ERHE_VERIFY(scaled.set_int(count.parameter, kit_detail_count(values, own, parameter.int_min, parameter.int_max, count.dimensions, count.step)));
     }
     return scaled;
 }

@@ -122,20 +122,33 @@ canonical text, and a text without `detail` reads as the default
 (`Kit_text_presence::unless_default`), so records written before the
 parameter read and keep their mesh key.
 
-A shape states the count parameters the detail scales in
-`Kit_shape_definition::detail_counts`: each `Kit_detail_count` names an int
-parameter, the dimensions of the mesh it resolves (1 for a ring's points, 2
-for a grid's columns whose rows follow them) and a step. The count takes
-(detail / 0.5) ^ (1 / dimensions) of its value, rounded to whole steps from
-it (a step of 2 keeps the parity of a count whose odd values build
-differently) and kept within the parameter's range
-(`get_kit_detail_values()`). The library wraps such a shape's generator and
-its other callbacks describing the mesh (walkability check, seam sides,
-connectors, light frames, collision kind), so all of them see the scaled
-counts. Parts the counts do not reach keep their triangles: the share is
-the counts' share. A shape with no detail counts ignores `detail` and builds
-one mesh at every value; its row is disabled ("This shape has one level of
-detail").
+A shape whose mesh follows the detail is `Kit_detail_response::scaled`; a
+`fixed` shape builds one mesh at every value and its row is disabled ("This
+shape has one level of detail"). A count follows the detail factor (detail
+/ 0.5, `get_kit_detail_factor()`, 1 for a fixed shape) by
+`kit_detail_count()`: its own value times factor ^ (1 / dimensions) (1 for a
+ring's points, 2 for each of two counts that multiply, such as a grid's
+columns and rows), rounded to whole steps from its own value (a step of 2
+keeps the parity of a count whose odd values build differently) and kept
+between a least and a most. Two ways use it:
+
+- Detail counts: `Kit_shape_definition::detail_counts` names int parameters
+  (`Kit_detail_count`: parameter, dimensions, step), scaled within the
+  parameter's range (`get_kit_detail_values()`); the library makes such a
+  shape scaled and wraps its generator and its other callbacks describing
+  the mesh (walkability check, seam sides, connectors, light frames,
+  collision kind), so all of them see the scaled counts.
+- Counts of the generator's own: the generator reads the factor and scales
+  its fixed counts (stations, sides, points across); its definition states
+  `detail_response = scaled`. Where a count's points take random draws, the
+  generator draws the default count's values and samples them at the scaled
+  count, so the detail moves no draw and the plant or the piece keeps its
+  layout at every detail.
+
+The kit's triangle ceiling holds at the default detail and scales by the
+factor above it (`Kit_shape_library::get_triangle_ceiling()`). Parts no
+count reaches keep their triangles: the share is the counts' share. A former
+build (`<id>_old`) is fixed.
 
 The shapes with detail counts scale their `segments`: `basic.cylinder`,
 `architecture.pillar`, `architecture.column`, `architecture.torii`,
@@ -145,9 +158,30 @@ The shapes with detail counts scale their `segments`: `basic.cylinder`,
 `prop.barrel`, `prop.pot`, `prop.cart`, `prop.well`, `harbour.pier`,
 `harbour.mooring`, `harbour.buoy`, `harbour.lighthouse`, `light.lamp_post`,
 `industrial.pipe`, `industrial.tank`, `ruin.broken_pillar` and
-`ruin.broken_arch` (and `prop.well_old`). The other shapes, and the counts
-fixed inside generators, are converted step by step
-(`doc/plans/level_kit_detail.md`).
+`ruin.broken_arch`. The vegetation scales counts of its own:
+
+- `nature.palm` and `nature.palm_clump` (and the trunk sides, `segments`,
+  of the palm): a feather frond's steps follow the factor; from 5/3 of the
+  default a palm's fronds take two segments across each half, their
+  undersides arching down to the edges ("Leaf helper"), and their steps the
+  rest of the factor. A fan leaf's sectors and the nuts' points follow the
+  factor, the trunk's stations (in pairs, so the rings keep alternating) and
+  sides its square root each.
+- `nature.palm_shrub` and `nature.leaf_plant`: the blades' and spears'
+  stations, the stalks' and the croziers' stations (their own at the
+  default, evenly spaced otherwise), the pinnate fronds' leaflet pairs and
+  the stems' sides; the fans' fingers and the hearts' outlines are the
+  leaves' form and stay.
+- `nature.succulent` and `nature.grass_tuft`: a blade's station table is
+  interpolated between its stations, or thinned to its first, its last and
+  evenly spaced others (`get_blade_stations()`; an ear, a plume and a
+  panicle keep at least their own); the stems' and the bud's sides.
+- `nature.tree` and `nature.bush`: the foliage clumps' and the conifer
+  tiers' points around, the trunk's and the limbs' sides.
+- `nature.bamboo`: the canes' sides; the nodes, sprays and leaves are the
+  plant's form.
+
+The other shapes are converted step by step (`doc/plans/level_kit_detail.md`).
 
 ## Slots and palette
 
@@ -1388,7 +1422,11 @@ leaflet rows of a feather frond; `folded_split`, the former build of
 parameters of the widest station and of the end of the widest stretch
 (`widest_end`: an oblong blade; at most `widest_at`, one station), the base's
 share of the width, the section's roll about the spine (`roll`: pi / 2 stands
-the blade on edge) and the station count. Each part is a `make_sweep()` tapered from the base share to
+the blade on edge), the station count and, for `folded`, the segments across
+each half (`across`): at 1 the halves are straight from the keel to the
+edge; above, the underside drops by (share across) ^ 1.6 to the edge, each
+upper point over the middle of its underside segment, the leaf thinning over
+its outer half, the base cap triangles sharing their edges. Each part is a `make_sweep()` tapered from the base share to
 the widest station and to a point, made in the generator's scratch mesh and taken in by
 `Kit_mesh_builder::add_mesh()`, which adds a generated mesh's facets under
 the current slot and splits each quad into two triangles (a bent sweep's
