@@ -23,16 +23,17 @@ capping instead.
    `_old` rows of `test_kit_collision.cpp`, the gallery script and the
    "Former builds" entry of the shapes reference.
 
+## Ruled
+
+- `nature.basalt_columns` keeps its joints: each column stands 2 - 5 cm in
+  from its cell, one part per column (user, 2026-11-26: "Basalt - keep
+  gaps").
+
 ## Not yet fixed
 
-Each needs more than a local change; the user picks which to do.
+Each needs more than a local change. Deferred: the user decides later which
+to do (2026-11-26).
 
-- `nature.basalt_columns` (`kit_shapes_nature_rocks.cpp`, "Joints"): each
-  column stands 2 - 5 cm in from its cell, slots between all columns. The
-  joints are part of the shape's look and its one part per column
-  (`kit_shape_rows_starter.cpp` components); sharing the lattice corners
-  makes it one solid with walls split where three heights meet. User
-  decision: keep the joints or close them.
 - `architecture.tower`, battlement top (`kit_shapes_medieval.cpp`): the
   merlons are prisms 0.02 inside both parapet faces, a ledge on every merlon.
   Fix: the merlon ends in the parapet's plan ring, its faces raised under the
