@@ -837,10 +837,11 @@ auto get_kit_shading(const Kit_parameter_values& values) -> Kit_normal_style
 {
     const Kit_shape_definition* const shape = values.get_shape();
     ERHE_VERIFY(shape != nullptr);
-    if (shape->find_parameter(c_kit_shading_parameter).has_value() && (values.get_enum(c_kit_shading_parameter) == c_str(Kit_shading::faceted))) {
-        return Kit_normal_style::faceted;
-    }
-    return shape->normal_style;
+    // A shape made outside Kit_shape_library (a test's) has no shading parameter: its default shading holds.
+    const bool faceted = shape->find_parameter(c_kit_shading_parameter).has_value()
+        ? (values.get_enum(c_kit_shading_parameter) == c_str(Kit_shading::faceted))
+        : (shape->default_shading == Kit_shading::faceted);
+    return faceted ? Kit_normal_style::faceted : shape->normal_style;
 }
 
 auto get_kit_geometry_bounds(const Kit_parameter_values& values) -> erhe::math::Aabb

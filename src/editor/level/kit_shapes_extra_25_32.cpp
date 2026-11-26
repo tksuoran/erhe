@@ -1068,7 +1068,7 @@ void add_extra_25_32_shapes(std::vector<Kit_shape_definition>& shapes)
             make_seed_parameter()
         };
         shape.material_slots  = {"wood", "cloth"};
-        shape.normal_style    = Kit_normal_style::faceted;
+        shape.default_shading = Kit_shading::faceted;
         shape.triangle_budget = 320;
         shape.collision       = Kit_collision::convex_hull;
         shape.randomness      = Kit_randomness::seeded;
@@ -1098,7 +1098,7 @@ void add_extra_25_32_shapes(std::vector<Kit_shape_definition>& shapes)
             make_seed_parameter()
         };
         shape.material_slots  = {"metal", "wood"};
-        shape.normal_style    = Kit_normal_style::faceted;
+        shape.default_shading = Kit_shading::faceted;
         shape.triangle_budget = 110;
         shape.collision       = Kit_collision::triangle_mesh;
         shape.generator       = generate_crane;
@@ -1128,7 +1128,7 @@ void add_extra_25_32_shapes(std::vector<Kit_shape_definition>& shapes)
             make_count_parameter("segments", "Points around the tower", 12, 8, 24)
         };
         shape.material_slots   = {"wall", "trim", "glow"};
-        shape.normal_style     = Kit_normal_style::faceted;
+        shape.default_shading  = Kit_shading::smooth;
         shape.triangle_budget  = 660;
         shape.collision        = Kit_collision::triangle_mesh;
         shape.detail_counts    = {{"segments"}};
@@ -1167,7 +1167,7 @@ void add_extra_25_32_shapes(std::vector<Kit_shape_definition>& shapes)
             make_count_parameter("segments", "Points around the drum", 12, 8, 24)
         };
         shape.material_slots  = {"metal", "trim"};
-        shape.normal_style    = Kit_normal_style::faceted;
+        shape.default_shading = Kit_shading::smooth;
         shape.triangle_budget = 400;
         shape.collision       = Kit_collision::convex_hull;
         shape.detail_counts   = {{"segments"}};
@@ -1198,7 +1198,7 @@ void add_extra_25_32_shapes(std::vector<Kit_shape_definition>& shapes)
             make_seed_parameter()
         };
         shape.material_slots  = {"metal"};
-        shape.normal_style    = Kit_normal_style::faceted;
+        shape.default_shading = Kit_shading::faceted;
         shape.triangle_budget = 370;
         shape.collision       = Kit_collision::triangle_mesh;
         shape.generator       = generate_truss;
@@ -1230,7 +1230,7 @@ void add_extra_25_32_shapes(std::vector<Kit_shape_definition>& shapes)
             make_seed_parameter()
         };
         shape.material_slots  = {"metal", "trim"};
-        shape.normal_style    = Kit_normal_style::faceted;
+        shape.default_shading = Kit_shading::faceted;
         shape.triangle_budget = 480;
         shape.collision       = Kit_collision::triangle_mesh;
         shape.generator       = generate_container;
@@ -1264,7 +1264,7 @@ void add_extra_25_32_shapes(std::vector<Kit_shape_definition>& shapes)
             make_seed_parameter()
         };
         shape.material_slots  = {"metal"};
-        shape.normal_style    = Kit_normal_style::faceted;
+        shape.default_shading = Kit_shading::faceted;
         shape.triangle_budget = 170;
         shape.collision       = Kit_collision::convex_hull;
         shape.origin_rule     = Kit_origin_rule::base_contains_origin; // a duct elbow's curb stands behind its mouth
@@ -1295,7 +1295,7 @@ void add_extra_25_32_shapes(std::vector<Kit_shape_definition>& shapes)
             make_seed_parameter()
         };
         shape.material_slots  = {"metal"};
-        shape.normal_style    = Kit_normal_style::faceted;
+        shape.default_shading = Kit_shading::smooth;
         shape.triangle_budget = 220;
         shape.collision       = Kit_collision::triangle_mesh;
         shape.randomness      = Kit_randomness::seeded;

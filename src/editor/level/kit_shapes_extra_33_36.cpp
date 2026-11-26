@@ -237,6 +237,10 @@ void add_rope(Kit_mesh_builder& builder, const std::span<const glm::vec3> center
     const uint32_t last = first + (4 * (count - 1));
     builder.add_quad(first + 3, first + 2, first + 1, first);
     builder.add_quad(last, last + 1, last + 2, last + 3);
+    // A tube of four sides: round between its end caps whatever its angles.
+    builder.set_smooth_from(first);
+    builder.add_hard_loop(first, 4);
+    builder.add_hard_loop(last, 4);
 }
 
 //
@@ -977,7 +981,7 @@ void add_extra_33_36_shapes(std::vector<Kit_shape_definition>& shapes)
             make_seed_parameter()
         };
         shape.material_slots   = {"metal", "glow", "cloth"};
-        shape.normal_style     = Kit_normal_style::faceted;
+        shape.default_shading  = Kit_shading::smooth;
         shape.triangle_budget  = 500;
         shape.collision        = Kit_collision::triangle_mesh;
         shape.generator        = generate_garland;
@@ -1019,7 +1023,7 @@ void add_extra_33_36_shapes(std::vector<Kit_shape_definition>& shapes)
             make_seed_parameter()
         };
         shape.material_slots    = {"wood", "cloth"};
-        shape.normal_style      = Kit_normal_style::faceted;
+        shape.default_shading   = Kit_shading::smooth;
         shape.triangle_budget   = 1010;
         shape.collision         = Kit_collision::triangle_mesh;
         shape.randomness        = Kit_randomness::seeded;
@@ -1053,7 +1057,7 @@ void add_extra_33_36_shapes(std::vector<Kit_shape_definition>& shapes)
             make_seed_parameter()
         };
         shape.material_slots    = {"floor"};
-        shape.normal_style      = Kit_normal_style::faceted;
+        shape.default_shading   = Kit_shading::faceted;
         shape.triangle_budget   = 120;
         shape.collision         = Kit_collision::triangle_mesh;
         shape.randomness        = Kit_randomness::seeded;
@@ -1104,7 +1108,7 @@ void add_extra_33_36_shapes(std::vector<Kit_shape_definition>& shapes)
             make_seed_parameter()
         };
         shape.material_slots  = {"wood", "trim"};
-        shape.normal_style    = Kit_normal_style::faceted;
+        shape.default_shading = Kit_shading::smooth;
         shape.triangle_budget = 520;
         shape.collision       = Kit_collision::triangle_mesh;
         shape.generator       = generate_boat;

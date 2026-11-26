@@ -455,7 +455,7 @@ void add_roof_shapes(std::vector<Kit_shape_definition>& shapes)
     };
     shape.parameters[5].float_max = 0.3f;
     shape.material_slots  = {"roof", "trim"};
-    shape.normal_style    = Kit_normal_style::faceted;
+    shape.default_shading = Kit_shading::faceted;
     shape.triangle_budget = 520;
     shape.collision       = Kit_collision::triangle_mesh;
     shape.origin_rule     = Kit_origin_rule::base_contains_origin;

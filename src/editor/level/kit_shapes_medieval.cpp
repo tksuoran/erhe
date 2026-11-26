@@ -1128,7 +1128,7 @@ void add_medieval_shapes(std::vector<Kit_shape_definition>& shapes)
             make_seed_parameter()
         };
         shape.material_slots  = {"wall", "trim"}; // the masonry; the sill band and the copings
-        shape.normal_style    = Kit_normal_style::faceted;
+        shape.default_shading = Kit_shading::faceted;
         shape.triangle_budget = 120;
         shape.collision       = Kit_collision::triangle_mesh;
         shape.generator       = generate_battlement;
@@ -1177,6 +1177,7 @@ void add_medieval_shapes(std::vector<Kit_shape_definition>& shapes)
         shape.material_slots  = {"wall", "trim", "floor"}; // the masonry; the dressed stone; the walkable top
         shape.normal_style    = Kit_normal_style::smooth_with_hard_edges;
         shape.hard_edge_angle_degrees = 30.0f;
+        shape.default_shading = Kit_shading::smooth;
         shape.triangle_budget = 1540;
         shape.collision       = Kit_collision::triangle_mesh;
         shape.generator       = generate_tower;

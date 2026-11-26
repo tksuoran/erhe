@@ -134,6 +134,25 @@ void add_arched_folded_leaf(Kit_mesh_builder& builder, const Kit_leaf& leaf, GEO
         const float middle = 0.5f * (u0 + u1);
         return (0.5f * (a + b)) + ((leaf.thickness * std::min(1.0f, 2.0f * (1.0f - middle))) * normal);
     };
+    // The right upper points (the left mirror them); at an inner corner where the underside bends down, the two beside
+    // it rise until the leaf is as thick over the corner as a segment's middle there would be.
+    std::vector<glm::vec2> right_upper_points;
+    for (int i = 0; i < k; ++i) {
+        right_upper_points.push_back(upper(1.0f, i));
+    }
+    for (int j = 1; j < k; ++j) {
+        const float     u        = static_cast<float>(j) / static_cast<float>(k);
+        const glm::vec2 corner   = under(1.0f, u);
+        glm::vec2&      inner    = right_upper_points[static_cast<std::size_t>(j - 1)];
+        glm::vec2&      outer    = right_upper_points[static_cast<std::size_t>(j)];
+        const float     share    = (corner.x - inner.x) / (outer.x - inner.x);
+        const float     over     = (inner.y + (share * (outer.y - inner.y))) - corner.y;
+        const float     required = leaf.thickness * std::min(1.0f, 2.0f * (1.0f - u));
+        if (over < required) {
+            inner.y += required - over;
+            outer.y += required - over;
+        }
+    }
     // Profile indices: the left underside from the edge at 0, the keel at k, the right underside to 2k, the right
     // upper side from its outer point at 2k + 1 to its inner one at 3k, the keel's top at 3k + 1, the left upper side
     // from its inner point at 3k + 2 to its outer one at 4k + 1.
@@ -146,11 +165,12 @@ void add_arched_folded_leaf(Kit_mesh_builder& builder, const Kit_leaf& leaf, GEO
         profile.push_back(under(1.0f, static_cast<float>(j) / static_cast<float>(k)));
     }
     for (int i = k - 1; i >= 0; --i) {
-        profile.push_back(upper(1.0f, i));
+        profile.push_back(right_upper_points[static_cast<std::size_t>(i)]);
     }
     profile.push_back(glm::vec2{0.0f, leaf.thickness});
     for (int i = 0; i < k; ++i) {
-        profile.push_back(upper(-1.0f, i));
+        const glm::vec2 point = right_upper_points[static_cast<std::size_t>(i)];
+        profile.push_back(glm::vec2{-point.x, point.y});
     }
     // The hard lines: the outer edges of both sides, the keel and its top.
     const uint32_t ku_lines = static_cast<uint32_t>(k);

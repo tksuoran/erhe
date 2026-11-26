@@ -1500,6 +1500,7 @@ void add_nature_plant_shapes(std::vector<Kit_shape_definition>& shapes)
         shape.material_slots  = {"bark", "leaf"};
         shape.normal_style            = Kit_normal_style::smooth_with_hard_edges;
         shape.hard_edge_angle_degrees = 75.0f;
+        shape.default_shading = Kit_shading::smooth;
         shape.triangle_budget = 1600;
         shape.collision       = Kit_collision::triangle_mesh;
         shape.randomness      = Kit_randomness::seeded;
@@ -1534,6 +1535,7 @@ void add_nature_plant_shapes(std::vector<Kit_shape_definition>& shapes)
         shape.material_slots  = {"bark", "leaf", "young_leaf"};
         shape.normal_style            = Kit_normal_style::smooth_with_hard_edges;
         shape.hard_edge_angle_degrees = 75.0f;
+        shape.default_shading = Kit_shading::smooth;
         shape.triangle_budget = 520;
         shape.collision       = Kit_collision::none;
         shape.randomness      = Kit_randomness::seeded;
@@ -1563,6 +1565,7 @@ void add_nature_plant_shapes(std::vector<Kit_shape_definition>& shapes)
         shape.material_slots  = {"bark", "leaf"};
         shape.normal_style            = Kit_normal_style::smooth_with_hard_edges;
         shape.hard_edge_angle_degrees = 75.0f;
+        shape.default_shading = Kit_shading::smooth;
         shape.triangle_budget = 1940;
         shape.collision       = Kit_collision::triangle_mesh;
         shape.randomness      = Kit_randomness::seeded;
@@ -1592,6 +1595,7 @@ void add_nature_plant_shapes(std::vector<Kit_shape_definition>& shapes)
         shape.material_slots  = {"bark", "leaf", "young_leaf"};
         shape.normal_style            = Kit_normal_style::smooth_with_hard_edges;
         shape.hard_edge_angle_degrees = 75.0f;
+        shape.default_shading = Kit_shading::smooth;
         shape.triangle_budget = 1300;
         shape.collision       = Kit_collision::convex_hull;
         shape.randomness      = Kit_randomness::seeded;

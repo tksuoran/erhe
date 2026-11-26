@@ -209,6 +209,12 @@ Kit_shape_library::Kit_shape_library()
     add_extra_33_36_shapes     (m_shapes);
     add_machine_01_08_shapes   (m_shapes);
     add_machine_09_18_shapes   (m_shapes);
+    // Every shape takes the shading, faceted or its smooth normal style, after its own parameters.
+    for (Kit_shape_definition& shape : m_shapes) {
+        ERHE_VERIFY(!shape.find_parameter(c_kit_shading_parameter).has_value());
+        ERHE_VERIFY(shape.normal_style != Kit_normal_style::faceted);
+        shape.parameters.push_back(make_shading_parameter(shape.default_shading));
+    }
     // Every shape takes the level of detail as its last parameter. A shape with detail counts builds from the counts
     // it scales, and every callback describing its mesh takes the same values.
     for (Kit_shape_definition& shape : m_shapes) {

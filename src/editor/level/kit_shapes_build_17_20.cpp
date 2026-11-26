@@ -1364,7 +1364,7 @@ void add_build_17_20_shapes(std::vector<Kit_shape_definition>& shapes)
             make_seed_parameter()
         };
         shape.material_slots  = {"wood", "wall"};
-        shape.normal_style    = Kit_normal_style::faceted;
+        shape.default_shading = Kit_shading::faceted;
         shape.triangle_budget = 440;
         shape.collision       = Kit_collision::triangle_mesh;
         shape.generator       = generate_timber_bay;
@@ -1404,7 +1404,7 @@ void add_build_17_20_shapes(std::vector<Kit_shape_definition>& shapes)
             make_seed_parameter()
         };
         shape.material_slots  = {"trim"};
-        shape.normal_style    = Kit_normal_style::faceted;
+        shape.default_shading = Kit_shading::smooth;
         shape.triangle_budget = 800;
         shape.collision       = Kit_collision::triangle_mesh;
         shape.generator       = generate_railing;
@@ -1439,11 +1439,11 @@ void add_build_17_20_shapes(std::vector<Kit_shape_definition>& shapes)
             derive_float(make_length_parameter("radius", "Radius of the canes' feet", 0.5f, Kit_default_scale::modules, 0.1f, 4.0f), 0.3f, 1.0f, 0.1f),
             from_seed_by_default(derive_float(make_angle_parameter("lean", "Outward lean of the outermost canes", 5.0f, 0.0f, 20.0f), 0.0f, 10.0f, 1.0f)),
             derive_float(make_length_parameter("cane_width", "Width of the thickest cane at its foot", 0.1f, Kit_default_scale::meters, 0.03f, 0.3f), 0.07f, 0.14f, 0.01f),
-            make_seed_parameter(),
-            make_shading_parameter(Kit_shading::smooth)
+            make_seed_parameter()
         };
         shape.material_slots  = {"cane", "bark", "leaf"};
         shape.normal_style    = Kit_normal_style::smooth; // round canes; the node bands are slots of their own, the leaf outlines hard edges
+        shape.default_shading = Kit_shading::smooth;
         shape.triangle_budget = 1200;
         shape.collision       = Kit_collision::triangle_mesh;
         shape.randomness      = Kit_randomness::seeded;
@@ -1472,7 +1472,7 @@ void add_build_17_20_shapes(std::vector<Kit_shape_definition>& shapes)
             make_seed_parameter()
         };
         shape.material_slots    = {"stone", "trim"};
-        shape.normal_style      = Kit_normal_style::faceted;
+        shape.default_shading   = Kit_shading::faceted;
         shape.triangle_budget   = 540;
         shape.collision         = Kit_collision::triangle_mesh;
         shape.origin_rule       = Kit_origin_rule::base_contains_origin; // a landing's footprint has no center of its own
@@ -1505,7 +1505,7 @@ void add_build_17_20_shapes(std::vector<Kit_shape_definition>& shapes)
             make_seed_parameter()
         };
         shape.material_slots    = {"stone", "trim"};
-        shape.normal_style      = Kit_normal_style::faceted;
+        shape.default_shading   = Kit_shading::smooth;
         shape.triangle_budget   = 360;
         shape.collision         = Kit_collision::triangle_mesh;
         shape.origin_rule       = Kit_origin_rule::base_contains_origin; // the first step lies on the ground at one side
@@ -1533,11 +1533,11 @@ void add_build_17_20_shapes(std::vector<Kit_shape_definition>& shapes)
             derive_float(make_length_parameter("depth",     "Size along Z at the crown",                 1.6f, Kit_default_scale::meters, 0.5f, 6.0f),  1.2f, 2.6f, 0.2f),
             derive_float(make_ratio_parameter ("roughness", "Irregular outline and sections",            0.6f), 0.3f, 0.9f, 0.05f),
             make_seed_parameter (),
-            make_count_parameter("segments", "Stations along the arch", 14, 8, 24),
-            make_shading_parameter(Kit_shading::faceted)
+            make_count_parameter("segments", "Stations along the arch", 14, 8, 24)
         };
         shape.material_slots    = {"rock"};
         shape.normal_style      = Kit_normal_style::smooth; // when the shading parameter is smooth
+        shape.default_shading   = Kit_shading::faceted;
         shape.triangle_budget   = 420;
         shape.collision         = Kit_collision::triangle_mesh;
         shape.randomness        = Kit_randomness::seeded;

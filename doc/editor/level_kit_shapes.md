@@ -201,31 +201,55 @@ The other shapes are converted step by step (`doc/plans/level_kit_detail.md`).
 
 ## Shading
 
-The rocks, the tree, bush, succulent, grass tuft and bamboo, and the
-machine parts take the enum parameter `shading` (`c_kit_shading_parameter`,
-`make_shading_parameter()`), the last of their own: `faceted`, or `smooth`,
-the shape's own normal style with its hard edges. It is never derived and
-leaves the mesh as it is; the normals follow it (`get_kit_shading()`). Like
-`detail`, the default is left out of a piece's canonical text and a text
-without it reads as the default (`Kit_text_presence::unless_default`), so
-pieces saved before the parameter read and keep their mesh key.
+Every shape takes the enum parameter `shading` (`c_kit_shading_parameter`,
+`make_shading_parameter()`), which `Kit_shape_library` adds after the
+shape's own parameters and before `detail`, at the shape's
+`default_shading`: `faceted`, or `smooth`, the shape's normal style with its
+hard edges. A normal style is never faceted; unless the shape names its
+own, it is smooth with hard edges above 50 degrees
+(`c_kit_default_hard_edge_degrees`), so a turned part of eight or more
+segments shades round while a box's corners and a cap's rim stay sharp. The
+parameter is never derived and leaves the mesh as it is; the normals follow
+it (`get_kit_shading()`). Like `detail`, the default is left out of a
+piece's canonical text and a text without it reads as the default
+(`Kit_text_presence::unless_default`), so pieces saved before the parameter
+read and keep their mesh key. A former build (`<id>_old`) takes its shape's
+style and default.
 
-- Rocks (`nature.rock`, `nature.boulder_cluster`, `nature.stepping_stone`,
-  `nature.rock_spire`, `nature.rock_arch`, `nature.basalt_columns`): smooth
-  with the 80 degree crease, a boulder's or a piece's flat base and flat top
-  outlines hard edges. The chamfered rocks, the boulder cluster and the
-  stepping stone, default to smooth; the others to faceted.
-- Plants (default smooth, the 80 degree crease): the tree's and the bush's
-  trunk, limbs, twigs, clumps and conifer tiers are smooth vertices
-  (`set_smooth_from()`), with hard edges at a flat base on the ground and a
-  tier's drooping rim. A succulent's or grass tuft's blade has its two edges
-  hard from base to tip, a stem its ground ring. The bamboo's node bands are
-  slots of their own, so their rings stay sharp, and a leaf's outline is
-  hard; a cane of three or four sides stays faceted at the crease.
-- Machine parts (default smooth): hard edges above 50 degrees, so a turned
-  surface of eight or more segments shades round while hexagons, teeth and
-  steps keep their edges. A bolt's thread marks its roots and crests hard
-  (a lathe's `hard_rings`, the helix's root and ridge lines).
+Round and organic shapes default to smooth, boxy and flat ones to faceted
+(their smooth style differs from faceted only at chamfers and slopes):
+
+- Smooth: the cylinder, pillar, column, arch, tunnel, tower, torii and the
+  broken pillar and arch; the props, harbour, industrial and light shapes
+  with turned or curved parts (`prop.barrel`, `prop.pot`, `prop.well`,
+  `prop.cart`, `harbour.lighthouse`, `harbour.buoy`, `harbour.mooring`,
+  `harbour.boat`, `harbour.pier`, `industrial.tank`, `industrial.pipe`,
+  `industrial.antenna`, `light.lamp_post`, `light.lantern`, `light.fire`,
+  `light.garland`), `traversal.rope_bridge`, `architecture.spiral_stairs`,
+  `architecture.railing`, `architecture.stone_lantern`; the hill, dune,
+  shore, ground patch, log and shell; the plants and the machine parts; the
+  boulder cluster and the stepping stone.
+- Faceted: every other shape, among them `nature.rock`,
+  `nature.rock_spire`, `nature.rock_arch`, `nature.basalt_columns`,
+  `nature.cliff` and `nature.land_mass`, whose smooth style is the 80
+  degree crease.
+
+Groups with hard edges of their own:
+
+- Rocks: the 80 degree crease, a boulder's or a piece's flat base and flat
+  top outlines hard edges.
+- Plants (the 80 degree crease): the tree's and the bush's trunk, limbs,
+  twigs, clumps and conifer tiers are smooth vertices (`set_smooth_from()`),
+  with hard edges at a flat base on the ground and a tier's drooping rim. A
+  succulent's or grass tuft's blade has its two edges hard from base to tip,
+  a stem its ground ring. The bamboo's node bands are slots of their own, so
+  their rings stay sharp, and a leaf's outline is hard; a cane of three or
+  four sides stays faceted at the crease. The palms and the leaf plant shade
+  smooth with hard edges above 75 degrees and their folds and rims hard.
+- Machine parts: a bolt's thread marks its roots and crests hard (a lathe's
+  `hard_rings`, the helix's root and ridge lines).
+- Ropes (`light.garland`'s wire, `traversal.rope_bridge`'s ropes): a rope is
+  a tube of four sides, smooth vertices with its two end caps hard loops.
 
 ## Slots and palette
 
@@ -396,7 +420,7 @@ other lengths (`doc/plans/open_items.md` "Editor defects found in passing").
 ## Basic kit
 
 `kit_shapes_basic.cpp`. Every basic shape has the slot `stone` (the floor
-slab: `floor`), is faceted (the cylinder: smooth with hard edges), draws
+slab: `floor`), is faceted by default (the cylinder: smooth), draws
 nothing from its seed and masks nothing by default.
 
 ### Block
@@ -1472,7 +1496,10 @@ the blade on edge), the station count and, for `folded`, the segments across
 each half (`across`): at 1 the halves are straight from the keel to the
 edge; above, the underside drops by (share across) ^ 1.6 to the edge, each
 upper point over the middle of its underside segment, the leaf thinning over
-its outer half, the base cap triangles sharing their edges. The hard edges
+its outer half; where the underside bends down at an inner corner, the two
+upper points beside it rise until the leaf is as thick over the corner as
+the middle of a segment there would be, so the section never pinches. The
+base cap triangles share their edges. The hard edges
 (`add_hard_edge()`) run from the base outline to the tip along the lens's two
 edges, and along a folded leaf's outer edges, keel and the keel's top (arched:
 also the outer points of the upper side), so each half is smooth along the
